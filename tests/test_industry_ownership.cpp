@@ -39,6 +39,7 @@ World flat_world(bool cycle = false) {
     cfg.populate = false;
     cfg.business_cycle = cycle;
     cfg.chairman_can_be_fired = false;
+    cfg.industries_appear = false; // only the industries each test places
     World w(cfg, industry_data());
     for (int y = 0; y <= 20; ++y)
         for (int x = 0; x <= 20; ++x) w.terrain().set_corner_height(x, y, 10);

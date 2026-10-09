@@ -1,7 +1,7 @@
 # Calibration
 
 `railmaster_calibrate` (built from `tools/calibrate/`) runs a few headless
-games and scores twelve metrics against the spec's targets. It exits 0
+games and scores sixteen metrics against the spec's targets. It exits 0
 when every metric is in range and 1 otherwise, so it can gate a balance
 change. A run takes about half a minute.
 
@@ -16,6 +16,7 @@ cmake --build build
 | Scenario | Setup | Measures |
 |---|---|---|
 | Economy alone | Seed 1, two years, no railway | Producer output, processor capacity, producer prices |
+| Price field | A strip of 48 × 9 economy nodes (2 × 2 cells each), flat or mountainous; a coal mine and a power plant 30 cells apart, a mine alone, or a new plant | Middleman speed, spread with no demand, how fast the price map reshapes |
 | Demo network | The client's opening network (`sim::build_demo_network`), seeds 1 to 6, ten years | Return on capital, revenue, town growth, share price |
 | Rivals | Seed 3, three AI tycoons, five years | Share of rivals in profit, rival revenue, station-building income |
 
@@ -26,6 +27,10 @@ cmake --build build
 | Raw producer output | 1.5–3.5 loads a year | §6.1 [C]: about 2.2 |
 | Processor capacity | 2–5 loads a year | §6.1 [C]: about 3 |
 | Median producer price | $240K–$1M | §6.2 [C]: farms sell for $240K–$350K |
+| Middlemen, flat land | 4–16 cells a year | §5.3 [C]: about 8 |
+| Middlemen, mountains | 2–8 cells a year | §5.3 [C]: about 4 |
+| Spread with no demand, 3 years (90% within) | 0–8 cells | §5.3 [C]: "a few cells" |
+| Price map reshapes (63% of the change, 10 cells from a new plant) | 0.5–2.5 years | §5.3 [C]: 1–2 years |
 | Demo return on capital, years 2–4 | 4–20% a year | [I], below |
 | Demo revenue, years 2–4 | $300K–$2M a year | [I], below |
 | Growth of served towns, ten years | 25–200% | §6.4 [C]: visible growth over 10–15 years |
@@ -75,6 +80,20 @@ towns are closer and its hops shorter. One node per cell instead of 2 × 2
 gave about 9%. Two maps were too few to tell this from luck (one seed alone
 ranged from −4% to 17%), so the demo now uses six. Served towns grow 29% in
 ten years, near the 25% floor.
+
+With the spec's price field (equilibrium prices from demand and supply,
+months-long relaxation, proportional middlemen), the middleman and
+reshaping metrics were added. Middlemen first delivered nothing: their
+small daily shares rounded away in thousandths of a carload, which is why
+stock is now kept in millionths. Dividing the middleman's cost by
+conductance as well as scaling the flow left mountains at a quarter of the
+flat speed, so the cost is now the same everywhere, as in the spec. Site
+prices relaxing over 30 days reshaped the map in 0.7 years; the spec's six
+months gives 1.2. Results: middlemen 7.2 cells a year on flat land and 2.8
+in mountains, 90% of an unsold mine's coal within 8 cells after three
+years (the top of its band), the map reshaped in 1.2 years. The demo and
+rivals barely moved (return 8.3%), as their revenue is mostly passengers;
+the calibration game's three rivals carry no freight at all.
 
 ## What changed
 

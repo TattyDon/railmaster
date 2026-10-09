@@ -29,7 +29,7 @@ From [economy-cargo.md](economy-cargo.md):
   after 1956).
 - The cargo overview map: red where a cargo is cheap, green where it is dear.
 
-## Our design (the formulas are not published)
+## Our design (rt3-clone-spec §5.3 [I], adapted)
 
 Each game day:
 
@@ -43,15 +43,38 @@ Each game day:
      need at least one.
    - Consumers and houses take what they need each day.
 2. **Stock spoils** a little, faster for perishable cargo.
-3. **The price field relaxes one step.** Consumers pin their cell's price
-   high, falling as unconsumed stock piles up there. Producers pin their
-   cell's price low. Every other cell becomes a screened average of its four
-   neighbours: (mean of neighbours + λ × neutral) ÷ (1 + λ). A consumer's
-   pull therefore fades with distance, so far from any buyer a cargo sits
-   at the neutral price. This is a screened Poisson equation, solved one
-   Jacobi step per day, which is also why the map reshapes slowly.
-4. **Stock drifts** a share per day to the neighbouring cell that pays
-   best once a transport cost is taken off, if that beats this cell's price.
+3. **Prices move toward equilibrium** (rt3-clone-spec §5.3). Each node's
+   equilibrium price is
+
+   `base × ((D + ε) ÷ (S + ε)) ^ α`, held between 30% and 300% of base,
+
+   where D is what the node's consumers want over a year (two years for
+   industries, which are harder to oversupply [C]), S its stock plus what
+   its producers make in a year, ε one carload and α 0.5. With nothing
+   there it is the base price; a starved town that wants 3 loads a year
+   pays twice base; a mine making 3 a year sells at half.
+   - **Nodes with industries or houses** move 1/180 of the way there each
+     day (τ about six months [I]). A new factory's price builds over
+     months, and repeated deliveries erode it the same way [C].
+   - **Every other node** moves 1/540 of the way to its own equilibrium
+     (base, lowered by any stock lying there), while 0.12 of each
+     conductance-weighted difference with its neighbours smooths it toward
+     them (the spec's Laplacian coupling). A site's pull reaches about 8
+     nodes (about 13 km), and the map reshapes over a year or two [C].
+
+   Why sites are not smoothed too: the spec applies relaxation and
+   coupling to every node, but with coupling strong enough to carry a
+   price 15 cells and τ of months, a lone consumer's node would rise only
+   1–2% of the way to its equilibrium, as coupling drains it far faster
+   than relaxation feeds it. Holding site nodes out of the smoothing keeps
+   each market its own price, as RT3's overlay shows.
+4. **Middlemen move stock** to every dearer neighbour: each day a share of
+   0.11 × (price gap − 1% of base) ÷ base × conductance goes to each (the
+   spec's flow rule). On flat land the leading edge of a mine's coal travels
+   about 7 cells a year toward a buyer, about 3 in mountains [C: ~8 and
+   ~4]; with no buyer, 90% of it stays within about 8 cells [C: "a few
+   cells"]. Stock is kept in millionths of a carload so these small daily
+   shares do not round away.
 
 ### Terrain [D behaviour, I numbers]
 
@@ -62,13 +85,14 @@ to water) 1.5, flat 1.0, hills 0.75, mountains 0.5. A cell is hilly when the
 relief across it is at least 4% of its width, mountainous at 7%. Where two
 cells meet, the edge conducts as their mean. Conductance does three things:
 
-- **Price coupling.** In step 3 each neighbour is weighted by the edge's
-  conductance, against a fixed screening term. A consumer's pull therefore
-  reaches further along water and dies off faster across mountains, so
-  prices are flat along coasts and steep over ranges [D].
-- **Middleman cost.** The transport cost in step 4 is divided by the edge's
-  conductance: half as much over water, double over mountains.
-- **Middleman speed.** The share of stock moved per day is multiplied by it.
+- **Price coupling.** In step 3 each neighbour difference is weighted by
+  the edge's conductance. A consumer's pull therefore reaches further along
+  water and dies off faster across mountains, so prices are flat along
+  coasts and steep over ranges [D].
+- **Middleman speed.** The share of stock moved per day is multiplied by
+  it. The middleman's cost is the same on every edge, as in the spec; an
+  earlier version also divided it by conductance, which left mountains at
+  a quarter of the flat speed rather than half.
 
 On flat land with no water every conductance is 1.0 and the model is
 exactly the one above; a test holds it to that.
@@ -212,23 +236,18 @@ history, so it opens with prices and cargo already in place.
 Researched: a factory sells at local prices, and slows or stops when its
 output price nearby is red (cheap) [C].
 
-Our price field used to pin a producer's cell at 50% of base however much
-unsold output piled up, so it could never turn red. Now supply mirrors
-demand [I]:
-
-- **Supply price:** a producer's price falls as unsold stock builds up in
-  its cell: 50% of base × S / (S + stock), where S is 180 days' output. A
-  consumer's price already falls the same way with unconsumed stock.
-- **Pace:** producers and processing plants run at full pace while their
-  best product sells for at least 35% of base there. Below that they slow
-  in proportion, stopping at 10%. A plant that slows uses fewer inputs.
-- **In practice:** middlemen carry output off as it is made, so a producer
-  normally holds about a carload and runs at full pace. It slows only when
-  stock piles up: nobody hauls it and the nearby buyers are saturated. It
-  recovers as soon as a railway takes the stock away. On the default map
-  no producer was slowed after three years.
-- **Side effect:** pickup prices at busy producers are a little lower than
-  before, so freight margins are slightly higher.
+- **Price:** unsold stock counts as supply, so a producer's node price
+  falls as it piles up (step 3), as a consumer's does with unconsumed stock.
+- **Pace:** a producer or processing plant compares its own equilibrium
+  price, counting its unsold stock, with what it would be with none. It
+  runs at full pace while that is at least 70%, slowing to a stop at 40%:
+  at the spec's rates, about 1.5 and 7 years of output piled up. A plant
+  that slows uses fewer inputs. The comparison is with the producer's own
+  stock-free price, not with base, so a big producer is not slowed for
+  being big.
+- **In practice:** middlemen carry output off, so a producer normally
+  holds little and runs at full pace; it slows only when nobody hauls and
+  nobody nearby buys, and recovers as soon as a railway takes the stock.
 - Set `output_full_percent` at or below `output_stop_percent` in
   `data/balance.json` to switch it off.
 
@@ -423,14 +442,13 @@ In the `economy`, `map`, `freight` and `express` sections of
 | Item | Value | Notes |
 |---|---|---|
 | Cargo price unit | Base prices in `cargo.json` are read as thousands of dollars per carload (coal $30K). | Players talk of $5K gains per hop, which suggests thousands. Unverified. |
-| Consumer price | 150% of base when unsatisfied. | |
-| Producer price | 50% of base. | |
-| Neutral price | 50% of base, far from any consumer. | |
-| Screening λ | 0.0025. A consumer's pull fades over roughly 10 cells (10 km). | |
-| Drift | 5% of a cell's stock per day, when the next cell is at least 1% of base dearer; both scaled by terrain. | |
+| Equilibrium price | base × ((D + 1 load) ÷ (S + 1 load))^0.5, 30%–300% of base; D over 365 days (towns) or 730 (industries), S stock plus 365 days' output. | rt3-clone-spec §5.3 [I]; horizons and ε ours. |
+| Neutral price | Base, far from any site (the spec's ε ÷ ε). | |
+| Relaxation | Site nodes 1/180 a day; other nodes 1/540 a day plus coupling 0.12 × conductance-weighted neighbour differences. | Spec τ 6–12 months; calibrated so the map reshapes in about 1.2 years. |
+| Middlemen | 0.11 × (gap − 1% of base) ÷ base × conductance of the stock a day, to each dearer neighbour. | Calibrated to ~7 cells a year flat, ~3 in mountains. |
 | Conductance | Water 2.0, coast 1.5, flat 1.0, hills 0.75 (≥ 4% relief), mountains 0.5 (≥ 7%). | Spec §5.3 gives flat 1.0, hills 0.75, mountains 0.5; water's figure and the thresholds are ours. |
 | Economic states | See the table above; checked twice a year. | Section `economic_states`. |
-| Saturation | Stock equal to a year of a town's demand halves its price; for industries, two years. | "Industries are hard to oversupply." Scaled with the rates; see [calibration.md](calibration.md). |
+| Saturation | Stock equal to a town's yearly demand brings it from about twice base back to base; industries count two years of demand. | "Industries are hard to oversupply." |
 | Spoilage | 0.1% per day × decay sensitivity (1-10). | Sensitivity read as decay rate; unverified. |
 | Cell cap | 50 carloads per cargo per cell. | |
 | Processor stockpile | 30 days of input. | |

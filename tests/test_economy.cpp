@@ -49,12 +49,14 @@ IndustryRegistry test_industries(const CargoRegistry& cargo) {
 }
 
 // The fixture's industries make a carload a day, about 150 times the
-// spec's rates, so stock saturates prices over days rather than months.
+// spec's rates, so demand and supply are counted over days rather than a
+// year, and site prices follow at once rather than over months.
 Balance fast_saturation() {
     Balance b;
-    b.economy.saturation_days = 30;
-    b.economy.industry_saturation_days = 120;
-    b.economy.supply_saturation_days = 60;
+    b.economy.town_demand_days = 30;
+    b.economy.industry_demand_days = 120;
+    b.economy.supply_days = 30;
+    b.economy.site_relax_days = 1;
     return b;
 }
 
@@ -137,9 +139,13 @@ TEST_CASE("cargo drifts from producer towards consumer without any trains") {
     f.eco.add_site(f.ind, f.type("electric_plant"), 9, 10);
     f.days(300);
     const CargoId coal = f.c("coal");
-    CHECK(f.eco.stock_milli(coal, 7, 10) > 0);                         // on its way east
-    CHECK(f.eco.stock_milli(coal, 2, 10) == 0);                         // nothing goes west
-    CHECK(f.eco.stock_milli(coal, 5, 10) > f.eco.stock_milli(coal, 3, 10));
+    // Middlemen carry it to every dearer neighbour, but the plant's pull
+    // makes the east dearer: more goes that way, and some is on its way.
+    CHECK(f.eco.stock_milli(coal, 7, 10) > 0);
+    std::int64_t east = 0, west = 0;
+    for (int x = 5; x <= 8; ++x) east += f.eco.stock_milli(coal, x, 10);
+    for (int x = 0; x <= 3; ++x) west += f.eco.stock_milli(coal, x, 10);
+    CHECK(east > west);
 }
 
 TEST_CASE("a steel mill needs both iron and coal; a textile mill needs either input") {
@@ -195,13 +201,15 @@ TEST_CASE("unsold output lowers a producer's price, and it slows down, then reco
     // Middlemen carry its coal off as it is made: full pace.
     CHECK(f.eco.sites()[mine].pace_permille == 1000);
     // Coal piles up unsold (40 carloads, 40 days' output): the price falls
-    // to about 30% of base and the mine slows to about two thirds.
+    // to the floor, 30% of base, and the mine's own price to about 63% of
+    // what it is with nothing unsold, so it slows to about three quarters.
     f.eco.add_stock(coal, 3, 3, 40'000);
     const std::int64_t before = f.eco.sites()[mine].produced_milli;
     f.days(1);
-    CHECK(f.eco.price(coal, 3, 3) < 15'000 * 35 / 50);
-    CHECK(f.eco.sites()[mine].pace_permille < 750);
-    CHECK(f.eco.sites()[mine].produced_milli - before < kMilli * 3 / 4);
+    CHECK(f.eco.price(coal, 3, 3) <= 30'000 * 30 / 100);
+    CHECK(f.eco.sites()[mine].pace_permille < 850);
+    CHECK(f.eco.sites()[mine].pace_permille > 600);
+    CHECK(f.eco.sites()[mine].produced_milli - before < kMilli * 85 / 100);
     // A railroad takes the stock away: the pace recovers.
     f.eco.take_stock(coal, 3, 3, 1'000'000);
     f.days(1);

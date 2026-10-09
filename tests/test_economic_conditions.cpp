@@ -131,9 +131,10 @@ TEST_CASE("a consumer's pull reaches further along water and less far over mount
 }
 
 TEST_CASE("middlemen move freight faster on water and slower over mountains [D]") {
-    const std::int32_t water = stock_beyond(Ground::Water, 4, 60);
-    const std::int32_t flat = stock_beyond(Ground::Flat, 4, 60);
-    const std::int32_t mountains = stock_beyond(Ground::Mountains, 4, 60);
+    // A year, as site prices take months to form.
+    const std::int32_t water = stock_beyond(Ground::Water, 4, 365);
+    const std::int32_t flat = stock_beyond(Ground::Flat, 4, 365);
+    const std::int32_t mountains = stock_beyond(Ground::Mountains, 4, 365);
     MESSAGE("carloads past cell 4: water ", water, ", flat ", flat, ", mountains ", mountains);
     CHECK(water > flat);
     CHECK(flat > mountains);

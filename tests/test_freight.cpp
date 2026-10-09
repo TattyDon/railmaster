@@ -120,10 +120,10 @@ TEST_CASE("stations gather only cargo a calling train could sell for more") {
     for (int i = 0; i < 10; ++i) gather_at_stations(s.rw, s.eco, s.cargo, s.ind, 1850);
     const WaitingCargo& pool = s.rw.station(mine).waiting[s.c("coal")];
     CHECK(pool.milli > 0);
-    // Bought at the station's price: the best in its catchment, a little
-    // above the mine's own $15K because the plant's pull reaches this far.
+    // Bought at the station's price: the best in its catchment, below the
+    // $30K base as the mine's low price spreads around it.
     CHECK(pool.average_price() == catchment_prices(s.eco, s.rw, s.rw.station(mine), s.c("coal")).best);
-    CHECK(pool.average_price() < 16'000);
+    CHECK(pool.average_price() < 30'000);
     CHECK(s.rw.station(s.stations[1]).waiting[s.c("coal")].milli == 0); // never gathered at the buyer
 }
 
@@ -133,7 +133,9 @@ TEST_CASE("a train loads the most valuable cargo first and only what sells furth
     s.days(200);
     Station& st = s.rw.station_mut(s.stations[0]);
     st.waiting.resize(s.cargo.all().size());
-    st.waiting[s.c("coal")] = {5 * kMilli, 5LL * kMilli * 15'000};
+    // The coal was bought at the most it could fetch (three times base), so
+    // nothing on the route pays more for it.
+    st.waiting[s.c("coal")] = {5 * kMilli, 5LL * kMilli * 90'000};
     st.waiting[s.c("steel")] = {2 * kMilli, 2LL * kMilli * 42'500};
     const TrainId t = s.rw.add_train(0, 4, {s.stations[0], s.stations[1]});
 
@@ -230,9 +232,10 @@ TEST_CASE("a train earns money hauling coal to a distant power plant") {
     MESSAGE("revenue in a year: $" << train.revenue.whole_dollars() << " over " << train.stops_made << " stops");
     CHECK(train.revenue > Money::dollars(100'000));
     CHECK(w.total_revenue() == train.revenue);
-    // A stop's income is at most four full carloads at the mine-to-plant gap
-    // ($15K to $45K), plus up to 15% for a new station.
-    CHECK(train.last_income <= Money::dollars(4 * 30'000).scaled(115, 100));
+    // A stop's income is at most four full carloads at the widest gap the
+    // field allows (30% to 300% of the $30K base), plus up to 15% for a new
+    // station.
+    CHECK(train.last_income <= Money::dollars(4 * 81'000).scaled(115, 100));
 }
 
 TEST_CASE("freight is deterministic") {

@@ -1,5 +1,7 @@
 #include "railmaster/sim/company.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -313,42 +315,6 @@ void Company::declare_bankruptcy() {
     history_.back().debt_forgiven += forgiven;
     bankrupt_year_ = history_.back().year;
 }
-
-namespace {
-
-// log2(num / den) in thousandths, for positive num and den, held within
-// +/- `cap` doublings. Integer-only, so it is the same on every machine.
-std::int64_t log2_permille(std::int64_t num, std::int64_t den, std::int64_t cap) {
-    std::int64_t whole = 0;
-    // Bring the ratio into [1, 2), counting doublings.
-    while (num >= 2 * den && whole < cap) {
-        den *= 2;
-        ++whole;
-    }
-    while (num < den && whole > -cap) {
-        num *= 2;
-        --whole;
-    }
-    if (whole >= cap || whole <= -cap) return whole * 1000;
-    // Fraction by repeated squaring of x = num/den in 2^30 fixed point.
-    constexpr std::int64_t kOne = std::int64_t{1} << 30;
-    while (den >= (std::int64_t{1} << 31)) { // keep num x 2^30 in range; num < 2 den
-        num /= 2;
-        den /= 2;
-    }
-    std::int64_t x = num * kOne / std::max<std::int64_t>(1, den);
-    std::int64_t frac = 0; // in 2^-20
-    for (int i = 19; i >= 0; --i) {
-        x = (x * x) >> 30; // x < 2^31, so this fits
-        if (x >= 2 * kOne) {
-            x /= 2;
-            frac += std::int64_t{1} << i;
-        }
-    }
-    return whole * 1000 + (frac * 1000 >> 20);
-}
-
-} // namespace
 
 Money Company::annual_interest() const {
     Money interest;

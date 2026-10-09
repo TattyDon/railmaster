@@ -109,30 +109,45 @@ struct Balance {
 
     struct Economy {
         std::int64_t cargo_price_unit = 1000; // cargo.json base prices are in $K
-        std::int32_t demand_price_percent = 150;
-        std::int32_t supply_price_percent = 50;
-        std::int32_t neutral_price_percent = 50;
-        std::int32_t screening_per_10000 = 25;
-        std::int32_t drift_percent_per_day = 5;
+        // The price field (rt3-clone-spec §5.3 [I]). Each node's equilibrium
+        // price is base x neutral% x ((D + epsilon) / (S + epsilon)) ^ alpha,
+        // held between the floor and ceiling (percent of base), where D is
+        // the demand of the node's consumers over town_demand_days or
+        // industry_demand_days, and S its stock plus its producers' output
+        // over supply_days. A node with industries or houses moves toward it
+        // by 1/site_relax_days a day; any other node by 1/field_relax_days,
+        // while coupling_permille of each conductance-weighted difference
+        // with its neighbours smooths it toward them. The map as a whole
+        // reshapes over a year or two [C], through the smoothing.
+        std::int32_t neutral_price_percent = 100;
+        std::int32_t price_alpha_permille = 500;
+        std::int32_t price_epsilon_milli = 1000;
+        std::int32_t town_demand_days = 365;
+        std::int32_t industry_demand_days = 730; // industries are harder to oversupply [C]
+        std::int32_t supply_days = 365;
+        std::int32_t price_floor_percent = 30;
+        std::int32_t price_ceiling_percent = 300;
+        std::int32_t site_relax_days = 180;
+        std::int32_t field_relax_days = 540;
+        std::int32_t coupling_permille = 120;
+        // Middlemen (rt3-clone-spec §5.3 [I]): each day a node's stock flows
+        // to each dearer neighbour, a share of middleman_permille x (price
+        // gap less the edge's cost) / base x conductance. The edge's cost is
+        // transport_cost_percent of base.
+        std::int32_t middleman_permille = 110;
         std::int32_t transport_cost_percent = 1;
-        // Unconsumed stock equal to this many days of demand halves a
-        // consumer's price. Calibrated for the spec's low rates (a town of 30
-        // houses wants ~3 loads of a good a year), so one delivery dents the
-        // price rather than crashing it [I; docs/spec/calibration.md].
-        std::int32_t saturation_days = 365;
-        std::int32_t industry_saturation_days = 730;
         std::int32_t spoilage_per_mille_per_sensitivity = 1;
         std::int32_t max_stock_milli = 50'000;
         std::int32_t input_buffer_days = 30;
         std::int32_t boost_percent = 50;
         std::int32_t history_days = 365; // simulated before a new map opens
         // Price-responsive output (rt3-clone-spec §6.1 [C]): unsold stock
-        // equal to this many days of output halves a producer's price, and
-        // producers slow as their local price falls below the full-pace
-        // share of base, stopping at the stop share [I].
-        std::int32_t supply_saturation_days = 180;
-        std::int32_t output_full_percent = 35;
-        std::int32_t output_stop_percent = 10;
+        // lowers a producer's own equilibrium price; it runs at full pace
+        // while that is at least the full share of what it would be with no
+        // stock, slowing to a stop at the stop share [I]. At the spec's
+        // rates that is about 1.5 and 7 years of output piled up.
+        std::int32_t output_full_percent = 70;
+        std::int32_t output_stop_percent = 40;
         // Middlemen and price coupling by terrain (rt3-clone-spec §5.3): how
         // easily freight and price signals cross a cell, in thousandths of
         // flat land. A cell is hilly or mountainous by its steepest corner-

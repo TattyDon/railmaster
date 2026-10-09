@@ -227,10 +227,18 @@ public:
     void settle(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year, int days);
 
     std::int32_t price(CargoId c, std::int32_t cx, std::int32_t cy) const { return price_[c][cell(cx, cy)]; }
-    std::int32_t stock_milli(CargoId c, std::int32_t cx, std::int32_t cy) const { return stock_[c][cell(cx, cy)]; }
+    std::int32_t stock_milli(CargoId c, std::int32_t cx, std::int32_t cy) const {
+        return stock_[c][cell(cx, cy)] / kMicroPerMilli;
+    }
     void add_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli);
     // Remove up to `milli`; returns how much was taken.
     std::int32_t take_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli);
+
+    // The equilibrium price for demand D and supply S, in carload
+    // thousandths over their horizons (rt3-clone-spec §5.3): base x
+    // neutral% x ((D + epsilon) / (S + epsilon)) ^ alpha, within the floor
+    // and ceiling. Prices move toward it.
+    std::int32_t equilibrium_price(const CargoType& c, std::int64_t demand_milli, std::int64_t supply_milli) const;
 
     std::int32_t cell_x(MapPoint p) const;
     std::int32_t cell_y(MapPoint p) const;
@@ -238,19 +246,20 @@ public:
     bool active(CargoId c) const { return active_[c]; }
 
 private:
+    // A site's pull on its node: demand and supply over their horizons.
     struct Anchor {
         std::size_t cell;
-        std::int32_t price;
+        std::int64_t demand_milli = 0;
+        std::int64_t supply_milli = 0;
     };
 
     std::size_t cell(std::int32_t cx, std::int32_t cy) const;
     void run_sites(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);
     void spoil(const CargoRegistry& cargo);
-    // A producer's local price, falling as unsold stock builds up.
-    std::int32_t supply_price(const CargoType& c, std::int64_t daily_milli, std::int64_t leftover) const;
     // How fast a producer or plant runs, in thousandths: full while its best
-    // product sells for at least output_full_percent of base here, slowing
-    // to a stop at output_stop_percent [C/I].
+    // product's price, lowered by its unsold stock, is at least
+    // output_full_percent of what it is with none, slowing to a stop at
+    // output_stop_percent [C/I].
     std::int32_t output_pace(const CargoRegistry& cargo, const IndustryType& t, std::int64_t rate, std::size_t at,
                              std::int32_t year) const;
     void relax(const CargoRegistry& cargo);
@@ -261,7 +270,10 @@ private:
     std::int32_t cells_per_node_ = 1;
     std::vector<bool> water_; // per cell
     std::vector<std::vector<std::int32_t>> price_; // [cargo][cell], dollars
-    std::vector<std::vector<std::int32_t>> stock_; // [cargo][cell], milli-carloads
+    // Stock is held in millionths of a carload, so the small daily shares
+    // middlemen move do not round away; it is shown in thousandths.
+    static constexpr std::int32_t kMicroPerMilli = 1000;
+    std::vector<std::vector<std::int32_t>> stock_; // [cargo][cell], micro-carloads
     std::vector<std::vector<Anchor>> anchors_;     // [cargo], rebuilt daily from sites
     std::vector<bool> active_;
     std::vector<std::int32_t> scratch_;

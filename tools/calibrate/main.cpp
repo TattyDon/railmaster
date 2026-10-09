@@ -6,9 +6,12 @@
 //   railmaster_calibrate [data-dir]
 
 #include "railmaster/sim/demo.hpp"
+#include "railmaster/sim/terrain.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <algorithm>
+#include <cstdlib>
+#include <optional>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -94,6 +97,94 @@ void economy_alone(const GameData& data) {
     report("processor capacity (data)", proc_n ? proc_rate / proc_n : 0, 2.0, 5.0, "loads/yr", "spec §6.1 [C]: ~3");
     report("producer price, median", farm_prices.empty() ? 0 : farm_prices[farm_prices.size() / 2], 240'000, 1'000'000,
            "$", "spec §6.2 [C]: farms $240K-$350K");
+}
+
+// D: the price field and middlemen on a strip of map, no railway
+// (rt3-clone-spec §5.3 [C] behaviour). Nodes of 2 x 2 half-mile cells, as
+// on the Small map.
+constexpr std::int32_t kStripNodes = 48, kStripWidth = 9, kNodeCells = 2;
+
+Economy strip(const GameData& data, bool mountains) {
+    Economy eco(kStripNodes, kStripWidth, 2 * 805'000, data.cargo, data.balance, kNodeCells);
+    Terrain t(kStripNodes * kNodeCells, kStripWidth * kNodeCells, 805);
+    if (mountains) {
+        // 150 m of relief across every node: mountains, about 9% grades.
+        for (std::int32_t y = 0; y <= t.height(); ++y)
+            for (std::int32_t x = 0; x <= t.width(); ++x) t.set_corner_height(x, y, (x + y) % 2 ? 150 : 0);
+    }
+    eco.set_terrain(t);
+    return eco;
+}
+
+IndustryTypeId industry(const GameData& data, const char* key) { return *data.industries.find(key); }
+
+void day(Economy& eco, const GameData& data) { eco.step_day(data.cargo, data.industries, 1850); }
+
+// Years for middlemen to bring the first tenth of a carload of coal 30
+// cells from a mine to a power plant: the leading edge of the spread, as
+// middlemen fan cargo out rather than move it in a block. Nothing if not
+// within `max_years`.
+std::optional<double> middleman_years(const GameData& data, bool mountains, int max_years) {
+    Economy eco = strip(data, mountains);
+    const std::int32_t y = kStripWidth / 2, gap = 30 / kNodeCells;
+    eco.add_site(data.industries, industry(data, "coal_mine"), 4, y);
+    const SiteId plant = eco.add_site(data.industries, industry(data, "electric_plant"), 4 + gap, y);
+    for (int d = 1; d <= max_years * 365; ++d) {
+        day(eco, data);
+        if (eco.sites()[plant].received_year_milli >= kMilli / 10) return d / 365.0;
+    }
+    return std::nullopt;
+}
+
+void price_field(const GameData& data) {
+    const auto flat = middleman_years(data, false, 12), steep = middleman_years(data, true, 12);
+    report("middlemen, flat land", flat ? 30 / *flat : 0, 4, 16, "cells/yr", "spec §5.3 [C]: ~8");
+    report("middlemen, mountains", steep ? 30 / *steep : 0, 2, 8, "cells/yr", "spec §5.3 [C]: ~4");
+
+    // With no demand, a mine's coal spreads only a few cells.
+    {
+        Economy eco = strip(data, false);
+        const std::int32_t mx = kStripNodes / 2, my = kStripWidth / 2;
+        const CargoId coal = *data.cargo.find("coal");
+        eco.add_site(data.industries, industry(data, "coal_mine"), mx, my);
+        for (int d = 0; d < 3 * 365; ++d) day(eco, data);
+        // The radius, in cells, holding 90% of the stock.
+        std::vector<std::int64_t> by_ring(kStripNodes, 0);
+        std::int64_t total = 0;
+        for (std::int32_t y = 0; y < kStripWidth; ++y)
+            for (std::int32_t x = 0; x < kStripNodes; ++x) {
+                const std::int64_t s = eco.stock_milli(coal, x, y);
+                by_ring[static_cast<std::size_t>(std::max(std::abs(x - mx), std::abs(y - my)))] += s;
+                total += s;
+            }
+        std::int64_t held = 0;
+        std::size_t ring = 0;
+        for (; ring < by_ring.size(); ++ring) {
+            held += by_ring[ring];
+            if (held * 10 >= total * 9) break;
+        }
+        report("spread with no demand, 3 years (90% within)", static_cast<double>(ring) * kNodeCells, 0, 8, "cells",
+               "spec §5.3 [C]: a few cells");
+    }
+
+    // A new power plant reshapes coal prices 10 cells away over a year or two.
+    {
+        Economy eco = strip(data, false);
+        const std::int32_t px = kStripNodes / 2, py = kStripWidth / 2;
+        const CargoId coal = *data.cargo.find("coal");
+        eco.add_site(data.industries, industry(data, "electric_plant"), px, py);
+        const std::int32_t before = eco.price(coal, px - 10 / kNodeCells, py);
+        std::vector<std::int32_t> seen;
+        for (int d = 0; d < 4 * 365; ++d) {
+            day(eco, data);
+            seen.push_back(eco.price(coal, px - 10 / kNodeCells, py));
+        }
+        const std::int64_t change = seen.back() - before;
+        std::size_t when = 0;
+        while (when < seen.size() && (seen[when] - before) * 100 < change * 63) ++when;
+        report("price map reshapes (63% at 10 cells)", static_cast<double>(when) / 365, 0.5, 2.5, "years",
+               "spec §5.3 [C]: 1-2 years");
+    }
 }
 
 // B: the demo network, ten years, six maps (fewer are too noisy to judge by).
@@ -185,6 +276,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     economy_alone(data);
+    price_field(data);
     demo_network(data);
     rivals(data);
     int bad = 0;

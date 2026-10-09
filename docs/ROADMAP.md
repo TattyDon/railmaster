@@ -79,8 +79,15 @@ saturation, express and town growth rescaled to match, and a tool,
 `railmaster_calibrate`, that scores the economy (now twelve metrics) against the spec's targets
 ([spec/calibration.md](spec/calibration.md)).
 
+Done in the tenth slice: the spec's price field. Equilibrium prices come
+from each node's demand and supply, prices relax over months, middlemen
+carry stock toward every dearer neighbour, and the calibration tool checks
+middleman speeds and how fast the price map reshapes.
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
+- AI rivals choosing freight lines: in the calibration game all three run
+  only passengers and mail.
 - Warehouse cargo conversion.
 
 ## M3: Company and finance (in progress)

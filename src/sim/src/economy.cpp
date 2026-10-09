@@ -1,5 +1,6 @@
 #include "railmaster/sim/economy.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/terrain.hpp"
 
@@ -44,15 +45,6 @@ bool input_active(const IndustryInput& in, const CargoRegistry& cargo, std::int3
 
 bool cargo_available(CargoId c, const CargoRegistry& cargo, std::int32_t year) {
     return cargo.get(c).cargo_class == CargoClass::Freight && year >= cargo.get(c).available_year;
-}
-
-// Price at a consumer: high when it is starved, falling as unconsumed stock
-// piles up around it.
-std::int32_t demand_price(const CargoType& c, std::int64_t daily_milli, std::int32_t days, std::int64_t leftover,
-                          std::int32_t demand_percent) {
-    const std::int64_t high = base_dollars(c) * demand_percent / 100;
-    const std::int64_t s = std::max<std::int64_t>(1, daily_milli * days);
-    return static_cast<std::int32_t>(high * s / (s + leftover));
 }
 
 std::string town_name(Random& rng) {
@@ -259,20 +251,27 @@ SiteId Economy::add_site(const IndustryRegistry& industries, IndustryTypeId type
 
 void Economy::add_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli) {
     std::int32_t& s = stock_[c][cell(cx, cy)];
-    s = std::min(balance_.max_stock_milli, s + milli);
+    s = std::min(balance_.max_stock_milli * kMicroPerMilli, s + milli * kMicroPerMilli);
 }
 
 std::int32_t Economy::take_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli) {
     std::int32_t& s = stock_[c][cell(cx, cy)];
-    const std::int32_t taken = std::clamp(milli, 0, s);
-    s -= taken;
+    const std::int32_t taken = std::clamp(milli, 0, s / kMicroPerMilli);
+    s -= taken * kMicroPerMilli;
     return taken;
 }
 
-std::int32_t Economy::supply_price(const CargoType& c, std::int64_t daily_milli, std::int64_t leftover) const {
-    const std::int64_t low = base_dollars(c) * balance_.supply_price_percent / 100;
-    const std::int64_t s = std::max<std::int64_t>(1, daily_milli * balance_.supply_saturation_days);
-    return static_cast<std::int32_t>(low * s / (s + std::max<std::int64_t>(0, leftover)));
+std::int32_t Economy::equilibrium_price(const CargoType& c, std::int64_t demand_milli,
+                                       std::int64_t supply_milli) const {
+    const std::int64_t eps = std::max(1, balance_.price_epsilon_milli);
+    const std::int64_t ratio = pow_ratio_permille(std::max<std::int64_t>(0, demand_milli) + eps,
+                                                  std::max<std::int64_t>(0, supply_milli) + eps,
+                                                  balance_.price_alpha_permille);
+    const std::int64_t base = base_dollars(c);
+    const std::int64_t pct10 = std::clamp<std::int64_t>(ratio * balance_.neutral_price_percent / 100,
+                                                        std::int64_t{balance_.price_floor_percent} * 10,
+                                                        std::int64_t{balance_.price_ceiling_percent} * 10);
+    return static_cast<std::int32_t>(base * pct10 / 1000);
 }
 
 std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType& t, std::int64_t rate, std::size_t at,
@@ -284,9 +283,11 @@ std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType
     for (CargoId c : t.outputs) {
         if (!cargo_available(c, cargo, year)) continue;
         any = true;
-        const CargoType& ct = cargo.get(c);
-        const std::int64_t base = std::max<std::int64_t>(1, base_dollars(ct));
-        const std::int64_t pct = std::int64_t{supply_price(ct, rate, stock_[c][at])} * 100 / base;
+        // This producer's own equilibrium price with its unsold stock,
+        // against what it would be with none (before the floor and ceiling).
+        const std::int64_t clear = rate * balance_.supply_days + std::max(1, balance_.price_epsilon_milli);
+        const std::int64_t pct =
+            pow_ratio_permille(clear, clear + stock_[c][at] / kMicroPerMilli, balance_.price_alpha_permille) / 10;
         best = std::max(best, static_cast<std::int32_t>(std::clamp<std::int64_t>((pct - stop) * 1000 / (full - stop), 0, 1000)));
     }
     return any ? best : 1000;
@@ -294,13 +295,13 @@ std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType
 
 void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year) {
     for (auto& a : anchors_) a.clear();
-    // A producer's price falls as unsold output piles up in its cell, as a
-    // consumer's does as unconsumed stock does [I].
+    // Each site pulls on its node's price: consumers by what they want over
+    // their horizon, producers by what they make over theirs (§5.3).
     auto supply = [&](CargoId c, std::size_t at, std::int64_t daily) {
-        anchors_[c].push_back({at, supply_price(cargo.get(c), daily, stock_[c][at])});
+        anchors_[c].push_back({at, 0, daily * balance_.supply_days});
     };
     auto demand = [&](CargoId c, std::size_t at, std::int64_t daily, std::int32_t days) {
-        anchors_[c].push_back({at, demand_price(cargo.get(c), daily, days, stock_[c][at], balance_.demand_price_percent)});
+        anchors_[c].push_back({at, daily * days, 0});
     };
 
     for (Site& s : sites_) {
@@ -326,7 +327,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, want);
                 s.used_milli[i] += took;
                 if (took >= want && want > 0) boosted = true;
-                demand(in.cargo, at, rate, balance_.industry_saturation_days);
+                demand(in.cargo, at, rate, balance_.industry_demand_days);
             }
             const std::int32_t out = daily * (100 + (boosted ? balance_.boost_percent : 0)) / 100;
             for (std::size_t o = 0; o < t.outputs.size(); ++o) {
@@ -348,7 +349,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(in, cargo, year)) continue;
                 any_input = true;
                 s.buffer[i] += take_stock(in.cargo, s.cx, s.cy, cap - s.buffer[i]);
-                demand(in.cargo, at, rate, balance_.industry_saturation_days);
+                demand(in.cargo, at, rate, balance_.industry_demand_days);
                 if (t.rule == InputRule::All) can_make = std::min(can_make, s.buffer[i]);
                 else can_make += s.buffer[i];
             }
@@ -387,7 +388,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                     const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
                     s.received_year_milli += took;
                     s.used_milli[i] += took;
-                    demand(in.cargo, at, rate, balance_.industry_saturation_days);
+                    demand(in.cargo, at, rate, balance_.industry_demand_days);
                 }
             }
             if (s.port_mode != PortMode::Receive) {
@@ -404,8 +405,8 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         }
         case IndustryKind::Sink:
         case IndustryKind::House: {
-            const std::int32_t days = t.kind == IndustryKind::House ? balance_.saturation_days
-                                                                    : balance_.industry_saturation_days;
+            const std::int32_t days = t.kind == IndustryKind::House ? balance_.town_demand_days
+                                                                    : balance_.industry_demand_days;
             for (const IndustryInput& in : t.inputs) {
                 if (!input_active(in, cargo, year)) continue;
                 const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
@@ -444,48 +445,69 @@ void Economy::spoil(const CargoRegistry& cargo) {
         for (std::size_t i = 0; i < stock.size(); ++i) {
             std::int32_t& s = stock[i];
             if (s <= 0) continue;
-            const auto loss = static_cast<std::int32_t>(std::max<std::int64_t>(1, s * per_mille / 1000));
+            const auto loss = static_cast<std::int32_t>(std::max<std::int64_t>(1, s * per_mille / 1000)); // micro
             if (cover.empty() || cover[i] < 0) {
                 s -= loss;
                 continue;
             }
             const std::int32_t kept = loss - loss * warehouse_spoilage_percent_ / 100;
             s -= loss - kept;
-            sites_[static_cast<std::size_t>(cover[i])].spoilage_saved += c.base_price.scaled(kept, kMilli);
+            sites_[static_cast<std::size_t>(cover[i])].spoilage_saved +=
+                c.base_price.scaled(kept, std::int64_t{kMilli} * kMicroPerMilli);
         }
     }
 }
 
+namespace {
+
+// Move `from` toward `to` by 1/days of the gap, rounded to the nearest dollar.
+std::int32_t toward(std::int32_t from, std::int64_t to, std::int32_t days) {
+    const std::int64_t gap = to - from, d = std::max(1, days);
+    return static_cast<std::int32_t>(from + (gap >= 0 ? (gap + d / 2) / d : -((-gap + d / 2) / d)));
+}
+
+} // namespace
+
 void Economy::relax(const CargoRegistry& cargo) {
     const auto w = static_cast<std::size_t>(width_);
     const auto h = static_cast<std::size_t>(height_);
+    std::vector<std::size_t> order;
     for (const CargoType& c : cargo.all()) {
         if (!active_[c.id]) continue;
         std::vector<std::int32_t>& p = price_[c.id];
-        const std::int64_t neutral = percent_of(base_dollars(c), balance_.neutral_price_percent);
+        const std::vector<std::int32_t>& stock = stock_[c.id];
+        const std::int32_t neutral = equilibrium_price(c, 0, 0);
+
+        // Nodes with no sites: smoothed toward their neighbours, weighted
+        // by how well each edge conducts, and relaxing toward their own
+        // equilibrium (neutral, less any stock lying there).
         for (std::size_t y = 0; y < h; ++y) {
             for (std::size_t x = 0; x < w; ++x) {
                 const std::size_t i = y * w + x;
-                // Neighbours weighted by how well the edge to them conducts.
-                // Edges reflect: a missing neighbour counts as this cell.
-                std::int64_t weight = 0, sum = 0;
-                const auto add = [&](std::int64_t wt, std::int32_t price) {
-                    weight += wt;
-                    sum += wt * price;
-                };
-                const std::int64_t self = conductance_[i];
-                if (x > 0) add(east_w_[i - 1], p[i - 1]); else add(self, p[i]);
-                if (x + 1 < w) add(east_w_[i], p[i + 1]); else add(self, p[i]);
-                if (y > 0) add(south_w_[i - w], p[i - w]); else add(self, p[i]);
-                if (y + 1 < h) add(south_w_[i], p[i + w]); else add(self, p[i]);
-                // (weighted mean of neighbours + lambda * neutral) / (1 + lambda),
-                // with lambda scaled to four flat edges; on flat land this is
-                // the plain screened average.
-                const std::int64_t screen = std::int64_t{4000} * balance_.screening_per_10000;
-                scratch_[i] = static_cast<std::int32_t>((sum * 10000 + screen * neutral) / (weight * 10000 + screen));
+                std::int64_t pull = 0; // sum of conductance x (neighbour - here), permille
+                if (x > 0) pull += std::int64_t{east_w_[i - 1]} * (p[i - 1] - p[i]);
+                if (x + 1 < w) pull += std::int64_t{east_w_[i]} * (p[i + 1] - p[i]);
+                if (y > 0) pull += std::int64_t{south_w_[i - w]} * (p[i - w] - p[i]);
+                if (y + 1 < h) pull += std::int64_t{south_w_[i]} * (p[i + w] - p[i]);
+                const std::int32_t target = stock[i] > 0 ? equilibrium_price(c, 0, stock[i] / kMicroPerMilli) : neutral;
+                const std::int32_t relaxed = toward(p[i], target, balance_.field_relax_days);
+                scratch_[i] = static_cast<std::int32_t>(relaxed + pull * balance_.coupling_permille / 1'000'000);
             }
         }
-        for (const Anchor& a : anchors_[c.id]) scratch_[a.cell] = a.price;
+
+        // Nodes with sites: their own demand and supply (stock included) set
+        // the equilibrium, which their price approaches over months.
+        std::vector<Anchor>& anchors = anchors_[c.id];
+        std::sort(anchors.begin(), anchors.end(), [](const Anchor& a, const Anchor& b) { return a.cell < b.cell; });
+        for (std::size_t k = 0; k < anchors.size();) {
+            const std::size_t at = anchors[k].cell;
+            std::int64_t d = 0, s = stock[at] / kMicroPerMilli;
+            for (; k < anchors.size() && anchors[k].cell == at; ++k) {
+                d += anchors[k].demand_milli;
+                s += anchors[k].supply_milli;
+            }
+            scratch_[at] = toward(p[at], equilibrium_price(c, d, s), balance_.site_relax_days);
+        }
         p.swap(scratch_);
     }
 }
@@ -497,40 +519,43 @@ void Economy::drift(const CargoRegistry& cargo) {
         if (!active_[c.id]) continue;
         const std::vector<std::int32_t>& p = price_[c.id];
         std::vector<std::int32_t>& s = stock_[c.id];
-        const std::int32_t threshold = percent_of(base_dollars(c), balance_.transport_cost_percent);
+        const std::int64_t base = std::max<std::int64_t>(1, base_dollars(c));
+        const std::int64_t cost = percent_of(base, balance_.transport_cost_percent);
         std::fill(scratch_.begin(), scratch_.end(), 0);
         for (std::size_t y = 0; y < h; ++y) {
             for (std::size_t x = 0; x < w; ++x) {
                 const std::size_t i = y * w + x;
                 if (s[i] <= 0) continue;
-                // The neighbour that pays best after the middleman's cost,
-                // which is cheaper where the edge conducts better. Checked in
-                // a fixed order so ties are deterministic.
-                std::size_t best = i;
-                std::int64_t best_net = p[i];
-                std::int64_t best_w = 0;
+                // Middlemen carry stock to every dearer neighbour, more the
+                // bigger the gap after their cost and the better the edge
+                // conducts (cheaper and faster on water, slower in mountains).
+                std::size_t to[4];
+                std::int64_t share[4]; // millionths of this node's stock
+                int n = 0;
+                std::int64_t total = 0;
                 const auto consider = [&](std::size_t j, std::int64_t wt) {
-                    const std::int64_t net = p[j] - std::int64_t{threshold} * 1000 / std::max<std::int64_t>(1, wt);
-                    if (net > best_net) {
-                        best = j;
-                        best_net = net;
-                        best_w = wt;
-                    }
+                    if (wt <= 0) return;
+                    const std::int64_t gap = p[j] - p[i] - cost;
+                    if (gap <= 0) return;
+                    to[n] = j;
+                    share[n] = balance_.middleman_permille * gap * wt / base;
+                    total += share[n++];
                 };
                 if (y > 0) consider(i - w, south_w_[i - w]);
                 if (y + 1 < h) consider(i + w, south_w_[i]);
                 if (x > 0) consider(i - 1, east_w_[i - 1]);
                 if (x + 1 < w) consider(i + 1, east_w_[i]);
-                if (best == i) continue;
-                // And faster: the share moved scales with conductance.
-                const auto move = static_cast<std::int32_t>(std::clamp<std::int64_t>(
-                    std::int64_t{s[i]} * balance_.drift_percent_per_day * best_w / (100 * 1000), 1, s[i]));
-                scratch_[i] -= move;
-                scratch_[best] += move;
+                if (n == 0) continue;
+                const std::int64_t scale = std::max<std::int64_t>(total, 1'000'000); // never more than all of it
+                for (int k = 0; k < n; ++k) {
+                    const auto move = static_cast<std::int32_t>(std::int64_t{s[i]} * share[k] / scale);
+                    scratch_[i] -= move;
+                    scratch_[to[k]] += move;
+                }
             }
         }
         for (std::size_t i = 0; i < s.size(); ++i) {
-            s[i] = std::min(balance_.max_stock_milli, s[i] + scratch_[i]);
+            s[i] = std::min(balance_.max_stock_milli * kMicroPerMilli, s[i] + scratch_[i]);
         }
     }
 }
