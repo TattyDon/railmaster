@@ -69,7 +69,9 @@ much of your fortune to invest and how much outside money to take (Enter
 founds the company; `--quick` skips it with the usual terms). Three AI
 rivals join by default; `--rivals=N` sets how many (0 to 7). `--map=small`,
 `medium` or `large` picks the map size (256 × 256, 384 × 512 or 768 × 1024
-cells of half a mile; Small by default).
+cells of half a mile; Small by default). `--territories=N` splits the map
+into N territories: the first town's is free, the others need access rights
+before you can build there (T in Inspect buys them).
 
 `./build/tools/calibrate/railmaster_calibrate` plays a few headless games
 and checks the economy against the spec's targets
@@ -84,6 +86,7 @@ and checks the economy against the spec's targets
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Over a train (Inspect) | F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). Each applies to every stop |
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
+| T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |

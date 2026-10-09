@@ -12,6 +12,7 @@
 #include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/terrain.hpp"
+#include "railmaster/sim/territory.hpp"
 
 #include <cstdint>
 #include <map>
@@ -64,6 +65,9 @@ struct WorldConfig {
     bool chairman_can_resign = true;
     bool town_growth = true; // the editor/sandbox switch for towns growing [D]
     bool industries_appear = true; // new industries open as the years go by [C]
+    // Split a new map into this many territories (rt3-clone-spec §3.3); 0
+    // for none, as in a sandbox map. The territory of the first town is free.
+    std::int32_t territories = 0;
     bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
 };
 
@@ -97,6 +101,18 @@ public:
     const GameData& data() const { return data_; }
     Economy& economy() { return economy_; }
     const Economy& economy() const { return economy_; }
+
+    // --- Territories (rt3-clone-spec §3.3) ---
+    const TerritoryMap& territories() const { return territories_; }
+    // Replace the map's territories (a scenario's, or a test's). The cell
+    // grid must match the terrain's.
+    void set_territories(TerritoryMap map);
+    TerritoryId territory_at(MapPoint p) const;
+    // Why `company` may not build at `p`, if it may not: a territory it has
+    // no access to.
+    std::optional<std::string> access_problem(CompanyId company, MapPoint p) const;
+    // Territories among these points that `company` would need access to.
+    std::vector<TerritoryId> access_needed(CompanyId company, const std::vector<MapPoint>& points) const;
     // The company the human player chairs (company 0 unless control changed
     // hands), or, after being fired or resigning, the one they last ran.
     Company& company() { return market_.companies.at(player_company().value_or(last_player_company_)); }
@@ -161,6 +177,13 @@ private:
     Terrain terrain_;
     GameData data_;
     Economy economy_;
+    TerritoryMap territories_;
+    // Each economy node's territory and the closed ones, for the economy.
+    void apply_territory_borders();
+    void make_territories(std::int32_t count);
+    // A company's share of upkeep weighted by territory overhead, in
+    // percent: by track length for track, by station count for buildings.
+    std::pair<std::int64_t, std::int64_t> overhead_percent(CompanyId c) const;
     Railway railway_;
     Money spent_;
     Money earned_;
@@ -205,6 +228,7 @@ private:
     CommandResult run(const CopyTrain& cmd);
     CommandResult run(const RetireTrain& cmd);
     CommandResult run(const ElectrifyTrack& cmd);
+    CommandResult run(const BuyTerritoryAccess& cmd);
     // Why the acting company may not change train `id`, if it may not.
     std::optional<std::string> own_train_problem(TrainId id) const;
     CommandResult run(const IssueBond& cmd);

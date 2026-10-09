@@ -29,6 +29,7 @@ const char* ledger_name(Ledger line) {
     case Ledger::BuildingUpkeep: return "Building upkeep";
     case Ledger::Interest: return "Interest";
     case Ledger::BondFees: return "Bond fees";
+    case Ledger::TerritoryFees: return "Territory fees";
     case Ledger::Count: break;
     }
     return "?";
@@ -153,6 +154,9 @@ void Company::absorb(Company& target) {
     rolling_stock_ += target.rolling_stock_;
     industries_ += target.industries_;
     bonds_.insert(bonds_.end(), target.bonds_.begin(), target.bonds_.end());
+    for (const auto& [t, grades] : target.access_)
+        if (!has_access(t)) grant_access(t, grades);
+    target.access_.clear();
     target.cash_ = target.track_ = target.buildings_ = target.rolling_stock_ = target.industries_ = Money{};
     target.bonds_.clear();
     target.shares_ = 0;
@@ -369,9 +373,20 @@ CreditRating Company::credit_rating() const {
         return CreditRating::D;
     }
     const std::int32_t score = credit_score();
-    std::size_t grade = 0;
-    while (grade < finance_.rating_thresholds.size() && score < finance_.rating_thresholds[grade]) ++grade;
-    return static_cast<CreditRating>(grade);
+    std::int32_t grade = 0;
+    while (static_cast<std::size_t>(grade) < finance_.rating_thresholds.size() &&
+           score < finance_.rating_thresholds[static_cast<std::size_t>(grade)])
+        ++grade;
+    for (const auto& access : access_) grade -= access.second; // + grades are better, toward A+
+    return static_cast<CreditRating>(std::clamp(grade, 0, static_cast<std::int32_t>(CreditRating::D)));
+}
+
+bool Company::has_access(std::uint16_t territory) const {
+    return std::any_of(access_.begin(), access_.end(), [&](const auto& a) { return a.first == territory; });
+}
+
+void Company::grant_access(std::uint16_t territory, std::int32_t credit_grades) {
+    if (!has_access(territory)) access_.emplace_back(territory, credit_grades);
 }
 
 std::int32_t Company::bond_rate_bp() const {

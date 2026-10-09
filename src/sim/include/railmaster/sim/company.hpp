@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace railmaster::sim {
@@ -49,6 +50,7 @@ enum class Ledger : std::uint8_t {
     BuildingUpkeep,
     Interest,
     BondFees,
+    TerritoryFees, // access rights bought [D]
     Count,
 };
 constexpr std::size_t kLedgerLines = static_cast<std::size_t>(Ledger::Count);
@@ -136,8 +138,16 @@ public:
     // The rating score (Balance::Finance): asset cover, interest cover,
     // profit record, bonds outstanding and any recent bankruptcy.
     std::int32_t credit_score() const;
-    // Graded from credit_score(); D for some years after a bankruptcy.
+    // Graded from credit_score(), then shifted by the territories it holds
+    // access to (rt3-clone-spec §3.3 [C]); D for some years after a
+    // bankruptcy.
     CreditRating credit_rating() const;
+
+    // Territory access rights (rt3-clone-spec §3.3 [D]), each with the
+    // credit-grade shift that territory brings.
+    bool has_access(std::uint16_t territory) const;
+    void grant_access(std::uint16_t territory, std::int32_t credit_grades);
+    const std::vector<std::pair<std::uint16_t, std::int32_t>>& access() const { return access_; }
     // For a new bond: the prime rate plus the rating's spread.
     std::int32_t bond_rate_bp() const;
     // Interest a year on the bonds outstanding.
@@ -244,6 +254,7 @@ private:
     Money track_, buildings_, rolling_stock_;
     Money industries_;
     std::vector<Bond> bonds_;
+    std::vector<std::pair<std::uint16_t, std::int32_t>> access_; // territory, credit grades
     std::vector<YearAccounts> history_;
     std::int64_t shares_ = 0;
     Money price_;

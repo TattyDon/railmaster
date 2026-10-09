@@ -203,6 +203,32 @@ void Economy::set_terrain(const Terrain& terrain) {
             east_w_[i] = x + 1 < width_ ? (conductance_[i] + conductance_[i + 1]) / 2 : 0;
             south_w_[i] = y + 1 < height_ ? (conductance_[i] + conductance_[cell(x, y + 1)]) / 2 : 0;
         }
+    }    apply_borders();
+}
+
+void Economy::set_borders(std::vector<std::uint16_t> territory, std::vector<bool> closed) {
+    if (!territory.empty() && territory.size() != conductance_.size()) throw std::invalid_argument("one territory per node");
+    node_territory_ = std::move(territory);
+    closed_territory_ = std::move(closed);
+    apply_borders();
+}
+
+void Economy::apply_borders() {
+    if (node_territory_.empty()) return;
+    const auto closed = [&](std::uint16_t t) { return t < closed_territory_.size() && closed_territory_[t]; };
+    for (std::int32_t y = 0; y < height_; ++y) {
+        for (std::int32_t x = 0; x < width_; ++x) {
+            const std::size_t i = cell(x, y);
+            const std::uint16_t here = node_territory_[i];
+            if (x + 1 < width_) {
+                const std::uint16_t there = node_territory_[i + 1];
+                if (here != there && (closed(here) || closed(there))) east_w_[i] = 0;
+            }
+            if (y + 1 < height_) {
+                const std::uint16_t there = node_territory_[cell(x, y + 1)];
+                if (here != there && (closed(here) || closed(there))) south_w_[i] = 0;
+            }
+        }
     }
 }
 

@@ -55,7 +55,10 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_pe
                                                 town_max_houses, town_spacing_cells, town_spread_cells,
                                                 industry_near_town_cells, raw_per_type,
                                                 processors_per_type, sinks_per_type, max_height_m, ports,
-                                                appear_chance_percent, max_count_multiple)
+                                                appear_chance_percent, max_count_multiple, territory_access_min,
+                                                territory_access_max, territory_access_big, territory_big_percent,
+                                                territory_station_cost_max_percent, territory_overhead_max_percent,
+                                                territory_credit_percent, territory_closed_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,
                                                 wait_loss_per_mille_per_sensitivity, mail_cap_months)

@@ -182,6 +182,20 @@ struct Balance {
         // many a type may reach, as a multiple of its usual number.
         std::int32_t appear_chance_percent = 10;
         std::int32_t max_count_multiple = 2;
+        // Territories on a generated map (rt3-clone-spec §3.3 [C] prices,
+        // [I] spread): the home territory is free; others cost between the
+        // two prices, or the big price with the big chance. Each may raise
+        // station costs and overhead by up to the given percent, shift the
+        // credit rating a grade either way with the credit chance, and close
+        // its borders to middlemen with the closed chance.
+        std::int64_t territory_access_min = 600'000;
+        std::int64_t territory_access_max = 2'000'000;
+        std::int64_t territory_access_big = 10'000'000;
+        std::int32_t territory_big_percent = 15;
+        std::int32_t territory_station_cost_max_percent = 20;
+        std::int32_t territory_overhead_max_percent = 30;
+        std::int32_t territory_credit_percent = 20;
+        std::int32_t territory_closed_percent = 10;
     } map;
 
     struct Freight {

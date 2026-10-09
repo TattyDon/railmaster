@@ -100,6 +100,10 @@ Still to do:
 - Transfers of express loads between trains.
 - Warehouse cargo conversion.
 
+Done since: territories (rt3-clone-spec §3.3): access rights to build,
+territory fees, station-cost, overhead and credit modifiers, closed borders
+for middlemen, a generator for new maps and rivals that buy access.
+
 ## M3: Company and finance (in progress)
 Done in the first slice: company cash that pays for everything (refusing
 what it cannot afford, except in sandbox); revenue by line; monthly running

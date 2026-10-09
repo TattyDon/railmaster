@@ -88,11 +88,14 @@ World::World(const WorldConfig& config, GameData data)
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
         populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
+        // Territories go down once the towns are placed, before trade starts across them.
+        if (config.territories > 0) make_territories(config.territories);
         // History, so the map starts with prices and cargo in place.
         economy_.settle(data_.cargo, data_.industries, date_.year(), data_.balance.economy.history_days);
         // Industries start with a year of accounts, so they have a price.
         economy_.close_accounts(data_.cargo, data_.industries, data_.balance.industries, 12);
     }
+    if (config.territories > 0 && territories_.empty()) make_territories(config.territories);
     railway_.set_balance(data_.balance);
     railway_.set_rules({.breakdowns = !config.sandbox});
 
@@ -205,6 +208,88 @@ void World::pay_trackage(Train& t, Money income) {
     t.leg_mm_by_owner.clear();
 }
 
+void World::make_territories(std::int32_t count) {
+    // The first town's territory is home: free to all.
+    const std::int64_t cell = std::int64_t{terrain_.tile_size_m()} * 1000;
+    std::int32_t hx = terrain_.width() / 2, hy = terrain_.height() / 2;
+    if (!economy_.towns().empty()) {
+        const MapPoint c = economy_.node_centre(economy_.towns().front().cx, economy_.towns().front().cy);
+        hx = static_cast<std::int32_t>(c.x_mm / cell);
+        hy = static_cast<std::int32_t>(c.y_mm / cell);
+    }
+    set_territories(generate_territories(terrain_.width(), terrain_.height(), count, hx, hy, rng_, data_.balance.map));
+}
+
+void World::set_territories(TerritoryMap map) {
+    if (!map.empty() && (map.width != terrain_.width() || map.height != terrain_.height() ||
+                         map.cells.size() != static_cast<std::size_t>(map.width) * static_cast<std::size_t>(map.height))) {
+        throw std::invalid_argument("territory cells must match the map");
+    }
+    territories_ = std::move(map);
+    apply_territory_borders();
+}
+
+void World::apply_territory_borders() {
+    if (territories_.empty()) {
+        economy_.set_borders({}, {});
+        return;
+    }
+    std::vector<std::uint16_t> nodes(static_cast<std::size_t>(economy_.width()) * static_cast<std::size_t>(economy_.height()));
+    for (std::int32_t y = 0; y < economy_.height(); ++y)
+        for (std::int32_t x = 0; x < economy_.width(); ++x)
+            nodes[static_cast<std::size_t>(y) * static_cast<std::size_t>(economy_.width()) + static_cast<std::size_t>(x)] =
+                territory_at(economy_.node_centre(x, y));
+    std::vector<bool> closed;
+    for (const Territory& t : territories_.territories) closed.push_back(t.closed_border);
+    economy_.set_borders(std::move(nodes), std::move(closed));
+}
+
+TerritoryId World::territory_at(MapPoint p) const {
+    const std::int64_t cell = std::int64_t{terrain_.tile_size_m()} * 1000;
+    return territories_.at(static_cast<std::int32_t>(p.x_mm / cell), static_cast<std::int32_t>(p.y_mm / cell));
+}
+
+std::optional<std::string> World::access_problem(CompanyId company, MapPoint p) const {
+    const TerritoryId t = territory_at(p);
+    if (t == kNoTerritory || t >= territories_.territories.size()) return std::nullopt;
+    const Territory& terr = territories_.territories[t];
+    if (terr.open() || this->company(company).has_access(t)) return std::nullopt;
+    return "you need access rights to " + terr.name + " to build there";
+}
+
+std::vector<TerritoryId> World::access_needed(CompanyId company, const std::vector<MapPoint>& points) const {
+    std::vector<TerritoryId> out;
+    for (const MapPoint& p : points) {
+        if (!access_problem(company, p)) continue;
+        const TerritoryId t = territory_at(p);
+        if (std::find(out.begin(), out.end(), t) == out.end()) out.push_back(t);
+    }
+    return out;
+}
+
+std::pair<std::int64_t, std::int64_t> World::overhead_percent(CompanyId c) const {
+    if (territories_.empty()) return {100, 100};
+    const auto overhead = [&](MapPoint p) {
+        const TerritoryId t = territory_at(p);
+        return t < territories_.territories.size() ? std::int64_t{territories_.territories[t].overhead_percent} : 100;
+    };
+    const TrackNetwork& net = railway_.track();
+    std::int64_t length = 0, weighted = 0;
+    for (const TrackEdge& e : net.edges()) {
+        if (e.owner != c) continue;
+        const MapPoint a = net.node(e.a).pos, b = net.node(e.b).pos;
+        length += e.length_mm;
+        weighted += e.length_mm * overhead({(a.x_mm + b.x_mm) / 2, (a.y_mm + b.y_mm) / 2});
+    }
+    std::int64_t stations = 0, station_weighted = 0;
+    for (const Station& s : railway_.stations()) {
+        if (s.owner != c) continue;
+        ++stations;
+        station_weighted += overhead(net.node(s.node).pos);
+    }
+    return {length > 0 ? weighted / length : 100, stations > 0 ? station_weighted / stations : 100};
+}
+
 void World::refresh_economy_terrain() {
     economy_.set_terrain(terrain_);
     economy_terrain_revision_ = terrain_.revision();
@@ -257,9 +342,14 @@ void World::charge_running_costs() {
         const std::int64_t cost_pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
         c.post(Ledger::TrainMaintenance, maintenance[c.id()].scaled(cost_pct, 100));
         c.post(Ledger::Fuel, fuel[c.id()].scaled(cost_pct, 100));
-        c.post(Ledger::TrackUpkeep, c.track_value().scaled(f.track_upkeep_bp_per_year * cost_pct, 10000 * 12 * 100));
-        c.post(Ledger::BuildingUpkeep, c.building_value().scaled(
-                                           f.building_upkeep_bp_per_year * std::int64_t{cost_percent()}, 10000 * 12 * 100));
+        // Territories may raise overhead where the track and stations lie [C].
+        const auto [track_overhead, building_overhead] = overhead_percent(c.id());
+        c.post(Ledger::TrackUpkeep, c.track_value()
+                                        .scaled(f.track_upkeep_bp_per_year * cost_pct, 10000 * 12 * 100)
+                                        .scaled(track_overhead, 100));
+        c.post(Ledger::BuildingUpkeep, c.building_value()
+                                           .scaled(f.building_upkeep_bp_per_year * std::int64_t{cost_percent()}, 10000 * 12 * 100)
+                                           .scaled(building_overhead, 100));
     }
 }
 

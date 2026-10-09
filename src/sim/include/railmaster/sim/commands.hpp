@@ -108,6 +108,12 @@ struct ElectrifyTrack {
     std::vector<EdgeId> edges{};
 };
 
+// Buy your company access rights to a territory, so it may build there
+// (rt3-clone-spec §3.3 [D]). Paid once, as a territory fee.
+struct BuyTerritoryAccess {
+    std::uint16_t territory = 0;
+};
+
 // Borrow $500,000 (needs a credit rating of B or better).
 struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
@@ -188,7 +194,7 @@ struct SetPortMode {
 struct DeclareBankruptcy {};
 
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
-                             CopyTrain, RetireTrain, ElectrifyTrack, IssueBond, RepayBond,
+                             CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
                              UpgradeIndustry, SetPortMode, BuildStationBuilding>;

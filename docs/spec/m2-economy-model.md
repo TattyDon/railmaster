@@ -99,8 +99,8 @@ exactly the one above; a test holds it to that.
 
 The stand-in map generator makes gentle hills (at most about 8% relief per
 cell), so mountains are rare; the thresholds will want revisiting with real
-maps. Rivers are not generated yet. Closed territory borders (conductance 0)
-come with territories.
+maps. Rivers are not generated yet. Closed territory borders have
+conductance 0 (see Territories below).
 
 ### Economic state [C]
 
@@ -269,6 +269,43 @@ output price nearby is red (cheap) [C].
   nobody nearby buys, and recovers as soon as a railway takes the stock.
 - Set `output_full_percent` at or below `output_stop_percent` in
   `data/balance.json` to switch it off.
+
+## Territories (rt3-clone-spec §3.3)
+
+Researched: a map can be split into named territories, and a company
+needs access rights to build in one [D]. Access costs from about $600K to
+$2M for minor states and $10M for the large ones [C]. Territories may shift
+the credit rating by grades, and raise station costs and overhead (Hannover
++1 grade, Bavaria +15% stations, Prussia +30% overhead) [C]. Closed borders
+stop middlemen [C].
+
+Our design:
+
+- **Data:** each territory has a name, an access price, a credit-grade
+  shift, a station-cost percentage, an overhead percentage and a
+  closed-border flag; every map cell belongs to one territory. A territory
+  with no price is open to all.
+- **Building** track (every point of the run), stations, support and
+  station buildings, and plants needs access to where it stands. Trains run
+  anywhere, rivals' track included.
+- **Access** is bought once per company (BuyTerritoryAccess) and posted as
+  "Territory fees", the spec's income-statement line. A merger brings the
+  target's rights.
+- **Modifiers:** stations built in a territory cost its percentage. Track
+  upkeep is weighted by where the company's track lies (by length) and
+  building upkeep by where its stations are; each territory's overhead
+  percentage applies to its share [I]. Each territory a company holds
+  access to shifts its credit rating by its grades.
+- **Closed borders:** between economy nodes in different territories,
+  either of them closed, nothing conducts, so neither middlemen nor price
+  signals cross.
+- **Generated maps** (`WorldConfig::territories`, the client's
+  `--territories=N`; none by default, like a sandbox): the map is split into
+  the cells nearest N random seeds. The first town's territory is free; the
+  others cost $600K–$2M, or $10M with a 15% chance, with stations up to 20%
+  and overhead up to 30% dearer, a 20% chance of a credit grade either way
+  and a 10% chance of closed borders (all in `map.territory_*`). Scenario
+  maps will set their own (World::set_territories).
 
 ## Station-area buildings (rt3-clone-spec §7.2)
 

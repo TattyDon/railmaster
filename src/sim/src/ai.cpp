@@ -372,6 +372,7 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
         Candidate c;
         BuildTrack cmd;
         Money total;
+        std::vector<TerritoryId> access; // territories to buy rights to first
     };
     std::optional<Costed> best;
     const auto n = std::min<std::size_t>(cands.size(), static_cast<std::size_t>(std::max(1, b.ai.candidates_previewed)));
@@ -390,9 +391,15 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
         cmd.end = end_for(c.b);
         const PlanResult plan = w.preview(cmd);
         if (!plan.plan) continue;
-        const Money total = plan.plan->total_cost + stations + loco_cost;
+        // Access rights to any territory the line crosses count as cost.
+        std::vector<MapPoint> where = plan.plan->points;
+        where.push_back(cmd.start.pos);
+        where.push_back(cmd.end.pos);
+        const std::vector<TerritoryId> access = w.access_needed(co.id(), where);
+        Money total = plan.plan->total_cost + stations + loco_cost;
+        for (TerritoryId t : access) total += w.territories().territories[t].access_cost;
         if (!best || c.value_per_year * best->total.whole_dollars() > best->c.value_per_year * total.whole_dollars()) {
-            best = Costed{c, cmd, total};
+            best = Costed{c, cmd, total, access};
         }
     }
     if (!best) return;
@@ -406,6 +413,8 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
     if (co.cash() < best->total + keep) return;
 
     r.last_build_month = now;
+    for (TerritoryId t : best->access)
+        if (!w.execute(BuyTerritoryAccess{.territory = t}, r.player).ok) return;
     const CommandResult track = w.execute(best->cmd, r.player);
     if (!track.ok) return;
     const NodeId end_node = track.created_id;

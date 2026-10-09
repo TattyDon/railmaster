@@ -454,6 +454,15 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
 
     switch (tool_) {
     case Tool::Inspect: {
+        if (key == SDLK_t) {
+            // Buy access rights to the territory under the cursor (rt3-clone-spec §3.3).
+            const sim::TerritoryId terr = world_.territory_at(hover_);
+            if (terr == sim::kNoTerritory) return false;
+            const sim::CommandResult r = world_.execute(sim::BuyTerritoryAccess{.territory = terr});
+            if (r.ok) show("BOUGHT ACCESS TO " + world_.territories().territories[terr].name + " FOR " + format_money(r.cost), true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        }
         // Keys act on the train under the cursor (rt3-clone-spec §9.3).
         const sim::Railway& rw = world_.railway();
         std::optional<sim::TrainId> id;
@@ -853,6 +862,19 @@ std::string Tools::cell_text() const {
             for (sim::CargoId o : t.outputs) s += " " + world_.data().cargo.get(o).name;
             s += ")";
         }
+    }
+    // The territory here, and whether the company may build in it.
+    if (const sim::TerritoryId terr = world_.territory_at(hover_); terr != sim::kNoTerritory) {
+        const sim::Territory& t = world_.territories().territories[terr];
+        if (!s.empty()) s += ".  ";
+        s += "TERRITORY " + t.name + ": ";
+        if (t.open()) s += "OPEN";
+        else if (world_.player_company() && world_.company().has_access(terr)) s += "YOURS";
+        else s += "ACCESS " + format_money(t.access_cost) + ", T TO BUY";
+        if (t.station_cost_percent != 100) s += ", STATIONS +" + std::to_string(t.station_cost_percent - 100) + "%";
+        if (t.overhead_percent != 100) s += ", OVERHEAD +" + std::to_string(t.overhead_percent - 100) + "%";
+        if (t.credit_grades != 0) s += std::string(", CREDIT ") + (t.credit_grades > 0 ? "+" : "") + std::to_string(t.credit_grades);
+        if (t.closed_border) s += ", BORDERS CLOSED";
     }
     if (overlay_) {
         const sim::CargoType& c = world_.data().cargo.get(*overlay_);

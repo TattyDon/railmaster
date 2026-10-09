@@ -165,6 +165,12 @@ CommandResult World::run(const BuildTrack& cmd) {
     // Validate everything before changing anything.
     const PlanResult check = preview(cmd);
     if (!check.plan) return fail(check.error);
+    // Every piece must lie where the company may build [D].
+    std::vector<MapPoint> where = check.plan->points;
+    where.push_back(cmd.start.pos);
+    where.push_back(cmd.end.pos);
+    for (const MapPoint& p : where)
+        if (auto why = access_problem(acting().id(), p)) return fail(*why);
     if (auto why = cannot_afford(check.plan->total_cost)) return fail(*why);
 
     const NodeId from = resolve_on_track(cmd.start);
@@ -187,9 +193,15 @@ CommandResult World::run(const BuildStation& cmd) {
             if (s.node == cmd.at.node) return fail("there is already a station here");
         }
     }
-    if (auto why = cannot_afford(construction_cost(station_cost(cmd.size, data_.balance)))) return fail(*why);
+    if (auto why = access_problem(acting().id(), cmd.at.pos)) return fail(*why);
+    // A territory may make stations dearer [C].
+    const TerritoryId terr = territory_at(cmd.at.pos);
+    const std::int64_t terr_pct =
+        terr < territories_.territories.size() ? territories_.territories[terr].station_cost_percent : 100;
+    const Money cost = construction_cost(station_cost(cmd.size, data_.balance)).scaled(terr_pct, 100);
+    if (auto why = cannot_afford(cost)) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
-    acting().invest_buildings(construction_cost(station_cost(cmd.size, data_.balance)));
+    acting().invest_buildings(cost);
     std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
     const StationId id = railway_.add_station(std::move(name), node, cmd.size, acting().id());
     // Which town it serves, for the station-age modifier: the nearest town
@@ -210,7 +222,7 @@ CommandResult World::run(const BuildStation& cmd) {
     if (st.town && !economy_.towns()[*st.town].first_station_day) {
         economy_.town_mut(*st.town).first_station_day = st.built_day;
     }
-    return success(construction_cost(station_cost(cmd.size, data_.balance)), id);
+    return success(cost, id);
 }
 
 CommandResult World::run(const BuildServiceBuilding& cmd) {
@@ -221,6 +233,7 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
             if (b.node == cmd.at.node && b.type == cmd.type) return fail("there is already one here");
         }
     }
+    if (auto why = access_problem(acting().id(), cmd.at.pos)) return fail(*why);
     if (auto why = cannot_afford(construction_cost(service_building_cost(cmd.type, data_.balance)))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
     acting().invest_buildings(construction_cost(service_building_cost(cmd.type, data_.balance)));
@@ -358,6 +371,17 @@ CommandResult World::run(const ElectrifyTrack& cmd) {
     acting().invest_track(cost);
     for (EdgeId id : edges) railway_.track().set_electrified(id, true);
     return success(cost, 0);
+}
+
+CommandResult World::run(const BuyTerritoryAccess& cmd) {
+    if (cmd.territory >= territories_.territories.size()) return fail("no such territory");
+    const Territory& t = territories_.territories[cmd.territory];
+    if (t.open()) return fail(t.name + " is open to all");
+    if (acting().has_access(cmd.territory)) return fail("you already have access to " + t.name);
+    if (auto why = cannot_afford(t.access_cost)) return fail(*why);
+    acting().post(Ledger::TerritoryFees, t.access_cost);
+    acting().grant_access(cmd.territory, t.credit_grades);
+    return success(t.access_cost, cmd.territory);
 }
 
 CommandResult World::run(const IssueBond&) {
@@ -524,6 +548,7 @@ CommandResult World::run(const BuildIndustry& cmd) {
     }
     if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
     if (economy_.water(cmd.cx, cmd.cy)) return fail("industries need dry land");
+    if (auto why = access_problem(acting().id(), economy_.node_centre(cmd.cx, cmd.cy))) return fail(*why);
     for (const Site& s : economy_.sites()) {
         if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) return fail("something is already built there");
     }
@@ -561,6 +586,7 @@ CommandResult World::run(const BuildStationBuilding& cmd) {
         near |= distance_mm(railway_.track().node(s.node).pos, cmd.pos) <= data_.balance.stations.building_range_mm;
     }
     if (!near) return fail("it must be near a station");
+    if (auto why = access_problem(acting().id(), cmd.pos)) return fail(*why);
     const Money cost = construction_cost(station_building_cost(cmd.type, data_.balance));
     if (auto why = cannot_afford(cost)) return fail(*why);
     acting().invest_buildings(cost);

@@ -3,7 +3,7 @@
 // throwaway (fixed-function OpenGL, top-down view); the real 3D renderer
 // replaces it later.
 //
-// Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large]
+// Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
 
 #include "render.hpp"
 #include "tools.hpp"
@@ -55,11 +55,13 @@ int main(int argc, char* argv[]) {
     bool quick = false; // skip the founding dialog: found on the usual terms
     int rivals = 3;
     sim::MapSize map_size = sim::MapSize::Small;
+    int territories = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
+        else if (arg.rfind("--territories=", 0) == 0) territories = std::stoi(arg.substr(14));
         else if (arg == "--map=small") map_size = sim::MapSize::Small;
         else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
         else if (arg == "--map=large") map_size = sim::MapSize::Large;
@@ -77,6 +79,7 @@ int main(int argc, char* argv[]) {
     sim::WorldConfig config;
     config.rivals = rivals;
     config.set_map_size(map_size);
+    config.territories = territories;
     config.found_player_company = quick;
     sim::World world(config, std::move(data));
     // The demo network is built once the player has a company to pay for it.
@@ -214,11 +217,14 @@ int main(int argc, char* argv[]) {
         client::draw_terrain(world.terrain());
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()));
         client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
+        client::draw_territory_borders(world.territories());
         client::draw_railway(world.railway(), cam, world.player_company());
         tools.draw_world_overlay();
 
         cam.apply_screen();
         client::draw_town_names(world.economy(), cam, world.data().balance.towns);
+        client::draw_territory_names(world.territories(), cam,
+                                     world.player_company() ? &world.company(*world.player_company()) : nullptr);
         std::string economy = sim::economic_state_name(world.economic_state());
         for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         std::string pace = sim::game_speed_name(speed.speed());

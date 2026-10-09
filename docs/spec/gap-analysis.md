@@ -55,6 +55,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §9.3 [D], §13.2 [I] | Replace locomotive (keeps route and consist); AI replaces engines over 25 years; a recessionCaution trait | none | as the spec; the old engine is scrapped with no trade-in, and what caution does is ours ([rivals-model.md](rivals-model.md)) |
 | §9.3 [D] | Consist rules per stop: auto (Any/Freight/Express, min/max, default 0/4) or custom cars; wait for a full load; 8 slots with caboose (−50% breakdowns) and dining car (+20% passengers); copy, retire | a fixed number of cars, one automatic rule | as documented; empty cars are not hauled (our reading of "picks cars for the next stop") |
 | §10.2, §11.2 [D/I] | Electrification drawn over existing track or "Electrify all track", +75% of single-track cost; electric engines need every leg between consecutive stops electrified | none: electric engines ran anywhere | as the spec (75% of the open-ground rate per km, × the double-track share on double track); electric trains route only over electrified track; rivals do not electrify, so they buy no electric engines |
+| §3.3 [D/C], §5.3 [C] | Territories with access rights needed to build; access prices; credit, station-cost and overhead modifiers; closed borders block middlemen | none | as described in [m2-economy-model.md](m2-economy-model.md) (Territories); a generator splits new maps on request until scenarios exist; rivals buy access for the lines they plan |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -114,7 +115,6 @@ Grouped by the spec's own build order (§17).
 - AI difficulty multipliers (§8.4).
 
 **Scenarios and presentation**
-- Territories and access rights (§3.3 [D]).
 - Scenario goals, medals, events, track budgets (§11.3, §14 [C/I]).
 - Ledger reports, lists, overlays F2–F5, radar, 3D camera (§15 [D]).
 - Save/load and content packaging (§16 [I]).

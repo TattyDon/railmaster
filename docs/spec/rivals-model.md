@@ -211,6 +211,8 @@ Each month, after the market, each rival in turn:
    - Ranks them by value per rough cost, then costs the best eight
      exactly with the track planner. It picks the best value per dollar it
      can afford, borrowing if its temperament allows.
+   - Counts the access price of any territory the line crosses as part of
+     its cost, and buys that access before building.
    - Builds the track. Where its new line meets existing track it joins it,
      a rival's included. It then builds stations at both ends (or reuses one
      already there, a rival's included), a maintenance facility and a

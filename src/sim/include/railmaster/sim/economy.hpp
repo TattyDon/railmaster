@@ -203,6 +203,14 @@ public:
     void set_terrain(const Terrain& terrain);
     // In thousandths of flat land.
     std::int32_t conductance(std::int32_t cx, std::int32_t cy) const { return conductance_[cell(cx, cy)]; }
+    // Closed borders (rt3-clone-spec §3.3, §5.3 [C]): between two nodes in
+    // different territories, either of them closed, nothing conducts, so
+    // middlemen and price signals stop there. `territory` is per node.
+    void set_borders(std::vector<std::uint16_t> territory, std::vector<bool> closed);
+    // Coupling to the node to the east or south, in thousandths (0 at the
+    // map edge or a closed border).
+    std::int32_t east_weight(std::int32_t cx, std::int32_t cy) const { return east_w_[cell(cx, cy)]; }
+    std::int32_t south_weight(std::int32_t cx, std::int32_t cy) const { return south_w_[cell(cx, cy)]; }
     // Production and demand everywhere, in percent (the economic state).
     void set_activity_percent(std::int32_t pct) { activity_percent_ = pct; }
     std::int32_t activity_percent() const { return activity_percent_; }
@@ -280,6 +288,9 @@ private:
     std::vector<std::int32_t> conductance_; // per cell, permille
     std::vector<std::int32_t> east_w_;      // coupling to the cell to the east, permille; 0 at the edge
     std::vector<std::int32_t> south_w_;     // coupling to the cell to the south
+    std::vector<std::uint16_t> node_territory_; // per cell; empty when there are no territories
+    std::vector<bool> closed_territory_;        // per territory
+    void apply_borders();
     std::int32_t activity_percent_ = 100;
     std::int32_t warehouse_radius_ = 2;
     std::int32_t warehouse_spoilage_percent_ = 25;

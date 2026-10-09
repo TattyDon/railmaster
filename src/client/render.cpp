@@ -1,6 +1,7 @@
 #include "render.hpp"
 
 #include "font.hpp"
+#include "tools.hpp"
 
 #include <SDL_opengl.h>
 
@@ -296,6 +297,62 @@ void draw_marker(sim::MapPoint p, const Camera& cam, float half_px, float r, flo
     glColor3f(r, g, b);
     square(p, cam, half_px / cam.zoom);
     glEnd();
+}
+
+} // namespace railmaster::client
+
+namespace railmaster::client {
+
+void draw_territory_borders(const sim::TerritoryMap& map) {
+    if (map.empty()) return;
+    glLineWidth(1.5f);
+    glBegin(GL_LINES);
+    for (std::int32_t y = 0; y < map.height; ++y) {
+        for (std::int32_t x = 0; x < map.width; ++x) {
+            const sim::TerritoryId here = map.at(x, y);
+            const auto edge = [&](sim::TerritoryId there, float x0, float y0, float x1, float y1) {
+                if (there == here || there == sim::kNoTerritory) return;
+                const bool closed = (here < map.territories.size() && map.territories[here].closed_border) ||
+                                    (there < map.territories.size() && map.territories[there].closed_border);
+                if (closed) glColor4f(0.85f, 0.1f, 0.1f, 0.9f);
+                else glColor4f(0.15f, 0.1f, 0.25f, 0.75f);
+                glVertex2f(x0, y0);
+                glVertex2f(x1, y1);
+            };
+            const auto fx = static_cast<float>(x), fy = static_cast<float>(y);
+            if (x + 1 < map.width) edge(map.at(x + 1, y), fx + 1, fy, fx + 1, fy + 1);
+            if (y + 1 < map.height) edge(map.at(x, y + 1), fx, fy + 1, fx + 1, fy + 1);
+        }
+    }
+    glEnd();
+}
+
+void draw_territory_names(const sim::TerritoryMap& map, const Camera& cam, const sim::Company* company) {
+    if (map.empty()) return;
+    // Centre of each territory's cells.
+    std::vector<std::int64_t> sx(map.territories.size(), 0), sy(map.territories.size(), 0), n(map.territories.size(), 0);
+    for (std::int32_t y = 0; y < map.height; ++y)
+        for (std::int32_t x = 0; x < map.width; ++x) {
+            const sim::TerritoryId t = map.at(x, y);
+            if (t >= map.territories.size()) continue;
+            sx[t] += x;
+            sy[t] += y;
+            ++n[t];
+        }
+    for (std::size_t t = 0; t < map.territories.size(); ++t) {
+        if (n[t] == 0) continue;
+        const sim::Territory& terr = map.territories[t];
+        std::string label = terr.name;
+        for (char& ch : label) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        if (company && company->has_access(static_cast<sim::TerritoryId>(t))) label += " (YOURS)";
+        else if (!terr.open()) label += " " + format_money(terr.access_cost);
+        float px = 0, py = 0;
+        const auto cell_mm = static_cast<std::int64_t>(cam.mm_per_tile);
+        cam.to_screen({(sx[t] * cell_mm) / n[t] + cell_mm / 2, (sy[t] * cell_mm) / n[t] + cell_mm / 2}, px, py);
+        const auto w = static_cast<float>(text_width(label, 2));
+        glColor4f(0.25f, 0.15f, 0.4f, 0.9f);
+        draw_text(px - w / 2, py, label, 2);
+    }
 }
 
 } // namespace railmaster::client
