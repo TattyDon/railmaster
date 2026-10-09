@@ -47,6 +47,9 @@ public:
     // interpolated from the corners. Positions off the map are clamped.
     std::int64_t height_at_mm(MapPoint p) const;
 
+    // Ground cover of the tile containing a map position (clamped to the map).
+    GroundType ground_at_mm(MapPoint p) const;
+
     // Size of the whole map in millimetres.
     std::int64_t width_mm() const { return static_cast<std::int64_t>(width_) * tile_size_m_ * 1000; }
     std::int64_t height_mm() const { return static_cast<std::int64_t>(height_) * tile_size_m_ * 1000; }

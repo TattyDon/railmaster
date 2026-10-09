@@ -10,14 +10,16 @@ Each milestone ends with something playable or testable. Spec pages in
 - Placeholder SDL2/OpenGL client; CI on gcc and clang.
 
 ## M1: Track and trains (in progress)
-Done in the first slice: track graph and ground-following builder, stations,
-locomotive data and loader, train movement with grade and acceleration,
-looping routes, single-track meets by priority, and a client demo.
+Done so far: track graph; a track planner with straight and curved runs,
+grade-limited rail profiles, automatic bridges (wood/stone/steel) and
+tunnels, and cost quotes; stations; locomotive data and loader; train
+movement with grade and acceleration; looping routes; single-track meets by
+priority; and a client demo.
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`.
 
 Still to do:
-- Curve tool (spline sampled into short pieces), bridges (wood/stone/steel)
-  and tunnels, track construction costs, track removal.
+- Track removal and upgrades (single to double, electrification), with refunds.
+- Charging track costs to a company (needs M3 ledgers).
 - Service towers and maintenance facilities; water, sand and oil use.
 - Breakdowns from reliability and oil level (with the sandbox toggle).
 - Per-stop consists, and automatic consist selection once cargo exists (M2).

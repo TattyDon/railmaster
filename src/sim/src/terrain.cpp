@@ -67,6 +67,13 @@ std::int64_t Terrain::height_at_mm(MapPoint p) const {
     return (top / tile_mm * (tile_mm - fy) + bot / tile_mm * fy) / tile_mm;
 }
 
+GroundType Terrain::ground_at_mm(MapPoint p) const {
+    const std::int64_t tile_mm = static_cast<std::int64_t>(tile_size_m_) * 1000;
+    const auto tx = static_cast<std::int32_t>(std::clamp<std::int64_t>(p.x_mm / tile_mm, 0, width_ - 1));
+    const auto ty = static_cast<std::int32_t>(std::clamp<std::int64_t>(p.y_mm / tile_mm, 0, height_ - 1));
+    return ground(tx, ty);
+}
+
 void Terrain::generate_rolling_hills(Random& rng, std::int32_t max_height_m) {
     // Midpoint-free value noise: random coarse lattice, bilinearly upsampled.
     constexpr std::int32_t kCell = 8;

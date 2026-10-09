@@ -13,10 +13,12 @@ may and may not contain.
 Early development. Done so far:
 - a deterministic simulation core: calendar, money, RNG, heightfield terrain
 - data for 41 cargo types and 35 locomotives
-- free-angle track that follows the ground, stations, and trains that run
-  looping routes, slow on grades and meet on single track
-- a placeholder top-down client with a demo line of three towns Game rules are being written
-up in `docs/spec/` before they are implemented.
+- free-angle straight and curved track with automatic bridges and tunnels
+- stations, and trains that run looping routes, slow on grades and meet on
+  single track
+- a placeholder top-down client with a demo line of three towns
+
+Game rules are written up in `docs/spec/` before they are implemented.
 
 ## Building
 

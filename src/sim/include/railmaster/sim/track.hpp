@@ -8,8 +8,6 @@
 
 namespace railmaster::sim {
 
-class Terrain;
-
 using NodeId = std::uint32_t;
 using EdgeId = std::uint32_t;
 
@@ -25,6 +23,10 @@ struct TrackNode {
 
 enum class TrackKind : std::uint8_t { Ground, Bridge, Tunnel };
 
+// RT3 offers three bridge materials. Wood is cheapest but carries single
+// track only; stone and steel carry double track; steel arrives later.
+enum class BridgeType : std::uint8_t { None, Wood, Stone, Steel };
+
 struct TrackEdge {
     EdgeId id = 0;
     NodeId a = 0;
@@ -32,6 +34,7 @@ struct TrackEdge {
     std::int64_t length_mm = 0; // horizontal length
     bool double_track = false;
     TrackKind kind = TrackKind::Ground;
+    BridgeType bridge = BridgeType::None; // set exactly when kind == Bridge
 
     NodeId other(NodeId n) const { return n == a ? b : a; }
 };
@@ -47,7 +50,10 @@ struct PathStep {
 class TrackNetwork {
 public:
     NodeId add_node(MapPoint pos, std::int64_t z_mm);
-    EdgeId add_edge(NodeId a, NodeId b, bool double_track = false, TrackKind kind = TrackKind::Ground);
+    // Throws if a bridge has no bridge type (or a non-bridge has one), or
+    // if a wooden bridge is asked to carry double track.
+    EdgeId add_edge(NodeId a, NodeId b, bool double_track = false, TrackKind kind = TrackKind::Ground,
+                    BridgeType bridge = BridgeType::None);
 
     const TrackNode& node(NodeId id) const { return nodes_.at(id); }
     const TrackEdge& edge(EdgeId id) const { return edges_.at(id); }
@@ -55,7 +61,8 @@ public:
     const std::vector<TrackEdge>& edges() const { return edges_; }
     const std::vector<EdgeId>& edges_at(NodeId id) const { return adjacency_.at(id); }
 
-    void set_double_track(EdgeId id, bool value) { edges_.at(id).double_track = value; }
+    // Upgrade or downgrade a piece. Throws for a wooden bridge.
+    void set_double_track(EdgeId id, bool value);
 
     NodeId step_start(PathStep s) const;
     NodeId step_end(PathStep s) const;
@@ -72,15 +79,5 @@ private:
     std::vector<TrackEdge> edges_;
     std::vector<std::vector<EdgeId>> adjacency_;
 };
-
-// Lay a straight run of ground-level track from `from` to a new point,
-// split into pieces no longer than `max_piece_mm`, with each node at the
-// terrain height so the line follows the ground. Returns the end node.
-NodeId lay_track_following_ground(TrackNetwork& net, const Terrain& terrain, NodeId from, MapPoint to,
-                                  std::int64_t max_piece_mm, bool double_track = false);
-
-// As above, but ending at an existing node, e.g. to join two lines.
-void connect_following_ground(TrackNetwork& net, const Terrain& terrain, NodeId from, NodeId to,
-                              std::int64_t max_piece_mm, bool double_track = false);
 
 } // namespace railmaster::sim

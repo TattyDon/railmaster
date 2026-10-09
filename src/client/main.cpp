@@ -3,6 +3,7 @@
 // throwaway (fixed-function OpenGL, top-down view); the real 3D renderer
 // replaces it later.
 
+#include "railmaster/sim/track_builder.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <SDL.h>
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -37,20 +39,42 @@ sim::GameData load_game_data(const std::string& dir) {
             sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"))};
 }
 
+// Plan and build one run of track, or report why it could not be built.
+sim::NodeId build_run(World& world, sim::NodeId from, std::vector<sim::MapPoint> points,
+                      std::optional<sim::NodeId> end = std::nullopt) {
+    sim::TrackBuildOptions opts;
+    opts.year = world.date().year();
+    auto r = sim::plan_track(world.railway().track(), world.terrain(), from, std::move(points), end, opts);
+    if (!r.plan) throw std::runtime_error("demo track: " + r.error);
+    int bridges = 0, tunnels = 0;
+    for (const auto& p : r.plan->pieces) {
+        bridges += p.kind == sim::TrackKind::Bridge;
+        tunnels += p.kind == sim::TrackKind::Tunnel;
+    }
+    std::printf("Built %zu pieces of track (%d bridge, %d tunnel) for $%lld\n", r.plan->pieces.size(), bridges,
+                tunnels, static_cast<long long>(r.plan->total_cost.whole_dollars()));
+    return sim::build_track(world.railway().track(), *r.plan);
+}
+
 // A demonstration network until the track-building UI exists: three towns
-// joined in a triangle, with two trains running round it in opposite
-// directions so single-track meets can be seen.
+// joined in a loop of straight and curved track, with two trains running
+// round it in opposite directions so single-track meets can be seen.
 void build_demo_network(World& world) {
     sim::Railway& rw = world.railway();
+    sim::TrackNetwork& net = rw.track();
     const Terrain& terrain = world.terrain();
     const sim::MapPoint towns[] = {{20 * kKm, 20 * kKm}, {105 * kKm, 35 * kKm}, {60 * kKm, 105 * kKm}};
     const char* names[] = {"Ashford", "Brookvale", "Carrow"};
+    constexpr std::int64_t piece = sim::provisional::kDefaultPieceMm;
 
     sim::NodeId nodes[3];
-    nodes[0] = rw.track().add_node(towns[0], terrain.height_at_mm(towns[0]));
-    nodes[1] = sim::lay_track_following_ground(rw.track(), terrain, nodes[0], towns[1], kKm);
-    nodes[2] = sim::lay_track_following_ground(rw.track(), terrain, nodes[1], towns[2], kKm);
-    sim::connect_following_ground(rw.track(), terrain, nodes[2], nodes[0], kKm);
+    nodes[0] = net.add_node(towns[0], terrain.height_at_mm(towns[0]));
+    nodes[1] = build_run(world, nodes[0], sim::straight_points(towns[0], towns[1], piece));
+    // Curves that carry on in the direction the track was already heading.
+    const sim::MapPoint c1 = *sim::continuing_control_point(net, nodes[1], towns[2]);
+    nodes[2] = build_run(world, nodes[1], sim::curve_points(towns[1], c1, towns[2], piece));
+    const sim::MapPoint c2 = *sim::continuing_control_point(net, nodes[2], towns[0]);
+    build_run(world, nodes[2], sim::curve_points(towns[2], c2, towns[0], piece), nodes[0]);
 
     sim::StationId st[3];
     for (int i = 0; i < 3; ++i) st[i] = rw.add_station(names[i], nodes[i], sim::StationSize::Medium);
@@ -70,8 +94,12 @@ void build_demo_network(World& world) {
 void draw_railway(const sim::Railway& rw, float mm_per_tile) {
     glLineWidth(2.0f);
     glBegin(GL_LINES);
-    glColor3f(0.35f, 0.25f, 0.15f);
     for (const sim::TrackEdge& e : rw.track().edges()) {
+        switch (e.kind) {
+        case sim::TrackKind::Ground: glColor3f(0.35f, 0.25f, 0.15f); break;
+        case sim::TrackKind::Bridge: glColor3f(0.85f, 0.85f, 0.85f); break;
+        case sim::TrackKind::Tunnel: glColor3f(0.10f, 0.08f, 0.05f); break;
+        }
         const sim::MapPoint a = rw.track().node(e.a).pos, b = rw.track().node(e.b).pos;
         glVertex2f(static_cast<float>(a.x_mm) / mm_per_tile, static_cast<float>(a.y_mm) / mm_per_tile);
         glVertex2f(static_cast<float>(b.x_mm) / mm_per_tile, static_cast<float>(b.y_mm) / mm_per_tile);
@@ -135,6 +163,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    World world(sim::WorldConfig{}, std::move(data));
+    try {
+        build_demo_network(world);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "%s\n", e.what());
+        return 1;
+    }
+    const auto mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -161,9 +198,6 @@ int main(int argc, char* argv[]) {
     }
     SDL_GL_SetSwapInterval(1);
 
-    World world(sim::WorldConfig{}, std::move(data));
-    build_demo_network(world);
-    const auto mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
 
     float pan_x = 0.0f, pan_y = 0.0f, zoom = 6.0f;
     int speed = 1;

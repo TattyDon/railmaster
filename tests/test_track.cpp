@@ -59,31 +59,17 @@ TEST_CASE("path is empty for same node and absent when disconnected") {
     CHECK_FALSE(net.shortest_path(a, island).has_value());
 }
 
-TEST_CASE("laid track follows the ground in bounded pieces") {
-    Terrain terrain(10, 10, 1000);
-    for (int y = 0; y <= 10; ++y)
-        for (int x = 0; x <= 10; ++x) terrain.set_corner_height(x, y, x * 10); // 1% slope rising east
-
-    TrackNetwork net;
-    const NodeId start = net.add_node({0, 0}, terrain.height_at_mm({0, 0}));
-    const NodeId end = lay_track_following_ground(net, terrain, start, {8 * kKm, 0}, kKm);
-    CHECK(net.edges().size() == 8);
-    CHECK(net.node(end).pos == MapPoint{8 * kKm, 0});
-    CHECK(net.node(end).z_mm == 80'000);
-    for (const TrackEdge& e : net.edges()) CHECK(net.grade_bp({e.id, true}) == 100);
-}
-
-TEST_CASE("connecting two existing nodes reuses both ends") {
-    Terrain terrain(10, 10, 1000);
+TEST_CASE("bridge type rules are enforced on edges") {
     TrackNetwork net;
     const NodeId a = net.add_node({0, 0}, 0);
-    const NodeId b = net.add_node({5 * kKm, 0}, 0);
-    connect_following_ground(net, terrain, a, b, kKm);
-    CHECK(net.edges().size() == 5);
-    CHECK(net.nodes().size() == 6); // a, b and four in between
-    const auto path = net.shortest_path(a, b);
-    REQUIRE(path.has_value());
-    CHECK(path->size() == 5);
+    const NodeId b = net.add_node({kKm, 0}, 0);
+    CHECK_THROWS(net.add_edge(a, b, false, TrackKind::Bridge, BridgeType::None));
+    CHECK_THROWS(net.add_edge(a, b, false, TrackKind::Ground, BridgeType::Steel));
+    CHECK_THROWS(net.add_edge(a, b, true, TrackKind::Bridge, BridgeType::Wood));
+    const EdgeId wood = net.add_edge(a, b, false, TrackKind::Bridge, BridgeType::Wood);
+    CHECK_THROWS(net.set_double_track(wood, true));
+    const EdgeId stone = net.add_edge(a, b, false, TrackKind::Bridge, BridgeType::Stone);
+    CHECK_NOTHROW(net.set_double_track(stone, true));
 }
 
 TEST_CASE("terrain height interpolates between corners") {

@@ -1,7 +1,5 @@
 #include "railmaster/sim/track.hpp"
 
-#include "railmaster/sim/terrain.hpp"
-
 #include <algorithm>
 #include <limits>
 #include <queue>
@@ -17,15 +15,25 @@ NodeId TrackNetwork::add_node(MapPoint pos, std::int64_t z_mm) {
     return id;
 }
 
-EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind kind) {
+EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind kind, BridgeType bridge) {
     if (a == b) throw std::invalid_argument("track edge must join two different nodes");
+    if ((kind == TrackKind::Bridge) != (bridge != BridgeType::None)) {
+        throw std::invalid_argument("bridge type must be set for bridges and only for bridges");
+    }
+    if (double_track && bridge == BridgeType::Wood) throw std::invalid_argument("wooden bridges are single track");
     const std::int64_t len = distance_mm(node(a).pos, node(b).pos);
     if (len <= 0) throw std::invalid_argument("track edge must have positive length");
     const auto id = static_cast<EdgeId>(edges_.size());
-    edges_.push_back({id, a, b, len, double_track, kind});
+    edges_.push_back({id, a, b, len, double_track, kind, bridge});
     adjacency_[a].push_back(id);
     adjacency_[b].push_back(id);
     return id;
+}
+
+void TrackNetwork::set_double_track(EdgeId id, bool value) {
+    TrackEdge& e = edges_.at(id);
+    if (value && e.bridge == BridgeType::Wood) throw std::invalid_argument("wooden bridges are single track");
+    e.double_track = value;
 }
 
 NodeId TrackNetwork::step_start(PathStep s) const {
@@ -84,45 +92,6 @@ std::optional<std::vector<PathStep>> TrackNetwork::shortest_path(NodeId from, No
     }
     std::reverse(path.begin(), path.end());
     return path;
-}
-
-namespace {
-
-// Lay pieces from `from` towards `to`, creating intermediate nodes at ground
-// height. The last piece ends at `end_node` if given, else at a new node.
-NodeId lay_pieces(TrackNetwork& net, const Terrain& terrain, NodeId from, MapPoint to,
-                  std::optional<NodeId> end_node, std::int64_t max_piece_mm, bool double_track) {
-    if (max_piece_mm <= 0) throw std::invalid_argument("piece length must be positive");
-    const MapPoint start = net.node(from).pos;
-    const std::int64_t total = distance_mm(start, to);
-    const std::int64_t pieces = std::max<std::int64_t>(1, (total + max_piece_mm - 1) / max_piece_mm);
-
-    NodeId prev = from;
-    for (std::int64_t i = 1; i <= pieces; ++i) {
-        NodeId n;
-        if (i == pieces && end_node) {
-            n = *end_node;
-        } else {
-            const MapPoint p{start.x_mm + (to.x_mm - start.x_mm) * i / pieces,
-                             start.y_mm + (to.y_mm - start.y_mm) * i / pieces};
-            n = net.add_node(p, terrain.height_at_mm(p));
-        }
-        net.add_edge(prev, n, double_track);
-        prev = n;
-    }
-    return prev;
-}
-
-} // namespace
-
-NodeId lay_track_following_ground(TrackNetwork& net, const Terrain& terrain, NodeId from, MapPoint to,
-                                  std::int64_t max_piece_mm, bool double_track) {
-    return lay_pieces(net, terrain, from, to, std::nullopt, max_piece_mm, double_track);
-}
-
-void connect_following_ground(TrackNetwork& net, const Terrain& terrain, NodeId from, NodeId to,
-                              std::int64_t max_piece_mm, bool double_track) {
-    lay_pieces(net, terrain, from, net.node(to).pos, to, max_piece_mm, double_track);
 }
 
 } // namespace railmaster::sim

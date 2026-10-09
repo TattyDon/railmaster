@@ -11,6 +11,7 @@ add_library(railmaster_sim
     src/railway.cpp
     src/terrain.cpp
     src/track.cpp
+    src/track_builder.cpp
     src/world.cpp
 )
 add_library(railmaster::sim ALIAS railmaster_sim)
