@@ -7,6 +7,7 @@
 #include "railmaster/sim/track.hpp"
 
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -147,11 +148,46 @@ std::int32_t town_stars(std::int64_t houses, const Balance::Towns& b);
 // troops) does not use the field; it travels to destinations (later slice).
 class Economy {
 public:
+    // A grid of economy nodes ("cells" in this class), each `cell_size_mm`
+    // across. A node covers cells_per_node x cells_per_node map cells
+    // (rt3-clone-spec §5.2): radii in Balance are in map cells.
     Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64_t cell_size_mm,
-            const CargoRegistry& cargo, const Balance& balance = default_balance());
+            const CargoRegistry& cargo, const Balance& balance = default_balance(),
+            std::int32_t cells_per_node = 1);
 
     std::int32_t width() const { return width_; }
     std::int32_t height() const { return height_; }
+    std::int64_t node_size_mm() const { return cell_size_mm_; }
+    std::int32_t cells_per_node() const { return cells_per_node_; }
+    // The size of a map cell, which Balance radii are counted in.
+    std::int64_t map_cell_mm() const { return cell_size_mm_ / cells_per_node_; }
+    std::int64_t cells_mm(std::int32_t map_cells) const { return map_cells * map_cell_mm(); }
+    MapPoint node_centre(std::int32_t cx, std::int32_t cy) const {
+        return {cx * cell_size_mm_ + cell_size_mm_ / 2, cy * cell_size_mm_ + cell_size_mm_ / 2};
+    }
+    // Is node (cx, cy)'s centre within `r_mm` of `p` in both directions?
+    bool within(std::int32_t cx, std::int32_t cy, MapPoint p, std::int64_t r_mm) const;
+    // Between two nodes' centres, in map cells (Chebyshev).
+    std::int32_t cells_between(std::int32_t ax, std::int32_t ay, std::int32_t bx, std::int32_t by) const {
+        return std::max(std::abs(ax - bx), std::abs(ay - by)) * cells_per_node_;
+    }
+    // Calls f(x, y) for every node whose centre is within `r_mm` of `p`, row
+    // by row, and always the node holding `p`.
+    template <typename F>
+    void for_nodes_within(MapPoint p, std::int64_t r_mm, F&& f) const {
+        const std::int32_t px = cell_x(p), py = cell_y(p);
+        const auto reach = static_cast<std::int32_t>(r_mm / cell_size_mm_ + 1);
+        for (std::int32_t y = std::max(0, py - reach); y <= std::min(height_ - 1, py + reach); ++y) {
+            for (std::int32_t x = std::max(0, px - reach); x <= std::min(width_ - 1, px + reach); ++x) {
+                if ((x == px && y == py) || within(x, y, p, r_mm)) f(x, y);
+            }
+        }
+    }
+    // Mostly water (from set_terrain): nothing is built there.
+    bool water(std::int32_t cx, std::int32_t cy) const { return water_[cell(cx, cy)]; }
+    // The map's area against a 128 km x 128 km map, in thousandths, and at
+    // least 1000: map generation scales its counts by it.
+    std::int64_t area_permille() const;
 
     SiteId add_site(const IndustryRegistry& industries, IndustryTypeId type, std::int32_t cx, std::int32_t cy,
                     std::int32_t level = 1);
@@ -162,8 +198,8 @@ public:
     // Houses in a town: the levels of its house cells.
     std::int64_t town_houses(std::size_t t) const;
 
-    // Derive each cell's conductance from the terrain (same grid size).
-    // Until called, every cell is flat land.
+    // Derive each node's conductance and water from the terrain, whose grid
+    // is cells_per_node times finer. Until called, every node is flat land.
     void set_terrain(const Terrain& terrain);
     // In thousandths of flat land.
     std::int32_t conductance(std::int32_t cx, std::int32_t cy) const { return conductance_[cell(cx, cy)]; }
@@ -222,6 +258,8 @@ private:
 
     std::int32_t width_, height_;
     std::int64_t cell_size_mm_;
+    std::int32_t cells_per_node_ = 1;
+    std::vector<bool> water_; // per cell
     std::vector<std::vector<std::int32_t>> price_; // [cargo][cell], dollars
     std::vector<std::vector<std::int32_t>> stock_; // [cargo][cell], milli-carloads
     std::vector<std::vector<Anchor>> anchors_;     // [cargo], rebuilt daily from sites
@@ -252,14 +290,15 @@ Money industry_upgrade_cost(const Site& s, const Balance::Industries& b);
 // in use this year below the map's usual number gets one more; others may
 // get one by chance, more often in good times, up to a cap [I]. Returns
 // the sites opened.
-std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& cargo,
                                      const IndustryRegistry& industries, Random& rng, std::int32_t year,
                                      const Balance& b);
 
 // Place towns and industries on a new map. A stand-in for authored scenario
 // maps: towns, and a spread of industries of every type whose products
-// exist in `year`, all on dry land (sizes and counts: Balance::map).
-void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+// exist in `year`, all on dry land (sizes and counts: Balance::map). Call
+// set_terrain first: water comes from it.
+void populate_economy(Economy& economy, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year,
                       const Balance& b = default_balance());
 

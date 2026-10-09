@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -33,6 +34,7 @@ GameData industry_data() {
 
 World flat_world(bool cycle = false) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.populate = false;
     cfg.business_cycle = cycle;

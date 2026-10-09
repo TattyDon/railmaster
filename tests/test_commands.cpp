@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <doctest/doctest.h>
@@ -20,6 +21,7 @@ GameData test_data() {
 // A flat, dry 20 x 20 km world.
 World flat_world() {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.start_date = Date::from_ymd(1835, 1, 1);
     World w(cfg, test_data());

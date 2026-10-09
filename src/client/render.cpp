@@ -166,8 +166,10 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Camera& cam,
                 std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
+    // Drawing is in map cells; a site sits at the centre of its economy node.
+    const auto k = static_cast<float>(eco.cells_per_node());
     const auto cell_square = [&](std::int32_t cx, std::int32_t cy, float half) {
-        const float x = static_cast<float>(cx) + 0.5f, y = static_cast<float>(cy) + 0.5f;
+        const float x = (static_cast<float>(cx) + 0.5f) * k, y = (static_cast<float>(cy) + 0.5f) * k;
         glVertex2f(x - half, y - half);
         glVertex2f(x + half, y - half);
         glVertex2f(x + half, y + half);
@@ -183,7 +185,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             if (makes || uses) {
                 if (makes) glColor3f(0.9f, 0.1f, 0.1f);
                 else glColor3f(0.1f, 0.85f, 0.2f);
-                cell_square(s.cx, s.cy, std::max(0.45f, 6 * px));
+                cell_square(s.cx, s.cy, std::max(0.45f * k, 6 * px));
             }
         }
         switch (t.kind) {
@@ -196,24 +198,25 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         }
         const float half = t.kind == sim::IndustryKind::House ? 0.2f + 0.02f * static_cast<float>(std::min(s.level, 10))
                                                                 : 0.3f;
-        cell_square(s.cx, s.cy, std::max(half, 2 * px));
+        cell_square(s.cx, s.cy, std::max(half * k, 2 * px));
     }
     glEnd();
 }
 
 void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo) {
     const auto base = static_cast<float>(std::max<std::int64_t>(1, cargo.base_price.whole_dollars()));
+    const auto k = static_cast<float>(eco.cells_per_node()); // map cells per node
     glBegin(GL_QUADS);
     for (std::int32_t y = 0; y < eco.height(); ++y) {
         for (std::int32_t x = 0; x < eco.width(); ++x) {
             // 0 at half the base price (red), 1 at one and a half times (green).
             const float t = std::clamp(static_cast<float>(eco.price(cargo.id, x, y)) / base - 0.5f, 0.0f, 1.0f);
             glColor4f(1.0f - t, t, 0.1f, 0.55f);
-            const auto fx = static_cast<float>(x), fy = static_cast<float>(y);
+            const auto fx = static_cast<float>(x) * k, fy = static_cast<float>(y) * k;
             glVertex2f(fx, fy);
-            glVertex2f(fx + 1, fy);
-            glVertex2f(fx + 1, fy + 1);
-            glVertex2f(fx, fy + 1);
+            glVertex2f(fx + k, fy);
+            glVertex2f(fx + k, fy + k);
+            glVertex2f(fx, fy + k);
         }
     }
     glEnd();
@@ -224,8 +227,8 @@ void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo) {
         for (std::int32_t x = 0; x < eco.width(); ++x) {
             const std::int32_t s = eco.stock_milli(cargo.id, x, y);
             if (s < sim::kMilli / 4) continue;
-            const float half = std::min(0.4f, 0.08f + 0.04f * static_cast<float>(s) / sim::kMilli);
-            const float cx = static_cast<float>(x) + 0.5f, cy = static_cast<float>(y) + 0.5f;
+            const float half = k * std::min(0.4f, 0.08f + 0.04f * static_cast<float>(s) / sim::kMilli);
+            const float cx = (static_cast<float>(x) + 0.5f) * k, cy = (static_cast<float>(y) + 0.5f) * k;
             glVertex2f(cx - half, cy - half);
             glVertex2f(cx + half, cy - half);
             glVertex2f(cx + half, cy + half);
@@ -241,9 +244,8 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
         const sim::Town& t = eco.towns()[i];
         const std::string label = t.name + " " + std::string(static_cast<std::size_t>(sim::town_stars(eco.town_houses(i), towns)), '*');
         float sx = 0, sy = 0;
-        cam.to_screen({static_cast<std::int64_t>((static_cast<float>(t.cx) + 0.5f) * cell_mm),
-                       static_cast<std::int64_t>((static_cast<float>(t.cy) - 2.5f) * cell_mm)},
-                      sx, sy);
+        const sim::MapPoint c = eco.node_centre(t.cx, t.cy);
+        cam.to_screen({c.x_mm, c.y_mm - static_cast<std::int64_t>(3.0f * cell_mm)}, sx, sy);
         const auto w = static_cast<float>(text_width(label, 2));
         glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
         glBegin(GL_QUADS);

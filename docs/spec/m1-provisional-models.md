@@ -69,7 +69,7 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Item | Stand-in | What would replace it |
 |---|---|---|
 | Time scale | A train moves as if 40 real seconds pass per simulation tick (16 ticks per game day, so about 10.7 minutes of travel per day). A 60 mph train covers about 17 km a day. | Time a train between two measured points in-game. |
-| Map scale | 1 terrain tile = 1 km by default. | Map dimensions from the original maps. |
+| Map scale | A map cell is 0.5 mile (805 m); maps are Small 256 × 256 cells (the default), Medium 384 × 512 or Large 768 × 1024 (rt3-clone-spec §3.1 [I]). Distances in `balance.json` with `_cells` are in these cells. | Map dimensions from the original maps. |
 | Grade penalty | Uphill: speed factor = 1 − (grade in hundredths of a percent × (2 + cars) × 25 ÷ grade_rating) ÷ 1000, floored at 10% of top speed. Downhill and flat: top speed. For example, a 2% grade with 8 cars halves speed at rating 100. | The RT3 grade-performance tiers and the speed-versus-grade curve. |
 | Grade rating | Every engine is 100, because no per-engine data exists yet. | Per-engine values from the in-game "grade performance" display. |
 | Acceleration | Reaches top speed in 8 ticks (half a day); braking is instant. | Observation. |

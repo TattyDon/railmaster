@@ -13,7 +13,12 @@ From [economy-cargo.md](economy-cargo.md):
 - So raw materials can reach industries and be processed with no trains
   [WP✓], and moving cargo over land is slow, which is what railroads fix.
 - About 15,000 economy nodes are spread evenly across a typical map. Ours
-  is one node per terrain tile: 16,384 on a 128 × 128 map.
+  groups map cells into square nodes, picked per map so there are about
+  15,000 (rt3-clone-spec §5.2 [I]): 2 × 2 cells on the Small 256 × 256 map
+  (16,384 nodes), 4 × 4 on Medium 384 × 512, 7 × 7 on Large 768 × 1024.
+  Sites, towns, prices and stock live on nodes. Each node is water if most
+  of its cells are, coast if any are, and takes its relief across all its
+  cells.
 - Oversupply pushes a consumer's local price down. Industries are much
   harder to oversupply than towns.
 - The price map reshapes slowly, over about a year.
@@ -139,7 +144,7 @@ How we implement them (code: `freight.hpp`):
 
 | Item | Value | Notes |
 |---|---|---|
-| Catchment | Small 3 × 3 cells, medium 5 × 5, large 7 × 7. | RT1's medium station had a 2-tile radius; RT3's are not known. |
+| Catchment | Radius 2, 3 and 4 map cells (1, 1.5 and 2 miles) for small, medium and large (rt3-clone-spec §7.1 [I]): the nodes whose centres lie within that square. On the Small map that is 2 × 2 to 3 × 3 nodes for a small station and 4 × 4 to 5 × 5 for a large one. | RT1's medium station had a 2-tile radius; RT3's are not known. |
 | Gathering | 20% of eligible catchment stock per day; up to 20 carloads of each cargo waiting. | |
 | Transit decay | Value left = exp(−0.0023 × sensitivity × days) [rt3-clone-spec §8.2, I]: sensitivity 10 loses half in 30 days, 1 loses 5%. Below 10% the load expires. | Computed from an integer table so it is identical on every platform. |
 | Revenue modifiers | Difficulty (Easy +20%, Medium 0, Hard −10%, Expert −20%) × station age (+15% for a town's first station when new, 0 at 4 years, −10% from 20 years, half in open country) [D, §8.4]. A station belongs to the nearest town centre within 4 cells. | The 4-cell reach is ours. |
@@ -194,8 +199,11 @@ How we implement them (code: `freight.hpp`):
 | Mail cap | Two months of the town's yearly mail demand, per month. | "Each city has a mail demand cap." The size is ours. |
 
 New maps are populated with towns of 10 to 40 houses, about four of each
-raw producer type and two of each processor and consumer type per 128 × 128
-map. Only industries whose products exist in the start year are placed.
+raw producer type and two of each processor and consumer type per 128 km ×
+128 km of map, scaled by area (the Small map is 2.6 times that, so it has
+about 20 towns). Maps under 128 km get the full numbers. Towns are at
+least 15 cells apart and spread 3 cells either side of their centre;
+plants and consumers go within 8 cells of a town. Only industries whose products exist in the start year are placed.
 Processors and consumers go near towns. The map then runs a year of
 history, so it opens with prices and cargo already in place.
 
@@ -309,7 +317,7 @@ warehouses and power plants upgrade on demand [C].
 - **The shipped port** exports grain, cotton, wool, lumber, coffee, rice,
   sugar, diesel and uranium, and imports rubber and goods. Diesel and
   plantation crops at last have a buyer, and rubber another source.
-- **New maps** get 3 ports per 128 × 128, on coastal land (land next to
+- **New maps** get 3 ports per 128 km × 128 km, on coastal land (land next to
   water), or on the map edge if there is no coast. Each gets a random mode.
 - **Upgrade on demand [C/I]:** at each year end, an unowned port or
   consumer (power plant and the like) that received 90% of its capacity

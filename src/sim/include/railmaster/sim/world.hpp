@@ -20,12 +20,30 @@
 
 namespace railmaster::sim {
 
+// Map size presets (rt3-clone-spec §3.1 [I]), in map cells.
+enum class MapSize : std::uint8_t { Small, Medium, Large };
+struct MapDimensions {
+    std::int32_t width, height;
+};
+MapDimensions map_dimensions(MapSize s); // 256 x 256, 384 x 512, 768 x 1024
+
+// Map cells per economy node side for a map: about 15,000 nodes
+// (rt3-clone-spec §5.1 [D], §5.2 [I]), at least 1.
+std::int32_t default_cells_per_node(std::int32_t width_cells, std::int32_t height_cells);
+
 struct WorldConfig {
     std::uint64_t seed = 1;
     Date start_date = Date::from_ymd(1830, 1, 1);
-    std::int32_t width_tiles = 128;
-    std::int32_t height_tiles = 128;
-    std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
+    std::int32_t width_tiles = 256; // the Small preset
+    std::int32_t height_tiles = 256;
+    std::int32_t tile_size_m = 805; // a map cell: 0.5 mile (rt3-clone-spec §3.1 [I])
+    // Map cells per economy node side; 0 picks default_cells_per_node.
+    std::int32_t cells_per_node = 0;
+    void set_map_size(MapSize s) {
+        const MapDimensions d = map_dimensions(s);
+        width_tiles = d.width;
+        height_tiles = d.height;
+    }
     bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
     // The player founds their company when the world is made, on these
     // terms (default: Balance::Stock's founder investment and the full

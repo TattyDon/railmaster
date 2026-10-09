@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <doctest/doctest.h>
@@ -37,6 +38,7 @@ MapPoint cell_centre(std::int32_t cx, std::int32_t cy) { return {cx * kKm + kKm 
 
 World flat_world(bool growth = true) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 30;
     cfg.populate = false;
     cfg.business_cycle = false;
@@ -203,19 +205,24 @@ TEST_CASE("new maps get ports on the coast") {
     GameData d;
     d.cargo = CargoRegistry::from_json(read_data("cargo.json"));
     d.industries = IndustryRegistry::from_json(read_data("industries.json"), d.cargo);
-    WorldConfig cfg;
+    WorldConfig cfg; // the shipped Small map: 0.5-mile cells, nodes of 2 x 2
     World w(cfg, std::move(d));
+    const Economy& eco = w.economy();
+    const Terrain& t = w.terrain();
+    const std::int32_t k = eco.cells_per_node();
+    REQUIRE(k == 2);
     std::int32_t ports = 0;
-    for (const Site& s : w.economy().sites()) {
+    for (const Site& s : eco.sites()) {
         if (w.data().industries.get(s.type).kind != IndustryKind::Port) continue;
         ++ports;
+        // Water in the port's node or in the cells just around it.
         bool coast = false;
-        for (const auto& [dx, dy] : {std::pair{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
-            const int x = s.cx + dx, y = s.cy + dy;
-            if (x >= 0 && y >= 0 && x < 128 && y < 128) coast |= w.terrain().ground(x, y) == GroundType::Water;
-        }
+        for (int y = s.cy * k - 1; y <= (s.cy + 1) * k; ++y)
+            for (int x = s.cx * k - 1; x <= (s.cx + 1) * k; ++x)
+                if (x >= 0 && y >= 0 && x < t.width() && y < t.height()) coast |= t.ground(x, y) == GroundType::Water;
         CHECK(coast);
-        CHECK(w.terrain().ground(s.cx, s.cy) != GroundType::Water);
+        CHECK_FALSE(eco.water(s.cx, s.cy));
     }
-    CHECK(ports == default_balance().map.ports);
+    // Three per 128 km x 128 km, scaled to the map's area.
+    CHECK(ports == default_balance().map.ports * eco.area_permille() / 1000);
 }

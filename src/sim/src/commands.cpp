@@ -197,11 +197,11 @@ CommandResult World::run(const BuildStation& cmd) {
     Station& st = railway_.station_mut(id);
     st.built_day = date_.days_since_epoch();
     const MapPoint p = railway_.track().node(node).pos;
-    const std::int32_t cx = economy_.cell_x(p), cy = economy_.cell_y(p);
-    std::int32_t best = data_.balance.stations.town_reach_cells;
+    std::int64_t best = economy_.cells_mm(data_.balance.stations.town_reach_cells);
     for (std::size_t t = 0; t < economy_.towns().size(); ++t) {
         const Town& town = economy_.towns()[t];
-        const std::int32_t d = std::max(std::abs(town.cx - cx), std::abs(town.cy - cy));
+        const MapPoint c = economy_.node_centre(town.cx, town.cy);
+        const std::int64_t d = std::max(std::abs(c.x_mm - p.x_mm), std::abs(c.y_mm - p.y_mm));
         if (d <= best) {
             best = d;
             st.town = t;
@@ -406,7 +406,8 @@ CommandResult World::run(const BuildIndustry& cmd) {
     if (cmd.cx < 0 || cmd.cy < 0 || cmd.cx >= economy_.width() || cmd.cy >= economy_.height()) {
         return fail("that is off the map");
     }
-    if (terrain_.ground(cmd.cx, cmd.cy) == GroundType::Water) return fail("industries need dry land");
+    if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
+    if (economy_.water(cmd.cx, cmd.cy)) return fail("industries need dry land");
     for (const Site& s : economy_.sites()) {
         if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) return fail("something is already built there");
     }

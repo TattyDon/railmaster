@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <doctest/doctest.h>
@@ -10,6 +11,7 @@ namespace {
 
 World plain_world() {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 16;
     cfg.populate = false;
     cfg.business_cycle = false;
@@ -88,6 +90,7 @@ TEST_CASE("bankruptcy halves the debt, pays bondholders in new shares and ruins 
 
 TEST_CASE("founding a company: your money buys shares at $10, investors add theirs [I, RT2]") {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 16;
     cfg.populate = false;
     cfg.found_player_company = false;

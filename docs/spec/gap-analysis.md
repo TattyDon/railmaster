@@ -50,6 +50,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §12.4 [C/I] | Ten grades A+ to D from a score of asset cover, interest cover, profit trend, bonds and bankruptcy; rate = prime + spread | eight grades from debt ÷ assets, bond notches, a rate table | as the spec; weights and thresholds ours |
 | §9.4, §11.2 [I] | Maintenance × (1 + 4% per year of age), × 1.5 with no oil; breakdowns × (1 + age/15); track upkeep 2% of cost a year | linear to 3× at 20 years, ×2 on low oil; no breakdown ageing; 6% a year | as the spec; building upkeep stays 6% (no figure in the spec) |
 | §2, §15.7 [D/C/I] | Six speeds (Paused to Very Fast) on `+`, `−` and Pause; ~4 minutes a game year at Normal, ×2 per step | three speeds on 1–3; `+`/`−` traded shares | as the spec; timings in `balance.json` (`time`); shares trade on A/S; Space also pauses |
+| §3.1, §5.2, §7.1 [I] | 0.5-mile cells; Small/Medium/Large maps of 256 × 256, 384 × 512, 768 × 1024; economy nodes every few cells (~15,000 [D]); catchment radius 2/3/4 cells | 1 km cells, one node per cell, 128 × 128 maps, radii 1/2/3 | as the spec; 2 × 2-cell nodes on Small, 4 × 4 on Medium, 7 × 7 on Large; map counts scale with area |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -81,9 +82,6 @@ Last reviewed against spec v1.0 (9 October 2026).
    weighted by terrain conductance. Ours is a screened-Poisson field with
    drift, now weighted by terrain conductance (which meets the spec's [D]
    behaviour). The equilibrium-price formulation itself is unchanged.
-2. **Catchment and map scale (§3.1, §7.1 [I]).** The spec uses 0.5-mile
-   cells, radii of 2/3/4 cells, and maps of 256–1,024 cells. Ours: 1 km
-   cells, radii of 1/2/3, and 128 × 128 maps. Similar real-world sizes.
 
 ## Missing
 
@@ -107,6 +105,8 @@ Grouped by the spec's own build order (§17).
 - Rivers in the map generator, and closed borders (conductance 0) (§5.3).
 - Automobile demand dropping sharply in recessions; the optional cost index (§5.5).
 - Owning ports; warehouse cargo conversion (§6.3 [D/C]).
+- Industry and demand-block footprints of 4 × 4 cells (§3.1 [C]); ours sit
+  on one economy node (2 × 2 cells on the Small map).
 
 **Express**
 - Units with origin and destination houses chosen by gravity weighting;

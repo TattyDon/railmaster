@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/stock.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -243,6 +244,7 @@ TEST_CASE("a portfolio across companies: net worth, purchasing power and margin 
 
 TEST_CASE("in the world, dividends land at quarter ends and commands trade shares") {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 16;
     cfg.populate = false;
     World w(cfg, no_data());

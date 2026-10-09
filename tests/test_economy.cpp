@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/terrain.hpp"
@@ -240,7 +241,8 @@ TEST_CASE("the economy is deterministic") {
         Fixture f;
         Random rng(7);
         Terrain t(20, 20, 1000);
-        populate_economy(f.eco, t, f.cargo, f.ind, rng, 1850);
+        f.eco.set_terrain(t);
+        populate_economy(f.eco, f.cargo, f.ind, rng, 1850);
         f.days(100);
         std::vector<std::int32_t> out;
         for (const auto& c : f.cargo.all())
@@ -259,15 +261,18 @@ TEST_CASE("a new world is populated with towns and industries on dry land") {
     data.cargo = CargoRegistry::from_json(read_data("cargo.json"));
     data.locomotives = LocomotiveRegistry::from_json(read_data("locomotives.json"));
     data.industries = IndustryRegistry::from_json(read_data("industries.json"), data.cargo);
-    WorldConfig cfg;
-    cfg.width_tiles = cfg.height_tiles = 64;
+    WorldConfig cfg; // the shipped Small map: 256 x 256 cells of 0.5 mile, 128 x 128 economy nodes
     World w(cfg, std::move(data));
     const Economy& eco = w.economy();
-    CHECK(eco.towns().size() >= 2);
-    CHECK(eco.sites().size() > 30);
+    CHECK(eco.width() == 128);
+    CHECK(eco.height() == 128);
+    // 206 km across: 2.6 times the area of a 128 km map, so about 20 towns.
+    CHECK(eco.area_permille() > 2500);
+    CHECK(eco.towns().size() >= 15);
+    CHECK(eco.sites().size() > 100);
     std::set<std::pair<int, int>> industry_cells;
     for (const Site& s : eco.sites()) {
-        CHECK(w.terrain().ground(s.cx, s.cy) != GroundType::Water);
+        CHECK_FALSE(w.economy().water(s.cx, s.cy));
         const auto& t = w.data().industries.get(s.type);
         if (t.kind != IndustryKind::House) CHECK(industry_cells.insert({s.cx, s.cy}).second);
         // Nothing whose products do not exist yet (the default start is 1830).

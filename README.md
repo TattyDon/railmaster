@@ -67,7 +67,9 @@ Run `./build/src/client/railmaster --empty` to start on a blank map instead
 of the demo network. A new game opens with the founding dialog: choose how
 much of your fortune to invest and how much outside money to take (Enter
 founds the company; `--quick` skips it with the usual terms). Three AI
-rivals join by default; `--rivals=N` sets how many (0 to 7).
+rivals join by default; `--rivals=N` sets how many (0 to 7). `--map=small`,
+`medium` or `large` picks the map size (256 × 256, 384 × 512 or 768 × 1024
+cells of half a mile; Small by default).
 
 `./build/tools/calibrate/railmaster_calibrate` plays a few headless games
 and checks the economy against the spec's targets

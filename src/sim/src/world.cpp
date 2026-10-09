@@ -26,13 +26,41 @@ std::int64_t fuel_per_km(const Balance::Finance& f, const LocomotiveType& loco, 
 
 } // namespace
 
+MapDimensions map_dimensions(MapSize s) {
+    switch (s) {
+    case MapSize::Small: return {256, 256};
+    case MapSize::Medium: return {384, 512};
+    case MapSize::Large: return {768, 1024};
+    }
+    return {256, 256};
+}
+
+std::int32_t default_cells_per_node(std::int32_t width_cells, std::int32_t height_cells) {
+    // sqrt(cells / 15,000), rounded to the nearest whole cell.
+    const std::int64_t cells = std::int64_t{width_cells} * height_cells;
+    std::int32_t k = 1;
+    while (std::int64_t{2 * k + 1} * (2 * k + 1) * 15'000 <= 4 * cells) ++k;
+    return k;
+}
+
+namespace {
+
+std::int32_t node_side(const WorldConfig& c) {
+    return c.cells_per_node > 0 ? c.cells_per_node : default_cells_per_node(c.width_tiles, c.height_tiles);
+}
+
+std::int32_t nodes_across(std::int32_t cells, std::int32_t k) { return (cells + k - 1) / k; }
+
+} // namespace
+
 World::World(const WorldConfig& config, GameData data)
     : rng_(config.seed),
       date_(config.start_date),
       terrain_(config.width_tiles, config.height_tiles, config.tile_size_m),
       data_(std::move(data)),
-      economy_(config.width_tiles, config.height_tiles, std::int64_t{config.tile_size_m} * 1000, data_.cargo,
-               data_.balance),
+      economy_(nodes_across(config.width_tiles, node_side(config)), nodes_across(config.height_tiles, node_side(config)),
+               std::int64_t{config.tile_size_m} * 1000 * node_side(config), data_.cargo, data_.balance,
+               node_side(config)),
       railway_(config.seed),
       sandbox_(config.sandbox),
       difficulty_(config.difficulty),
@@ -59,7 +87,7 @@ World::World(const WorldConfig& config, GameData data)
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
-        populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
+        populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
         // History, so the map starts with prices and cargo in place.
         economy_.settle(data_.cargo, data_.industries, date_.year(), data_.balance.economy.history_days);
         // Industries start with a year of accounts, so they have a price.
@@ -406,8 +434,8 @@ void World::add_house(std::size_t t) {
                 const std::int32_t x = h.cx + dx, y = h.cy + dy;
                 if (x < 0 || y < 0 || x >= economy_.width() || y >= economy_.height()) continue;
                 if (occupied[static_cast<std::size_t>(y * economy_.width() + x)]) continue;
-                if (terrain_.ground(x, y) == GroundType::Water) continue;
-                if (std::max(std::abs(tw.cx - x), std::abs(tw.cy - y)) > b.max_radius_cells) continue;
+                if (economy_.water(x, y)) continue;
+                if (economy_.cells_between(tw.cx, tw.cy, x, y) > b.max_radius_cells) continue;
                 options.push_back({score(x, y), x, y, std::nullopt});
             }
         }
@@ -511,7 +539,7 @@ void World::on_new_year() {
         news_.push_back("The " + data_.industries.get(economy_.sites()[s].type).name + " has expanded to meet demand");
     }
     if (industries_appear_) {
-        for (const SiteId id : spawn_industries(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(),
+        for (const SiteId id : spawn_industries(economy_, data_.cargo, data_.industries, rng_, date_.year(),
                                                 data_.balance)) {
             // Name the nearest town, for the news.
             const Site& s = economy_.sites()[id];

@@ -49,8 +49,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Industries, labour_perc
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::EconomicStates, activity_percent, cost_percent,
                                                 prime_rate_bp, stock_percent, checks_per_year, stay_percent,
                                                 toward_normal_percent)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, cells_per_town, town_min_houses,
-                                                town_max_houses, town_spacing_cells, raw_per_type,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_per_map, town_min_houses,
+                                                town_max_houses, town_spacing_cells, town_spread_cells,
+                                                industry_near_town_cells, raw_per_type,
                                                 processors_per_type, sinks_per_type, max_height_m, ports,
                                                 appear_chance_percent, max_count_multiple)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)

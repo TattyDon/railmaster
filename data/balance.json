@@ -7,7 +7,7 @@
     "candidates_previewed": 8,
     "cars_per_train": 4,
     "cash_reserve": 250000,
-    "cover_cells": 2,
+    "cover_cells": 3,
     "max_route_km": 40,
     "max_trains_per_route": 3,
     "min_route_km": 8,
@@ -165,12 +165,12 @@
     "receiver_max_level": 8,
     "receiver_upgrade_permille": 900,
     "upgrade_cost_percent": 50,
-    "warehouse_radius_cells": 2,
+    "warehouse_radius_cells": 3,
     "warehouse_spoilage_percent": 25
   },
   "map": {
     "appear_chance_percent": 10,
-    "cells_per_town": 2048,
+    "industry_near_town_cells": 8,
     "max_count_multiple": 2,
     "max_height_m": 400,
     "ports": 3,
@@ -179,7 +179,9 @@
     "sinks_per_type": 2,
     "town_max_houses": 40,
     "town_min_houses": 10,
-    "town_spacing_cells": 12
+    "town_spacing_cells": 15,
+    "town_spread_cells": 3,
+    "towns_per_map": 8
   },
   "servicing": {
     "maintenance_facility_cost": 100000,
@@ -195,9 +197,9 @@
   "stations": {
     "building_range_mm": 2000000,
     "cap_milli": 20000,
-    "catchment_large": 3,
-    "catchment_medium": 2,
-    "catchment_small": 1,
+    "catchment_large": 4,
+    "catchment_medium": 3,
+    "catchment_small": 2,
     "gather_percent_per_day": 20,
     "hotel_cost": 100000,
     "hotel_per_load_day": 20,
@@ -209,7 +211,7 @@
     "small_cost": 50000,
     "tavern_cost": 25000,
     "tavern_per_load": 80,
-    "town_reach_cells": 4,
+    "town_reach_cells": 5,
     "wait_loss_percent": 50
   },
   "stock": {
@@ -264,7 +266,7 @@
     "freight_permille_per_k_house": 3,
     "max_growth_permille": 150,
     "max_houses_per_cell": 6,
-    "max_radius_cells": 8,
+    "max_radius_cells": 10,
     "star_houses": [
       20,
       50,

@@ -96,11 +96,11 @@ void economy_alone(const GameData& data) {
            "$", "spec §6.2 [C]: farms $240K-$350K");
 }
 
-// B: the demo network, ten years, several maps.
+// B: the demo network, ten years, six maps (fewer are too noisy to judge by).
 void demo_network(const GameData& data) {
     double roi = 0, revenue = 0, growth = 0, price = 0, to_book = 0, grade = 0;
     int n = 0;
-    for (const std::uint64_t seed : {1u, 2u}) {
+    for (const std::uint64_t seed : {1u, 2u, 3u, 4u, 5u, 6u}) {
         WorldConfig cfg;
         cfg.seed = seed;
         World w(cfg, data);
@@ -134,8 +134,11 @@ void demo_network(const GameData& data) {
         ++n;
     }
     if (n == 0) return;
-    report("demo network: return on capital", roi / n * 100, 10, 40, "%/yr",
-           "[I] scenario goals of $10-40M over 25-30 years from $1-3M");
+    // Scenario goals of $10-40M of net worth over 25-30 years from $1-3M
+    // are compound growth of about 4% ($3M to $10M in 30 years) to 16% ($1M
+    // to $40M in 25) a year; the ceiling leaves some headroom.
+    report("demo network: return on capital", roi / n * 100, 4, 20, "%/yr",
+           "[I] scenario goals: 4-16% a year compound");
     report("demo network: revenue, years 2-4", revenue / n, 300'000, 2'000'000, "$/yr", "[I] as above");
     report("demo network: served towns grow, 10 years", growth / n * 100, 25, 200, "%",
            "spec §6.4 [C]: visible growth over 10-15 years");

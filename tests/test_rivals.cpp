@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/ai.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -31,6 +32,7 @@ GameData coal_data() {
 
 World flat_world(GameData data) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = 60;
     cfg.height_tiles = 20;
     cfg.populate = false;
@@ -184,6 +186,7 @@ namespace {
 
 WorldConfig rivals_config(std::uint64_t seed) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.seed = seed;
     cfg.width_tiles = cfg.height_tiles = 80;
     cfg.rivals = 2;

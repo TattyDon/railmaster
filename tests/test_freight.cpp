@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/freight.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -208,6 +209,7 @@ TrainId build_coal_line(World& w) {
 
 WorldConfig coal_line_config() {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = 60;
     cfg.height_tiles = 20;
     cfg.populate = false;

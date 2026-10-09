@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/economic_state.hpp"
 #include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/random.hpp"
@@ -177,6 +178,7 @@ namespace {
 
 World plain_world(bool cycle = true) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.populate = false;
     cfg.business_cycle = cycle;

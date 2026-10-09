@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -21,6 +22,7 @@ std::string read_data(const char* name) {
 
 World small_world(const Balance& b) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.populate = false;
     GameData d;
@@ -88,6 +90,7 @@ TEST_CASE("a world takes its numbers from its balance") {
 
     // An explicit starting cash in the config still wins.
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.populate = false;
     cfg.starting_cash = 5'000;

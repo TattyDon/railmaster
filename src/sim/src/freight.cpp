@@ -7,23 +7,12 @@ namespace railmaster::sim {
 
 namespace {
 
-struct Cell {
-    std::int32_t x, y;
-};
-
-Cell station_cell(const Economy& eco, const Railway& rw, const Station& s) {
-    const MapPoint p = rw.track().node(s.node).pos;
-    return {eco.cell_x(p), eco.cell_y(p)};
-}
-
-// Calls f(x, y) for every cell in a station's catchment, row by row.
+// Calls f(x, y) for every economy node in a station's catchment, row by
+// row: those whose centre is within the radius of the station.
 template <typename F>
 void for_catchment(const Economy& eco, const Railway& rw, const Station& s, F&& f) {
-    const Cell c = station_cell(eco, rw, s);
-    const std::int32_t r = catchment_radius(s.size, rw.balance());
-    for (std::int32_t y = std::max(0, c.y - r); y <= std::min(eco.height() - 1, c.y + r); ++y) {
-        for (std::int32_t x = std::max(0, c.x - r); x <= std::min(eco.width() - 1, c.x + r); ++x) f(x, y);
-    }
+    const MapPoint p = rw.track().node(s.node).pos;
+    eco.for_nodes_within(p, eco.cells_mm(catchment_radius(s.size, rw.balance())), f);
 }
 
 void size_pool(Station& s, const CargoRegistry& cargo) {
@@ -106,10 +95,11 @@ CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const St
 std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const IndustryRegistry& industries,
                             const Station& s, CargoId c, bool outputs) {
     const MapPoint p = rw.track().node(s.node).pos;
-    const std::int32_t cx = eco.cell_x(p), cy = eco.cell_y(p), r = catchment_radius(s.size, rw.balance());
+    const std::int64_t r_mm = eco.cells_mm(catchment_radius(s.size, rw.balance()));
+    const std::int32_t px = eco.cell_x(p), py = eco.cell_y(p);
     std::int64_t total = 0;
     for (const Site& site : eco.sites()) {
-        if (std::abs(site.cx - cx) > r || std::abs(site.cy - cy) > r) continue;
+        if (!(site.cx == px && site.cy == py) && !eco.within(site.cx, site.cy, p, r_mm)) continue;
         const IndustryType& t = industries.get(site.type);
         const bool has = outputs ? std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end()
                                  : std::any_of(t.inputs.begin(), t.inputs.end(),

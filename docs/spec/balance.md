@@ -34,6 +34,7 @@ Each key's name carries its unit:
 | `_bp` | basis points (1% = 100) |
 | `_ppm_…` / `_ppb_…` | millionths / billionths |
 | `_milli` | thousandths of a carload |
+| `_cells` | map cells, 0.5 mile each by default |
 | `_ticks`, `_days`, `_months`, `_years` | simulation time |
 | none, on a cost or cash | dollars |
 

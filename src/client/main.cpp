@@ -3,7 +3,7 @@
 // throwaway (fixed-function OpenGL, top-down view); the real 3D renderer
 // replaces it later.
 //
-// Usage: railmaster [data-dir] [--empty]
+// Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large]
 
 #include "render.hpp"
 #include "tools.hpp"
@@ -54,11 +54,15 @@ int main(int argc, char* argv[]) {
     bool empty = false;
     bool quick = false; // skip the founding dialog: found on the usual terms
     int rivals = 3;
+    sim::MapSize map_size = sim::MapSize::Small;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
+        else if (arg == "--map=small") map_size = sim::MapSize::Small;
+        else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
+        else if (arg == "--map=large") map_size = sim::MapSize::Large;
         else data_dir = arg;
     }
 
@@ -72,6 +76,7 @@ int main(int argc, char* argv[]) {
 
     sim::WorldConfig config;
     config.rivals = rivals;
+    config.set_map_size(map_size);
     config.found_player_company = quick;
     sim::World world(config, std::move(data));
     // The demo network is built once the player has a company to pay for it.

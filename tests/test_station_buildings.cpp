@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <doctest/doctest.h>
@@ -57,6 +58,7 @@ struct Line {
     }
     static World make() {
         WorldConfig cfg;
+        testing::legacy_scale(cfg);
         cfg.width_tiles = cfg.height_tiles = 30;
         cfg.populate = false;
         cfg.business_cycle = false;

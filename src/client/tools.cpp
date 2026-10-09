@@ -809,15 +809,14 @@ void Tools::draw_world_overlay() const {
     case Tool::Market: return;
     case Tool::Industry: {
         // Owned industries in their owner's colour; the cell under the cursor in white.
-        const std::int64_t cell = std::int64_t{world_.terrain().tile_size_m()} * 1000;
-        for (const sim::Site& s : world_.economy().sites()) {
+        const sim::Economy& eco = world_.economy();
+        for (const sim::Site& s : eco.sites()) {
             if (!s.owner || s.closed) continue;
             float r, g, b;
             owner_rgb(*s.owner, world_.player_company(), r, g, b);
-            draw_marker({s.cx * cell + cell / 2, s.cy * cell + cell / 2}, cam_, 7, r, g, b);
+            draw_marker(eco.node_centre(s.cx, s.cy), cam_, 7, r, g, b);
         }
-        const std::int32_t cx = world_.economy().cell_x(hover_), cy = world_.economy().cell_y(hover_);
-        draw_marker({cx * cell + cell / 2, cy * cell + cell / 2}, cam_, 4, 1, 1, 1);
+        draw_marker(eco.node_centre(eco.cell_x(hover_), eco.cell_y(hover_)), cam_, 4, 1, 1, 1);
         return;
     }
     }

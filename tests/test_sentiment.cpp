@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <doctest/doctest.h>
@@ -46,6 +47,7 @@ struct Fixture {
     }
     static World make(bool can_be_fired) {
         WorldConfig cfg;
+        testing::legacy_scale(cfg);
         cfg.width_tiles = cfg.height_tiles = 16;
         cfg.populate = false;
         cfg.business_cycle = false;
@@ -217,6 +219,8 @@ TEST_CASE("resigning keeps your shares; the board appoints someone else") {
     CHECK_FALSE(f.w.execute(Resign{}).ok); // nothing left to resign from
 
     WorldConfig cfg;
+
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 16;
     cfg.populate = false;
     cfg.chairman_can_resign = false;

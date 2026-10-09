@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/company.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -20,6 +21,7 @@ GameData test_data() {
 
 World flat_world(std::int64_t cash, bool sandbox = false) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 40;
     cfg.populate = false;
     cfg.starting_cash = cash;
@@ -204,6 +206,7 @@ TEST_CASE("running costs are charged monthly, and interest quarterly") {
 
 TEST_CASE("a new year opens new accounts; December's costs stay in the old year") {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 20;
     cfg.populate = false;
     cfg.start_date = Date::from_ymd(1850, 12, 1);

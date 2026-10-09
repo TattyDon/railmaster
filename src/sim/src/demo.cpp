@@ -25,10 +25,7 @@ TrackEnd on_ground(MapPoint p) { return {TrackEnd::Kind::Free, 0, 0, p}; }
 std::string build_demo_network(World& world) {
     const auto& towns = world.economy().towns();
     if (towns.size() < 3) throw std::runtime_error("demo network: fewer than three towns on the map");
-    const auto centre = [&](const Town& t) {
-        const std::int64_t cell = world.terrain().tile_size_m() * std::int64_t{1000};
-        return MapPoint{t.cx * cell + cell / 2, t.cy * cell + cell / 2};
-    };
+    const auto centre = [&](const Town& t) { return world.economy().node_centre(t.cx, t.cy); };
     std::vector<std::size_t> order(towns.size());
     for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
     std::sort(order.begin() + 1, order.end(), [&](std::size_t a, std::size_t b) {

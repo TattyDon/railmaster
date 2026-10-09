@@ -63,19 +63,13 @@ constexpr std::int64_t kJoinMm = 300'000;
 
 std::int32_t month_index(Date d) { return d.year() * 12 + d.month() - 1; }
 
-MapPoint centre(const World& w, std::int32_t cx, std::int32_t cy) {
-    const std::int64_t cell = std::int64_t{w.terrain().tile_size_m()} * 1000;
-    return {cx * cell + cell / 2, cy * cell + cell / 2};
-}
+MapPoint centre(const World& w, std::int32_t cx, std::int32_t cy) { return w.economy().node_centre(cx, cy); }
 
 std::int64_t distance_km(const World& w, const Place& a, const Place& b) {
     const MapPoint pa = centre(w, a.cx, a.cy), pb = centre(w, b.cx, b.cy);
     return distance_mm(pa, pb) / 1'000'000;
 }
 
-std::int32_t chebyshev(std::int32_t ax, std::int32_t ay, std::int32_t bx, std::int32_t by) {
-    return std::max(std::abs(ax - bx), std::abs(ay - by));
-}
 
 bool input_wanted(const IndustryInput& in, std::int32_t year) { return !in.until_year || year <= *in.until_year; }
 
@@ -86,7 +80,7 @@ std::int64_t houses(const World& w, const Town& town) {
     std::int64_t n = 0;
     for (const Site& s : eco.sites()) {
         if (w.data().industries.get(s.type).kind == IndustryKind::House &&
-            chebyshev(s.cx, s.cy, town.cx, town.cy) <= reach)
+            eco.cells_between(s.cx, s.cy, town.cx, town.cy) <= reach)
             n += s.level;
     }
     return n;
@@ -99,7 +93,7 @@ std::optional<StationId> station_near(const World& w, std::int32_t cx, std::int3
     for (const Station& st : rw.stations()) {
         if (owner && st.owner != *owner) continue;
         const MapPoint p = rw.track().node(st.node).pos;
-        if (chebyshev(w.economy().cell_x(p), w.economy().cell_y(p), cx, cy) <= cells) return st.id;
+        if (w.economy().cells_between(w.economy().cell_x(p), w.economy().cell_y(p), cx, cy) <= cells) return st.id;
     }
     return std::nullopt;
 }

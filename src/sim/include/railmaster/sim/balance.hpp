@@ -84,12 +84,14 @@ struct Balance {
         std::int64_t small_cost = 50'000;
         std::int64_t medium_cost = 100'000;
         std::int64_t large_cost = 200'000;
-        std::int32_t catchment_small = 1; // radius in economy cells
-        std::int32_t catchment_medium = 2;
-        std::int32_t catchment_large = 3;
+        // Catchment radius in map cells (rt3-clone-spec §7.1 [I]). Every
+        // "_cells" distance in this file is in map cells, 0.5 mile by default.
+        std::int32_t catchment_small = 2;
+        std::int32_t catchment_medium = 3;
+        std::int32_t catchment_large = 4;
         std::int32_t gather_percent_per_day = 20;
         std::int32_t cap_milli = 20'000;
-        std::int32_t town_reach_cells = 4; // a station within this of a town centre serves that town
+        std::int32_t town_reach_cells = 5; // a station within this of a town centre serves that town
         // Station-area buildings (rt3-clone-spec §7.2): costs are not
         // researched [I]; each serves stations within the range; income per
         // passenger load is [I], tuned to be small [C: "~$1K a year to a
@@ -144,15 +146,18 @@ struct Balance {
     } economy;
 
     struct MapGeneration {
-        std::int32_t cells_per_town = 2048;
+        // Counts are per 128 km x 128 km of map, scaled by area.
+        std::int32_t towns_per_map = 8;
         std::int32_t town_min_houses = 10;
         std::int32_t town_max_houses = 40;
-        std::int32_t town_spacing_cells = 12;
-        std::int32_t raw_per_type = 4; // per 128 x 128 map
+        std::int32_t town_spacing_cells = 15;
+        std::int32_t town_spread_cells = 3;         // houses this far either side of the centre
+        std::int32_t industry_near_town_cells = 8;  // plants and consumers this near a town
+        std::int32_t raw_per_type = 4;
         std::int32_t processors_per_type = 2;
         std::int32_t sinks_per_type = 2;
         std::int32_t max_height_m = 400;
-        std::int32_t ports = 3; // per 128 x 128 map, on the coast or else the map edge
+        std::int32_t ports = 3; // on the coast, or else the map edge
         // New industries over time [C/I]: the yearly chance of an extra one
         // of each type (times the economy's activity), and the cap on how
         // many a type may reach, as a multiple of its usual number.
@@ -184,7 +189,7 @@ struct Balance {
         std::int32_t max_growth_permille = 150;
         std::int32_t unconnected_permille = 300;
         std::int32_t max_houses_per_cell = 6;
-        std::int32_t max_radius_cells = 8;
+        std::int32_t max_radius_cells = 10;
         std::array<std::int32_t, 4> star_houses{20, 50, 120, 300}; // 2 to 5 stars from these
     } towns;
 
@@ -207,7 +212,7 @@ struct Balance {
         // Warehouses keep cargo nearby from spoiling [D/C]: within this many
         // cells, stock spoils at this share of the usual rate [I]; the owner
         // earns the value saved [C: "its profit is the loss it saves"].
-        std::int32_t warehouse_radius_cells = 2;
+        std::int32_t warehouse_radius_cells = 3;
         std::int32_t warehouse_spoilage_percent = 25;
     } industries;
 
@@ -234,7 +239,7 @@ struct Balance {
         std::int32_t cars_per_train = 4;
         std::int32_t max_trains_per_route = 3;
         std::int32_t waiting_carloads_for_train = 6;
-        std::int32_t cover_cells = 2;             // a station this near already serves a place
+        std::int32_t cover_cells = 3;             // a station this near already serves a place
         // Share trading, against the price the market is heading for
         // (target_share_price): buy below, sell and short above.
         std::int32_t buy_below_value_percent = 80;

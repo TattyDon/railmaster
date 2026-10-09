@@ -1,3 +1,4 @@
+#include "legacy_scale.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/world.hpp"
 
@@ -28,6 +29,7 @@ GameData data() {
 
 World flat_world(Date start = Date::from_ymd(1850, 1, 1), bool appear = true) {
     WorldConfig cfg;
+    testing::legacy_scale(cfg);
     cfg.width_tiles = cfg.height_tiles = 30;
     cfg.populate = false;
     cfg.business_cycle = false;
@@ -119,7 +121,7 @@ TEST_CASE("industries below the map's usual number appear, a year at a time [C/I
     // Up to the usual number (4 coal mines on a small map), then rarely more, never past the cap.
     CHECK(open_of(w, "coal_mine") >= m.raw_per_type);
     CHECK(open_of(w, "coal_mine") <= m.raw_per_type * m.max_count_multiple);
-    for (const Site& s : w.economy().sites()) CHECK(w.terrain().ground(s.cx, s.cy) != GroundType::Water);
+    for (const Site& s : w.economy().sites()) CHECK_FALSE(w.economy().water(s.cx, s.cy));
 }
 
 TEST_CASE("new kinds of industry appear once their cargo exists") {

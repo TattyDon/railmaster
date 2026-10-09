@@ -127,8 +127,9 @@ std::optional<IndustryTypeId> IndustryRegistry::find(std::string_view key) const
 // --- The economy grid --------------------------------------------------------
 
 Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64_t cell_size_mm,
-                 const CargoRegistry& cargo, const Balance& balance)
-    : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm), balance_(balance.economy) {
+                 const CargoRegistry& cargo, const Balance& balance, std::int32_t cells_per_node)
+    : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm),
+      cells_per_node_(std::max(1, cells_per_node)), balance_(balance.economy) {
     warehouse_radius_ = balance.industries.warehouse_radius_cells;
     warehouse_spoilage_percent_ = balance.industries.warehouse_spoilage_percent;
     if (width_ <= 0 || height_ <= 0 || cell_size_mm_ <= 0) throw std::invalid_argument("bad economy grid size");
@@ -143,6 +144,7 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
     }
     scratch_.resize(cells);
     conductance_.assign(cells, 1000);
+    water_.assign(cells, false);
     east_w_.assign(cells, 1000);
     south_w_.assign(cells, 1000);
     for (std::int32_t y = 0; y < height_; ++y) east_w_[cell(width_ - 1, y)] = 0;
@@ -150,11 +152,32 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
 }
 
 void Economy::set_terrain(const Terrain& terrain) {
-    if (terrain.width() != width_ || terrain.height() != height_) {
+    const std::int32_t k = cells_per_node_;
+    if (terrain.width() < (width_ - 1) * k + 1 || terrain.width() > width_ * k ||
+        terrain.height() < (height_ - 1) * k + 1 || terrain.height() > height_ * k) {
         throw std::invalid_argument("terrain and economy grids differ in size");
     }
+    // The map cells a node covers (the last row and column may be partial).
+    const auto tiles = [&](std::int32_t x, std::int32_t y, auto&& f) {
+        for (std::int32_t ty = y * k; ty < std::min(terrain.height(), (y + 1) * k); ++ty)
+            for (std::int32_t tx = x * k; tx < std::min(terrain.width(), (x + 1) * k); ++tx) f(tx, ty);
+    };
+    // A node is water when most of it is; it is coast when any of its cells,
+    // or a neighbouring node, is water.
+    std::vector<bool> wet(water_.size(), false);
+    for (std::int32_t y = 0; y < height_; ++y) {
+        for (std::int32_t x = 0; x < width_; ++x) {
+            std::int32_t n = 0, w = 0;
+            tiles(x, y, [&](std::int32_t tx, std::int32_t ty) {
+                ++n;
+                w += terrain.ground(tx, ty) == GroundType::Water;
+            });
+            water_[cell(x, y)] = n > 0 && 2 * w > n;
+            wet[cell(x, y)] = w > 0;
+        }
+    }
     const auto water = [&](std::int32_t x, std::int32_t y) {
-        return x >= 0 && y >= 0 && x < width_ && y < height_ && terrain.ground(x, y) == GroundType::Water;
+        return x >= 0 && y >= 0 && x < width_ && y < height_ && water_[cell(x, y)];
     };
     for (std::int32_t y = 0; y < height_; ++y) {
         for (std::int32_t x = 0; x < width_; ++x) {
@@ -162,14 +185,20 @@ void Economy::set_terrain(const Terrain& terrain) {
             if (water(x, y)) {
                 c = balance_.water_conductance_permille;
             } else {
-                const std::int32_t hs[] = {terrain.corner_height(x, y), terrain.corner_height(x + 1, y),
-                                           terrain.corner_height(x, y + 1), terrain.corner_height(x + 1, y + 1)};
-                const std::int64_t relief = *std::max_element(std::begin(hs), std::end(hs)) -
-                                            *std::min_element(std::begin(hs), std::end(hs));
-                const std::int64_t grade_bp = relief * 10000 / terrain.tile_size_m();
+                // Relief across the node: the highest corner less the lowest.
+                std::int32_t lo = terrain.corner_height(x * k, y * k), hi = lo;
+                const std::int32_t x1 = std::min(terrain.width(), (x + 1) * k), y1 = std::min(terrain.height(), (y + 1) * k);
+                for (std::int32_t ty = y * k; ty <= y1; ++ty) {
+                    for (std::int32_t tx = x * k; tx <= x1; ++tx) {
+                        lo = std::min(lo, terrain.corner_height(tx, ty));
+                        hi = std::max(hi, terrain.corner_height(tx, ty));
+                    }
+                }
+                const std::int64_t span_m = std::int64_t{terrain.tile_size_m()} * std::max(1, std::min(x1 - x * k, y1 - y * k));
+                const std::int64_t grade_bp = std::int64_t{hi - lo} * 10000 / span_m;
                 if (grade_bp >= balance_.mountain_grade_bp) c = balance_.mountain_conductance_permille;
                 else if (grade_bp >= balance_.hill_grade_bp) c = balance_.hill_conductance_permille;
-                else if (water(x - 1, y) || water(x + 1, y) || water(x, y - 1) || water(x, y + 1))
+                else if (wet[cell(x, y)] || water(x - 1, y) || water(x + 1, y) || water(x, y - 1) || water(x, y + 1))
                     c = balance_.coast_conductance_permille;
             }
             conductance_[cell(x, y)] = std::max(1, c);
@@ -183,6 +212,18 @@ void Economy::set_terrain(const Terrain& terrain) {
             south_w_[i] = y + 1 < height_ ? (conductance_[i] + conductance_[cell(x, y + 1)]) / 2 : 0;
         }
     }
+}
+
+bool Economy::within(std::int32_t cx, std::int32_t cy, MapPoint p, std::int64_t r_mm) const {
+    const MapPoint c = node_centre(cx, cy);
+    return std::abs(c.x_mm - p.x_mm) <= r_mm && std::abs(c.y_mm - p.y_mm) <= r_mm;
+}
+
+std::int64_t Economy::area_permille() const {
+    constexpr std::int64_t kReferenceMm = 128'000'000; // 128 km
+    const std::int64_t wmm = width_ * cell_size_mm_, hmm = height_ * cell_size_mm_;
+    // Smaller maps still get the usual numbers.
+    return std::max<std::int64_t>(1000, (wmm / 1000) * (hmm / 1000) / (kReferenceMm / 1000 * (kReferenceMm / 1000) / 1000));
 }
 
 std::size_t Economy::cell(std::int32_t cx, std::int32_t cy) const {
@@ -392,13 +433,10 @@ void Economy::spoil(const CargoRegistry& cargo) {
     for (const Site& w : sites_) {
         if (w.closed || w.kind != IndustryKind::Warehouse) continue;
         if (cover.empty()) cover.assign(scratch_.size(), -1);
-        const std::int32_t r = warehouse_radius_;
-        for (std::int32_t y = std::max(0, w.cy - r); y <= std::min(height_ - 1, w.cy + r); ++y) {
-            for (std::int32_t x = std::max(0, w.cx - r); x <= std::min(width_ - 1, w.cx + r); ++x) {
-                std::int64_t& c = cover[cell(x, y)];
-                if (c < 0) c = w.id;
-            }
-        }
+        for_nodes_within(node_centre(w.cx, w.cy), cells_mm(warehouse_radius_), [&](std::int32_t x, std::int32_t y) {
+            std::int64_t& c = cover[cell(x, y)];
+            if (c < 0) c = w.id;
+        });
     }
     for (const CargoType& c : cargo.all()) {
         const std::int64_t per_mille = std::int64_t{c.decay_sensitivity} * balance_.spoilage_per_mille_per_sensitivity;
@@ -656,21 +694,22 @@ std::int32_t usual_count(const IndustryType& t, const Balance::MapGeneration& mg
 
 // Raw producers go anywhere on open land; processors and consumers go near
 // towns, where their customers are. `taken` marks occupied cells.
-std::optional<SiteId> place_site(Economy& economy, const Terrain& terrain, const IndustryRegistry& industries,
-                                 IndustryTypeId type, Random& rng, std::vector<bool>& taken) {
+std::optional<SiteId> place_site(Economy& economy, const IndustryRegistry& industries, IndustryTypeId type,
+                                 Random& rng, std::vector<bool>& taken, const Balance::MapGeneration& mg) {
     const std::int32_t w = economy.width(), h = economy.height();
     const bool near_town = industries.get(type).kind != IndustryKind::Raw;
+    const std::int32_t near = std::max(1, mg.industry_near_town_cells / economy.cells_per_node());
     for (int attempt = 0; attempt < 300; ++attempt) {
         std::int32_t x, y;
         if (near_town && !economy.towns().empty()) {
             const Town& t = economy.towns()[rng.below(static_cast<std::uint32_t>(economy.towns().size()))];
-            x = t.cx + rng.between(-6, 6);
-            y = t.cy + rng.between(-6, 6);
+            x = t.cx + rng.between(-near, near);
+            y = t.cy + rng.between(-near, near);
         } else {
             x = rng.between(0, w - 1);
             y = rng.between(0, h - 1);
         }
-        if (x < 0 || y < 0 || x >= w || y >= h || terrain.ground(x, y) == GroundType::Water) continue;
+        if (x < 0 || y < 0 || x >= w || y >= h || economy.water(x, y)) continue;
         const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
         if (taken[i]) continue;
         taken[i] = true;
@@ -681,7 +720,7 @@ std::optional<SiteId> place_site(Economy& economy, const Terrain& terrain, const
 
 } // namespace
 
-std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& cargo,
                                      const IndustryRegistry& industries, Random& rng, std::int32_t year,
                                      const Balance& b) {
     const std::int32_t w = economy.width(), h = economy.height();
@@ -689,13 +728,13 @@ std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, c
     for (const Site& s : economy.sites()) {
         if (!s.closed) taken[static_cast<std::size_t>(s.cy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(s.cx)] = true;
     }
-    const std::int32_t area_scale = std::max(1, w * h / 16384);
+    const std::int64_t area = economy.area_permille();
     std::vector<SiteId> opened;
     for (const IndustryType& t : industries.all()) {
         if (!industry_eligible(t, cargo, year)) continue;
         std::int32_t open = 0;
         for (const Site& s : economy.sites()) open += s.type == t.id && !s.closed;
-        const std::int32_t usual = usual_count(t, b.map) * area_scale;
+        const auto usual = static_cast<std::int32_t>(std::max<std::int64_t>(1, usual_count(t, b.map) * area / 1000));
         // Below the usual number: one more (new types, and replacing closures).
         // Otherwise a chance of one more, better in good times, up to a cap [I].
         const bool short_of = open < usual;
@@ -703,36 +742,43 @@ std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, c
             std::max<std::int64_t>(0, std::int64_t{b.map.appear_chance_percent} * economy.activity_percent() / 100));
         const bool extra = open < usual * b.map.max_count_multiple && rng.chance(chance, 100);
         if (!short_of && !extra) continue;
-        if (const auto id = place_site(economy, terrain, industries, t.id, rng, taken)) opened.push_back(*id);
+        if (const auto id = place_site(economy, industries, t.id, rng, taken, b.map)) opened.push_back(*id);
     }
     return opened;
 }
 
 
 
-void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+void populate_economy(Economy& economy, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b) {
     const Balance::MapGeneration& mg = b.map;
     const std::int32_t w = economy.width(), h = economy.height();
     const auto land = [&](std::int32_t x, std::int32_t y) {
-        return x >= 0 && y >= 0 && x < w && y < h && terrain.ground(x, y) != GroundType::Water;
+        return x >= 0 && y >= 0 && x < w && y < h && !economy.water(x, y);
     };
     std::vector<bool> taken(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
     const auto idx = [&](std::int32_t x, std::int32_t y) {
         return static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
     };
-    const std::int32_t area_scale = std::max(1, w * h / 16384); // 1 for a 128 x 128 map
+    // Counts are per 128 km x 128 km of map, distances in map cells.
+    const std::int64_t area = economy.area_permille();
+    const auto scaled = [&](std::int32_t per_map) {
+        return static_cast<std::int32_t>(std::max<std::int64_t>(1, per_map * area / 1000));
+    };
+    const std::int32_t k = economy.cells_per_node();
+    const std::int32_t spread = mg.town_spread_cells / k; // nodes either side of the centre
+    const std::int32_t side = 2 * spread + 1;
 
     // Towns.
     const std::optional<IndustryTypeId> house = industries.find("house");
-    const std::int32_t town_count = std::max(1, w * h / mg.cells_per_town);
+    const std::int32_t town_count = scaled(mg.towns_per_map);
     std::vector<std::string> used_names;
     for (std::int32_t t = 0; t < town_count; ++t) {
         for (int attempt = 0; attempt < 200; ++attempt) {
             const std::int32_t cx = rng.between(3, std::max(3, w - 4)), cy = rng.between(3, std::max(3, h - 4));
             if (!land(cx, cy) || taken[idx(cx, cy)]) continue;
             const bool crowded = std::any_of(economy.towns().begin(), economy.towns().end(), [&](const Town& o) {
-                return std::abs(o.cx - cx) + std::abs(o.cy - cy) < mg.town_spacing_cells;
+                return (std::abs(o.cx - cx) + std::abs(o.cy - cy)) * k < mg.town_spacing_cells;
             });
             if (crowded && attempt < 150) continue;
             std::string name = town_name(rng);
@@ -741,15 +787,19 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
             economy.add_town({name, cx, cy});
 
             if (house) {
-                std::vector<std::int32_t> houses(25, 0); // 5 x 5 around the centre
+                // Houses scattered over the nodes around the centre.
+                std::vector<std::int32_t> houses(static_cast<std::size_t>(side * side), 0);
+                const auto slot = [&](std::int32_t dx, std::int32_t dy) {
+                    return static_cast<std::size_t>((dy + spread) * side + dx + spread);
+                };
                 const std::int32_t count = rng.between(mg.town_min_houses, mg.town_max_houses);
                 for (std::int32_t i = 0; i < count; ++i) {
-                    const std::int32_t dx = rng.between(-2, 2), dy = rng.between(-2, 2);
-                    if (land(cx + dx, cy + dy)) ++houses[static_cast<std::size_t>((dy + 2) * 5 + dx + 2)];
+                    const std::int32_t dx = rng.between(-spread, spread), dy = rng.between(-spread, spread);
+                    if (land(cx + dx, cy + dy)) ++houses[slot(dx, dy)];
                 }
-                for (std::int32_t dy = -2; dy <= 2; ++dy) {
-                    for (std::int32_t dx = -2; dx <= 2; ++dx) {
-                        const std::int32_t n = houses[static_cast<std::size_t>((dy + 2) * 5 + dx + 2)];
+                for (std::int32_t dy = -spread; dy <= spread; ++dy) {
+                    for (std::int32_t dx = -spread; dx <= spread; ++dx) {
+                        const std::int32_t n = houses[slot(dx, dy)];
                         if (n == 0) continue;
                         const SiteId site = economy.add_site(industries, *house, cx + dx, cy + dy, n);
                         economy.town_mut(economy.towns().size() - 1).houses.push_back(site);
@@ -764,8 +814,8 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
     // Industries, in the map's usual numbers.
     for (const IndustryType& t : industries.all()) {
         if (!industry_eligible(t, cargo, year)) continue;
-        for (std::int32_t i = 0; i < usual_count(t, mg) * area_scale; ++i) {
-            place_site(economy, terrain, industries, t.id, rng, taken);
+        for (std::int32_t i = 0; i < scaled(usual_count(t, mg)); ++i) {
+            place_site(economy, industries, t.id, rng, taken, mg);
         }
     }
 
@@ -782,7 +832,7 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
             else if (x == 0 || y == 0 || x == w - 1 || y == h - 1) edge.emplace_back(x, y);
         }
     }
-    for (std::int32_t i = 0; i < mg.ports * area_scale; ++i) {
+    for (std::int32_t i = 0; i < scaled(mg.ports); ++i) {
         auto& pool = !coast.empty() ? coast : edge;
         if (pool.empty()) return;
         const std::size_t pick = rng.below(static_cast<std::uint32_t>(pool.size()));

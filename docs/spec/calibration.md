@@ -16,7 +16,7 @@ cmake --build build
 | Scenario | Setup | Measures |
 |---|---|---|
 | Economy alone | Seed 1, two years, no railway | Producer output, processor capacity, producer prices |
-| Demo network | The client's opening network (`sim::build_demo_network`), seeds 1 and 2, ten years | Return on capital, revenue, town growth, share price |
+| Demo network | The client's opening network (`sim::build_demo_network`), seeds 1 to 6, ten years | Return on capital, revenue, town growth, share price |
 | Rivals | Seed 3, three AI tycoons, five years | Share of rivals in profit, rival revenue, station-building income |
 
 ## Targets
@@ -26,7 +26,7 @@ cmake --build build
 | Raw producer output | 1.5–3.5 loads a year | §6.1 [C]: about 2.2 |
 | Processor capacity | 2–5 loads a year | §6.1 [C]: about 3 |
 | Median producer price | $240K–$1M | §6.2 [C]: farms sell for $240K–$350K |
-| Demo return on capital, years 2–4 | 10–40% a year | [I], below |
+| Demo return on capital, years 2–4 | 4–20% a year | [I], below |
 | Demo revenue, years 2–4 | $300K–$2M a year | [I], below |
 | Growth of served towns, ten years | 25–200% | §6.4 [C]: visible growth over 10–15 years |
 | Demo share price after ten years | $15–120 | §12.3 [C]: typically $50–100 |
@@ -37,9 +37,12 @@ cmake --build build
 | Station-building income | $0–$20K a year each | §7.2 [C]: about $1K |
 
 The [I] targets are derived from scenario goals: the spec's scenarios ask
-for $10–40M of net worth over 25–30 years from a $1–3M start. That needs
-returns of roughly 10–40% a year on capital, and on a starter network of a
-few million dollars, revenue in the hundreds of thousands to low millions.
+for $10–40M of net worth over 25–30 years from a $1–3M start. That is
+compound growth of about 4% ($3M to $10M in 30 years) to 16% ($1M to $40M
+in 25) a year, so the return target is 4–20% a year, with some headroom.
+On a starter network of a few million dollars, revenue should be in the
+hundreds of thousands to low millions. (The first version of this page
+read the goals as 10–40% a year, which was too generous.)
 
 ## Before and after
 
@@ -63,6 +66,15 @@ demo company rated A+. All 12 metrics are in range.
 
 With the spec's maintenance ageing and 2% track upkeep (was 6%), the demo
 network's return rose to 20.6% a year and its share price to $42.50.
+
+With the spec's map scale (0.5-mile cells, the Small 256 × 256 map, nodes
+of 2 × 2 cells, catchment 2/3/4 cells), the demo's return fell to 8.4% a
+year over six maps. Most of the fall comes from the bigger map: it has
+about 20 towns instead of 8, at the same density, so the demo's nearest
+towns are closer and its hops shorter. One node per cell instead of 2 × 2
+gave about 9%. Two maps were too few to tell this from luck (one seed alone
+ranged from −4% to 17%), so the demo now uses six. Served towns grow 29% in
+ten years, near the 25% floor.
 
 ## What changed
 

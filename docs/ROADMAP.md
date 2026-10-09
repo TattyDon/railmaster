@@ -22,7 +22,9 @@ priority; service towers and maintenance facilities with water, sand and oil;
 breakdowns with a sandbox switch; age-based maintenance cost; a command
 layer through which every player action passes; and build tools in the
 client (track with preview, branching, stations, support buildings, trains);
-and the six game speeds on `+`, `−` and Pause (rt3-clone-spec §2).
+the six game speeds on `+`, `−` and Pause (rt3-clone-spec §2); and the
+spec's map scale: 0.5-mile cells, Small/Medium/Large maps, economy nodes of
+several cells (about 15,000 a map) and catchment radii of 2/3/4 cells.
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
 numbers are in `data/balance.json`.
 
