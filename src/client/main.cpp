@@ -182,6 +182,13 @@ int main(int argc, char* argv[]) {
             demo_pending = false;
             try {
                 std::printf("%s\n", sim::build_demo_network(world).c_str());
+                // Look at it: centre the view on its first station.
+                const auto& rw = world.railway();
+                if (!rw.stations().empty()) {
+                    const sim::MapPoint p = rw.track().node(rw.stations().front().node).pos;
+                    cam.pan_x = static_cast<float>(p.x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
+                    cam.pan_y = static_cast<float>(p.y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
+                }
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
             }

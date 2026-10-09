@@ -229,6 +229,10 @@ public:
 
     StationId add_station(std::string name, NodeId node, StationSize size, CompanyId owner = 0);
     const Station& station(StationId id) const { return stations_.at(id); }
+    // Why an electric engine could not run this route, if it could not:
+    // every leg between consecutive stops, the last back to the first, must
+    // be possible on electrified track (rt3-clone-spec §10.2 [D]).
+    std::optional<std::string> electric_route_problem(const std::vector<StationId>& route) const;
     const std::vector<Station>& stations() const { return stations_; }
 
     ServiceBuildingId add_service_building(ServiceType type, NodeId node, CompanyId owner = 0);
@@ -267,7 +271,8 @@ public:
 
 private:
     void tick_train(Train& t, const LocomotiveRegistry& locos);
-    void plan_to_current_stop(Train& t);
+    // Electric engines keep to electrified track [D].
+    void plan_to_current_stop(Train& t, bool electric);
     bool must_yield(const Train& t) const;
     void use_supplies(Train& t, const LocomotiveType& loco, std::int64_t distance_mm, std::int32_t grade_bp);
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);

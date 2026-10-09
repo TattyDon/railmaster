@@ -144,6 +144,8 @@ public:
     // Construction, fuel and labour costs, in percent of Normal.
     std::int32_t cost_percent() const;
     Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100); }
+    // What electrifying a piece of track would cost now, nothing if it is.
+    Money electrify_cost(EdgeId e) const;
     // The state the economy changed to since the last call, if it did: news.
     std::optional<EconomicState> take_economy_news();
 
@@ -202,6 +204,7 @@ private:
     CommandResult run(const SetSpecialCars& cmd);
     CommandResult run(const CopyTrain& cmd);
     CommandResult run(const RetireTrain& cmd);
+    CommandResult run(const ElectrifyTrack& cmd);
     // Why the acting company may not change train `id`, if it may not.
     std::optional<std::string> own_train_problem(TrainId id) const;
     CommandResult run(const IssueBond& cmd);

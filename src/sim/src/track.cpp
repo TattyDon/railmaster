@@ -88,7 +88,7 @@ NodeId TrackNetwork::split_edge(EdgeId id, MapPoint at, EdgeId* second) {
     first.b = mid;
     first.length_mm = da;
     const auto new_id = static_cast<EdgeId>(edges_.size());
-    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge, old.owner});
+    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge, old.owner, old.electrified});
     std::replace(adjacency_[old.b].begin(), adjacency_[old.b].end(), id, new_id);
     adjacency_[mid] = {id, new_id};
     if (second) *second = new_id;
@@ -122,7 +122,7 @@ std::int32_t TrackNetwork::grade_bp(PathStep s) const {
     return static_cast<std::int32_t>(rise * 10000 / e.length_mm);
 }
 
-std::optional<std::vector<PathStep>> TrackNetwork::shortest_path(NodeId from, NodeId to) const {
+std::optional<std::vector<PathStep>> TrackNetwork::shortest_path(NodeId from, NodeId to, bool electric_only) const {
     if (from >= nodes_.size() || to >= nodes_.size()) throw std::out_of_range("path endpoint out of range");
     if (from == to) return std::vector<PathStep>{};
 
@@ -143,6 +143,7 @@ std::optional<std::vector<PathStep>> TrackNetwork::shortest_path(NodeId from, No
         if (n == to) break;
         for (EdgeId eid : adjacency_[n]) {
             const TrackEdge& e = edges_[eid];
+            if (electric_only && !e.electrified) continue;
             const NodeId m = e.other(n);
             const std::int64_t nd = d + e.length_mm;
             if (nd < dist[m]) {

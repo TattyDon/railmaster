@@ -101,6 +101,13 @@ struct RetireTrain {
     TrainId train = 0;
 };
 
+// Electrify your own track so electric engines can use it (rt3-clone-spec
+// §11.2 [D]): the listed pieces, or with none listed all of your track
+// ("Electrify all track"). Pieces already electrified cost nothing.
+struct ElectrifyTrack {
+    std::vector<EdgeId> edges{};
+};
+
 // Borrow $500,000 (needs a credit rating of B or better).
 struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
@@ -181,7 +188,7 @@ struct SetPortMode {
 struct DeclareBankruptcy {};
 
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
-                             CopyTrain, RetireTrain, IssueBond, RepayBond,
+                             CopyTrain, RetireTrain, ElectrifyTrack, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
                              UpgradeIndustry, SetPortMode, BuildStationBuilding>;

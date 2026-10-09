@@ -21,7 +21,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Breakdowns, mean_distan
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Track, default_max_grade_bp, tunnel_cover_mm,
                                                 viaduct_clearance_mm, piece_mm, ground_per_km, wood_bridge_multiple,
                                                 steel_bridge_multiple, stone_bridge_multiple,
-                                                suspension_bridge_multiple, tunnel_multiple, double_track_percent,
+                                                suspension_bridge_multiple, tunnel_multiple, double_track_percent, electrify_percent,
                                                 suspension_min_span_mm)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stations, small_cost, medium_cost, large_cost,
                                                 catchment_small, catchment_medium, catchment_large,

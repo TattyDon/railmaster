@@ -80,6 +80,7 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Default tunnel preference | 50 (halfway between climbing over and cutting through). | The default of RT3's "Tunnels" setting. |
 | Bridge eras | Wood and stone until 1865, steel from 1865, suspension from 1895 [D, rt3-clone-spec §11.2]. Water spans of 2 km or more get suspension bridges. | The span length is ours. |
 | Track prices per km of single track | Ground $25K; structures at the spec's multiples [I]: wood bridge 3×, steel 5×, stone 6×, suspension 10×, tunnel 15×. Double track 1.7× (less than 2× [D]). | The in-game build cost readout. |
+| Electrification | 75% of the open-ground price per km of track (rt3-clone-spec §11.2 [I]: +75%), × 1.7 on double track, × the economy's cost level. Carried as track. Electric engines need every leg between consecutive stops electrified and route only over electrified track [D]. | In-game readout. |
 | Bridge slowdown | Wood bridges 50% of speed, other bridges 90% [D qualitative, I numbers]. | The speed-versus-structure behaviour in-game. |
 | Water | A steam tender lasts 150 km. | Observation. |
 | Sand | Used only climbing; runs out after 600 m of total climb. | Observation. |

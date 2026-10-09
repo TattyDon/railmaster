@@ -84,6 +84,7 @@ and checks the economy against the spec's targets
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Over a train (Inspect) | F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). Each applies to every stop |
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
+| E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
 | F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |

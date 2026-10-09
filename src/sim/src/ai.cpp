@@ -210,11 +210,12 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
     return out;
 }
 
-// The fastest locomotive the company can afford now, if any.
+// The fastest steam or diesel locomotive the company can afford now, if any.
 std::optional<LocoTypeId> pick_loco(const World& w, Money budget) {
     std::optional<LocoTypeId> best;
     for (const LocomotiveType& l : w.data().locomotives.all()) {
         if (!l.available_in(w.date().year()) || l.cost > budget) continue;
+        if (l.fuel == Fuel::Electric) continue; // rivals do not electrify their lines (yet)
         if (!best) {
             best = l.id;
             continue;

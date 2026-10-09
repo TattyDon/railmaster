@@ -40,6 +40,7 @@ struct TrackEdge {
     TrackKind kind = TrackKind::Ground;
     BridgeType bridge = BridgeType::None; // set exactly when kind == Bridge
     CompanyId owner = 0;                  // who built it and is paid trackage for it
+    bool electrified = false;             // electric engines may run here [D]
 
     NodeId other(NodeId n) const { return n == a ? b : a; }
 };
@@ -102,7 +103,9 @@ public:
 
     // Shortest path by track length. Deterministic: ties are broken by
     // node id. Returns an empty vector if from == to, nullopt if unreachable.
-    std::optional<std::vector<PathStep>> shortest_path(NodeId from, NodeId to) const;
+    // With electric_only, only electrified track is used.
+    std::optional<std::vector<PathStep>> shortest_path(NodeId from, NodeId to, bool electric_only = false) const;
+    void set_electrified(EdgeId id, bool value) { edges_.at(id).electrified = value; }
 
 private:
     std::vector<TrackNode> nodes_;

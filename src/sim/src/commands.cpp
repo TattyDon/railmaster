@@ -237,6 +237,9 @@ CommandResult World::run(const BuyTrain& cmd) {
     for (StationId s : cmd.route) {
         if (s >= railway_.stations().size()) return fail("unknown station in route");
     }
+    if (loco.fuel == Fuel::Electric) {
+        if (auto why = railway_.electric_route_problem(cmd.route)) return fail(*why);
+    }
     if (auto why = cannot_afford(loco.cost)) return fail(*why);
     const TrainId id = railway_.add_train(cmd.loco, cmd.cars, cmd.route, cmd.priority, acting().id());
     railway_.train_mut(id).built_day = date_.days_since_epoch();
@@ -250,6 +253,9 @@ CommandResult World::run(const ReplaceLocomotive& cmd) {
     const Train& t = railway_.train(cmd.train);
     const LocomotiveType& loco = data_.locomotives.get(cmd.loco);
     if (!loco.available_in(date_.year())) return fail(loco.name + " is not available in " + std::to_string(date_.year()));
+    if (loco.fuel == Fuel::Electric) {
+        if (auto why = railway_.electric_route_problem(t.route)) return fail(*why);
+    }
     if (auto why = cannot_afford(loco.cost)) return fail(*why);
     acting().write_off_train(data_.locomotives.get(t.loco).cost); // scrapped
     acting().invest_train(loco.cost);
@@ -321,6 +327,37 @@ CommandResult World::run(const RetireTrain& cmd) {
     t.path.clear();
     t.holding = false;
     return success(Money{}, cmd.train);
+}
+
+Money World::electrify_cost(EdgeId id) const {
+    const TrackEdge& e = railway_.track().edge(id);
+    if (e.electrified) return Money{};
+    const Balance::Track& b = data_.balance.track;
+    Money cost = Money::dollars(b.ground_per_km).scaled(e.length_mm * b.electrify_percent, 1'000'000LL * 100);
+    if (e.double_track) cost = cost.scaled(b.double_track_percent, 100);
+    return construction_cost(cost);
+}
+
+CommandResult World::run(const ElectrifyTrack& cmd) {
+    const TrackNetwork& net = railway_.track();
+    std::vector<EdgeId> edges = cmd.edges;
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    if (edges.empty()) {
+        for (const TrackEdge& e : net.edges())
+            if (e.owner == acting().id() && !e.electrified) edges.push_back(e.id);
+        if (edges.empty()) return fail("all your track is already electrified");
+    }
+    Money cost;
+    for (EdgeId id : edges) {
+        if (id >= net.edges().size()) return fail("no such track");
+        if (net.edge(id).owner != acting().id()) return fail("you can only electrify your own track");
+        cost += electrify_cost(id);
+    }
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_track(cost);
+    for (EdgeId id : edges) railway_.track().set_electrified(id, true);
+    return success(cost, 0);
 }
 
 CommandResult World::run(const IssueBond&) {

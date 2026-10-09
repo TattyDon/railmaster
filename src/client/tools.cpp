@@ -530,6 +530,22 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         }
     }
     case Tool::Track:
+        if (key == SDLK_e) {
+            // Electrify the piece under the cursor, or with Shift all your track.
+            sim::ElectrifyTrack cmd;
+            if ((mod & KMOD_SHIFT) == 0) {
+                const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
+                if (!p) {
+                    show("POINT AT A PIECE OF TRACK (SHIFT+E FOR ALL YOUR TRACK)", false);
+                    return true;
+                }
+                cmd.edges.push_back(p->edge);
+            }
+            const sim::CommandResult r = world_.execute(cmd);
+            if (r.ok) show("ELECTRIFIED FOR " + format_money(r.cost), true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        }
         if (key == SDLK_d) double_track_ = !double_track_;
         else if (key == SDLK_c) curves_ = !curves_;
         else if (key == SDLK_LEFTBRACKET) tunnel_preference_ = std::max(0, tunnel_preference_ - 10);
@@ -971,7 +987,7 @@ std::string Tools::hint() const {
     case Tool::Track:
         return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP." : "CLICK TO START A LINE.") +
                "  D DOUBLE: " + (double_track_ ? "ON" : "OFF") + "  C CURVES: " + (curves_ ? "ON" : "OFF") +
-               "  [ ] TUNNELS: " + std::to_string(tunnel_preference_) + "%";
+               "  [ ] TUNNELS: " + std::to_string(tunnel_preference_) + "%  E ELECTRIFY (SHIFT: ALL)";
     case Tool::Station:
         if (station_building_) {
             return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +

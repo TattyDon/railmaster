@@ -77,6 +77,10 @@ struct Balance {
         std::int32_t suspension_bridge_multiple = 10;
         std::int32_t tunnel_multiple = 15;
         std::int32_t double_track_percent = 170;
+        // Electrifying track costs this share of laying single track on open
+        // ground, per km (times the double-track share on double track)
+        // (rt3-clone-spec §11.2 [I]: +75%).
+        std::int32_t electrify_percent = 75;
         std::int64_t suspension_min_span_mm = 2'000'000;
     } track;
 

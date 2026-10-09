@@ -286,6 +286,7 @@
   "track": {
     "default_max_grade_bp": 300,
     "double_track_percent": 170,
+    "electrify_percent": 75,
     "ground_per_km": 25000,
     "piece_mm": 500000,
     "steel_bridge_multiple": 5,

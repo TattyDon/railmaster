@@ -218,6 +218,8 @@ Each month, after the market, each rival in turn:
      cars.
 3. **More trains:** adds a train to a line whose stations have more cargo
    waiting than its trains can carry, up to three a line.
+   **Engines:** rivals buy the fastest steam or diesel engine they can
+   afford; they do not electrify their lines, so they buy no electric ones.
    **Old engines:** re-engines its oldest train whose engine has reached
    25 years (§13.2 [I]) with the fastest engine it can afford above its
    reserve, one a month.

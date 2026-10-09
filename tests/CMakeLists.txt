@@ -22,6 +22,7 @@ add_executable(railmaster_tests
     test_date.cpp
     test_economic_conditions.cpp
     test_economy.cpp
+    test_electrification.cpp
     test_express.cpp
     test_freight.cpp
     test_industry_ownership.cpp

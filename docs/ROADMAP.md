@@ -29,7 +29,8 @@ Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
 numbers are in `data/balance.json`.
 
 Still to do:
-- Track removal and upgrades (single to double, electrification), with refunds.
+- Track removal and upgrading single to double track, with refunds.
+  (Electrification is done: rt3-clone-spec §10.2, §11.2.)
 - Charging track costs to a company (needs M3 ledgers).
 - Crashes (needs research on what happens), and scheduled service stops in routes.
 - Track rights: trains on another company's track always yield.

@@ -238,6 +238,17 @@ ServiceBuildingId Railway::add_service_building(ServiceType type, NodeId node, C
     return id;
 }
 
+std::optional<std::string> Railway::electric_route_problem(const std::vector<StationId>& route) const {
+    for (std::size_t i = 0; i < route.size(); ++i) {
+        const Station& from = stations_.at(route[i]);
+        const Station& to = stations_.at(route[(i + 1) % route.size()]);
+        if (!track_.shortest_path(from.node, to.node, true)) {
+            return "electric engines need electrified track all the way from " + from.name + " to " + to.name;
+        }
+    }
+    return std::nullopt;
+}
+
 TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<StationId> route,
                            std::int32_t priority, CompanyId owner) {
     if (car_count > kMaxCarsPerTrain) throw std::invalid_argument("too many cars for one train");
@@ -264,9 +275,9 @@ void Railway::tick(const LocomotiveRegistry& locos) {
     for (Train& t : trains_) tick_train(t, locos);
 }
 
-void Railway::plan_to_current_stop(Train& t) {
+void Railway::plan_to_current_stop(Train& t, bool electric) {
     const NodeId target = stations_[t.route[t.stop_index]].node;
-    auto path = track_.shortest_path(t.at_node, target);
+    auto path = track_.shortest_path(t.at_node, target, electric);
     if (!path) {
         t.state = TrainState::NoRoute;
         return;
@@ -401,10 +412,10 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
             return;
         }
         t.stop_index = (t.stop_index + 1) % t.route.size();
-        plan_to_current_stop(t);
+        plan_to_current_stop(t, loco.fuel == Fuel::Electric);
         return;
     case TrainState::NoRoute:
-        plan_to_current_stop(t);
+        plan_to_current_stop(t, loco.fuel == Fuel::Electric);
         return;
     case TrainState::Servicing:
     case TrainState::BrokenDown:

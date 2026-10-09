@@ -118,6 +118,16 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
         vertex(net.node(e.b).pos, cam);
         glEnd();
     }
+    // Overhead wires: a thin copper line along electrified track.
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    glColor3f(0.95f, 0.6f, 0.2f);
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (!e.electrified) continue;
+        vertex(net.node(e.a).pos, cam);
+        vertex(net.node(e.b).pos, cam);
+    }
+    glEnd();
 
     // Markers stay the same size on screen at any zoom.
     const float px = 1.0f / cam.zoom;
