@@ -33,6 +33,7 @@ const char* state_name(sim::TrainState s) {
     case sim::TrainState::Servicing: return "SERVICING";
     case sim::TrainState::BrokenDown: return "BROKEN DOWN";
     case sim::TrainState::NoRoute: return "NO ROUTE";
+    case sim::TrainState::Crashed: return "WRECKED";
     }
     return "?";
 }

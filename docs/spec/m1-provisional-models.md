@@ -13,8 +13,8 @@ Source of each constant: `src/sim/include/railmaster/sim/railway.hpp`
 - At most 8 cars per train [M].
 - Trains pass each other on single track with no signals. When two trains
   meet, the lower-priority one stops while the other passes [WP✓, SC1].
-  Ties go to the train that was bought first (lower id). This tie-break is
-  our choice.
+  At equal priority the train with more valuable cargo goes first [D,
+  rt3-clone-spec §10.3]; then, our choice, the train bought first.
 - Double track removes the wait [SC1].
 - Routes are ordered stop lists that loop back to the start.
 - Station sizes and prices: small $50K, medium $100K, large $200K [SW].
@@ -37,9 +37,8 @@ Source of each constant: `src/sim/include/railmaster/sim/railway.hpp`
 - Maintenance is a fixed yearly cost that rises with age to about 3× by
   year 20, and rises sharply when oil is low [EM, possibly RT2].
 
-Not modelled yet: **crashes.** The manual pairs them with breakdowns under
-reliability, but no source says what a crash does to the train (destroyed?
-repaired?). Scheduled service stops in a route are also still to do.
+Crashes destroy the train [D, rt3-clone-spec §9.4]. Scheduled service stops
+in a route are still to do.
 
 Source of the track-building constants: `src/sim/include/railmaster/sim/track_builder.hpp`.
 
@@ -75,8 +74,9 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Grade limit for building | 3%. Steeper ground is cut, tunnelled or bridged. | RT3's actual limit, if it has one. |
 | Tunnel and bridge thresholds | Rail more than 12 m below the ground is a tunnel; more than 10 m above it is a bridge. | Observation. |
 | Default tunnel preference | 50 (halfway between climbing over and cutting through). | The default of RT3's "Tunnels" setting. |
-| Steel bridges | Available from 1870. | The year steel appears in RT3. |
-| Track prices per km of single track | Ground $25K; tunnel $250K; wood bridge $100K; steel $160K; stone $200K. Double track costs 2×. Only the bridge ordering (wood < steel < stone) is researched. | The in-game build cost readout. |
+| Bridge eras | Wood and stone until 1865, steel from 1865, suspension from 1895 [D, rt3-clone-spec §11.2]. Water spans of 2 km or more get suspension bridges. | The span length is ours. |
+| Track prices per km of single track | Ground $25K; structures at the spec's multiples [I]: wood bridge 3×, steel 5×, stone 6×, suspension 10×, tunnel 15×. Double track 1.7× (less than 2× [D]). | The in-game build cost readout. |
+| Bridge slowdown | Wood bridges 50% of speed, other bridges 90% [D qualitative, I numbers]. | The speed-versus-structure behaviour in-game. |
 | Water | A steam tender lasts 150 km. | Observation. |
 | Sand | Used only climbing; runs out after 600 m of total climb. | Observation. |
 | Oil | Lasts 1,500 km. | Observation. |
@@ -85,7 +85,8 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
 | Out of sand | Climbing ability drops to 40%. | "Much of its grade performance" [M]. |
 | Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability. Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
-| Breakdown | The train stops where it is for two days. | Observation. |
+| Breakdown | The train stops where it is for two days. | Observation; the spec suggests 3–10 days and a repair cost [I]. |
+| Crash | 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20), and ×3 with no oil (rt3-clone-spec §9.4 [I]). The train is destroyed and written off. | Observation. |
 | Maintenance growth | Linear to 3× at 20 years, then flat; 2× while oil is below half. | [EM] gives only the 3× figure. |
 | Support building prices | Service tower $30K; maintenance facility $100K ("relatively expensive" [M]). | In-game prices. |
 | Piece length | Curves are sampled every 0.5 km or less. This is a modelling choice, not a game rule. | — |

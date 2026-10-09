@@ -126,8 +126,12 @@ CreditRating Company::credit_rating() const {
     // A young company, with no completed profitable year, is marginal.
     const bool proven = std::any_of(history_.begin(), history_.end() - 1,
                                     [](const YearAccounts& y) { return y.profit() > Money{}; });
-    if (!proven) grade = std::max(grade, static_cast<int>(CreditRating::BB));
-    grade += static_cast<int>(bonds_.size()); // each bond outstanding lowers the rating
+    // Each bond outstanding lowers the rating: a notch per bond while the
+    // company is unproven (room for one or two), a notch per four once it
+    // has a profitable year behind it (so a strong company can reach 20).
+    const int bonds = static_cast<int>(bonds_.size());
+    if (!proven) grade = std::max(grade, static_cast<int>(CreditRating::BB)) + bonds;
+    else grade += bonds / 4;
     return static_cast<CreditRating>(std::min(grade, static_cast<int>(CreditRating::D)));
 }
 
@@ -147,12 +151,24 @@ void Company::repay_bond() {
     const auto worst = std::max_element(bonds_.begin(), bonds_.end(),
                                         [](const Bond& a, const Bond& b) { return a.rate_bp < b.rate_bp; });
     cash_ -= worst->principal;
+    post(Ledger::BondFees, worst->principal.scaled(kBondEarlyRepaymentPercent, 100));
     bonds_.erase(worst);
 }
 
-void Company::charge_interest() {
+void Company::retire_matured_bonds(std::int32_t year) {
+    for (auto it = bonds_.begin(); it != bonds_.end();) {
+        if (year - it->issued_year >= provisional::kBondMaturityYears) {
+            cash_ -= it->principal;
+            it = bonds_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void Company::charge_interest(std::int32_t months) {
     Money interest;
-    for (const Bond& b : bonds_) interest += b.principal.scaled(b.rate_bp, 10000 * 12);
+    for (const Bond& b : bonds_) interest += b.principal.scaled(std::int64_t{b.rate_bp} * months, 10000 * 12);
     if (interest > Money{}) post(Ledger::Interest, interest);
 }
 

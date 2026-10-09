@@ -44,6 +44,7 @@ ExpressWaiting& express_pool(Station& s, CargoId c, StationId dest) {
 std::vector<std::vector<StationId>> route_partners(const Railway& rw) {
     std::vector<std::vector<StationId>> partners(rw.stations().size());
     for (const Train& t : rw.trains()) {
+        if (t.state == TrainState::Crashed) continue;
         for (StationId a : t.route)
             for (StationId b : t.route)
                 if (a != b) partners[a].push_back(b);
@@ -64,6 +65,7 @@ std::vector<std::int32_t> best_onward_prices(const Economy& eco, const Railway& 
                                              const std::vector<std::vector<std::int32_t>>& best_at) {
     std::vector<std::int32_t> best(cargo.all().size(), 0);
     for (const Train& t : rw.trains()) {
+        if (t.state == TrainState::Crashed) continue;
         if (std::find(t.route.begin(), t.route.end(), station) == t.route.end()) continue;
         for (StationId other : t.route) {
             if (other == station) continue;
@@ -128,10 +130,54 @@ void start_new_month(Railway& rw) {
     }
 }
 
+namespace {
+
+// exp(-0.0023 x) for x = 0..kDecaySteps, as Q30 fixed point, built by
+// repeated integer multiplication so every platform gets the same table.
+constexpr std::int64_t kDecayStepQ30 = 1'071'275'056; // round(exp(-0.0023) * 2^30)
+constexpr std::size_t kDecaySteps = 3000;
+
+const std::vector<std::int32_t>& decay_table() {
+    static const std::vector<std::int32_t> table = [] {
+        std::vector<std::int32_t> t(kDecaySteps + 1);
+        std::int64_t v = std::int64_t{1} << 30;
+        for (std::size_t i = 0; i <= kDecaySteps; ++i) {
+            t[i] = static_cast<std::int32_t>(v * 1000 >> 30);
+            v = v * kDecayStepQ30 >> 30;
+        }
+        return t;
+    }();
+    return table;
+}
+
+} // namespace
+
 std::int32_t value_left_permille(const CargoType& c, std::int32_t days) {
-    const std::int64_t lost = std::int64_t{std::max(0, days)} * c.decay_sensitivity *
-                              provisional::kTransitDecayPerMillePerSensitivity;
-    return static_cast<std::int32_t>(std::max<std::int64_t>(0, 1000 - lost));
+    const std::int64_t x = std::int64_t{std::max(0, days)} * c.decay_sensitivity;
+    if (x > static_cast<std::int64_t>(kDecaySteps)) return 0;
+    const std::int32_t v = decay_table()[static_cast<std::size_t>(x)];
+    return v < provisional::kExpiredPermille ? 0 : v;
+}
+
+std::int32_t difficulty_revenue_permille(Difficulty d) {
+    switch (d) {
+    case Difficulty::Easy: return 1200;
+    case Difficulty::Medium: return 1000;
+    case Difficulty::Hard: return 900;
+    case Difficulty::Expert: return 800;
+    }
+    return 1000;
+}
+
+std::int32_t station_age_permille(std::int32_t days, bool open_country) {
+    constexpr std::int64_t kYear = 365;
+    const std::int64_t d = std::max(0, days);
+    std::int64_t bonus; // permille above or below 1000
+    if (d <= 4 * kYear) bonus = 150 - 150 * d / (4 * kYear);
+    else if (d <= 20 * kYear) bonus = -100 * (d - 4 * kYear) / (16 * kYear);
+    else bonus = -100;
+    if (open_country) bonus /= 2;
+    return static_cast<std::int32_t>(1000 + bonus);
 }
 
 void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
@@ -205,7 +251,8 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
 }
 
 Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
-                        TrainId train_id, StationId station_id, std::int32_t today, std::uint64_t tick) {
+                        TrainId train_id, StationId station_id, std::int32_t today, std::uint64_t tick,
+                        std::int32_t revenue_permille) {
     Station& st = rw.station_mut(station_id);
     size_pool(st, cargo);
     Earnings income;
@@ -223,7 +270,8 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                                          provisional::kMailCapMonths;
                 if (!c.demand_cap || received < cap) {
                     income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
-                                         .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli));
+                                         .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli)
+                                         .scaled(revenue_permille, 1000));
                 }
                 received += car.milli;
                 car = Car{};
@@ -235,11 +283,12 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         const CatchmentPrices here = catchment_prices(eco, rw, st, c.id);
         if (car.loaded_at != station_id && here.best > car.pickup_price) {
             const std::int64_t gain = std::int64_t{here.best - car.pickup_price};
-            income.add(c.id, Money::dollars(gain * left / 1000 * car.milli / kMilli));
+            income.add(c.id,
+                       Money::dollars(gain * left / 1000 * car.milli / kMilli).scaled(revenue_permille, 1000));
             eco.add_stock(c.id, here.best_cx, here.best_cy, car.milli);
             car = Car{};
         } else if (left == 0) {
-            car = Car{}; // spoiled on the way: worthless, dumped
+            car = Car{}; // expired on the way: worthless, dumped
         }
     }
 
@@ -282,13 +331,13 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         const Candidate& pick = candidates[next];
         if (pick.destination) {
             express_pool(st, pick.cargo, *pick.destination).milli -= kMilli;
-            car = Car{pick.cargo, kMilli, 0, today, station_id, pick.destination};
+            car = Car{pick.cargo, kMilli, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain)};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];
             const std::int32_t price = pool.average_price();
             pool.milli -= kMilli;
             pool.value -= std::int64_t{price} * kMilli;
-            car = Car{pick.cargo, kMilli, price, today, station_id, std::nullopt};
+            car = Car{pick.cargo, kMilli, price, today, station_id, std::nullopt, static_cast<std::int32_t>(pick.gain)};
         }
     }
 

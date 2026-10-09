@@ -23,9 +23,11 @@ struct TrackNode {
 
 enum class TrackKind : std::uint8_t { Ground, Bridge, Tunnel };
 
-// RT3 offers three bridge materials. Wood is cheapest but carries single
-// track only; stone and steel carry double track; steel arrives later.
-enum class BridgeType : std::uint8_t { None, Wood, Stone, Steel };
+// RT3's bridges [D, rt3-clone-spec §11.2]: wood (until 1865, cheapest,
+// single track only, a big slowdown); stone (until 1865, double OK); steel
+// (1865 on, double OK, a small slowdown); suspension (1895 on, very
+// expensive, used automatically for long water spans).
+enum class BridgeType : std::uint8_t { None, Wood, Stone, Steel, Suspension };
 
 struct TrackEdge {
     EdgeId id = 0;

@@ -3,8 +3,16 @@
 These pages describe how *Railroad Tycoon 3* behaves, as facts with sources,
 written in our own words (see [../CLEAN_ROOM.md](../CLEAN_ROOM.md)).
 
+**[rt3-clone-spec.md](rt3-clone-spec.md) is the primary reference.** It tags
+every rule as documented [D], community [C] or inferred [I], and where it
+disagrees with the earlier research pages below, it wins.
+[gap-analysis.md](gap-analysis.md) tracks how the implementation compares
+with it.
+
 | Page | Covers |
 |------|--------|
+| [rt3-clone-spec.md](rt3-clone-spec.md) | **Primary.** Full functional and technical spec, every rule tagged |
+| [gap-analysis.md](gap-analysis.md) | Implementation against the primary spec: matched, changed, differing, missing |
 | [economy-cargo.md](economy-cargo.md) | Price field, cargo list, production chains, industries, stations, decay |
 | [trains-track-operations.md](trains-track-operations.md) | Locomotive roster, consists, grades, track, servicing, routing |
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |

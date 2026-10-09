@@ -9,10 +9,26 @@ namespace {
 
 constexpr std::int64_t kMmPerMile = 1609344;
 
-// a outranks b at a single-track meet: higher priority, then older train.
+std::int64_t cargo_value(const Train& t) {
+    std::int64_t v = 0;
+    for (const Car& c : t.cars)
+        if (c.cargo) v += c.expected_value;
+    return v;
+}
+
+// a outranks b at a single-track meet: higher priority; at equal priority the
+// more valuable cargo [D]; then, our tie-break, the older train.
 bool outranks(const Train& a, const Train& b) {
     if (a.priority != b.priority) return a.priority > b.priority;
+    const std::int64_t va = cargo_value(a), vb = cargo_value(b);
+    if (va != vb) return va > vb;
     return a.id < b.id;
+}
+
+std::int32_t bridge_speed_permille(const TrackEdge& e) {
+    if (e.kind != TrackKind::Bridge) return 1000;
+    return e.bridge == BridgeType::Wood ? provisional::kWoodBridgeSpeedPermille
+                                        : provisional::kOtherBridgeSpeedPermille;
 }
 
 // A train is physically on the track (rather than at a station node) in these states.
@@ -258,6 +274,21 @@ void Railway::arrive_at_stop(Train& t) {
     arrivals_.emplace_back(t.id, t.route[t.stop_index]);
 }
 
+std::vector<TrainId> Railway::take_crashes() {
+    std::vector<TrainId> out;
+    out.swap(crashes_);
+    return out;
+}
+
+bool Railway::roll_crash(const Train& t, const LocomotiveType& loco) {
+    if (!rules_.breakdowns) return false;
+    const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
+    std::int64_t ppb = provisional::kCrashPpbPerTick * 100 / loco.reliability;
+    ppb = ppb * (20 + age_years) / 20;
+    if (t.oil == 0) ppb *= 3;
+    return static_cast<std::int64_t>(rng_.below(1'000'000'000u)) < ppb;
+}
+
 std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
     std::vector<std::pair<TrainId, StationId>> out;
     out.swap(arrivals_);
@@ -285,6 +316,8 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         t.state = TrainState::Moving;
         t.speed_mm_per_tick = 0;
         return;
+    case TrainState::Crashed:
+        return;
     case TrainState::Moving:
         break;
     }
@@ -297,7 +330,9 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
 
     const std::int64_t accel = std::max<std::int64_t>(
         1, mph_to_mm_per_tick(loco.top_speed_mph) / provisional::kAccelTicksToTopSpeed);
-    const std::int64_t target = target_speed_mm_per_tick(loco, t, track_.grade_bp(t.path[t.step]));
+    const PathStep here = t.path[t.step];
+    const std::int64_t target = target_speed_mm_per_tick(loco, t, track_.grade_bp(here)) *
+                                bridge_speed_permille(track_.edge(here.edge)) / 1000;
     t.speed_mm_per_tick = std::min(target, t.speed_mm_per_tick + accel);
 
     std::int64_t remaining = t.speed_mm_per_tick;
@@ -335,6 +370,13 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         t.wait_ticks_left = provisional::kBreakdownTicks;
         t.speed_mm_per_tick = 0;
         ++t.breakdowns;
+    } else if (travelled > 0 && roll_crash(t, loco)) {
+        t.state = TrainState::Crashed;
+        t.at_node = track_.step_start(t.path[t.step]); // wreck shown at the last node passed
+        t.path.clear();
+        t.speed_mm_per_tick = 0;
+        for (Car& car : t.cars) car = Car{};
+        crashes_.push_back(t.id);
     }
 }
 

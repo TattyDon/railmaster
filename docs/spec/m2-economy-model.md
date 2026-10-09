@@ -87,7 +87,8 @@ How we implement them (code: `freight.hpp`):
 |---|---|---|
 | Catchment | Small 3 × 3 cells, medium 5 × 5, large 7 × 7. | RT1's medium station had a 2-tile radius; RT3's are not known. |
 | Gathering | 20% of eligible catchment stock per day; up to 20 carloads of each cargo waiting. | |
-| Transit decay | 0.5% of value per day per point of decay sensitivity: coal 0.5% a day, milk 5%. | |
+| Transit decay | Value left = exp(−0.0023 × sensitivity × days) [rt3-clone-spec §8.2, I]: sensitivity 10 loses half in 30 days, 1 loses 5%. Below 10% the load expires. | Computed from an integer table so it is identical on every platform. |
+| Revenue modifiers | Difficulty (Easy +20%, Medium 0, Hard −10%, Expert −20%) × station age (+15% for a town's first station when new, 0 at 4 years, −10% from 20 years, half in open country) [D, §8.4]. A station belongs to the nearest town centre within 4 cells. | The 4-cell reach is ours. |
 | Waiting at a station | No loss while waiting. | The research says decay is slower at a station than on a train. |
 
 Known simplifications: one consist rule (automatic) for every stop; RT3

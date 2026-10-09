@@ -3,6 +3,10 @@
 Each milestone ends with something playable or testable. Spec pages in
 `docs/spec/` must cover a system before it is implemented.
 
+The primary reference is `docs/spec/rt3-clone-spec.md`; `docs/spec/gap-analysis.md`
+lists everything it describes that is not built yet, and the open
+decisions where our design differs from its proposals.
+
 ## M0: Foundations (done)
 - Deterministic simulation core: calendar, integer money, PCG32 RNG,
   heightfield terrain with exact grades, fixed-step world tick.

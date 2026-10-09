@@ -6,6 +6,7 @@
 #include "railmaster/sim/stock.hpp"
 #include "railmaster/sim/date.hpp"
 #include "railmaster/sim/economy.hpp"
+#include "railmaster/sim/freight.hpp"
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/random.hpp"
@@ -24,6 +25,7 @@ struct WorldConfig {
     bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
     std::int64_t starting_cash = provisional::kStartingCash; // company's opening cash, dollars
     bool populate = true;            // place towns and industries (when industry data is present)
+    Difficulty difficulty = Difficulty::Medium;
 };
 
 // Static definitions shared by the whole game, loaded from data/.
@@ -57,6 +59,9 @@ public:
     Company& company() { return company_; }
     const Company& company() const { return company_; }
     bool sandbox() const { return sandbox_; }
+    Difficulty difficulty() const { return difficulty_; }
+    // Difficulty x station age, in thousandths, for income at a station.
+    std::int32_t revenue_permille(StationId s) const;
     Investor& investor() { return investor_; }
     const Investor& investor() const { return investor_; }
     // Shares sold automatically at the last month end because purchasing
@@ -91,6 +96,7 @@ private:
     Money spent_;
     Money earned_;
     bool sandbox_ = false;
+    Difficulty difficulty_ = Difficulty::Medium;
     Company company_;
     Investor investor_;
     std::int64_t last_forced_sale_ = 0;

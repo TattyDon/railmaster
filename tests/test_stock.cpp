@@ -76,8 +76,10 @@ TEST_CASE("each month: salary in, margin interest out, and forced sales if under
     inv.cash = Money::dollars(-120'000);
     const Money before = inv.cash;
     monthly_market(inv, c);
-    // +$2,000 salary, then 10% a year on the $118,000 still owed.
-    CHECK(inv.cash == before + Money::dollars(2'000) - Money::dollars(118'000).scaled(1000, 120'000));
+    // Salary in, then 10% a year on what is still owed.
+    const Money salary = Money::dollars(provisional::kSalaryPerYear).scaled(1, 12);
+    const Money owed = -(before + salary);
+    CHECK(inv.cash == before + salary - owed.scaled(1000, 120'000));
 
     // A collapse in the share price leaves purchasing power negative: shares are sold.
     Investor bust;
@@ -173,6 +175,6 @@ TEST_CASE("in the world, dividends land at quarter ends and commands trade share
         for (int i = 0; i < World::kTicksPerDay; ++i) w.tick();
     const Money dividend = Money::dollars(1).scaled(305'000, 4);
     CHECK(w.company().this_year().dividends_paid > Money{});
-    CHECK(w.investor().cash == cash_before + dividend + Money::dollars(6'000) -
-                                   Money{}); // three months' salary, no margin interest
+    CHECK(w.investor().cash ==
+          cash_before + dividend + Money::dollars(provisional::kSalaryPerYear).scaled(1, 12) * 3); // three salaries
 }

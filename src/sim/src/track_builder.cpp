@@ -25,6 +25,7 @@ std::int64_t per_km_rate(TrackKind kind, BridgeType bridge) {
         case BridgeType::Wood: return provisional::kWoodBridgePerKm;
         case BridgeType::Steel: return provisional::kSteelBridgePerKm;
         case BridgeType::Stone: return provisional::kStoneBridgePerKm;
+        case BridgeType::Suspension: return provisional::kSuspensionBridgePerKm;
         case BridgeType::None: break;
         }
         break;
@@ -47,7 +48,8 @@ std::optional<BridgeType> choose_bridge(const TrackBuildOptions& o, std::string&
         }
         return std::nullopt;
     }
-    if (!o.double_track) return BridgeType::Wood;
+    // The cheapest that fits: wood, then steel, then stone.
+    if (!o.double_track && bridge_available(BridgeType::Wood, o.year)) return BridgeType::Wood;
     return bridge_available(BridgeType::Steel, o.year) ? BridgeType::Steel : BridgeType::Stone;
 }
 
@@ -57,13 +59,16 @@ bool bridge_available(BridgeType type, std::int32_t year) {
     switch (type) {
     case BridgeType::None: return false;
     case BridgeType::Wood:
-    case BridgeType::Stone: return true;
-    case BridgeType::Steel: return year >= provisional::kSteelBridgeFirstYear;
+    case BridgeType::Stone: return year <= kWoodStoneBridgeLastYear;
+    case BridgeType::Steel: return year >= kSteelBridgeFirstYear;
+    case BridgeType::Suspension: return year >= kSuspensionBridgeFirstYear;
     }
     return false;
 }
 
-bool bridge_carries_double_track(BridgeType type) { return type == BridgeType::Stone || type == BridgeType::Steel; }
+bool bridge_carries_double_track(BridgeType type) {
+    return type == BridgeType::Stone || type == BridgeType::Steel || type == BridgeType::Suspension;
+}
 
 std::vector<MapPoint> straight_points(MapPoint a, MapPoint b, std::int64_t max_piece_mm) {
     const std::int64_t n = pieces_for(distance_mm(a, b), max_piece_mm);
@@ -199,11 +204,13 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
     plan.rail_z_mm.assign(z.begin() + 1, z.end());
 
     std::optional<BridgeType> bridge;
+    std::vector<bool> piece_over_water(n + 1, false);
     for (std::size_t i = 1; i <= n; ++i) {
         const MapPoint mid = midpoint(pos[i - 1], pos[i]);
         const std::int64_t mid_ground = terrain.height_at_mm(mid);
         const std::int64_t mid_rail = (z[i - 1] + z[i]) / 2;
         const bool over_water = water[i - 1] || water[i] || terrain.ground_at_mm(mid) == GroundType::Water;
+        piece_over_water[i] = over_water;
 
         PlannedPiece piece;
         piece.length_mm = run[i];
@@ -217,11 +224,32 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
         } else if (mid_ground - mid_rail > provisional::kTunnelCoverMm) {
             piece.kind = TrackKind::Tunnel;
         }
-        const std::int64_t multiplier = options.double_track ? provisional::kDoubleTrackMultiplier : 1;
-        piece.cost = Money::dollars(per_km_rate(piece.kind, piece.bridge) * multiplier)
-                         .scaled(piece.length_mm, 1'000'000);
-        plan.total_cost += piece.cost;
         plan.pieces.push_back(piece);
+    }
+
+    // Long water crossings get a suspension bridge once one exists [D],
+    // unless the player chose a bridge type.
+    if (!options.bridge_type && bridge_available(BridgeType::Suspension, options.year)) {
+        for (std::size_t i = 1; i <= n;) {
+            if (!piece_over_water[i]) {
+                ++i;
+                continue;
+            }
+            std::size_t j = i;
+            std::int64_t span = 0;
+            while (j <= n && piece_over_water[j]) span += run[j++];
+            if (span >= provisional::kSuspensionMinSpanMm) {
+                for (std::size_t k = i; k < j; ++k) plan.pieces[k - 1].bridge = BridgeType::Suspension;
+            }
+            i = j;
+        }
+    }
+
+    const std::int64_t percent = options.double_track ? provisional::kDoubleTrackPercent : 100;
+    for (PlannedPiece& piece : plan.pieces) {
+        piece.cost = Money::dollars(per_km_rate(piece.kind, piece.bridge))
+                         .scaled(piece.length_mm * percent, 100LL * 1'000'000);
+        plan.total_cost += piece.cost;
     }
 
     result.plan = std::move(plan);

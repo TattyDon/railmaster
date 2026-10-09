@@ -38,6 +38,14 @@ constexpr std::int64_t kMeanBreakdownDistanceMm = 2'000'000'000; // 2,000 km at 
 constexpr std::int32_t kEmptyOilBreakdownMultiplier = 4;         // empty oil: 4x the breakdown rate
 constexpr std::int32_t kBreakdownTicks = 32;                     // two days stopped
 
+// Crashes [D: a rare event that destroys the train; rate from rt3-clone-spec §9.4, I]:
+// 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20) and
+// tripled with no oil.
+constexpr std::int64_t kCrashPpbPerTick = 342; // 0.002 a year over 5,840 ticks
+// Bridges slow trains [D]: wood a lot, others a little [I numbers].
+constexpr std::int32_t kWoodBridgeSpeedPermille = 500;
+constexpr std::int32_t kOtherBridgeSpeedPermille = 900;
+
 // Maintenance cost growth.
 constexpr std::int32_t kMaintenanceAgeCapYears = 20;
 constexpr std::int32_t kMaintenanceLowOilMultiplier = 2;
@@ -77,6 +85,8 @@ struct Station {
     std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
     std::vector<ExpressWaiting> express{}; // sorted by (cargo, destination)
     std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
+    std::optional<std::size_t> town{}; // index into Economy::towns(); none in open country
+    std::int32_t built_day = 0;
 };
 
 // RT3 has two support buildings that sit on the track: the service tower
@@ -97,6 +107,7 @@ enum class TrainState : std::uint8_t {
     Servicing,  // stopped at a service building, part-way along its path
     BrokenDown, // stopped where it failed, part-way along its path
     NoRoute,    // next stop is unreachable; retries every tick
+    Crashed,    // destroyed: no longer runs
 };
 
 // One freight car and what it carries.
@@ -107,13 +118,14 @@ struct Car {
     std::int32_t loaded_day = 0;   // Date::days_since_epoch() when loaded
     std::uint32_t loaded_at = 0;   // StationId where loaded; never sold back there
     std::optional<std::uint32_t> destination; // express only: the StationId it must reach
+    std::int32_t expected_value = 0; // dollars this load should earn; decides meets at equal priority
 };
 
 struct Train {
     TrainId id = 0;
     LocoTypeId loco = 0;
     std::vector<Car> cars;
-    std::int32_t priority = 0; // higher wins meets on single track
+    std::int32_t priority = 0; // higher wins meets on single track; then more valuable cargo [D]
     std::vector<StationId> route;
     std::size_t stop_index = 0; // the stop being travelled to, or dwelt at
 
@@ -200,6 +212,10 @@ public:
     // Trains that reached a station since the last call, in arrival order,
     // with the station. The world handles cargo for each.
     std::vector<std::pair<TrainId, StationId>> take_arrivals();
+    // Trains destroyed in crashes since the last call.
+    std::vector<TrainId> take_crashes();
+    // The current date, for train ages (crash risk).
+    void set_today(std::int32_t day) { today_ = day; }
     const Train& train(TrainId id) const { return trains_.at(id); }
     const std::vector<Train>& trains() const { return trains_; }
 
@@ -215,6 +231,7 @@ private:
     bool must_yield(const Train& t) const;
     void use_supplies(Train& t, const LocomotiveType& loco, std::int64_t distance_mm, std::int32_t grade_bp);
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);
+    bool roll_crash(const Train& t, const LocomotiveType& loco);
     // Refill at any support buildings at `node` the train needs. True if it stopped.
     bool service_at(Train& t, NodeId node, const LocomotiveType& loco);
     void arrive_at_stop(Train& t);
@@ -224,6 +241,8 @@ private:
     std::vector<ServiceBuilding> service_buildings_;
     std::vector<Train> trains_;
     std::vector<std::pair<TrainId, StationId>> arrivals_;
+    std::vector<TrainId> crashes_;
+    std::int32_t today_ = 0;
     OperatingRules rules_;
     Random rng_;
 };

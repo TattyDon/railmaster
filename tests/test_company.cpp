@@ -98,15 +98,17 @@ TEST_CASE("interest accrues monthly and the dearest bond is repaid first") {
     c.issue_bond(1850); // at BB
     c.issue_bond(1850); // at B
     const Money before = c.cash();
-    c.charge_interest();
-    // Each bond's month of interest, rounded to the cent separately.
-    const Money expected = Money::dollars(500'000).scaled(c.bonds()[0].rate_bp, 10000 * 12) +
-                           Money::dollars(500'000).scaled(c.bonds()[1].rate_bp, 10000 * 12);
+    c.charge_interest(3);
+    // Each bond's quarter of interest, rounded to the cent separately.
+    const Money expected = Money::dollars(500'000).scaled(c.bonds()[0].rate_bp * 3, 10000 * 12) +
+                           Money::dollars(500'000).scaled(c.bonds()[1].rate_bp * 3, 10000 * 12);
     CHECK(before - c.cash() == expected);
     const std::int32_t cheaper = c.bonds()[0].rate_bp;
+    const Money before_repay = c.cash();
     c.repay_bond();
     REQUIRE(c.bonds().size() == 1);
     CHECK(c.bonds()[0].rate_bp == cheaper);
+    CHECK(before_repay - c.cash() == Money::dollars(510'000)); // face value plus 2% for repaying early
 }
 
 TEST_CASE("building costs the company cash, and is refused when it cannot pay") {
@@ -144,9 +146,28 @@ TEST_CASE("bonds through commands follow the rating rules") {
     CHECK(w.execute(RepayBond{}).ok);
     CHECK(w.execute(RepayBond{}).ok);
     CHECK_FALSE(w.execute(RepayBond{}).ok);
+    CHECK(w.company().this_year().lines[static_cast<std::size_t>(Ledger::BondFees)] ==
+          Money::dollars(4 * 10'000)); // two issues and two early repayments at 2%
 }
 
-TEST_CASE("running costs are charged monthly: maintenance, fuel, upkeep, interest") {
+TEST_CASE("bonds mature after 30 years, and at most 20 may be outstanding") {
+    Company c("Test", Money::dollars(1'000'000'000), 1850);
+    c.post(Ledger::FreightRevenue, Money::dollars(500'000'000)); // proven and very rich: AAA
+    c.start_year(1851);
+    for (int i = 0; i < 20; ++i) {
+        REQUIRE(c.can_issue_bond());
+        c.issue_bond(1851);
+    }
+    CHECK_FALSE(c.can_issue_bond());
+    c.retire_matured_bonds(1880);
+    CHECK(c.bonds().size() == 20);
+    const Money before = c.cash();
+    c.retire_matured_bonds(1881);
+    CHECK(c.bonds().empty());
+    CHECK(before - c.cash() == Money::dollars(10'000'000)); // at face value, no penalty
+}
+
+TEST_CASE("running costs are charged monthly, and interest quarterly") {
     World w = flat_world(5'000'000);
     REQUIRE(w.execute(BuildTrack{.start = free_at(2, 5), .end = free_at(32, 5)}).ok);
     const TrackNetwork& net = w.railway().track();
@@ -162,10 +183,10 @@ TEST_CASE("running costs are charged monthly: maintenance, fuel, upkeep, interes
     CHECK(line(Ledger::TrainMaintenance) == Money::dollars(1'000)); // $12K a year, new
     CHECK(line(Ledger::TrackUpkeep) == w.company().track_value().scaled(5, 1000));
     CHECK(line(Ledger::BuildingUpkeep) == Money::dollars(100'000).scaled(5, 1000));
-    CHECK(line(Ledger::Interest) == Money::dollars(500'000).scaled(w.company().bonds()[0].rate_bp, 120000));
-    // Fuel: $20 + 3 cars x $2 per km run.
-    const Train& t = w.railway().train(0);
-    CHECK(line(Ledger::Fuel) == Money::dollars(26).scaled(t.fuel_billed_mm, 1'000'000));
+    CHECK(line(Ledger::Interest) == Money{}); // not until the quarter ends
+    run_days(w, 59); // to 1 April
+    CHECK(w.company().this_year().lines[static_cast<std::size_t>(Ledger::Interest)] ==
+          Money::dollars(500'000).scaled(w.company().bonds()[0].rate_bp * 3, 120000));
     CHECK(line(Ledger::Fuel) > Money{});
 }
 

@@ -32,6 +32,7 @@ World::World(const WorldConfig& config, GameData data)
       economy_(config.width_tiles, config.height_tiles, std::int64_t{config.tile_size_m} * 1000, data_.cargo),
       railway_(config.seed),
       sandbox_(config.sandbox),
+      difficulty_(config.difficulty),
       company_("Railmaster Railroad", Money::dollars(config.starting_cash), config.start_date.year()) {
     terrain_.generate_rolling_hills(rng_, 400);
     if (config.populate && !data_.industries.all().empty()) {
@@ -44,10 +45,14 @@ World::World(const WorldConfig& config, GameData data)
 
 void World::tick() {
     ++total_ticks_;
+    railway_.set_today(date_.days_since_epoch());
     railway_.tick(data_.locomotives);
+    for (TrainId id : railway_.take_crashes()) {
+        company_.write_off_train(data_.locomotives.get(railway_.train(id).loco).cost);
+    }
     for (const auto& [train, station] : railway_.take_arrivals()) {
         const Earnings e = handle_arrival(railway_, economy_, data_.cargo, data_.industries, train, station,
-                                          date_.days_since_epoch(), total_ticks_);
+                                          date_.days_since_epoch(), total_ticks_, revenue_permille(station));
         earned_ += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) company_.post(revenue_line(data_.cargo.get(cargo)), amount);
     }
@@ -63,22 +68,38 @@ void World::tick() {
     if (after.year != before.year) on_new_year();
 }
 
+std::int32_t World::revenue_permille(StationId s) const {
+    const Station& st = railway_.station(s);
+    const std::int32_t today = date_.days_since_epoch();
+    std::int32_t age_permille;
+    if (st.town) {
+        const auto& first = economy_.towns()[*st.town].first_station_day;
+        age_permille = station_age_permille(today - first.value_or(st.built_day), false);
+    } else {
+        age_permille = station_age_permille(today - st.built_day, true);
+    }
+    return difficulty_revenue_permille(difficulty_) * age_permille / 1000;
+}
+
 void World::charge_running_costs() {
     const std::int32_t today = date_.days_since_epoch();
     Money maintenance, fuel;
     for (const Train& t : railway_.trains()) {
+        if (t.state == TrainState::Crashed) continue;
         const LocomotiveType& loco = data_.locomotives.get(t.loco);
         maintenance += annual_maintenance(loco, (today - t.built_day) / 365, t.oil).scaled(1, 12);
         const std::int64_t run_mm = t.distance_mm - t.fuel_billed_mm;
         fuel += Money::dollars(fuel_per_km(loco, t.cars.size())).scaled(run_mm, 1'000'000);
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
-    company_.post(Ledger::TrainMaintenance, maintenance);
-    company_.post(Ledger::Fuel, fuel);
-    company_.post(Ledger::TrackUpkeep, company_.track_value().scaled(provisional::kTrackUpkeepPerMillePerMonth, 1000));
+    // Easy games cut maintenance, fuel and track costs [D]; by 15% [I].
+    const std::int64_t cost_pct = difficulty_ == Difficulty::Easy ? 85 : 100;
+    company_.post(Ledger::TrainMaintenance, maintenance.scaled(cost_pct, 100));
+    company_.post(Ledger::Fuel, fuel.scaled(cost_pct, 100));
+    company_.post(Ledger::TrackUpkeep,
+                  company_.track_value().scaled(provisional::kTrackUpkeepPerMillePerMonth * cost_pct, 1000 * 100));
     company_.post(Ledger::BuildingUpkeep,
                   company_.building_value().scaled(provisional::kBuildingUpkeepPerMillePerMonth, 1000));
-    company_.charge_interest();
 }
 
 void World::on_new_day() {
@@ -93,10 +114,16 @@ void World::on_new_month() {
     charge_running_costs();
     company_.record_month();
     last_forced_sale_ = monthly_market(investor_, company_);
-    // Dividends are paid at the end of March, June, September and December.
-    if ((date_.month() - 1) % 3 == 0) pay_dividends(investor_, company_);
+    // Bond interest [D] and dividends are paid at the end of each quarter.
+    if ((date_.month() - 1) % 3 == 0) {
+        company_.charge_interest(3);
+        pay_dividends(investor_, company_);
+    }
 }
 
-void World::on_new_year() { company_.start_year(date_.year()); }
+void World::on_new_year() {
+    company_.retire_matured_bonds(date_.year());
+    company_.start_year(date_.year());
+}
 
 } // namespace railmaster::sim

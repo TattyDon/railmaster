@@ -31,10 +31,16 @@ constexpr std::int64_t kFoundingShares = 600'000;
 constexpr std::int64_t kFoundingPlayerShares = 300'000;
 } // namespace provisional
 
-// Researched: bonds are $500,000, need a rating of at least B, and cost 2%
-// of face value to underwrite.
+// Researched (docs/spec/rt3-clone-spec.md §12.4): bonds are $500,000, need a
+// rating of at least B, cost 2% of face value to underwrite and about 2% to
+// repay early; at most 20 may be outstanding; interest is paid quarterly.
 constexpr std::int64_t kBondFaceValue = 500'000;
 constexpr std::int32_t kBondUnderwritingPercent = 2;
+constexpr std::int32_t kBondEarlyRepaymentPercent = 2;
+constexpr std::size_t kMaxBonds = 20;
+namespace provisional {
+constexpr std::int32_t kBondMaturityYears = 30; // [I] in the spec
+} // namespace provisional
 
 enum class CreditRating : std::uint8_t { AAA, AA, A, BBB, BB, B, C, D };
 const char* rating_name(CreditRating r);
@@ -90,6 +96,8 @@ public:
     void invest_track(Money cost);
     void invest_buildings(Money cost);
     void invest_train(Money cost);
+    // A train destroyed in a crash leaves the books.
+    void write_off_train(Money cost) { rolling_stock_ -= cost; }
 
     Money track_value() const { return track_; }
     Money building_value() const { return buildings_; }
@@ -98,21 +106,23 @@ public:
     Money debt() const;
     Money book_value() const { return total_assets() - debt(); }
 
-    // Grade from debt over total assets; a company yet to finish a
-    // profitable year is held to BB at best; each bond outstanding costs a
-    // further notch. Bonds need B or better.
+    // Grade from debt over total assets. A company yet to finish a
+    // profitable year is held to BB at best and loses a notch per bond; a
+    // proven one loses a notch per four bonds. Bonds need B or better.
     CreditRating credit_rating() const;
     std::int32_t bond_rate_bp() const;
     const std::vector<Bond>& bonds() const { return bonds_; }
-    bool can_issue_bond() const { return credit_rating() <= CreditRating::B; }
+    bool can_issue_bond() const { return credit_rating() <= CreditRating::B && bonds_.size() < kMaxBonds; }
     // Issue one bond: cash in, less the underwriting fee. Caller checks can_issue_bond.
     void issue_bond(std::int32_t year);
-    // Repay the most expensive bond at face value. Caller checks there is
-    // one and enough cash.
+    // Repay the most expensive bond early: face value plus the 2% penalty.
+    // Caller checks there is one and enough cash.
     void repay_bond();
+    // Repay at face value any bond that has reached maturity in `year`.
+    void retire_matured_bonds(std::int32_t year);
 
-    // Monthly: interest on bonds outstanding.
-    void charge_interest();
+    // Quarterly: `months` of interest on bonds outstanding.
+    void charge_interest(std::int32_t months = 3);
 
     // --- Shares ---
     std::int64_t shares_outstanding() const { return shares_; }

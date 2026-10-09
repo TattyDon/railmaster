@@ -92,7 +92,9 @@ TEST_CASE("double track costs more") {
     dbl.double_track = true;
     const auto single = plan_track(net, terrain, start, pts, std::nullopt, {});
     const auto twin = plan_track(net, terrain, start, pts, std::nullopt, dbl);
-    CHECK(twin.plan->total_cost == single.plan->total_cost * provisional::kDoubleTrackMultiplier);
+    // More than single, less than twice [D].
+    CHECK(twin.plan->total_cost > single.plan->total_cost);
+    CHECK(twin.plan->total_cost < single.plan->total_cost * 2);
 }
 
 TEST_CASE("a ridge is tunnelled, keeping the grade under the limit") {
@@ -158,7 +160,7 @@ TEST_CASE("water is bridged: wood for single track, steel or stone for double") 
     REQUIRE(early.plan.has_value());
     for (const auto& p : early.plan->pieces)
         if (p.kind == TrackKind::Bridge) CHECK(p.bridge == BridgeType::Stone);
-    dbl.year = 1900;
+    dbl.year = 1870; // steel's era, before suspension bridges (1895)
     const auto later = plan_track(net, terrain, start, pts, std::nullopt, dbl);
     REQUIRE(later.plan.has_value());
     for (const auto& p : later.plan->pieces)
@@ -186,6 +188,35 @@ TEST_CASE("impossible bridge requests are refused with a reason") {
     CHECK_FALSE(plan_track(net, terrain, start, straight_points({2 * kKm, 5 * kKm}, {9 * kKm, 5 * kKm}, kKm),
                            std::nullopt, {})
                     .plan.has_value()); // would end in the lake
+}
+
+TEST_CASE("bridge eras: wood and stone until 1865, steel from 1865, suspension from 1895") {
+    CHECK(bridge_available(BridgeType::Wood, 1865));
+    CHECK_FALSE(bridge_available(BridgeType::Wood, 1866));
+    CHECK_FALSE(bridge_available(BridgeType::Stone, 1866));
+    CHECK_FALSE(bridge_available(BridgeType::Steel, 1864));
+    CHECK(bridge_available(BridgeType::Steel, 1865));
+    CHECK_FALSE(bridge_available(BridgeType::Suspension, 1894));
+    CHECK(bridge_available(BridgeType::Suspension, 1895));
+}
+
+TEST_CASE("long water crossings get suspension bridges once available") {
+    // A lake 4 km wide (tiles 8..11): long enough for a suspension bridge.
+    Terrain terrain = lake_terrain();
+    TrackNetwork net;
+    const NodeId start = net.add_node({2 * kKm, 5 * kKm}, 0);
+    const auto pts = straight_points({2 * kKm, 5 * kKm}, {16 * kKm, 5 * kKm}, kKm);
+    TrackBuildOptions later;
+    later.year = 1900;
+    const auto r = plan_track(net, terrain, start, pts, std::nullopt, later);
+    REQUIRE(r.plan.has_value());
+    bool any = false;
+    for (const auto& p : r.plan->pieces) any |= p.bridge == BridgeType::Suspension;
+    CHECK(any);
+    later.bridge_type = BridgeType::Steel; // the player's choice wins
+    const auto chosen = plan_track(net, terrain, start, pts, std::nullopt, later);
+    REQUIRE(chosen.plan.has_value());
+    for (const auto& p : chosen.plan->pieces) CHECK(p.bridge != BridgeType::Suspension);
 }
 
 TEST_CASE("bridge prices follow the researched order: wood < steel < stone") {

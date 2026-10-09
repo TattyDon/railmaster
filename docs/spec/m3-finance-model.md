@@ -41,8 +41,12 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
   A company that has not yet finished a profitable year is held to BB at
   best, and every bond outstanding costs one more notch. A new company can
   therefore issue two bonds (BB, then B) and no more until it proves itself.
-- **Bonds** have no maturity. The interest rate is fixed when issued.
-  Repaying pays off the most expensive bond at face value.
+- **Bonds:** at most 20; interest paid quarterly [D]; repaying early costs
+  2% extra [C]; they mature after 30 years [I] and are repaid at face
+  value. The interest rate is fixed when issued.
+- **Rating penalty for bonds:** a notch per bond while the company is
+  unproven, a notch per four bonds once it has had a profitable year, so
+  the 20-bond maximum is reachable.
 - **Book value** = cash + assets at cost − bonds.
 - **Negative cash** is currently allowed: running costs are always charged.
   Bankruptcy comes later.
@@ -107,7 +111,7 @@ Our design:
 | Item | Value |
 |---|---|
 | Personal starting cash | $500,000 |
-| Salary | $24,000 a year |
+| Salary | $50,000 a year [C] |
 | Margin | Holdings count at 50% |
 | Margin interest | 10% a year on negative cash |
 | Issue or buyback size | 10% of shares outstanding |

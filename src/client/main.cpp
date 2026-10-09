@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     client::Tools tools(world, cam);
-    int speed = 1;
+    int speed = 0; // every game starts paused [D]
     double tick_accumulator = 0.0;
     Uint64 last = SDL_GetPerformanceCounter();
 

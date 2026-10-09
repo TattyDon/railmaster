@@ -72,14 +72,28 @@ TEST_CASE("catchment grows with station size") {
     CHECK(catchment_radius(StationSize::Medium) < catchment_radius(StationSize::Large));
 }
 
-TEST_CASE("cargo loses value in transit, perishables faster") {
+TEST_CASE("cargo loses value in transit, perishables faster, and expires below 10%") {
     const auto cargo = test_cargo();
     const auto& coal = cargo.get(*cargo.find("coal"));
     const auto& milk = cargo.get(*cargo.find("milk"));
     CHECK(value_left_permille(coal, 0) == 1000);
-    CHECK(value_left_permille(coal, 10) == 950);
-    CHECK(value_left_permille(milk, 10) == 500);
-    CHECK(value_left_permille(milk, 30) == 0);
+    CHECK(value_left_permille(coal, 30) == 933);  // sensitivity 1: ~5% in 30 days
+    CHECK(value_left_permille(milk, 30) == 501);  // sensitivity 10: ~half in 30 days
+    CHECK(value_left_permille(milk, 100) == 100); // exactly 10%: still worth something
+    CHECK(value_left_permille(milk, 101) == 0);   // expired
+}
+
+TEST_CASE("revenue modifiers: difficulty and station age") {
+    CHECK(difficulty_revenue_permille(Difficulty::Easy) == 1200);
+    CHECK(difficulty_revenue_permille(Difficulty::Medium) == 1000);
+    CHECK(difficulty_revenue_permille(Difficulty::Hard) == 900);
+    CHECK(difficulty_revenue_permille(Difficulty::Expert) == 800);
+    CHECK(station_age_permille(0, false) == 1150);
+    CHECK(station_age_permille(2 * 365, false) == 1075);
+    CHECK(station_age_permille(4 * 365, false) == 1000);
+    CHECK(station_age_permille(12 * 365, false) == 950);
+    CHECK(station_age_permille(30 * 365, false) == 900);
+    CHECK(station_age_permille(0, true) == 1075); // open country: half the effect
 }
 
 TEST_CASE("a station's best price is the dearest cell in its catchment") {
@@ -147,8 +161,8 @@ TEST_CASE("cargo is unloaded at the first stop that pays more, earning the diffe
     const std::int32_t plant_price = s.eco.price(s.c("coal"), 30, 10);
     const std::int32_t stock_before = s.eco.stock_milli(s.c("coal"), 30, 10);
     const Money income = handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 110, 2).total;
-    // Ten days in transit at 0.5% a day: 95% of the price gain.
-    CHECK(income == Money::dollars(std::int64_t{plant_price - 15'000} * 950 / 1000));
+    // Ten days in transit for sensitivity-1 coal: 97.7% of the price gain.
+    CHECK(income == Money::dollars(std::int64_t{plant_price - 15'000} * 977 / 1000));
     CHECK_FALSE(s.rw.train(t).cars[0].cargo.has_value());
     CHECK(s.eco.stock_milli(s.c("coal"), 30, 10) == stock_before + kMilli); // fed into the local economy
     CHECK(s.rw.train(t).revenue == income);
@@ -160,7 +174,7 @@ TEST_CASE("spoiled cargo is dumped for nothing") {
     s.days(10);
     const TrainId t = s.rw.add_train(0, 1, {s.stations[0], s.stations[1]});
     s.rw.train_mut(t).cars[0] = Car{s.c("milk"), kMilli, 55'000, 0, s.stations[0], std::nullopt};
-    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 40, 1).total == Money{});
+    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 120, 1).total == Money{});
     CHECK_FALSE(s.rw.train(t).cars[0].cargo.has_value());
 }
 
@@ -214,8 +228,9 @@ TEST_CASE("a train earns money hauling coal to a distant power plant") {
     MESSAGE("revenue in a year: $" << train.revenue.whole_dollars() << " over " << train.stops_made << " stops");
     CHECK(train.revenue > Money::dollars(100'000));
     CHECK(w.total_revenue() == train.revenue);
-    // A stop's income is at most four full carloads at the mine-to-plant gap ($15K to $45K).
-    CHECK(train.last_income <= Money::dollars(4 * 30'000));
+    // A stop's income is at most four full carloads at the mine-to-plant gap
+    // ($15K to $45K), plus up to 15% for a new station.
+    CHECK(train.last_income <= Money::dollars(4 * 30'000).scaled(115, 100));
 }
 
 TEST_CASE("freight is deterministic") {

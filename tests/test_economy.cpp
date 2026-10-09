@@ -93,12 +93,11 @@ TEST_CASE("shipped industry data covers every freight cargo") {
         for (CargoId o : t.outputs) produced.insert(cargo.get(o).key);
         for (const auto& i : t.inputs) consumed.insert(cargo.get(i.cargo).key);
     }
-    // Known gaps from the research: rubber has no listed producer (ports,
-    // later) and diesel has neither a producer nor a consumer.
+    // Known gap: no source names a consumer of diesel (refineries make it).
     for (const auto& c : cargo.all()) {
         if (c.cargo_class != CargoClass::Freight) continue;
         INFO(c.key);
-        if (c.key != "rubber" && c.key != "diesel") CHECK(produced.count(c.key) == 1);
+        CHECK(produced.count(c.key) == 1);
         if (c.key != "diesel") CHECK(consumed.count(c.key) == 1);
     }
 }

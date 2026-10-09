@@ -169,3 +169,68 @@ TEST_CASE("train position interpolates along the track") {
     CHECK(p.x_mm == l.rw.train(t).offset_mm);
     CHECK(p.x_mm > 0);
 }
+
+TEST_CASE("at equal priority, the train with more valuable cargo has right of way") {
+    const auto locos = test_locos();
+    Line l = make_line(20, 0);
+    const TrainId older = l.rw.add_train(0, 1, {l.west, l.east});
+    const TrainId richer = l.rw.add_train(0, 1, {l.east, l.west});
+    l.rw.train_mut(richer).cars[0] = Car{CargoId{0}, 1000, 0, 0, l.east, std::nullopt, 50'000};
+    bool older_yielded = false;
+    for (int i = 0; i < 200; ++i) {
+        l.rw.tick(locos);
+        CHECK_FALSE(l.rw.train(richer).yielding);
+        older_yielded = older_yielded || l.rw.train(older).yielding;
+    }
+    CHECK(older_yielded);
+}
+
+TEST_CASE("wooden bridges slow trains a lot, other bridges a little") {
+    const auto locos = test_locos();
+    auto trip = [&](TrackKind kind, BridgeType bridge) {
+        Railway rw;
+        rw.set_rules({.breakdowns = false});
+        const NodeId a = rw.track().add_node({0, 0}, 0);
+        const NodeId b = rw.track().add_node({40 * kKm, 0}, 0);
+        rw.track().add_edge(a, b, false, kind, bridge);
+        const StationId sa = rw.add_station("A", a, StationSize::Small);
+        const StationId sb = rw.add_station("B", b, StationSize::Small);
+        const TrainId t = rw.add_train(0, 0, {sa, sb});
+        return ticks_until_stop(rw, locos, t, 1);
+    };
+    const int ground = trip(TrackKind::Ground, BridgeType::None);
+    const int steel = trip(TrackKind::Bridge, BridgeType::Steel);
+    const int wood = trip(TrackKind::Bridge, BridgeType::Wood);
+    CHECK(steel > ground);
+    CHECK(wood > steel * 3 / 2);
+}
+
+TEST_CASE("an unreliable train eventually crashes and is destroyed") {
+    const auto locos = LocomotiveRegistry::from_json(R"({"locomotives": [
+        {"key": "bad", "name": "Bad", "fuel": "diesel", "available_from": 1800,
+         "top_speed_mph": 60, "cost": 1, "maintenance_per_year": 1, "reliability": 1}]})");
+    Line l = make_line(1000, 0);
+    l.rw.set_rules({.breakdowns = true});
+    const TrainId t = l.rw.add_train(0, 2, {l.west, l.east});
+    std::vector<TrainId> crashed;
+    for (int i = 0; i < 2'000'000 && crashed.empty(); ++i) {
+        l.rw.tick(locos);
+        for (TrainId c : l.rw.take_crashes()) crashed.push_back(c);
+    }
+    REQUIRE(crashed.size() == 1);
+    CHECK(crashed[0] == t);
+    CHECK(l.rw.train(t).state == TrainState::Crashed);
+    const MapPoint wreck = l.rw.train_position(t);
+    for (int i = 0; i < 100; ++i) l.rw.tick(locos);
+    CHECK(l.rw.train_position(t) == wreck); // it never moves again
+}
+
+TEST_CASE("no crashes when the rules turn breakdowns and crashes off") {
+    const auto locos = LocomotiveRegistry::from_json(R"({"locomotives": [
+        {"key": "bad", "name": "Bad", "fuel": "diesel", "available_from": 1800,
+         "top_speed_mph": 60, "cost": 1, "maintenance_per_year": 1, "reliability": 1}]})");
+    Line l = make_line(100, 0);
+    l.rw.add_train(0, 2, {l.west, l.east});
+    for (int i = 0; i < 200'000; ++i) l.rw.tick(locos);
+    CHECK(l.rw.take_crashes().empty());
+}

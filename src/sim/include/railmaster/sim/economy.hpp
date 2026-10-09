@@ -91,6 +91,7 @@ struct Site {
 struct Town {
     std::string name;
     std::int32_t cx = 0, cy = 0;
+    std::optional<std::int32_t> first_station_day{}; // for the station-age revenue modifier
 };
 
 // The map's cargo economy: a grid of economy nodes (one per terrain tile),
@@ -116,6 +117,7 @@ public:
                     std::int32_t level = 1);
     const std::vector<Site>& sites() const { return sites_; }
     void add_town(Town t) { towns_.push_back(std::move(t)); }
+    Town& town_mut(std::size_t i) { return towns_.at(i); }
     const std::vector<Town>& towns() const { return towns_; }
 
     void step_day(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);

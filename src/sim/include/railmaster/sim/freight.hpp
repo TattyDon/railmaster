@@ -23,9 +23,10 @@ constexpr std::int32_t kCatchmentMedium = 2; // 5 x 5
 constexpr std::int32_t kCatchmentLarge = 3;  // 7 x 7
 constexpr std::int32_t kGatherPercentPerDay = 20;   // share of catchment stock that moves to the station
 constexpr std::int32_t kStationCapMilli = 20'000;  // 20 carloads of each cargo waiting
-// Value lost in transit, per day per point of decay sensitivity (1-10), in
-// tenths of a percent: coal loses 0.5% a day, milk 5% a day.
-constexpr std::int32_t kTransitDecayPerMillePerSensitivity = 5;
+// Value left after transit = exp(-0.0023 x sensitivity x days)
+// [rt3-clone-spec §8.2, I]: sensitivity 10 loses half in 30 days, 1 loses 5%.
+// Below 10% the load has expired.
+constexpr std::int32_t kExpiredPermille = 100;
 // Express: a destination's pull saturates; one with this much attraction
 // (e.g. 20 houses) draws half the traffic it could.
 constexpr std::int32_t kExpressAttractionHalf = 20;
@@ -56,8 +57,16 @@ struct CatchmentPrices {
 };
 CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const Station& s, CargoId c);
 
-// Share of a load's value left after `days` in transit, in thousandths.
+// Share of a load's value left after `days` in transit, in thousandths;
+// 0 once it falls below kExpiredPermille.
 std::int32_t value_left_permille(const CargoType& c, std::int32_t days);
+
+// Revenue modifiers at a destination [D, rt3-clone-spec §8.4].
+enum class Difficulty : std::uint8_t { Easy, Medium, Hard, Expert };
+std::int32_t difficulty_revenue_permille(Difficulty d); // 1200, 1000, 900, 800
+// Station age: +15% when the town's first station is new, 0 at 4 years,
+// -10% from 20 years; half the effect for a station in open country.
+std::int32_t station_age_permille(std::int32_t days_since_first_station, bool open_country);
 
 // How strongly the sites in a station's catchment produce (outputs) or
 // attract (inputs) a cargo: the sum of their yearly rate x level.
@@ -86,7 +95,9 @@ void start_new_month(Railway& rw);
 // local economy. Returns the income.
 // Express loads are only unloaded at their destination, earning the fare
 // less decay (mail past the town's monthly demand earns nothing).
+// `revenue_permille` scales all income here (difficulty x station age).
 Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
-                        TrainId train, StationId station, std::int32_t today, std::uint64_t tick);
+                        TrainId train, StationId station, std::int32_t today, std::uint64_t tick,
+                        std::int32_t revenue_permille = 1000);
 
 } // namespace railmaster::sim

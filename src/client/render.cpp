@@ -110,6 +110,7 @@ void draw_railway(const sim::Railway& rw, const Camera& cam) {
         square(net.node(b.node).pos, cam, 3 * px);
     }
     for (const sim::Train& t : rw.trains()) {
+        if (t.state == sim::TrainState::Crashed) continue;
         if (t.state == sim::TrainState::BrokenDown) glColor3f(1.0f, 0.55f, 0.0f);
         else if (t.state == sim::TrainState::Servicing) glColor3f(0.2f, 0.4f, 1.0f);
         else if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);

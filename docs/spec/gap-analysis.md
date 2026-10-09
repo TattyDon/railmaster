@@ -1,0 +1,136 @@
+# Gap analysis against the RT3 clone spec
+
+[rt3-clone-spec.md](rt3-clone-spec.md) is the primary reference. This page
+records, section by section, how the implementation compares with it.
+Spec tags: **[D]** documented (implement exactly), **[C]** community
+(default, configurable), **[I]** inferred (tunable placeholder).
+
+Last reviewed against spec v1.0 (9 October 2026).
+
+## Brought into line with the spec
+
+| Spec | Rule | Was | Now |
+|---|---|---|---|
+| §12.4 [D] | Bond interest paid quarterly | monthly | quarterly, with dividends |
+| §12.4 [C] | At most 20 bonds; ~2% early-repayment penalty | no cap, repaid at par | both; 30-year maturity [I] repaid at par |
+| §12.4 [C] | Each bond lowers the rating, yet 20 are possible | −1 notch per bond (max ~6) | −1 per bond while unproven, −1 per 4 once proven |
+| §12.2 [C] | Salary ~$50K | $24K | $50K |
+| §10.3 [D] | Equal priority: more valuable cargo wins the meet | older train | cargo value, then older train |
+| §10.1 [D] | Wood bridges slow trains a lot, steel a little | no effect | wood 50%, others 90% [I] |
+| §11.2 [D] | Wood and stone bridges until 1865, steel from 1865, suspension from 1895 (auto for long water spans) | wood/stone always, steel from 1870, no suspension | as documented; spans ≥ 2 km get suspension [I] |
+| §11.2 [D] | Double track costs more than single but less than 2× | 2× | 1.7× [I] |
+| §11.2 [I] | Structure cost multiples: wood 3×, steel 5×, stone 6×, suspension 10×, tunnel 15× | 4×, 6.4×, 8×, —, 10× | as the spec |
+| §9.4 [D] | Crashes: a rare event that destroys the train; off in sandbox | not modelled | spec's [I] rate; wreck written off the books |
+| §8.4 [D] | Difficulty revenue: Easy +20%, Medium 0, Hard −10%, Expert −20%; Easy cuts costs | none | as documented; Easy −15% running costs [I] |
+| §8.4 [D] | Station age: +15% new, 0% at 4 years, −10% at 20+; counted from the town's first station; open country half | none | as documented, linear between points [I] |
+| §8.2 [I] | Timeliness exp(−0.0023 × S × days); freight expires below 10% | linear 0.5%/day × S | the spec's curve (deterministic integer table) |
+| §6.3 [C] | Refinery: oil → diesel; rubber plantation (1900) | missing (rubber had no source) | added |
+| §6.3 [C] | Houses take milk only until ~1890 | always | until 1890 |
+| §2 [D] | Every game starts paused | started running | starts paused |
+
+## Matches already
+
+- §1 [I] architecture: deterministic integer simulation, seeded RNG,
+  command pattern for player actions.
+- §4.1 [D] cargo table (41 types, prices in $K, sensitivity 1–10).
+- §5.1 [D] price field on ~15,000 nodes with price and inventory per freight
+  cargo; express kept out of the field; revenue = destination − origin price.
+- §5.4 [D] cargo supply overlay, red cheap to green dear.
+- §7.1 [C] station prices $50K/$100K/$200K; size changes only cost and radius [D].
+- §7.1 [D] freight won't board for a stop where it sells for less.
+- §7.2 [D] service tower (water, sand) and maintenance facility (oil), with automatic stops when low.
+- §9.3 [D] 8 car slots; automatic consist picks the most profitable cars.
+- §9.4 [D] consumables and their effects; sandbox switches breakdowns and crashes off.
+- §10.3 [D] no signals or collisions; lower priority yields; double track passes freely.
+- §12.1 [D] two ledgers; purchasing power = cash + 0.5 × holdings; net worth.
+- §12.3 [D/C] issue at most twice a year; buybacks; dividends paid quarterly
+  and cut if unaffordable; one 1,000-share lot on a $50 stock with 100K
+  shares moves the price about $1 [C], which our linear impact reproduces.
+- §12.5 [D/C] 1,000-share lots (5,000 with a modifier); margin call
+  force-sells in lots until purchasing power is positive.
+
+## Our design differs from the spec's [C]/[I] proposal: decisions needed
+
+1. **Production rates (§6.1 [C]).** The spec gives about 2.2 loads a year
+   for raw producers and about 3 for processors. Ours are 24 and 36. Adopting
+   the spec's figures would cut freight volume roughly tenfold and starve
+   most freight routes. That suggests either the figure means something else
+   (per unit of footprint, or before demand-driven growth) or our other
+   rates need to fall with it. **Recommend calibrating in-game before
+   changing.**
+2. **Where tunable numbers live (§0 rule).** The spec requires every [C] and
+   [I] number in data files. Ours are named constants in `provisional`
+   namespaces in the headers, which is documented but compiled in. Moving
+   them to `content/balance.json` (§16) needs a balance object passed
+   through the simulation; a contained refactor.
+3. **Price field (§5.3 [I]).** The spec proposes an equilibrium price from
+   the demand/supply ratio, relaxing over 6–12 months, with middleman flow
+   weighted by terrain conductance. Ours is a screened-Poisson field with
+   uniform drift. The spec's [D] requirement we don't yet meet is
+   **terrain**: middlemen are cheap along rivers and coasts and slow over
+   mountains.
+4. **Stock price (§12.3 [I]).** The spec weights book value 0.8, a 3-year
+   EPS trend × P/E by economy, a dividend term that grows with an unbroken
+   record, revenue, ⅛ monthly smoothing, and trade pressure that decays.
+   Ours: 0.6 × book value + 8 × trailing EPS + 10 × dividend, ¼ smoothing,
+   permanent trade impact.
+5. **Credit rating (§12.4 [I]).** The spec uses ten grades, A+ to D, and a
+   score from assets/debt, interest cover, profit trend and bonds, with
+   rate = prime + spread. Ours: eight grades from debt/assets with
+   bond notches and a fixed rate table. Prime rates arrive with economic states.
+6. **Maintenance and upkeep (§9.4, §11.2 [I]).** The spec proposes
+   maintenance × (1 + 4% per year of age) and track upkeep at 2% of cost a
+   year. Ours: linear to 3× at 20 years (from a community page) and 6% a
+   year (RT2's rate).
+7. **Catchment and map scale (§3.1, §7.1 [I]).** The spec uses 0.5-mile
+   cells, radii of 2/3/4 cells, and maps of 256–1,024 cells. Ours: 1 km
+   cells, radii of 1/2/3, and 128 × 128 maps. Similar real-world sizes.
+8. **Game speed keys (§2, §15.7 [D/C]).** The spec has six speeds on
+   `+`/`−`. Ours: three speeds on 1–3, and `+`/`−` trade shares on the
+   finance screen.
+
+## Missing
+
+Grouped by the spec's own build order (§17).
+
+**Trains and track**
+- Era car weights (§4.2 [D]) and the speed model with free weight,
+  acceleration and appeal (§9.1 [D], §10.2 [I]). Needs per-locomotive
+  numbers (§17 item 1).
+- Consist rules (§9.3 [D]): min/max cars (default 0/4) and waiting for a
+  full load; Any/Freight/Express filters; custom consists per stop;
+  caboose (−50% breakdowns); dining car (+20% passengers); copy, replace and
+  retire.
+- Electrification, and electric engines needing it (§10.2, §11.2 [D]).
+- Free undo while laying track; removing track (10% refund); overpasses
+  (§11.1–11.2 [D]).
+- Curve slowdown; following trains on single track (§10 [C/I]).
+- Breakdown repair cost and duration (§9.4 [I]).
+
+**Economy**
+- Terrain conductance for middlemen (§5.3 [D behaviour]).
+- Economic states (§5.5 [C]) affecting production, costs, prime rate and stocks.
+- Industry ownership: buying at ~10× profit, building, upgrading to double
+  capacity, closures (§6.1–6.2 [D/C]).
+- Town growth and star ratings (§3.2 [D], §6.4 [I]).
+- Warehouses and ports (§6.3 [D/C]).
+- Hotels, restaurants, taverns and post offices (§7.2 [D/C]).
+
+**Express**
+- Units with origin and destination houses chosen by gravity weighting;
+  transfers via hubs; won't board rarely served stops; travellers who
+  give up avoid rail for a while (§8.3 [D/I]).
+- Fare speed factor, locomotive appeal and dining car (§8.3 [D]).
+
+**Company and market**
+- Bankruptcy (§12.4 [D]).
+- Investor sentiment and ousting the chairman; resigning (§12.2 [D]).
+- Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]); stock splits (§12.3 [C]).
+- Rival companies, and with them short selling (§12.5), takeovers and
+  mergers (§12.6), trackage rights (§8.5 [D]) and AI (§13).
+
+**Scenarios and presentation**
+- Territories and access rights (§3.3 [D]).
+- Scenario goals, medals, events, track budgets (§11.3, §14 [C/I]).
+- Ledger reports, lists, overlays F2–F5, radar, 3D camera (§15 [D]).
+- Save/load and content packaging (§16 [I]).

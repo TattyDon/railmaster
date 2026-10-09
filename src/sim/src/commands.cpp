@@ -3,6 +3,7 @@
 #include "railmaster/sim/world.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -146,6 +147,24 @@ CommandResult World::run(const BuildStation& cmd) {
     company_.invest_buildings(station_cost(cmd.size));
     std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
     const StationId id = railway_.add_station(std::move(name), node, cmd.size);
+    // Which town it serves, for the station-age modifier: the nearest town
+    // centre within the reach of a town's houses.
+    Station& st = railway_.station_mut(id);
+    st.built_day = date_.days_since_epoch();
+    const MapPoint p = railway_.track().node(node).pos;
+    const std::int32_t cx = economy_.cell_x(p), cy = economy_.cell_y(p);
+    std::int32_t best = 4; // cells
+    for (std::size_t t = 0; t < economy_.towns().size(); ++t) {
+        const Town& town = economy_.towns()[t];
+        const std::int32_t d = std::max(std::abs(town.cx - cx), std::abs(town.cy - cy));
+        if (d <= best) {
+            best = d;
+            st.town = t;
+        }
+    }
+    if (st.town && !economy_.towns()[*st.town].first_station_day) {
+        economy_.town_mut(*st.town).first_station_day = st.built_day;
+    }
     return success(station_cost(cmd.size), id);
 }
 
@@ -180,6 +199,7 @@ CommandResult World::run(const BuyTrain& cmd) {
 }
 
 CommandResult World::run(const IssueBond&) {
+    if (company_.bonds().size() >= kMaxBonds) return fail("the company already has the maximum of 20 bonds");
     if (!company_.can_issue_bond()) {
         return fail(std::string("credit rating ") + rating_name(company_.credit_rating()) +
                     " is too low: bonds need B or better");
@@ -210,9 +230,8 @@ CommandResult World::run(const SetDividend& cmd) {
 
 CommandResult World::run(const RepayBond&) {
     if (company_.bonds().empty()) return fail("there are no bonds to repay");
-    if (!sandbox_ && company_.cash() < Money::dollars(kBondFaceValue)) {
-        return fail("not enough cash to repay a bond (" + dollars(Money::dollars(kBondFaceValue)) + ")");
-    }
+    const Money due = Money::dollars(kBondFaceValue).scaled(100 + kBondEarlyRepaymentPercent, 100);
+    if (!sandbox_ && company_.cash() < due) return fail("not enough cash to repay a bond (" + dollars(due) + ")");
     company_.repay_bond();
     return success(Money{}, 0);
 }

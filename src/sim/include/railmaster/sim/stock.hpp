@@ -15,7 +15,7 @@ namespace railmaster::sim {
 
 namespace provisional {
 constexpr std::int64_t kStartingPersonalCash = 500'000;
-constexpr std::int64_t kSalaryPerYear = 24'000;    // "small"
+constexpr std::int64_t kSalaryPerYear = 50'000;    // ~$50K, set by the board [C]
 constexpr std::int32_t kMarginPercent = 50;        // holdings count at half their value towards purchasing power
 constexpr std::int32_t kMarginInterestBp = 1000;   // 10% a year on negative personal cash
 constexpr std::int32_t kImpactPerShareOfCompany = 2; // trading 1% of a company moves its price 2%

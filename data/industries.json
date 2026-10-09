@@ -1,5 +1,5 @@
 {
-"_comment": "Industry types per docs/spec/economy-cargo.md sections 3-4 (who produces and consumes each cargo). Which inputs are boosters, the 'all' vs 'any' rule (only the steel mill's 'all' is researched), and every rate are PROVISIONAL; see docs/spec/m2-economy-model.md. Rates are carloads per year at level 1; for houses, per house.",
+"_comment": "Industry types per docs/spec/rt3-clone-spec.md section 6 and docs/spec/economy-cargo.md sections 3-4 (who produces and consumes each cargo). Which inputs are boosters, the 'all' vs 'any' rule (only the steel mill's 'all' is researched), and every rate are PROVISIONAL; see docs/spec/m2-economy-model.md. Rates are carloads per year at level 1; for houses, per house.",
 "industries": [
   {"key": "coal_mine", "name": "Coal Mine", "kind": "raw", "outputs": ["coal"], "rate": 24},
   {"key": "iron_mine", "name": "Iron Mine", "kind": "raw", "outputs": ["iron"], "rate": 24},
@@ -18,6 +18,7 @@
   {"key": "bauxite_mine", "name": "Bauxite Mine", "kind": "raw", "outputs": ["bauxite"], "rate": 24},
   {"key": "uranium_mine", "name": "Uranium Mine", "kind": "raw", "outputs": ["uranium"], "rate": 12},
   {"key": "chemical_plant", "name": "Chemical Plant", "kind": "raw", "outputs": ["chemicals"], "rate": 24},
+  {"key": "rubber_plantation", "name": "Rubber Plantation", "kind": "raw", "outputs": ["rubber"], "rate": 24},
 
   {"key": "steel_mill", "name": "Steel Mill", "kind": "processor", "rule": "all", "inputs": [{"cargo": "iron"}, {"cargo": "coal"}], "outputs": ["steel"], "rate": 36},
   {"key": "lumber_mill", "name": "Lumber Mill", "kind": "processor", "inputs": [{"cargo": "logs"}], "outputs": ["lumber"], "rate": 36},
@@ -30,6 +31,7 @@
   {"key": "furniture_factory", "name": "Furniture Factory", "kind": "processor", "inputs": [{"cargo": "lumber"}], "outputs": ["furniture"], "rate": 36},
   {"key": "tool_and_die", "name": "Tool and Die", "kind": "processor", "inputs": [{"cargo": "steel"}, {"cargo": "aluminum"}, {"cargo": "plastic"}, {"cargo": "iron", "until": 1877}], "outputs": ["goods"], "rate": 36},
   {"key": "aluminum_mill", "name": "Aluminum Mill", "kind": "processor", "inputs": [{"cargo": "bauxite"}], "outputs": ["aluminum"], "rate": 36},
+  {"key": "refinery", "name": "Refinery", "kind": "processor", "inputs": [{"cargo": "oil"}], "outputs": ["diesel"], "rate": 36},
   {"key": "plastics_factory", "name": "Plastics Factory", "kind": "processor", "inputs": [{"cargo": "oil"}], "outputs": ["plastic"], "rate": 36},
   {"key": "toy_factory", "name": "Toy Factory", "kind": "processor", "inputs": [{"cargo": "plastic"}, {"cargo": "lumber", "until": 1956}], "outputs": ["toys"], "rate": 36},
   {"key": "tire_factory", "name": "Tire Factory", "kind": "processor", "inputs": [{"cargo": "rubber"}], "outputs": ["tires"], "rate": 36},
@@ -48,7 +50,7 @@
   {"key": "house", "name": "Houses", "kind": "house", "rate": 1,
    "inputs": [{"cargo": "alcohol"}, {"cargo": "automobiles"}, {"cargo": "cheese"}, {"cargo": "clothing"},
               {"cargo": "coal", "until": 1910}, {"cargo": "coffee"}, {"cargo": "corn"}, {"cargo": "furniture"},
-              {"cargo": "goods"}, {"cargo": "grain"}, {"cargo": "lumber"}, {"cargo": "meat"}, {"cargo": "milk"},
+              {"cargo": "goods"}, {"cargo": "grain"}, {"cargo": "lumber"}, {"cargo": "meat"}, {"cargo": "milk", "until": 1890},
               {"cargo": "oil", "until": 1910}, {"cargo": "paper"}, {"cargo": "produce"}, {"cargo": "rice"},
               {"cargo": "sugar"}, {"cargo": "toys"}, {"cargo": "passengers"}, {"cargo": "mail"}],
    "outputs": ["waste", "passengers", "mail"]}

@@ -19,16 +19,26 @@ namespace provisional {
 constexpr std::int32_t kDefaultMaxGradeBp = 300;         // 3%: steeper ground is cut, tunnelled or bridged
 constexpr std::int64_t kTunnelCoverMm = 12'000;          // rail this far below ground becomes a tunnel
 constexpr std::int64_t kViaductClearanceMm = 10'000;     // rail this far above ground becomes a bridge
-constexpr std::int32_t kSteelBridgeFirstYear = 1870;
 constexpr std::int64_t kDefaultPieceMm = 500'000;        // curve smoothness, not a game rule
-// Construction prices per kilometre of single track.
+// Construction prices per kilometre of single track. The structure
+// multiples follow rt3-clone-spec §11.2 [I]: wood 3x, steel 5x, stone 6x,
+// suspension 10x, tunnel 15x plain track.
 constexpr std::int64_t kGroundTrackPerKm = 25'000;
-constexpr std::int64_t kTunnelPerKm = 250'000;
-constexpr std::int64_t kWoodBridgePerKm = 100'000;
-constexpr std::int64_t kSteelBridgePerKm = 160'000;
-constexpr std::int64_t kStoneBridgePerKm = 200'000;
-constexpr std::int64_t kDoubleTrackMultiplier = 2;
+constexpr std::int64_t kWoodBridgePerKm = 3 * kGroundTrackPerKm;
+constexpr std::int64_t kSteelBridgePerKm = 5 * kGroundTrackPerKm;
+constexpr std::int64_t kStoneBridgePerKm = 6 * kGroundTrackPerKm;
+constexpr std::int64_t kSuspensionBridgePerKm = 10 * kGroundTrackPerKm;
+constexpr std::int64_t kTunnelPerKm = 15 * kGroundTrackPerKm;
+// Double track costs more than single but less than twice [D]: +70% [I].
+constexpr std::int64_t kDoubleTrackPercent = 170;
+// Water stretches at least this long get a suspension bridge, once available [I].
+constexpr std::int64_t kSuspensionMinSpanMm = 2'000'000;
 } // namespace provisional
+
+// Bridge eras [D, rt3-clone-spec §11.2].
+constexpr std::int32_t kWoodStoneBridgeLastYear = 1865;
+constexpr std::int32_t kSteelBridgeFirstYear = 1865;
+constexpr std::int32_t kSuspensionBridgeFirstYear = 1895;
 
 bool bridge_available(BridgeType type, std::int32_t year);
 bool bridge_carries_double_track(BridgeType type);

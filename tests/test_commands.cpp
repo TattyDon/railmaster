@@ -198,3 +198,28 @@ TEST_CASE("stations and support buildings go on track; trains need a valid route
     for (int i = 0; i < 5000 && w.railway().train(train.created_id).stops_made == 0; ++i) w.tick();
     CHECK(w.railway().train(train.created_id).stops_made == 1);
 }
+
+TEST_CASE("station age counts from a town's first station; open country gets half the effect") {
+    World w = flat_world();
+    w.economy().add_town({"Townsville", 5, 5});
+    REQUIRE(w.execute(track(free_at(2, 5), free_at(18, 5))).ok);
+    const TrackNetwork& net = w.railway().track();
+    const auto at = [&](std::int64_t x_km) { return pick_track_end(net, {x_km * kKm, 5 * kKm}, 600'000); };
+
+    const CommandResult in_town = w.execute(BuildStation{.at = at(5)});
+    const CommandResult country = w.execute(BuildStation{.at = at(16)});
+    REQUIRE(in_town.ok);
+    REQUIRE(country.ok);
+    CHECK(w.railway().station(in_town.created_id).town == std::size_t{0});
+    CHECK_FALSE(w.railway().station(country.created_id).town.has_value());
+    CHECK(w.revenue_permille(in_town.created_id) == 1150);
+    CHECK(w.revenue_permille(country.created_id) == 1075);
+
+    for (int d = 0; d < 2 * 365; ++d)
+        for (int i = 0; i < World::kTicksPerDay; ++i) w.tick();
+    // A second station in the same town is as "old" as the town's first.
+    const CommandResult second = w.execute(BuildStation{.at = at(7)});
+    REQUIRE(second.ok);
+    CHECK(w.revenue_permille(second.created_id) == w.revenue_permille(in_town.created_id));
+    CHECK(w.revenue_permille(second.created_id) < 1100);
+}
