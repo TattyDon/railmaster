@@ -1,0 +1,23 @@
+find_package(doctest QUIET)
+if(NOT doctest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.4.11)
+    FetchContent_MakeAvailable(doctest)
+endif()
+
+add_executable(railmaster_tests
+    main.cpp
+    test_cargo.cpp
+    test_date.cpp
+    test_money.cpp
+    test_random.cpp
+    test_terrain.cpp
+    test_world.cpp
+)
+target_link_libraries(railmaster_tests PRIVATE railmaster::sim doctest::doctest railmaster_warnings)
+target_compile_definitions(railmaster_tests PRIVATE
+    RAILMASTER_DATA_DIR="${PROJECT_SOURCE_DIR}/data")
+
+add_test(NAME railmaster_tests COMMAND railmaster_tests)

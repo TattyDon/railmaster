@@ -1,0 +1,4 @@
+{"cargo": [
+  {"key": "coal", "name": "Coal", "base_price": 100},
+  {"key": "passengers", "name": "Passengers", "base_price": 100}
+]}
