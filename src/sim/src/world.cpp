@@ -1,5 +1,7 @@
 #include "railmaster/sim/world.hpp"
 
+#include "railmaster/sim/freight.hpp"
+
 #include <utility>
 
 namespace railmaster::sim {
@@ -23,6 +25,10 @@ World::World(const WorldConfig& config, GameData data)
 void World::tick() {
     ++total_ticks_;
     railway_.tick(data_.locomotives);
+    for (const auto& [train, station] : railway_.take_arrivals()) {
+        earned_ += handle_arrival(railway_, economy_, data_.cargo, train, station, date_.days_since_epoch(),
+                                  total_ticks_);
+    }
     if (++tick_of_day_ < kTicksPerDay) return;
     tick_of_day_ = 0;
 
@@ -37,7 +43,10 @@ void World::tick() {
 
 // Periodic hooks. Maintenance and finance processing get wired in here as
 // those systems are implemented from docs/spec.
-void World::on_new_day() { economy_.step_day(data_.cargo, data_.industries, date_.year()); }
+void World::on_new_day() {
+    economy_.step_day(data_.cargo, data_.industries, date_.year());
+    gather_at_stations(railway_, economy_, data_.cargo);
+}
 void World::on_new_month() {}
 void World::on_new_year() {}
 

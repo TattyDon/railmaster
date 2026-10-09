@@ -52,9 +52,9 @@ TEST_CASE("station prices") {
 
 TEST_CASE("trains are limited to eight cars and need a route") {
     Line l = make_line(10, 0);
-    CHECK_NOTHROW(l.rw.add_train(0, std::vector<CargoId>(8, 0), {l.west, l.east}));
-    CHECK_THROWS(l.rw.add_train(0, std::vector<CargoId>(9, 0), {l.west, l.east}));
-    CHECK_THROWS(l.rw.add_train(0, {}, {}));
+    CHECK_NOTHROW(l.rw.add_train(0, 8, {l.west, l.east}));
+    CHECK_THROWS(l.rw.add_train(0, 9, {l.west, l.east}));
+    CHECK_THROWS(l.rw.add_train(0, 0, {}));
 }
 
 TEST_CASE("grade slows trains in proportion to load") {
@@ -71,7 +71,7 @@ TEST_CASE("grade slows trains in proportion to load") {
 TEST_CASE("a train shuttles between two stations and dwells at each") {
     const auto locos = test_locos();
     Line l = make_line(20, 0);
-    const TrainId t = l.rw.add_train(0, {0, 0}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(0, 2, {l.west, l.east});
 
     l.rw.tick(locos); // departs
     CHECK(l.rw.train(t).state == TrainState::Moving);
@@ -89,8 +89,8 @@ TEST_CASE("uphill trips take longer than flat ones") {
     const auto locos = test_locos();
     Line flat = make_line(20, 0);
     Line hill = make_line(20, 400); // 2% grade
-    const TrainId tf = flat.rw.add_train(0, std::vector<CargoId>(8, 0), {flat.west, flat.east});
-    const TrainId th = hill.rw.add_train(0, std::vector<CargoId>(8, 0), {hill.west, hill.east});
+    const TrainId tf = flat.rw.add_train(0, 8, {flat.west, flat.east});
+    const TrainId th = hill.rw.add_train(0, 8, {hill.west, hill.east});
     const int flat_ticks = ticks_until_stop(flat.rw, locos, tf, 1);
     const int hill_ticks = ticks_until_stop(hill.rw, locos, th, 1);
     CHECK(hill_ticks > flat_ticks * 3 / 2);
@@ -99,8 +99,8 @@ TEST_CASE("uphill trips take longer than flat ones") {
 TEST_CASE("on single track the lower-priority train waits while the other passes") {
     const auto locos = test_locos();
     Line l = make_line(20, 0);
-    const TrainId slow = l.rw.add_train(0, {}, {l.west, l.east}, /*priority=*/0);
-    const TrainId fast = l.rw.add_train(0, {}, {l.east, l.west}, /*priority=*/5);
+    const TrainId slow = l.rw.add_train(0, 0, {l.west, l.east}, /*priority=*/0);
+    const TrainId fast = l.rw.add_train(0, 0, {l.east, l.west}, /*priority=*/5);
 
     bool slow_yielded = false;
     for (int i = 0; i < 200 && l.rw.train(fast).stops_made == 0; ++i) {
@@ -119,8 +119,8 @@ TEST_CASE("on single track the lower-priority train waits while the other passes
 TEST_CASE("equal priority: the older train has right of way") {
     const auto locos = test_locos();
     Line l = make_line(20, 0);
-    const TrainId older = l.rw.add_train(0, {}, {l.west, l.east});
-    const TrainId newer = l.rw.add_train(0, {}, {l.east, l.west});
+    const TrainId older = l.rw.add_train(0, 0, {l.west, l.east});
+    const TrainId newer = l.rw.add_train(0, 0, {l.east, l.west});
     bool newer_yielded = false;
     for (int i = 0; i < 200; ++i) {
         l.rw.tick(locos);
@@ -133,8 +133,8 @@ TEST_CASE("equal priority: the older train has right of way") {
 TEST_CASE("double track removes the wait") {
     const auto locos = test_locos();
     Line l = make_line(20, 0, /*double_track=*/true);
-    const TrainId a = l.rw.add_train(0, {}, {l.west, l.east});
-    const TrainId b = l.rw.add_train(0, {}, {l.east, l.west});
+    const TrainId a = l.rw.add_train(0, 0, {l.west, l.east});
+    const TrainId b = l.rw.add_train(0, 0, {l.east, l.west});
     for (int i = 0; i < 200; ++i) {
         l.rw.tick(locos);
         CHECK_FALSE(l.rw.train(a).yielding);
@@ -150,7 +150,7 @@ TEST_CASE("a train with no route to its next stop waits and recovers") {
     const NodeId b = rw.track().add_node({5 * kKm, 0}, 0);
     const StationId sa = rw.add_station("A", a, StationSize::Small);
     const StationId sb = rw.add_station("B", b, StationSize::Small);
-    const TrainId t = rw.add_train(0, {}, {sa, sb});
+    const TrainId t = rw.add_train(0, 0, {sa, sb});
     rw.tick(locos);
     CHECK(rw.train(t).state == TrainState::NoRoute);
 
@@ -162,7 +162,7 @@ TEST_CASE("a train with no route to its next stop waits and recovers") {
 TEST_CASE("train position interpolates along the track") {
     const auto locos = test_locos();
     Line l = make_line(100, 0);
-    const TrainId t = l.rw.add_train(0, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(0, 0, {l.west, l.east});
     for (int i = 0; i < 20; ++i) l.rw.tick(locos);
     const MapPoint p = l.rw.train_position(t);
     CHECK(p.y_mm == 0);

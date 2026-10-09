@@ -150,8 +150,7 @@ CommandResult World::run(const BuyTrain& cmd) {
     for (StationId s : cmd.route) {
         if (s >= railway_.stations().size()) return fail("unknown station in route");
     }
-    std::vector<CargoId> cars(cmd.cars, CargoId{0}); // cargo assignment arrives with the economy (M2)
-    const TrainId id = railway_.add_train(cmd.loco, std::move(cars), cmd.route, cmd.priority);
+    const TrainId id = railway_.add_train(cmd.loco, cmd.cars, cmd.route, cmd.priority);
     return success(loco.cost, id);
 }
 

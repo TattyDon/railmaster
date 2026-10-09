@@ -7,7 +7,9 @@
 #include "railmaster/sim/track.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace railmaster::sim {
@@ -52,11 +54,20 @@ enum class StationSize : std::uint8_t { Small, Medium, Large };
 
 Money station_cost(StationSize size);
 
+// Cargo gathered at a station, waiting for a train.
+struct WaitingCargo {
+    std::int32_t milli = 0;
+    std::int64_t value = 0; // sum of pickup price x milli, for the average pickup price
+
+    std::int32_t average_price() const { return milli > 0 ? static_cast<std::int32_t>(value / milli) : 0; }
+};
+
 struct Station {
     StationId id = 0;
     std::string name;
     NodeId node = 0;
     StationSize size = StationSize::Small;
+    std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
 };
 
 // RT3 has two support buildings that sit on the track: the service tower
@@ -79,10 +90,19 @@ enum class TrainState : std::uint8_t {
     NoRoute,    // next stop is unreachable; retries every tick
 };
 
+// One freight car and what it carries.
+struct Car {
+    std::optional<CargoId> cargo;  // empty car if unset
+    std::int32_t milli = 0;        // amount, in thousandths of a carload
+    std::int32_t pickup_price = 0; // dollars per carload where it was collected
+    std::int32_t loaded_day = 0;   // Date::days_since_epoch() when loaded
+    std::uint32_t loaded_at = 0;   // StationId where loaded; never sold back there
+};
+
 struct Train {
     TrainId id = 0;
     LocoTypeId loco = 0;
-    std::vector<CargoId> cars;
+    std::vector<Car> cars;
     std::int32_t priority = 0; // higher wins meets on single track
     std::vector<StationId> route;
     std::size_t stop_index = 0; // the stop being travelled to, or dwelt at
@@ -107,6 +127,10 @@ struct Train {
     std::uint32_t stops_made = 0;
     std::uint32_t service_stops = 0;
     std::uint32_t breakdowns = 0;
+
+    Money revenue;                    // lifetime earnings
+    Money last_income;                // from the most recent stop
+    std::uint64_t last_income_tick = 0;
 };
 
 // Game rules that change how trains are operated.
@@ -154,8 +178,14 @@ public:
 
     // The train starts stopped at the first station of its route.
     // Throws if there are more than kMaxCarsPerTrain cars or the route is empty.
-    TrainId add_train(LocoTypeId loco, std::vector<CargoId> cars, std::vector<StationId> route,
+    TrainId add_train(LocoTypeId loco, std::size_t car_count, std::vector<StationId> route,
                       std::int32_t priority = 0);
+    Train& train_mut(TrainId id) { return trains_.at(id); }
+    Station& station_mut(StationId id) { return stations_.at(id); }
+
+    // Trains that reached a station since the last call, in arrival order,
+    // with the station. The world handles cargo for each.
+    std::vector<std::pair<TrainId, StationId>> take_arrivals();
     const Train& train(TrainId id) const { return trains_.at(id); }
     const std::vector<Train>& trains() const { return trains_; }
 
@@ -179,6 +209,7 @@ private:
     std::vector<Station> stations_;
     std::vector<ServiceBuilding> service_buildings_;
     std::vector<Train> trains_;
+    std::vector<std::pair<TrainId, StationId>> arrivals_;
     OperatingRules rules_;
     Random rng_;
 };

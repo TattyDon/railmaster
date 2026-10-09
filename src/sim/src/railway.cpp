@@ -148,9 +148,9 @@ ServiceBuildingId Railway::add_service_building(ServiceType type, NodeId node) {
     return id;
 }
 
-TrainId Railway::add_train(LocoTypeId loco, std::vector<CargoId> cars, std::vector<StationId> route,
+TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<StationId> route,
                            std::int32_t priority) {
-    if (cars.size() > kMaxCarsPerTrain) throw std::invalid_argument("too many cars for one train");
+    if (car_count > kMaxCarsPerTrain) throw std::invalid_argument("too many cars for one train");
     if (route.empty()) throw std::invalid_argument("train route must have at least one stop");
     for (StationId s : route) {
         if (s >= stations_.size()) throw std::out_of_range("route station out of range");
@@ -158,7 +158,7 @@ TrainId Railway::add_train(LocoTypeId loco, std::vector<CargoId> cars, std::vect
     Train t;
     t.id = static_cast<TrainId>(trains_.size());
     t.loco = loco;
-    t.cars = std::move(cars);
+    t.cars.resize(car_count);
     t.priority = priority;
     t.route = std::move(route);
     t.state = TrainState::Dwelling;
@@ -183,6 +183,7 @@ void Railway::plan_to_current_stop(Train& t) {
         t.state = TrainState::Dwelling;
         t.wait_ticks_left = provisional::kStationDwellTicks;
         ++t.stops_made;
+        arrivals_.emplace_back(t.id, t.route[t.stop_index]);
         return;
     }
     t.path = std::move(*path);
@@ -254,6 +255,13 @@ void Railway::arrive_at_stop(Train& t) {
     t.state = TrainState::Dwelling;
     t.wait_ticks_left = provisional::kStationDwellTicks;
     ++t.stops_made;
+    arrivals_.emplace_back(t.id, t.route[t.stop_index]);
+}
+
+std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
+    std::vector<std::pair<TrainId, StationId>> out;
+    out.swap(arrivals_);
+    return out;
 }
 
 void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {

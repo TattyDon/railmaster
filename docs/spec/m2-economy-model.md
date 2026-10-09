@@ -49,6 +49,49 @@ Each game day:
    highest price, if that price beats this cell's by more than a transport
    cost.
 
+## Freight by rail
+
+Researched rules [economy-cargo.md §1, §7, §9; trains-track-operations.md §2]:
+
+- A station's catchment grows with its size.
+- Cargo only loads if some destination on the train's route wants it; a
+  waiting train is not itself demand.
+- Automatic car setup loads the cars that will earn the most [WP✓].
+- If fewer loads are waiting than the train has cars, it leaves with what is there.
+- A train unloads at the first stop whose price beats what the cargo cost,
+  even by $1.
+- Revenue is the delivery price minus the pickup price [WP✓], and cargo
+  loses value in transit, perishables faster; worthless cargo disappears.
+
+How we implement them (code: `freight.hpp`):
+
+1. **Gathering (daily).** For each station, find each cargo's best price
+   at any other stop of any train that calls there. From every catchment
+   cell where the cargo is cheaper than that, 20% of the stock moves into the
+   station's waiting pool, recording its price there as the pickup price.
+2. **Arrival, unloading.** Each loaded car is sold if the dearest cell in this
+   station's catchment pays more than its pickup price. It is never sold
+   back at the station it was loaded at; without that rule, price
+   differences within one catchment would pay out for nothing. Income =
+   (price here − pickup price) × value left. The cargo goes into that cell's
+   stock, where the consumer uses it and oversupply lowers the price.
+   Cargo whose value has fallen to nothing is dumped.
+3. **Arrival, loading.** Empty cars take whole carloads from the waiting
+   pool, best expected gain first, but only cargo that some other stop on
+   the route would pay more for.
+
+| Item | Value | Notes |
+|---|---|---|
+| Catchment | Small 3 × 3 cells, medium 5 × 5, large 7 × 7. | RT1's medium station had a 2-tile radius; RT3's are not known. |
+| Gathering | 20% of eligible catchment stock per day; up to 20 carloads of each cargo waiting. | |
+| Transit decay | 0.5% of value per day per point of decay sensitivity: coal 0.5% a day, milk 5%. | |
+| Waiting at a station | No loss while waiting. | The research says decay is slower at a station than on a train. |
+
+Known simplifications: one consist rule (automatic) for every stop; RT3
+also allows manual per-stop consists. Delivery income is tallied but not
+yet paid to a company, and running costs are not yet charged (M3), so
+profits are overstated for now.
+
 Express cargo (passengers, mail, troops) is not priced by the field; each
 load has a destination. That comes in a later slice.
 

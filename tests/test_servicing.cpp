@@ -50,8 +50,8 @@ void run_until(Railway& rw, const LocomotiveRegistry& reg, TrainId t, std::uint3
 TEST_CASE("steam engines use water; diesels do not; everyone uses oil") {
     const auto reg = locos();
     Line l = make_line(60);
-    const TrainId steam = l.rw.add_train(kSteam, {}, {l.west, l.east});
-    const TrainId diesel = l.rw.add_train(kDiesel, {}, {l.west, l.east});
+    const TrainId steam = l.rw.add_train(kSteam, 0, {l.west, l.east});
+    const TrainId diesel = l.rw.add_train(kDiesel, 0, {l.west, l.east});
     run_until(l.rw, reg, steam, 1);
     run_until(l.rw, reg, diesel, 1);
     // 60 km of a 150 km tank: 40% used.
@@ -65,7 +65,7 @@ TEST_CASE("steam engines use water; diesels do not; everyone uses oil") {
 TEST_CASE("sand is used only when climbing") {
     const auto reg = locos();
     Line l = make_line(10, 10); // 1% grade, 100 m total climb
-    const TrainId t = l.rw.add_train(kDiesel, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kDiesel, 0, {l.west, l.east});
     run_until(l.rw, reg, t, 1);
     const std::int32_t after_climb = l.rw.train(t).sand;
     CHECK(after_climb < kGaugeFull);
@@ -99,7 +99,7 @@ TEST_CASE("a train passing a service tower stops to refill only when low") {
     Line l = make_line(200);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[50]);  // passed with water at 66%
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[120]); // passed with water at 20%
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
 
     bool seen_servicing = false;
     std::int32_t lowest_water = kGaugeFull;
@@ -120,7 +120,7 @@ TEST_CASE("maintenance facilities refill oil; service towers do not") {
     Line l = make_line(1000);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[800]); // does not touch oil
     l.rw.add_service_building(ServiceType::MaintenanceFacility, l.nodes[900]);
-    const TrainId t = l.rw.add_train(kDiesel, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kDiesel, 0, {l.west, l.east});
     run_until(l.rw, reg, t, 1);
     CHECK(l.rw.train(t).service_stops == 1); // diesel: tower not needed, facility needed
     CHECK(l.rw.train(t).oil == kGaugeFull - 100 * kGaugeFull / 1500); // refilled at 900, ran 100 km
@@ -131,7 +131,7 @@ TEST_CASE("nothing is serviced when nothing is low") {
     Line l = make_line(10);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[3]);
     l.rw.add_service_building(ServiceType::MaintenanceFacility, l.nodes[6]);
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
     run_until(l.rw, reg, t, 1);
     CHECK(l.rw.train(t).service_stops == 0);
 }
@@ -140,7 +140,7 @@ TEST_CASE("a service building at a station services during the station stop") {
     const auto reg = locos();
     Line l = make_line(100);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes.back());
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
     run_until(l.rw, reg, t, 1);
     CHECK(l.rw.train(t).state == TrainState::Dwelling);
     CHECK(l.rw.train(t).water == kGaugeFull);
@@ -158,7 +158,7 @@ TEST_CASE("breakdowns happen at roughly the expected rate and stop the train") {
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[200]);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[300]);
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[400]);
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
 
     run_until(l.rw, reg, t, 40); // 40 trips of 500 km = 20,000 km
     // About 10 expected at one per 2,000 km with oil kept high; allow wide variance.
@@ -171,7 +171,7 @@ TEST_CASE("a broken-down train stays put, then carries on") {
     const auto reg = locos(5); // unreliable, so a breakdown comes quickly
     Line l = make_line(500);
     l.rw.set_rules({.breakdowns = true});
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
     for (int i = 0; i < 100'000 && l.rw.train(t).breakdowns == 0; ++i) l.rw.tick(reg);
     REQUIRE(l.rw.train(t).breakdowns == 1);
     CHECK(l.rw.train(t).state == TrainState::BrokenDown);
@@ -191,7 +191,7 @@ TEST_CASE("a broken-down train stays put, then carries on") {
 TEST_CASE("breakdowns are off when the rules say so") {
     const auto reg = locos(1); // terrible reliability
     Line l = make_line(100);
-    const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+    const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
     run_until(l.rw, reg, t, 10);
     CHECK(l.rw.train(t).breakdowns == 0);
 }
@@ -204,7 +204,7 @@ TEST_CASE("low reliability and low oil mean more breakdowns") {
         l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[100]);
         l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[200]);
         if (maintained) l.rw.add_service_building(ServiceType::MaintenanceFacility, l.nodes[150]);
-        const TrainId t = l.rw.add_train(kSteam, {}, {l.west, l.east});
+        const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
         run_until(l.rw, reg, t, 30);
         return l.rw.train(t).breakdowns;
     };
@@ -222,8 +222,8 @@ TEST_CASE("simulation with breakdowns is deterministic for a given seed") {
         const StationId a = rw.add_station("A", n.front(), StationSize::Small);
         const StationId b = rw.add_station("B", n.back(), StationSize::Small);
         rw.add_service_building(ServiceType::ServiceTower, n[25]);
-        rw.add_train(kSteam, {}, {a, b});
-        rw.add_train(kDiesel, {}, {b, a});
+        rw.add_train(kSteam, 0, {a, b});
+        rw.add_train(kDiesel, 0, {b, a});
         for (int i = 0; i < 20'000; ++i) rw.tick(reg);
         return std::vector<std::uint32_t>{rw.train(0).breakdowns, rw.train(1).breakdowns, rw.train(0).stops_made,
                                           rw.train(1).stops_made, static_cast<std::uint32_t>(rw.train(0).offset_mm)};

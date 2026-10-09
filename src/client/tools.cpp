@@ -378,15 +378,34 @@ std::string Tools::inspect_text() const {
     for (const sim::Train& t : rw.trains()) {
         if (sim::distance_mm(rw.train_position(t.id), hover_) > snap) continue;
         const auto& loco = world_.data().locomotives.get(t.loco);
-        std::string s = "TRAIN " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ", " +
-                        std::to_string(t.cars.size()) + " CARS.";
+        std::string s = "TRAIN " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ". ";
+        // Load, grouped by cargo: "2 COAL, 1 STEEL, 1 EMPTY".
+        std::vector<std::pair<std::string, int>> load;
+        for (const sim::Car& car : t.cars) {
+            const std::string what = car.cargo ? world_.data().cargo.get(*car.cargo).name : "EMPTY";
+            auto it = std::find_if(load.begin(), load.end(), [&](const auto& p) { return p.first == what; });
+            if (it == load.end()) load.emplace_back(what, 1);
+            else ++it->second;
+        }
+        for (std::size_t i = 0; i < load.size(); ++i) {
+            s += (i ? ", " : "") + std::to_string(load[i].second) + " " + load[i].first;
+        }
+        s += ". EARNED " + format_money(t.revenue) + ".";
         if (loco.fuel == sim::Fuel::Steam) s += " WATER " + percent(t.water);
-        s += " SAND " + percent(t.sand) + " OIL " + percent(t.oil) + ". BREAKDOWNS " + std::to_string(t.breakdowns);
+        s += " SAND " + percent(t.sand) + " OIL " + percent(t.oil);
         return s;
     }
     if (const auto st = station_near(hover_)) {
         const sim::Station& s = rw.station(*st);
-        return "STATION: " + s.name + " (" + size_name(s.size) + ")";
+        std::string text = "STATION: " + s.name + " (" + size_name(s.size) + "). WAITING:";
+        bool any = false;
+        for (std::size_t c = 0; c < s.waiting.size(); ++c) {
+            if (s.waiting[c].milli < sim::kMilli) continue;
+            text += std::string(any ? ", " : " ") + std::to_string(s.waiting[c].milli / sim::kMilli) + " " +
+                    world_.data().cargo.get(static_cast<sim::CargoId>(c)).name;
+            any = true;
+        }
+        return any ? text : text + " NOTHING";
     }
     return cell_text();
 }
@@ -399,7 +418,8 @@ void Tools::draw_ui(const std::string& status) const {
     fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
     glColor3f(0.95f, 0.95f, 0.9f);
     draw_text(8, 4, status, kScale);
-    const std::string spent = "SPENT " + format_money(world_.total_spent());
+    const std::string spent =
+        "EARNED " + format_money(world_.total_revenue()) + "   SPENT " + format_money(world_.total_spent());
     draw_text(w - static_cast<float>(text_width(spent, kScale)) - 8, 4, spent, kScale);
 
     for (const Button& b : layout_buttons()) {
@@ -425,6 +445,21 @@ void Tools::draw_ui(const std::string& status) const {
     if (good) glColor3f(0.6f, 0.95f, 0.6f);
     else glColor3f(1.0f, 0.45f, 0.4f);
     draw_text(8, h - kBottomBarH + 26, line2, kScale);
+
+    // "+$12,345" floating over trains that have just been paid, for two game days.
+    for (const sim::Train& t : world_.railway().trains()) {
+        if (t.last_income_tick == 0 ||
+            world_.total_ticks() - t.last_income_tick > 2 * static_cast<std::uint64_t>(sim::World::kTicksPerDay)) {
+            continue;
+        }
+        float sx = 0, sy = 0;
+        cam_.to_screen(world_.railway().train_position(t.id), sx, sy);
+        const std::string label = "+" + format_money(t.last_income);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        draw_text(sx - static_cast<float>(text_width(label, kScale)) / 2 + 1, sy - 25, label, kScale);
+        glColor3f(0.4f, 1.0f, 0.4f);
+        draw_text(sx - static_cast<float>(text_width(label, kScale)) / 2, sy - 26, label, kScale);
+    }
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

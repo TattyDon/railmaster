@@ -15,6 +15,8 @@ Early development. Done so far:
 - data for 41 cargo types, 35 locomotives, and 41 industry types plus houses
 - a cargo economy: towns and industries, production chains, and a map-wide
   price field along which cargo drifts, shown as a cargo price overlay
+- freight by rail: stations gather cargo, trains load the most valuable,
+  and deliveries earn the price difference
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track

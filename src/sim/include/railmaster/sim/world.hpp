@@ -61,6 +61,8 @@ public:
     // Everything spent through commands so far. A stand-in until companies
     // and ledgers exist (M3).
     Money total_spent() const { return spent_; }
+    // Everything trains have earned delivering freight.
+    Money total_revenue() const { return earned_; }
 
 private:
     void on_new_day();
@@ -76,6 +78,7 @@ private:
     Economy economy_;
     Railway railway_;
     Money spent_;
+    Money earned_;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);

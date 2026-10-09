@@ -35,9 +35,13 @@ chains; houses; map population with towns and industries; a year of
 history on new maps; and the RT3-style cargo price overlay in the client.
 See `docs/spec/m2-economy-model.md`.
 
+Done in the second slice: stations gather cargo from their catchment; trains
+load automatically, unload at the first stop that pays more, and earn the
+price difference less value lost in transit; delivered cargo feeds the local
+economy.
+
 Still to do:
-- Stations collect cargo from a catchment area; trains load it and deliver
-  it, earning the price difference, with value lost in transit.
+- Manual per-stop consists.
 - Express cargo (passengers, mail, troops) with destinations.
 - Ports and warehouses; new industries appearing over time; town growth.
 
