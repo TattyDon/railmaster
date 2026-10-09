@@ -190,6 +190,24 @@ CommandResult World::run(const IssueBond&) {
     return r;
 }
 
+namespace {
+CommandResult from(const std::optional<std::string>& error) {
+    if (error) return fail(*error);
+    return success(Money{}, 0);
+}
+} // namespace
+
+CommandResult World::run(const BuyShares& cmd) { return from(buy_shares(investor_, company_, cmd.blocks)); }
+CommandResult World::run(const SellShares& cmd) { return from(sell_shares(investor_, company_, cmd.blocks)); }
+CommandResult World::run(const IssueStock&) { return from(issue_stock(investor_, company_)); }
+CommandResult World::run(const BuyBackStock&) { return from(buy_back_stock(investor_, company_)); }
+
+CommandResult World::run(const SetDividend& cmd) {
+    if (cmd.per_share < Money{}) return fail("a dividend cannot be negative");
+    company_.set_dividend_per_share(cmd.per_share);
+    return success(Money{}, 0);
+}
+
 CommandResult World::run(const RepayBond&) {
     if (company_.bonds().empty()) return fail("there are no bonds to repay");
     if (!sandbox_ && company_.cash() < Money::dollars(kBondFaceValue)) {

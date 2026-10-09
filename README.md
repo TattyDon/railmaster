@@ -20,6 +20,8 @@ Early development. Done so far:
 - passengers, mail and troops with destinations, paid by distance
 - a company with cash, running costs, yearly accounts, credit rating and
   bonds, shown on a finance screen
+- a personal account and a stock market: trade shares on margin, issue or
+  buy back stock, set dividends, grow your net worth
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
@@ -58,7 +60,7 @@ of the demo network.
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
-| F7, then B / R | Finance screen; issue or repay a bond |
+| F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |

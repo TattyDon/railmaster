@@ -69,7 +69,23 @@ struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
 struct RepayBond {};
 
-using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond>;
+// The player trades shares in the company, in blocks of 1,000.
+struct BuyShares {
+    std::int64_t blocks = 1;
+};
+struct SellShares {
+    std::int64_t blocks = 1;
+};
+// The company sells new shares (at most twice a year) or buys some back.
+struct IssueStock {};
+struct BuyBackStock {};
+// Set the annual dividend per share, paid quarterly.
+struct SetDividend {
+    Money per_share{};
+};
+
+using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
+                             BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend>;
 
 struct CommandResult {
     bool ok = false;

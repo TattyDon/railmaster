@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,10 @@ constexpr std::int32_t kBuildingUpkeepPerMillePerMonth = 5; // same for stations
 constexpr std::int32_t kRatingLeverageLimits[] = {5, 15, 25, 35, 45, 55, 70}; // AAA..C; above: D
 // Interest by rating, in basis points a year (AAA..D), in a normal economy.
 constexpr std::int32_t kBondRateBp[] = {400, 450, 500, 600, 700, 800, 1000, 1200};
+// Shares: the company is founded with this many, at a price equal to its
+// starting cash per share; the player holds half.
+constexpr std::int64_t kFoundingShares = 600'000;
+constexpr std::int64_t kFoundingPlayerShares = 300'000;
 } // namespace provisional
 
 // Researched: bonds are $500,000, need a rating of at least B, and cost 2%
@@ -65,6 +70,7 @@ struct YearAccounts {
     Money track_built;
     Money buildings_built;
     Money trains_bought;
+    Money dividends_paid; // a distribution to shareholders, not an expense
 
     Money revenue() const;
     Money expenses() const;
@@ -108,6 +114,30 @@ public:
     // Monthly: interest on bonds outstanding.
     void charge_interest();
 
+    // --- Shares ---
+    std::int64_t shares_outstanding() const { return shares_; }
+    Money share_price() const { return price_; }
+    void set_share_price(Money p) { price_ = p; }
+    Money market_cap() const { return price_ * shares_; }
+    Money book_value_per_share() const { return shares_ > 0 ? book_value().scaled(1, shares_) : Money{}; }
+    // Annual dividend per share, paid in quarters.
+    Money dividend_per_share() const { return dividend_; }
+    void set_dividend_per_share(Money d) { dividend_ = d; }
+    std::int32_t stock_issues_this_year() const { return issues_this_year_; }
+    // Sell `shares` new shares for `proceeds` (an issue) or retire them for
+    // `cost` (a buyback). Callers enforce the rules and price impact.
+    void issue_shares(std::int64_t shares, Money proceeds);
+    void retire_shares(std::int64_t shares, Money cost);
+    // Pay a quarter of the annual dividend on every share. Returns the
+    // amount paid, or nothing (and cuts the dividend to zero) if the company
+    // cannot afford it.
+    Money pay_quarterly_dividend();
+
+    // Profit over the last 12 months, annualised from what is available; nullopt if under 3 months of history.
+    std::optional<Money> trailing_profit() const;
+    // Monthly: remember the running profit total, for trailing_profit().
+    void record_month();
+
     void start_year(std::int32_t year);
     const YearAccounts& this_year() const { return history_.back(); }
     const std::vector<YearAccounts>& history() const { return history_; }
@@ -118,6 +148,12 @@ private:
     Money track_, buildings_, rolling_stock_;
     std::vector<Bond> bonds_;
     std::vector<YearAccounts> history_;
+    std::int64_t shares_ = provisional::kFoundingShares;
+    Money price_;
+    Money dividend_;
+    std::int32_t issues_this_year_ = 0;
+    Money lifetime_profit_;
+    std::vector<Money> month_marks_; // lifetime_profit_ at each month end, newest last
 };
 
 } // namespace railmaster::sim

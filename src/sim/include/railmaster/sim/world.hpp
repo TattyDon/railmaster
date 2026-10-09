@@ -3,6 +3,7 @@
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/commands.hpp"
 #include "railmaster/sim/company.hpp"
+#include "railmaster/sim/stock.hpp"
 #include "railmaster/sim/date.hpp"
 #include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/locomotive.hpp"
@@ -56,6 +57,11 @@ public:
     Company& company() { return company_; }
     const Company& company() const { return company_; }
     bool sandbox() const { return sandbox_; }
+    Investor& investor() { return investor_; }
+    const Investor& investor() const { return investor_; }
+    // Shares sold automatically at the last month end because purchasing
+    // power went negative.
+    std::int64_t last_forced_sale() const { return last_forced_sale_; }
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
@@ -86,6 +92,8 @@ private:
     Money earned_;
     bool sandbox_ = false;
     Company company_;
+    Investor investor_;
+    std::int64_t last_forced_sale_ = 0;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);
@@ -93,6 +101,11 @@ private:
     CommandResult run(const BuyTrain& cmd);
     CommandResult run(const IssueBond& cmd);
     CommandResult run(const RepayBond& cmd);
+    CommandResult run(const BuyShares& cmd);
+    CommandResult run(const SellShares& cmd);
+    CommandResult run(const IssueStock& cmd);
+    CommandResult run(const BuyBackStock& cmd);
+    CommandResult run(const SetDividend& cmd);
     // Sandbox games ignore cash; otherwise the company must be able to pay.
     std::optional<std::string> cannot_afford(Money cost) const;
     void charge_running_costs();

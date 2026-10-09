@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
                                ev.button.button == SDL_BUTTON_RIGHT);
                 break;
             case SDL_KEYDOWN:
-                if (tools.on_key(ev.key.keysym.sym)) break;
+                if (tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod)) break;
                 switch (ev.key.keysym.sym) {
                 case SDLK_SPACE: speed = speed == 0 ? 1 : 0; break;
                 case SDLK_1: speed = 1; break;

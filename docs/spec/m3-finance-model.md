@@ -57,6 +57,64 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 | Rating by debt ÷ assets | AAA < 5%, AA < 15%, A < 25%, BBB < 35%, BB < 45%, B < 55%, C < 70%, else D |
 | Interest by rating | AAA 4%, AA 4.5%, A 5%, BBB 6%, BB 7%, B 8%, C 10%, D 12% |
 
+## Personal account, shares and the stock market
+
+Code: `src/sim/include/railmaster/sim/stock.hpp`.
+
+Researched [overview-finance-scenarios.md §4.1, §4.3]:
+
+- The player's money is separate from the company's. Personal income is a
+  small salary, dividends and trading. Personal net worth is the usual
+  scenario score.
+- There are no personal loans; borrowing happens only through margin.
+  Purchasing power = cash + what can be borrowed against holdings (one
+  player estimates 50%). Cash may go negative and is charged interest. If
+  purchasing power goes negative, shares are sold automatically, which can
+  push the price down further.
+- Shares trade in blocks of 1,000, and Ctrl-click trades 5,000 (we use
+  Shift). A trade executes at the price after its own impact, so big blocks
+  move the price against you.
+- The company may issue stock at most twice a year. An issue raises cash
+  and pushes the price down; a buyback raises the price but reduces book
+  value.
+- Dividends are an annual per-share figure set by the chairman, paid
+  quarterly at the end of March, June, September and December.
+- Prices update at least monthly. Players say they are driven by earnings,
+  dividends, book value per share, the economy, issues and buybacks, and
+  trading.
+
+Our design:
+
+- **Founding.** The company starts with 600,000 shares priced at its
+  starting cash per share ($10). The player holds half and has $500,000 in
+  personal cash.
+- **Price impact.** Each 1,000-share block moves the price by
+  2 × (block ÷ shares outstanding), so trading 1% of the company moves the
+  price 2%.
+- **Price model.** Each month the price closes a quarter of the gap to a
+  target of 0.6 × book value per share + 8 × earnings per share + 10 ×
+  dividend per share. Earnings are the last 12 months' profit, annualised
+  once three months exist. The economy's effect comes with economic cycles.
+- **Buying** must be covered by purchasing power *before* the trade.
+  Valuing holdings after it would let a purchase, which lifts the price,
+  pay for itself. Tests caught exactly that loop.
+- **Issues and buybacks** are 10% of shares outstanding. A buyback can only
+  take shares in public hands.
+- **Dividends** are cut to zero if the company cannot pay a quarter's
+  worth. They are recorded as distributions, not expenses.
+- **Short selling** is allowed only on rivals, so it comes with AI companies.
+
+| Item | Value |
+|---|---|
+| Personal starting cash | $500,000 |
+| Salary | $24,000 a year |
+| Margin | Holdings count at 50% |
+| Margin interest | 10% a year on negative cash |
+| Issue or buyback size | 10% of shares outstanding |
+| Price target weights | 0.6 × book value/share, 8 × EPS, 10 × dividend/share |
+| Monthly price adjustment | 25% of the gap |
+| Minimum share price | $0.50 |
+
 ## Balance: known to be off
 
 With the provisional fares and costs, a 20 km passenger and mail line made

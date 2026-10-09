@@ -57,9 +57,9 @@ void Tools::draw_finance_panel() const {
     const sim::YearAccounts& now = years.back();
     const sim::YearAccounts* last = years.size() > 1 ? &years[years.size() - 2] : nullptr;
 
-    constexpr float kRow = 18.0f;
-    const float x0 = 40, y0 = 70, w = 760;
-    const float h = kRow * 31;
+    constexpr float kRow = 16.0f;
+    const float x0 = 40, y0 = 56, w = 760;
+    const float h = kRow * 42;
     fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
     float y = y0 + 10;
     const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
@@ -98,7 +98,7 @@ void Tools::draw_finance_panel() const {
     row("TRACK", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
     row("STATIONS AND BUILDINGS", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
     row("TRAINS", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
-    row("BONDS", "-" + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
+    row("BONDS", (co.debt() > sim::Money{} ? "-" : "") + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
     row("BOOK VALUE", format_money(co.book_value()), "", 1, 1, 1);
     y += kRow / 2;
     std::string bonds;
@@ -110,6 +110,43 @@ void Tools::draw_finance_panel() const {
             std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
         "", "", 1.0f, 0.9f, 0.5f);
     row("BONDS OUTSTANDING: " + (bonds.empty() ? std::string("NONE") : bonds), "", "", 0.9f, 0.9f, 0.9f);
+
+    y += kRow / 2;
+    const sim::Investor& me = world_.investor();
+    const auto pct = [](std::int64_t part, std::int64_t whole) {
+        return whole > 0 ? std::to_string(part * 100 / whole) + "%" : std::string("-");
+    };
+    row("STOCK", "", "", 1.0f, 0.9f, 0.5f);
+    row("SHARE PRICE", format_cents(co.share_price()), "", 0.9f, 0.9f, 0.9f);
+    row("SHARES OUTSTANDING", format_count(co.shares_outstanding()), "", 0.9f, 0.9f, 0.9f);
+    row("BOOK VALUE PER SHARE", format_cents(co.book_value_per_share()), "", 0.9f, 0.9f, 0.9f);
+    row("DIVIDEND PER SHARE (A YEAR)", format_cents(co.dividend_per_share()),
+        "PAID " + format_money(now.dividends_paid), 0.9f, 0.9f, 0.9f);
+    row("STOCK ISSUES THIS YEAR", std::to_string(co.stock_issues_this_year()) + " OF 2", "", 0.9f, 0.9f, 0.9f);
+    y += kRow / 2;
+    row("YOU", "", "", 1.0f, 0.9f, 0.5f);
+    row("PERSONAL CASH", format_money(me.cash), "", me.cash < sim::Money{} ? 0.95f : 0.9f,
+        me.cash < sim::Money{} ? 0.65f : 0.9f, me.cash < sim::Money{} ? 0.6f : 0.9f);
+    row("SHARES HELD", format_count(me.shares) + " (" + pct(me.shares, co.shares_outstanding()) + ")",
+        format_money(sim::holdings_value(me, co)), 0.9f, 0.9f, 0.9f);
+    row("PURCHASING POWER", format_money(sim::purchasing_power(me, co)), "", 0.9f, 0.9f, 0.9f);
+    row("NET WORTH", format_money(sim::net_worth(me, co)), "", 1, 1, 1);
+}
+
+std::string format_count(std::int64_t n) {
+    const std::string digits = std::to_string(n < 0 ? -n : n);
+    std::string out;
+    for (std::size_t i = 0; i < digits.size(); ++i) {
+        if (i > 0 && (digits.size() - i) % 3 == 0) out += ',';
+        out += digits[i];
+    }
+    return (n < 0 ? "-" : "") + out;
+}
+
+std::string format_cents(sim::Money m) {
+    const std::int64_t c = m.in_cents();
+    const std::int64_t frac = (c < 0 ? -c : c) % 100;
+    return format_money(m) + "." + (frac < 10 ? "0" : "") + std::to_string(frac);
 }
 
 std::string format_money(sim::Money m) {
@@ -242,7 +279,7 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     }
 }
 
-bool Tools::on_key(SDL_Keycode key) {
+bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     switch (key) {
     case SDLK_F1: select(Tool::Inspect); return true;
     case SDLK_F2: select(Tool::Track); return true;
@@ -301,11 +338,38 @@ bool Tools::on_key(SDL_Keycode key) {
         return true;
     }
     case Tool::Finance: {
+        const bool big = (mod & KMOD_SHIFT) != 0; // 5,000 shares at a time
+        const std::int64_t blocks = big ? 5 : 1;
+        const sim::Money step = sim::Money::cents(25);
         sim::CommandResult r;
-        if (key == SDLK_b) r = world_.execute(sim::IssueBond{});
-        else if (key == SDLK_r) r = world_.execute(sim::RepayBond{});
-        else return false;
-        if (r.ok) show(key == SDLK_b ? "ISSUED A $500,000 BOND" : "REPAID A BOND", true);
+        std::string done;
+        if (key == SDLK_b) {
+            r = world_.execute(sim::IssueBond{});
+            done = "ISSUED A $500,000 BOND";
+        } else if (key == SDLK_r) {
+            r = world_.execute(sim::RepayBond{});
+            done = "REPAID A BOND";
+        } else if (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS) {
+            r = world_.execute(sim::BuyShares{.blocks = blocks});
+            done = "BOUGHT " + format_count(blocks * sim::kShareBlock) + " SHARES";
+        } else if (key == SDLK_MINUS || key == SDLK_KP_MINUS) {
+            r = world_.execute(sim::SellShares{.blocks = blocks});
+            done = "SOLD " + format_count(blocks * sim::kShareBlock) + " SHARES";
+        } else if (key == SDLK_i) {
+            r = world_.execute(sim::IssueStock{});
+            done = "ISSUED NEW STOCK";
+        } else if (key == SDLK_y) {
+            r = world_.execute(sim::BuyBackStock{});
+            done = "BOUGHT BACK STOCK";
+        } else if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
+            const sim::Money now = world_.company().dividend_per_share();
+            const sim::Money next = key == SDLK_RIGHTBRACKET ? now + step : std::max(sim::Money{}, now - step);
+            r = world_.execute(sim::SetDividend{.per_share = next});
+            done = "DIVIDEND SET TO " + format_cents(next) + " A SHARE A YEAR";
+        } else {
+            return false;
+        }
+        if (r.ok) show(done, true);
         else show("CANNOT: " + r.error, false);
         return true;
     }
@@ -442,7 +506,9 @@ std::string Tools::hint() const {
         return "CLICK STATIONS IN ORDER, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
-    case Tool::Finance: return "B ISSUE A $500,000 BOND   R REPAY THE DEAREST BOND";
+    case Tool::Finance:
+        return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
+               "DIVIDEND";
     }
     return {};
 }
@@ -502,9 +568,9 @@ void Tools::draw_ui(const std::string& status) const {
     fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
     glColor3f(0.95f, 0.95f, 0.9f);
     draw_text(8, 4, status, kScale);
-    const std::string spent = (world_.sandbox() ? std::string("SANDBOX   ") : std::string()) + "CASH " +
-                              format_money(world_.company().cash()) + "   PROFIT THIS YEAR " +
-                              format_money(world_.company().this_year().profit());
+    const std::string spent = (world_.sandbox() ? std::string("SANDBOX   ") : std::string()) + "COMPANY " +
+                              format_money(world_.company().cash()) + "   NET WORTH " +
+                              format_money(sim::net_worth(world_.investor(), world_.company()));
     draw_text(w - static_cast<float>(text_width(spent, kScale)) - 8, 4, spent, kScale);
 
     for (const Button& b : layout_buttons()) {

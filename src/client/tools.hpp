@@ -28,8 +28,8 @@ public:
 
     void on_mouse_move(float sx, float sy);
     void on_click(float sx, float sy, bool right_button);
-    // True if the key was used.
-    bool on_key(SDL_Keycode key);
+    // True if the key was used. `mod` is the event's modifier state.
+    bool on_key(SDL_Keycode key, Uint16 mod = KMOD_NONE);
 
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
@@ -82,5 +82,8 @@ private:
 };
 
 std::string format_money(sim::Money m);
+// Dollars and cents, for share prices and dividends.
+std::string format_cents(sim::Money m);
+std::string format_count(std::int64_t n); // 600,000
 
 } // namespace railmaster::client

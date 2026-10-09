@@ -55,9 +55,14 @@ costs (train maintenance, fuel, track and building upkeep, interest); yearly
 income statements; balance sheet and book value; credit rating; bonds; a
 finance screen in the client. See `docs/spec/m3-finance-model.md`.
 
+Done in the second slice: personal account and net worth, salary, shares
+traded in 1,000-share blocks with price impact, margin with interest and
+forced sales, stock issues (twice a year) and buybacks, quarterly dividends,
+and a monthly share-price model.
+
 Still to do:
-- Personal account, shares, stock issue and buyback, dividends.
-- Stock market: trading, margin, short selling, takeovers and mergers.
+- Rival AI companies, and with them short selling, takeovers and mergers.
+- Bankruptcy, depreciation, bond maturity.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 - Economic cycle states.
 

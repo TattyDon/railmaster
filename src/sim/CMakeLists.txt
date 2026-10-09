@@ -13,6 +13,7 @@ add_library(railmaster_sim
     src/freight.cpp
     src/locomotive.cpp
     src/railway.cpp
+    src/stock.cpp
     src/terrain.cpp
     src/track.cpp
     src/track_builder.cpp

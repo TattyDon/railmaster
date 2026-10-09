@@ -45,14 +45,52 @@ Money YearAccounts::expenses() const {
 
 Company::Company(std::string name, Money starting_cash, std::int32_t year)
     : name_(std::move(name)), cash_(starting_cash) {
-    history_.push_back(YearAccounts{year, {}, {}, {}, {}});
+    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
+    price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
 }
 
 void Company::post(Ledger line, Money amount) {
     history_.back().lines[static_cast<std::size_t>(line)] += amount;
-    if (is_revenue(line)) cash_ += amount;
-    else cash_ -= amount;
+    if (is_revenue(line)) {
+        cash_ += amount;
+        lifetime_profit_ += amount;
+    } else {
+        cash_ -= amount;
+        lifetime_profit_ -= amount;
+    }
 }
+
+void Company::issue_shares(std::int64_t shares, Money proceeds) {
+    shares_ += shares;
+    cash_ += proceeds;
+    ++issues_this_year_;
+}
+
+void Company::retire_shares(std::int64_t shares, Money cost) {
+    shares_ -= shares;
+    cash_ -= cost;
+}
+
+Money Company::pay_quarterly_dividend() {
+    const Money payout = dividend_.scaled(shares_, 4);
+    if (payout <= Money{}) return Money{};
+    if (payout > cash_) {
+        dividend_ = Money{};
+        return Money{};
+    }
+    cash_ -= payout;
+    history_.back().dividends_paid += payout;
+    return payout;
+}
+
+std::optional<Money> Company::trailing_profit() const {
+    const std::size_t months = std::min<std::size_t>(month_marks_.size(), 12);
+    if (months < 3) return std::nullopt;
+    const Money then = month_marks_.size() > 12 ? month_marks_[month_marks_.size() - 13] : Money{};
+    return (lifetime_profit_ - then).scaled(12, static_cast<std::int64_t>(months));
+}
+
+void Company::record_month() { month_marks_.push_back(lifetime_profit_); }
 
 void Company::invest_track(Money cost) {
     cash_ -= cost;
@@ -118,6 +156,9 @@ void Company::charge_interest() {
     if (interest > Money{}) post(Ledger::Interest, interest);
 }
 
-void Company::start_year(std::int32_t year) { history_.push_back(YearAccounts{year, {}, {}, {}, {}}); }
+void Company::start_year(std::int32_t year) {
+    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
+    issues_this_year_ = 0;
+}
 
 } // namespace railmaster::sim

@@ -91,6 +91,10 @@ void World::on_new_day() {
 void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
+    company_.record_month();
+    last_forced_sale_ = monthly_market(investor_, company_);
+    // Dividends are paid at the end of March, June, September and December.
+    if ((date_.month() - 1) % 3 == 0) pay_dividends(investor_, company_);
 }
 
 void World::on_new_year() { company_.start_year(date_.year()); }
