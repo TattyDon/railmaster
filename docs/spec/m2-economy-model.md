@@ -197,6 +197,68 @@ map. Only industries whose products exist in the start year are placed.
 Processors and consumers go near towns. The map then runs a year of
 history, so it opens with prices and cargo already in place.
 
+## Price-responsive output (rt3-clone-spec §6.1 [C])
+
+Researched: a factory sells at local prices, and slows or stops when its
+output price nearby is red (cheap) [C].
+
+Our price field used to pin a producer's cell at 50% of base however much
+unsold output piled up, so it could never turn red. Now supply mirrors
+demand [I]:
+
+- **Supply price:** a producer's price falls as unsold stock builds up in
+  its cell: 50% of base × S / (S + stock), where S is 60 days' output. A
+  consumer's price already falls the same way with unconsumed stock.
+- **Pace:** producers and processing plants run at full pace while their
+  best product sells for at least 35% of base there. Below that they slow
+  in proportion, stopping at 10%. A plant that slows uses fewer inputs.
+- **In practice:** middlemen carry output off as it is made, so a producer
+  normally holds about a carload and runs at full pace. It slows only when
+  stock piles up: nobody hauls it and the nearby buyers are saturated. It
+  recovers as soon as a railway takes the stock away. On the default map
+  no producer was slowed after three years.
+- **Side effect:** pickup prices at busy producers are a little lower than
+  before, so freight margins are slightly higher.
+- Set `output_full_percent` at or below `output_stop_percent` in
+  `data/balance.json` to switch it off.
+
+## Station-area buildings (rt3-clone-spec §7.2)
+
+Researched [D/C]:
+
+- **Post office:** mail waits longer before expiring; earns nothing.
+- **Hotel:** passengers wait longer; it earns mainly from passengers
+  waiting or transferring.
+- **Restaurant:** earns from every passenger passing through.
+- **Tavern:** earns only from passengers boarding.
+
+These share a fixed market per station: adding buildings does not grow it,
+the nearest takes the largest share, and one building can serve several
+stations. Rivals may build by your stations. Income is small: about $1,000
+a year per building, or $500,000 across a large network.
+
+Our design:
+
+- **Placement:** any company builds one on dry land within 2 km of any
+  station. Costs are not researched [I]: post office $30,000, hotel
+  $100,000, restaurant $50,000, tavern $25,000, moved by the economic
+  state. They count as company buildings, with building upkeep.
+- **Traffic:** each station counts passenger loads boarding, loads
+  arriving, and loads waiting summed over the days. Our passengers go
+  straight to their destinations, so hotels earn from waiting rather than
+  transfers.
+- **Income [I]:** each month, for each station:
+  - hotels share $20 per load-day waiting
+  - restaurants share $50 per load arriving or boarding
+  - taverns share $80 per load boarding
+  Buildings in range split it by 1 / distance² (the spec's share model),
+  and it posts to each owner's Station buildings line.
+- **Waiting [D, I amount]:** a post office within range halves mail's
+  waiting loss, and a hotel passengers'.
+- **AI:** rivals put a restaurant by each of their stations that has none.
+- **Measured:** four rivals put up 22 buildings in three years, earning
+  $50 to $17,000 a year each company [C: small].
+
 ## Town growth (rt3-clone-spec §3.2, §6.4)
 
 Researched: towns grow on their own, rail-connected hubs faster, and

@@ -434,6 +434,22 @@ CommandResult World::run(const UpgradeIndustry& cmd) {
     return success(cost, s.id);
 }
 
+CommandResult World::run(const BuildStationBuilding& cmd) {
+    if (cmd.pos.x_mm < 0 || cmd.pos.y_mm < 0 || cmd.pos.x_mm >= terrain_.width_mm() || cmd.pos.y_mm >= terrain_.height_mm()) {
+        return fail("that is off the map");
+    }
+    if (terrain_.ground_at_mm(cmd.pos) == GroundType::Water) return fail("it needs dry land");
+    bool near = false;
+    for (const Station& s : railway_.stations()) {
+        near |= distance_mm(railway_.track().node(s.node).pos, cmd.pos) <= data_.balance.stations.building_range_mm;
+    }
+    if (!near) return fail("it must be near a station");
+    const Money cost = construction_cost(station_building_cost(cmd.type, data_.balance));
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_buildings(cost);
+    return success(cost, railway_.add_station_building(cmd.type, cmd.pos, acting().id()));
+}
+
 CommandResult World::run(const SetPortMode& cmd) {
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);

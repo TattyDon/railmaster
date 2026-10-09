@@ -108,7 +108,9 @@ TEST_CASE("prices rise from producer to consumer") {
     f.eco.add_site(f.ind, f.type("electric_plant"), 12, 10);
     f.days(400);
     const CargoId coal = f.c("coal");
-    CHECK(f.eco.price(coal, 4, 10) == 15'000);  // 50% of $30K at the mine
+    // At most 50% of $30K at the mine, less as unsold coal piles up there.
+    CHECK(f.eco.price(coal, 4, 10) <= 15'000);
+    CHECK(f.eco.price(coal, 4, 10) > 0);
     CHECK(f.eco.price(coal, 12, 10) > 30'000);  // above base at the plant
     for (int x = 5; x <= 12; ++x) {
         INFO("x = " << x);
@@ -161,13 +163,38 @@ TEST_CASE("processors never exceed capacity") {
 
 TEST_CASE("a supplied booster raises a farm's output") {
     Fixture f;
-    const SiteId plain = f.eco.add_site(f.ind, f.type("corn_farm"), 3, 3);
-    const SiteId fed = f.eco.add_site(f.ind, f.type("corn_farm"), 15, 15);
+    // Without price-responsive output, so only the booster differs.
+    Balance steady;
+    steady.economy.output_full_percent = 0;
+    Economy eco{20, 20, kKm, f.cargo, steady};
+    const SiteId plain = eco.add_site(f.ind, f.type("corn_farm"), 3, 3);
+    const SiteId fed = eco.add_site(f.ind, f.type("corn_farm"), 15, 15);
     for (int d = 0; d < 20; ++d) {
-        f.eco.add_stock(f.c("fertilizer"), 15, 15, kMilli);
-        f.days(1);
+        eco.add_stock(f.c("fertilizer"), 15, 15, kMilli);
+        eco.step_day(f.cargo, f.ind, 1850);
     }
-    CHECK(f.eco.sites()[fed].produced_milli == f.eco.sites()[plain].produced_milli * 3 / 2);
+    CHECK(eco.sites()[fed].produced_milli == eco.sites()[plain].produced_milli * 3 / 2);
+}
+
+TEST_CASE("unsold output lowers a producer's price, and it slows down, then recovers when served [C/I]") {
+    Fixture f;
+    const SiteId mine = f.eco.add_site(f.ind, f.type("coal_mine"), 3, 3);
+    const CargoId coal = f.c("coal");
+    f.days(30);
+    // Middlemen carry its coal off as it is made: full pace.
+    CHECK(f.eco.sites()[mine].pace_permille == 1000);
+    // Coal piles up unsold (40 carloads, 40 days' output): the price falls
+    // to about 30% of base and the mine slows to about two thirds.
+    f.eco.add_stock(coal, 3, 3, 40'000);
+    const std::int64_t before = f.eco.sites()[mine].produced_milli;
+    f.days(1);
+    CHECK(f.eco.price(coal, 3, 3) < 15'000 * 35 / 50);
+    CHECK(f.eco.sites()[mine].pace_permille < 750);
+    CHECK(f.eco.sites()[mine].produced_milli - before < kMilli * 3 / 4);
+    // A railroad takes the stock away: the pace recovers.
+    f.eco.take_stock(coal, 3, 3, 1'000'000);
+    f.days(1);
+    CHECK(f.eco.sites()[mine].pace_permille == 1000);
 }
 
 TEST_CASE("oversupply pushes a consumer's price down") {

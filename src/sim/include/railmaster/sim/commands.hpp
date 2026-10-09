@@ -129,6 +129,13 @@ struct BuildIndustry {
 struct UpgradeIndustry {
     SiteId site = 0;
 };
+// Put up a post office, hotel, restaurant or tavern near a station, anyone's
+// [D/C]: on dry land within the buildings' range of at least one station.
+struct BuildStationBuilding {
+    StationBuildingType type = StationBuildingType::Restaurant;
+    MapPoint pos{};
+};
+
 // Set what one of your warehouses does: receive, supply or exchange [C].
 struct SetPortMode {
     SiteId site = 0;
@@ -142,7 +149,7 @@ struct DeclareBankruptcy {};
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding>;
 
 struct CommandResult {
     bool ok = false;

@@ -314,6 +314,12 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         return;
     }
     case Tool::Station: {
+        if (station_building_) {
+            const sim::CommandResult r = world_.execute(sim::BuildStationBuilding{.type = *station_building_, .pos = hover_});
+            if (r.ok) show(std::string("BUILT A ") + sim::station_building_name(*station_building_) + " FOR " + format_money(r.cost), true);
+            else show("CANNOT BUILD: " + r.error, false);
+            return;
+        }
         const sim::CommandResult r = world_.execute(sim::BuildStation{.at = hover_pick_, .size = station_size_});
         if (r.ok) show("BUILT " + world_.railway().station(r.created_id).name + " FOR " + format_money(r.cost), true);
         else show("CANNOT BUILD: " + r.error, false);
@@ -454,6 +460,13 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else return false;
         return true;
     case Tool::Station:
+        if (key == SDLK_b) {
+            // Station, then post office, hotel, restaurant, tavern, and round again.
+            if (!station_building_) station_building_ = sim::StationBuildingType::PostOffice;
+            else if (*station_building_ == sim::StationBuildingType::Tavern) station_building_.reset();
+            else station_building_ = static_cast<sim::StationBuildingType>(static_cast<int>(*station_building_) + 1);
+            return true;
+        }
         if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
             const int step = key == SDLK_LEFTBRACKET ? 2 : 1; // cycle backwards or forwards
             station_size_ = static_cast<sim::StationSize>((static_cast<int>(station_size_) + step) % 3);
@@ -884,7 +897,12 @@ std::string Tools::hint() const {
                "  D DOUBLE: " + (double_track_ ? "ON" : "OFF") + "  C CURVES: " + (curves_ ? "ON" : "OFF") +
                "  [ ] TUNNELS: " + std::to_string(tunnel_preference_) + "%";
     case Tool::Station:
-        return std::string("CLICK ON TRACK TO BUILD A STATION.  [ ] SIZE: ") + size_name(station_size_) + " " +
+        if (station_building_) {
+            return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +
+                   format_money(world_.construction_cost(sim::station_building_cost(*station_building_, world_.data().balance))) +
+                   ".  B NEXT KIND";
+        }
+        return std::string("CLICK ON TRACK TO BUILD A STATION.  B FOR BUILDINGS.  [ ] SIZE: ") + size_name(station_size_) + " " +
                format_money(sim::station_cost(station_size_));
     case Tool::ServiceTower:
         return "CLICK ON TRACK: SERVICE TOWER (WATER, SAND) " +

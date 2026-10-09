@@ -247,6 +247,7 @@ void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
     account_industries(1);
+    pay_station_buildings();
     grow_towns();
     for (Company& c : market_.companies) c.record_month();
     const std::int32_t checks = data_.balance.economic_states.checks_per_year;
@@ -275,6 +276,52 @@ void World::account_industries(std::int32_t months) {
         Company& c = company(*s.owner);
         c.post(Ledger::IndustryIncome, accounts[s.id].revenue);
         c.post(Ledger::IndustryCosts, accounts[s.id].costs);
+    }
+}
+
+// Each station's trade is a fixed market for each kind of building: those in
+// range split it, the nearest taking most, by 1 / distance squared [D/C, I].
+void World::pay_station_buildings() {
+    const Balance::Stations& b = data_.balance.stations;
+    const auto& buildings = railway_.station_buildings();
+    for (StationId sid = 0; sid < railway_.stations().size(); ++sid) {
+        Station& st = railway_.station_mut(sid);
+        const MapPoint at = railway_.track().node(st.node).pos;
+        const auto market = [&](StationBuildingType type) -> Money {
+            switch (type) {
+            case StationBuildingType::Hotel:
+                return Money::dollars(b.hotel_per_load_day).scaled(st.passengers_waiting_milli_days, kMilli);
+            case StationBuildingType::Restaurant:
+                return Money::dollars(b.restaurant_per_load)
+                    .scaled(st.passengers_boarded_milli + st.passengers_arrived_milli, kMilli);
+            case StationBuildingType::Tavern:
+                return Money::dollars(b.tavern_per_load).scaled(st.passengers_boarded_milli, kMilli);
+            case StationBuildingType::PostOffice: return Money{};
+            }
+            return Money{};
+        };
+        for (const auto type : {StationBuildingType::Hotel, StationBuildingType::Restaurant, StationBuildingType::Tavern}) {
+            const Money total = market(type);
+            if (total <= Money{}) continue;
+            // Weights 1 / (d^2 + 50 m^2), d in metres, so a building on the spot is not infinite.
+            std::vector<std::pair<CompanyId, std::int64_t>> weights;
+            std::int64_t sum = 0;
+            for (const StationBuilding& sb : buildings) {
+                if (sb.type != type) continue;
+                const std::int64_t d = distance_mm(sb.pos, at);
+                if (d > b.building_range_mm) continue;
+                const std::int64_t m = d / 1000;
+                const std::int64_t w = 1'000'000'000'000LL / (m * m + 2'500);
+                weights.emplace_back(sb.owner, w);
+                sum += w;
+            }
+            for (const auto& [owner, w] : weights) {
+                if (owner < market_.companies.size() && !company(owner).defunct()) {
+                    company(owner).post(Ledger::StationBuildingIncome, total.scaled(w, sum));
+                }
+            }
+        }
+        st.passengers_boarded_milli = st.passengers_arrived_milli = st.passengers_waiting_milli_days = 0;
     }
 }
 

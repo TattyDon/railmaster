@@ -76,6 +76,8 @@ private:
     std::int32_t tunnel_preference_ = 50;
 
     sim::StationSize station_size_ = sim::StationSize::Medium;
+    // What the station tool places: a station, or a building near one.
+    std::optional<sim::StationBuildingType> station_building_{};
 
     std::vector<sim::StationId> route_;
     std::uint8_t cars_ = 4;

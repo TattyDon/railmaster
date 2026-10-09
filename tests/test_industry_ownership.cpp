@@ -13,6 +13,7 @@ namespace {
 GameData industry_data() {
     GameData d;
     d.balance.stock.founder_fortune = 13'000'000; // deep pockets for the merger test
+    d.balance.economy.output_full_percent = 0;    // steady output, so accounts are exact
     d.cargo = CargoRegistry::from_json(R"({"cargo": [
         {"key": "coal", "name": "Coal", "base_price": 30},
         {"key": "iron", "name": "Iron", "base_price": 30},

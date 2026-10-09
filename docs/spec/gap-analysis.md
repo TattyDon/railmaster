@@ -43,6 +43,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §6.3 [C] | Ports import/export at the coast or edge; receive, supply or exchange; unowned receivers upgrade on demand | none | as described |
 | §6.3 [D/C] | Warehouses: inland ports that cut spoilage and earn the loss they save | none | as described in m2-economy-model.md; spoilage rate and radius [I] |
 | §6.1 [C] | Industries appear from their start year, and new ones as the economy develops | fixed at map creation | yearly: up to the usual count, then by chance |
+| §6.1 [C] | Industries slow or stop when their output sells cheaply nearby | constant output | supply price falls with unsold stock; output paced by it [I] |
+| §7.2 [D/C] | Post office, hotel, restaurant, tavern: fixed per-station market split by distance; post office and hotel slow waiting loss | none | as the spec; costs and rates [I] |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -121,9 +123,7 @@ Grouped by the spec's own build order (§17).
 **Economy**
 - Rivers in the map generator, and closed borders (conductance 0) (§5.3).
 - Automobile demand dropping sharply in recessions; the optional cost index (§5.5).
-- Price-responsive industry output (slowing when the local price is red) (§6.1 [C]).
 - Owning ports; warehouse cargo conversion (§6.3 [D/C]).
-- Hotels, restaurants, taverns and post offices (§7.2 [D/C]).
 
 **Express**
 - Units with origin and destination houses chosen by gravity weighting;

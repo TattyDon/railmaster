@@ -29,6 +29,9 @@ Early development. Done so far:
 - short selling, takeovers and mergers by shareholder vote
 - owning industries: buy producers and plants, build and upgrade plants,
   and collect their profit
+- post offices, hotels, restaurants and taverns by stations, sharing each
+  station's passenger trade
+- industries that slow down when their output piles up unsold
 - towns that grow with good service (star ratings by each name), ports on
   the coast that import and export, warehouses you build, and new industries
   appearing over the years
@@ -74,7 +77,7 @@ rivals join by default; `--rivals=N` sets how many (0 to 7).
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
-| [ ] (Station) | Station size |
+| [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
 | F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |

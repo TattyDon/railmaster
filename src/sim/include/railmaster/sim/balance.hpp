@@ -76,6 +76,19 @@ struct Balance {
         std::int32_t gather_percent_per_day = 20;
         std::int32_t cap_milli = 20'000;
         std::int32_t town_reach_cells = 4; // a station within this of a town centre serves that town
+        // Station-area buildings (rt3-clone-spec §7.2): costs are not
+        // researched [I]; each serves stations within the range; income per
+        // passenger load is [I], tuned to be small [C: "~$1K a year to a
+        // small loss per building"].
+        std::int64_t building_range_mm = 2'000'000;
+        std::int64_t post_office_cost = 30'000;
+        std::int64_t hotel_cost = 100'000;
+        std::int64_t restaurant_cost = 50'000;
+        std::int64_t tavern_cost = 25'000;
+        std::int64_t hotel_per_load_day = 20;   // passengers waiting at the station [D/C]
+        std::int64_t restaurant_per_load = 50;  // every passenger arriving or leaving [C]
+        std::int64_t tavern_per_load = 80;      // passengers boarding [C]
+        std::int32_t wait_loss_percent = 50;    // post office (mail) and hotel (passengers) slow waiting loss [D]
     } stations;
 
     struct Economy {
@@ -93,6 +106,13 @@ struct Balance {
         std::int32_t input_buffer_days = 30;
         std::int32_t boost_percent = 50;
         std::int32_t history_days = 365; // simulated before a new map opens
+        // Price-responsive output (rt3-clone-spec §6.1 [C]): unsold stock
+        // equal to this many days of output halves a producer's price, and
+        // producers slow as their local price falls below the full-pace
+        // share of base, stopping at the stop share [I].
+        std::int32_t supply_saturation_days = 60;
+        std::int32_t output_full_percent = 35;
+        std::int32_t output_stop_percent = 10;
         // Middlemen and price coupling by terrain (rt3-clone-spec §5.3): how
         // easily freight and price signals cross a cell, in thousandths of
         // flat land. A cell is hilly or mountainous by its steepest corner-

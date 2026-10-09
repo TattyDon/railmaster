@@ -482,6 +482,23 @@ void invest_in_industry(World& w, const Rival& r, const Tycoon& ty, Company& co)
     if (best) w.execute(BuyIndustry{.site = *best}, r.player);
 }
 
+// A restaurant by each of its stations that has none nearby, one a month
+// (rt3-clone-spec §7.2: rivals build by stations [C]).
+void add_station_buildings(World& w, const Rival& r, const Company& co) {
+    const Balance& b = w.data().balance;
+    const Money cost = w.construction_cost(station_building_cost(StationBuildingType::Restaurant, b));
+    if (co.cash() < cost + Money::dollars(b.ai.cash_reserve) * 4) return;
+    for (const Station& st : w.railway().stations()) {
+        if (st.owner != co.id() || w.railway().near_building(st.id, StationBuildingType::Restaurant)) continue;
+        const MapPoint at = w.railway().track().node(st.node).pos;
+        // Just off the station, on whichever side is dry.
+        for (const MapPoint p : {MapPoint{at.x_mm + 300'000, at.y_mm}, MapPoint{at.x_mm - 300'000, at.y_mm},
+                                 MapPoint{at.x_mm, at.y_mm + 300'000}, MapPoint{at.x_mm, at.y_mm - 300'000}}) {
+            if (w.execute(BuildStationBuilding{.type = StationBuildingType::Restaurant, .pos = p}, r.player).ok) return;
+        }
+    }
+}
+
 void run_rival(World& w, Rival& r, const Tycoon& ty) {
     // A tycoon whose company was merged away still trades.
     if (const auto chairs = w.investors().at(r.player).chairs) {
@@ -490,6 +507,7 @@ void run_rival(World& w, Rival& r, const Tycoon& ty) {
         expand(w, r, ty, co);
         add_trains(w, r, co);
         invest_in_industry(w, r, ty, co);
+        add_station_buildings(w, r, co);
     }
     speculate(w, r, ty);
     pursue_control(w, r, ty);

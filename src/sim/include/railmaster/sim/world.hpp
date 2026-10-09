@@ -195,6 +195,9 @@ private:
     CommandResult run(const BuildIndustry& cmd);
     CommandResult run(const UpgradeIndustry& cmd);
     CommandResult run(const SetPortMode& cmd);
+    CommandResult run(const BuildStationBuilding& cmd);
+    // Monthly: hotels, restaurants and taverns share each station's trade.
+    void pay_station_buildings();
     // Post each owned industry's month to its owner's books.
     void account_industries(std::int32_t months);
     // Monthly: towns grow with the service they get (rt3-clone-spec §6.4).

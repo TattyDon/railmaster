@@ -128,6 +128,20 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
         glColor3f(r, g, b);
         square(net.node(s.node).pos, cam, 6 * px);
     }
+    // Post offices blue, hotels white, restaurants green, taverns red; edged in the owner's colour.
+    for (const sim::StationBuilding& b : rw.station_buildings()) {
+        float r, g, bl;
+        owner_rgb(b.owner, player, r, g, bl);
+        glColor3f(r, g, bl);
+        square(b.pos, cam, 4 * px);
+        switch (b.type) {
+        case sim::StationBuildingType::PostOffice: glColor3f(0.3f, 0.5f, 0.95f); break;
+        case sim::StationBuildingType::Hotel: glColor3f(0.95f, 0.95f, 0.95f); break;
+        case sim::StationBuildingType::Restaurant: glColor3f(0.3f, 0.85f, 0.35f); break;
+        case sim::StationBuildingType::Tavern: glColor3f(0.9f, 0.3f, 0.25f); break;
+        }
+        square(b.pos, cam, 2.5f * px);
+    }
     for (const sim::ServiceBuilding& b : rw.service_buildings()) {
         if (b.type == sim::ServiceType::ServiceTower) glColor3f(0.3f, 0.6f, 0.95f);
         else glColor3f(0.95f, 0.75f, 0.2f);

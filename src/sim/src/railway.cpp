@@ -153,11 +153,47 @@ NodeId Railway::split_edge(EdgeId e, MapPoint at) {
     return mid;
 }
 
+const char* station_building_name(StationBuildingType t) {
+    switch (t) {
+    case StationBuildingType::PostOffice: return "Post Office";
+    case StationBuildingType::Hotel: return "Hotel";
+    case StationBuildingType::Restaurant: return "Restaurant";
+    case StationBuildingType::Tavern: return "Tavern";
+    }
+    return "?";
+}
+
+Money station_building_cost(StationBuildingType t, const Balance& b) {
+    switch (t) {
+    case StationBuildingType::PostOffice: return Money::dollars(b.stations.post_office_cost);
+    case StationBuildingType::Hotel: return Money::dollars(b.stations.hotel_cost);
+    case StationBuildingType::Restaurant: return Money::dollars(b.stations.restaurant_cost);
+    case StationBuildingType::Tavern: return Money::dollars(b.stations.tavern_cost);
+    }
+    return Money{};
+}
+
+std::uint32_t Railway::add_station_building(StationBuildingType type, MapPoint pos, CompanyId owner) {
+    const auto id = static_cast<std::uint32_t>(station_buildings_.size());
+    station_buildings_.push_back({id, type, owner, pos});
+    return id;
+}
+
+bool Railway::near_building(StationId s, StationBuildingType type) const {
+    const MapPoint at = track_.node(stations_.at(s).node).pos;
+    for (const StationBuilding& b : station_buildings_) {
+        if (b.type == type && distance_mm(b.pos, at) <= balance_.stations.building_range_mm) return true;
+    }
+    return false;
+}
+
 void Railway::transfer_owner(CompanyId from, CompanyId to) {
     track_.transfer_owner(from, to);
     for (Station& s : stations_)
         if (s.owner == from) s.owner = to;
     for (ServiceBuilding& b : service_buildings_)
+        if (b.owner == from) b.owner = to;
+    for (StationBuilding& b : station_buildings_)
         if (b.owner == from) b.owner = to;
     for (Train& t : trains_) {
         if (t.owner == from) t.owner = to;

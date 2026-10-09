@@ -38,6 +38,7 @@ enum class Ledger : std::uint8_t {
     MailRevenue,
     TroopRevenue,
     IndustryIncome, // output of the industries it owns [C]
+    StationBuildingIncome, // hotels, restaurants and taverns
     TrackageIncome, // rivals' share of income for running on our track [D]
     TrainMaintenance,
     Fuel,

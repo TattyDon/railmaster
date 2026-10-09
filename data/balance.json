@@ -83,10 +83,13 @@
     "mountain_conductance_permille": 500,
     "mountain_grade_bp": 700,
     "neutral_price_percent": 50,
+    "output_full_percent": 35,
+    "output_stop_percent": 10,
     "saturation_days": 30,
     "screening_per_10000": 25,
     "spoilage_per_mille_per_sensitivity": 1,
     "supply_price_percent": 50,
+    "supply_saturation_days": 60,
     "transport_cost_percent": 1,
     "water_conductance_permille": 2000
   },
@@ -177,15 +180,24 @@
     "water_range_mm": 150000000
   },
   "stations": {
+    "building_range_mm": 2000000,
     "cap_milli": 20000,
     "catchment_large": 3,
     "catchment_medium": 2,
     "catchment_small": 1,
     "gather_percent_per_day": 20,
+    "hotel_cost": 100000,
+    "hotel_per_load_day": 20,
     "large_cost": 200000,
     "medium_cost": 100000,
+    "post_office_cost": 30000,
+    "restaurant_cost": 50000,
+    "restaurant_per_load": 50,
     "small_cost": 50000,
-    "town_reach_cells": 4
+    "tavern_cost": 25000,
+    "tavern_per_load": 80,
+    "town_reach_cells": 4,
+    "wait_loss_percent": 50
   },
   "stock": {
     "big_split_price_cents": 20000,

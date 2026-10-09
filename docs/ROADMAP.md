@@ -66,9 +66,13 @@ Done in the seventh slice: warehouses (inland ports that keep nearby cargo
 from spoiling and earn what they save) and new industries appearing year by
 year.
 
+Done in the eighth slice: price-responsive industry output (a producer's
+price falls as unsold stock piles up, and it slows), and post offices,
+hotels, restaurants and taverns by stations.
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
-- Price-responsive industry output; warehouse cargo conversion.
+- Warehouse cargo conversion.
 
 ## M3: Company and finance (in progress)
 Done in the first slice: company cash that pays for everything (refusing
@@ -103,7 +107,6 @@ brokerage, and voluntary bankruptcy.
 
 Still to do:
 - Depreciation of track, buildings and trains.
-- Hotels, restaurants and the like.
 
 ## M4: Real 3D client
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

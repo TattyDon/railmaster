@@ -45,8 +45,8 @@ Each key's name carries its unit:
 | `servicing` | water, sand and oil ranges; service buildings | m1 |
 | `breakdowns` | breakdown and crash rates, maintenance ageing | m1 |
 | `track` | grade limit, structure clearances, costs per km | m1 |
-| `stations` | costs, catchment, gathering, town reach | m1, [m2-economy-model.md](m2-economy-model.md) |
-| `economy` | price field, drift, saturation, stockpiles, terrain conductance | m2 |
+| `stations` | costs, catchment, gathering, town reach; post offices, hotels, restaurants, taverns | m1, [m2-economy-model.md](m2-economy-model.md) |
+| `economy` | price field, drift, saturation, stockpiles, terrain conductance, price-responsive output | m2 |
 | `map` | towns, industries and ports on a new map; new industries over time | m2 |
 | `freight` | timeliness curve, expiry | m2 |
 | `express` | passengers, mail and troops | m2 |

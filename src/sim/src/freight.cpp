@@ -226,10 +226,18 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     // Express: waiting loads dwindle, then houses and barracks add new ones
     // for every station a train connects them to.
     for (StationId sid = 0; sid < n_stations; ++sid) {
-        for (ExpressWaiting& e : rw.station_mut(sid).express) {
-            const std::int32_t per_mille =
-                cargo.get(e.cargo).decay_sensitivity * rw.balance().express.wait_loss_per_mille_per_sensitivity;
+        // A post office keeps mail, and a hotel passengers, waiting longer [D].
+        const bool post_office = rw.near_building(sid, StationBuildingType::PostOffice);
+        const bool hotel = rw.near_building(sid, StationBuildingType::Hotel);
+        Station& st = rw.station_mut(sid);
+        for (ExpressWaiting& e : st.express) {
+            const CargoType& c = cargo.get(e.cargo);
+            std::int32_t per_mille = c.decay_sensitivity * rw.balance().express.wait_loss_per_mille_per_sensitivity;
+            if ((c.key == "mail" && post_office) || (c.key == "passengers" && hotel)) {
+                per_mille = per_mille * rw.balance().stations.wait_loss_percent / 100;
+            }
             if (e.milli > 0) e.milli -= std::max(1, e.milli * per_mille / 1000);
+            if (c.key == "passengers") st.passengers_waiting_milli_days += e.milli;
         }
     }
     const auto partners = route_partners(rw);
@@ -278,6 +286,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                                          .scaled(revenue_permille, 1000));
                 }
                 received += car.milli;
+                if (c.key == "passengers") st.passengers_arrived_milli += car.milli;
                 car = Car{};
             } else if (left == 0) {
                 car = Car{}; // gave up: worthless
@@ -335,6 +344,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         const Candidate& pick = candidates[next];
         if (pick.destination) {
             express_pool(st, pick.cargo, *pick.destination).milli -= kMilli;
+            if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += kMilli;
             car = Car{pick.cargo, kMilli, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain)};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];

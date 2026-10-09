@@ -225,10 +225,35 @@ std::int32_t Economy::take_stock(CargoId c, std::int32_t cx, std::int32_t cy, st
     return taken;
 }
 
+std::int32_t Economy::supply_price(const CargoType& c, std::int64_t daily_milli, std::int64_t leftover) const {
+    const std::int64_t low = base_dollars(c) * balance_.supply_price_percent / 100;
+    const std::int64_t s = std::max<std::int64_t>(1, daily_milli * balance_.supply_saturation_days);
+    return static_cast<std::int32_t>(low * s / (s + std::max<std::int64_t>(0, leftover)));
+}
+
+std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType& t, std::int64_t rate, std::size_t at,
+                                  std::int32_t year) const {
+    const std::int32_t stop = balance_.output_stop_percent, full = balance_.output_full_percent;
+    if (full <= stop) return 1000; // switched off
+    std::int32_t best = 0;
+    bool any = false;
+    for (CargoId c : t.outputs) {
+        if (!cargo_available(c, cargo, year)) continue;
+        any = true;
+        const CargoType& ct = cargo.get(c);
+        const std::int64_t base = std::max<std::int64_t>(1, base_dollars(ct));
+        const std::int64_t pct = std::int64_t{supply_price(ct, rate, stock_[c][at])} * 100 / base;
+        best = std::max(best, static_cast<std::int32_t>(std::clamp<std::int64_t>((pct - stop) * 1000 / (full - stop), 0, 1000)));
+    }
+    return any ? best : 1000;
+}
+
 void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year) {
     for (auto& a : anchors_) a.clear();
-    auto supply = [&](CargoId c, std::size_t at) {
-        anchors_[c].push_back({at, percent_of(base_dollars(cargo.get(c)), balance_.supply_price_percent)});
+    // A producer's price falls as unsold output piles up in its cell, as a
+    // consumer's does as unconsumed stock does [I].
+    auto supply = [&](CargoId c, std::size_t at, std::int64_t daily) {
+        anchors_[c].push_back({at, supply_price(cargo.get(c), daily, stock_[c][at])});
     };
     auto demand = [&](CargoId c, std::size_t at, std::int64_t daily, std::int32_t days) {
         anchors_[c].push_back({at, demand_price(cargo.get(c), daily, days, stock_[c][at], balance_.demand_price_percent)});
@@ -238,8 +263,15 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         if (s.closed) continue;
         const IndustryType& t = industries.get(s.type);
         const std::size_t at = cell(s.cx, s.cy);
-        const auto daily = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli *
-                                                     activity_percent_ / (365 * 100));
+        // `rate` is what the site makes or wants at full pace; `daily` what it
+        // actually makes, slowed when its products sell cheaply here [C].
+        const auto rate = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli *
+                                                    activity_percent_ / (365 * 100));
+        std::int32_t daily = rate;
+        if (t.kind == IndustryKind::Raw || t.kind == IndustryKind::Processor) {
+            s.pace_permille = output_pace(cargo, t, rate, at, year);
+            daily = static_cast<std::int32_t>(std::int64_t{rate} * s.pace_permille / 1000);
+        }
 
         switch (t.kind) {
         case IndustryKind::Raw: {
@@ -251,7 +283,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, want);
                 s.used_milli[i] += took;
                 if (took >= want && want > 0) boosted = true;
-                demand(in.cargo, at, daily, balance_.industry_saturation_days);
+                demand(in.cargo, at, rate, balance_.industry_saturation_days);
             }
             const std::int32_t out = daily * (100 + (boosted ? balance_.boost_percent : 0)) / 100;
             for (std::size_t o = 0; o < t.outputs.size(); ++o) {
@@ -260,7 +292,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 add_stock(c, s.cx, s.cy, out);
                 s.produced_milli += out;
                 s.made_milli[o] += out;
-                supply(c, at);
+                supply(c, at, rate);
             }
             break;
         }
@@ -273,7 +305,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(in, cargo, year)) continue;
                 any_input = true;
                 s.buffer[i] += take_stock(in.cargo, s.cx, s.cy, cap - s.buffer[i]);
-                demand(in.cargo, at, daily, balance_.industry_saturation_days);
+                demand(in.cargo, at, rate, balance_.industry_saturation_days);
                 if (t.rule == InputRule::All) can_make = std::min(can_make, s.buffer[i]);
                 else can_make += s.buffer[i];
             }
@@ -297,7 +329,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!cargo_available(c, cargo, year)) continue;
                 add_stock(c, s.cx, s.cy, made);
                 s.made_milli[o] += made;
-                supply(c, at);
+                supply(c, at, rate);
             }
             s.produced_milli += made;
             break;
@@ -312,7 +344,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                     const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
                     s.received_year_milli += took;
                     s.used_milli[i] += took;
-                    demand(in.cargo, at, daily, balance_.industry_saturation_days);
+                    demand(in.cargo, at, rate, balance_.industry_saturation_days);
                 }
             }
             if (s.port_mode != PortMode::Receive) {
@@ -322,7 +354,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                     add_stock(c, s.cx, s.cy, daily);
                     s.produced_milli += daily;
                     s.made_milli[o] += daily;
-                    supply(c, at);
+                    supply(c, at, rate);
                 }
             }
             break;
@@ -335,13 +367,13 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(in, cargo, year)) continue;
                 const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
                 if (t.kind == IndustryKind::Sink) s.received_year_milli += took;
-                demand(in.cargo, at, daily, days);
+                demand(in.cargo, at, rate, days);
             }
             for (CargoId c : t.outputs) {
                 if (!cargo_available(c, cargo, year)) continue;
                 add_stock(c, s.cx, s.cy, daily);
                 s.produced_milli += daily;
-                supply(c, at);
+                supply(c, at, rate);
             }
             break;
         }

@@ -53,6 +53,26 @@ struct Station {
     std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
     std::optional<std::size_t> town{}; // index into Economy::towns(); none in open country
     std::int32_t built_day = 0;
+    // Passenger traffic this month, for the station-area buildings: loads
+    // boarded, loads arriving, and loads waiting summed over the days.
+    std::int64_t passengers_boarded_milli = 0;
+    std::int64_t passengers_arrived_milli = 0;
+    std::int64_t passengers_waiting_milli_days = 0;
+};
+
+// Buildings placed near stations (rt3-clone-spec §7.2): a post office keeps
+// mail waiting longer; a hotel keeps passengers longer and earns from those
+// waiting; a restaurant earns from every passenger passing; a tavern from
+// those boarding. Any company may build them by anyone's station.
+enum class StationBuildingType : std::uint8_t { PostOffice, Hotel, Restaurant, Tavern };
+const char* station_building_name(StationBuildingType t);
+Money station_building_cost(StationBuildingType t, const Balance& b = default_balance());
+
+struct StationBuilding {
+    std::uint32_t id = 0;
+    StationBuildingType type = StationBuildingType::Restaurant;
+    CompanyId owner = 0;
+    MapPoint pos{};
 };
 
 // RT3 has two support buildings that sit on the track: the service tower
@@ -176,6 +196,11 @@ public:
     const std::vector<Station>& stations() const { return stations_; }
 
     ServiceBuildingId add_service_building(ServiceType type, NodeId node, CompanyId owner = 0);
+
+    std::uint32_t add_station_building(StationBuildingType type, MapPoint pos, CompanyId owner);
+    const std::vector<StationBuilding>& station_buildings() const { return station_buildings_; }
+    // Is there a building of this type within range of the station?
+    bool near_building(StationId s, StationBuildingType type) const;
     const std::vector<ServiceBuilding>& service_buildings() const { return service_buildings_; }
 
     // The train starts stopped at the first station of its route.
@@ -218,6 +243,7 @@ private:
     TrackNetwork track_;
     std::vector<Station> stations_;
     std::vector<ServiceBuilding> service_buildings_;
+    std::vector<StationBuilding> station_buildings_;
     std::vector<Train> trains_;
     std::vector<std::pair<TrainId, StationId>> arrivals_;
     std::vector<TrainId> crashes_;

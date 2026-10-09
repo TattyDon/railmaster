@@ -17,6 +17,7 @@ const char* ledger_name(Ledger line) {
     case Ledger::MailRevenue: return "Mail revenue";
     case Ledger::TroopRevenue: return "Troop revenue";
     case Ledger::IndustryIncome: return "Industry income";
+    case Ledger::StationBuildingIncome: return "Station buildings";
     case Ledger::TrackageIncome: return "Trackage income";
     case Ledger::TrainMaintenance: return "Train maintenance";
     case Ledger::Fuel: return "Fuel";

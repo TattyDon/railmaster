@@ -23,12 +23,16 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Track, default_max_grad
                                                 suspension_min_span_mm)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stations, small_cost, medium_cost, large_cost,
                                                 catchment_small, catchment_medium, catchment_large,
-                                                gather_percent_per_day, cap_milli, town_reach_cells)
+                                                gather_percent_per_day, cap_milli, town_reach_cells, building_range_mm,
+                                                post_office_cost, hotel_cost, restaurant_cost, tavern_cost,
+                                                hotel_per_load_day, restaurant_per_load, tavern_per_load,
+                                                wait_loss_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Economy, cargo_price_unit, demand_price_percent,
                                                 supply_price_percent, neutral_price_percent, screening_per_10000,
                                                 drift_percent_per_day, transport_cost_percent, saturation_days,
                                                 industry_saturation_days, spoilage_per_mille_per_sensitivity,
                                                 max_stock_milli, input_buffer_days, boost_percent, history_days,
+                                                supply_saturation_days, output_full_percent, output_stop_percent,
                                                 water_conductance_permille, coast_conductance_permille,
                                                 hill_conductance_permille, mountain_conductance_permille,
                                                 hill_grade_bp, mountain_grade_bp)

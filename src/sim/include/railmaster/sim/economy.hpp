@@ -97,6 +97,7 @@ struct Site {
     std::vector<Money> monthly_profit{};    // the last 12 months, newest last
     std::int32_t loss_years = 0;            // closed years in a row with a loss
     std::int32_t utilisation_permille = 0;  // output against capacity, last period
+    std::int32_t pace_permille = 1000;      // producers and plants: how fast they run, by local price
     Money owner_paid{};                     // what the owner has spent on it: the book value
 };
 
@@ -207,6 +208,13 @@ private:
     std::size_t cell(std::int32_t cx, std::int32_t cy) const;
     void run_sites(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);
     void spoil(const CargoRegistry& cargo);
+    // A producer's local price, falling as unsold stock builds up.
+    std::int32_t supply_price(const CargoType& c, std::int64_t daily_milli, std::int64_t leftover) const;
+    // How fast a producer or plant runs, in thousandths: full while its best
+    // product sells for at least output_full_percent of base here, slowing
+    // to a stop at output_stop_percent [C/I].
+    std::int32_t output_pace(const CargoRegistry& cargo, const IndustryType& t, std::int64_t rate, std::size_t at,
+                             std::int32_t year) const;
     void relax(const CargoRegistry& cargo);
     void drift(const CargoRegistry& cargo);
 
