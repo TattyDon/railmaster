@@ -62,9 +62,13 @@ Done in the sixth slice: towns that grow with the service they get, with
 star ratings; ports on the coast that receive, supply or exchange cargo;
 and unowned ports and consumers that expand when demand fills them.
 
+Done in the seventh slice: warehouses (inland ports that keep nearby cargo
+from spoiling and earn what they save) and new industries appearing year by
+year.
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
-- Warehouses; new industries appearing over time; price-responsive output.
+- Price-responsive industry output; warehouse cargo conversion.
 
 ## M3: Company and finance (in progress)
 Done in the first slice: company cash that pays for everything (refusing

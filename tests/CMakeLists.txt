@@ -33,6 +33,7 @@ add_executable(railmaster_tests
     test_track.cpp
     test_towns_ports.cpp
     test_track_builder.cpp
+    test_warehouses_spawning.cpp
     test_world.cpp
 )
 target_link_libraries(railmaster_tests PRIVATE railmaster::sim doctest::doctest railmaster_warnings)

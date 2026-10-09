@@ -19,6 +19,7 @@ IndustryKind parse_kind(const std::string& s, const std::string& key) {
     if (s == "sink") return IndustryKind::Sink;
     if (s == "house") return IndustryKind::House;
     if (s == "port") return IndustryKind::Port;
+    if (s == "warehouse") return IndustryKind::Warehouse;
     throw std::runtime_error("industry data: unknown kind '" + s + "' for '" + key + "'");
 }
 
@@ -102,7 +103,7 @@ IndustryRegistry IndustryRegistry::from_json(std::string_view json_text, const C
         if (t.rate_per_year <= 0) throw std::runtime_error("industry data: bad rate for '" + t.key + "'");
         const bool needs_inputs = t.kind == IndustryKind::Processor || t.kind == IndustryKind::Sink;
         if (needs_inputs && t.inputs.empty()) throw std::runtime_error("industry data: '" + t.key + "' has no inputs");
-        if (t.kind == IndustryKind::Port && t.inputs.empty() && t.outputs.empty()) {
+        if (trades(t.kind) && t.inputs.empty() && t.outputs.empty()) {
             throw std::runtime_error("industry data: port '" + t.key + "' trades nothing");
         }
         if (t.kind == IndustryKind::Raw && t.outputs.empty()) {
@@ -125,6 +126,8 @@ std::optional<IndustryTypeId> IndustryRegistry::find(std::string_view key) const
 Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64_t cell_size_mm,
                  const CargoRegistry& cargo, const Balance& balance)
     : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm), balance_(balance.economy) {
+    warehouse_radius_ = balance.industries.warehouse_radius_cells;
+    warehouse_spoilage_percent_ = balance.industries.warehouse_spoilage_percent;
     if (width_ <= 0 || height_ <= 0 || cell_size_mm_ <= 0) throw std::invalid_argument("bad economy grid size");
     const auto cells = static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_);
     const std::size_t n = cargo.all().size();
@@ -199,6 +202,7 @@ SiteId Economy::add_site(const IndustryRegistry& industries, IndustryTypeId type
     Site s;
     s.id = static_cast<SiteId>(sites_.size());
     s.type = type;
+    s.kind = industries.get(type).kind;
     s.cx = cx;
     s.cy = cy;
     s.level = level;
@@ -298,20 +302,26 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
             s.produced_milli += made;
             break;
         }
-        case IndustryKind::Port: {
-            // Exports leave the map; imports arrive, both up to capacity.
+        case IndustryKind::Port:
+        case IndustryKind::Warehouse: {
+            // Exports leave; imports arrive, both up to capacity.
             if (s.port_mode != PortMode::Supply) {
-                for (const IndustryInput& in : t.inputs) {
+                for (std::size_t i = 0; i < t.inputs.size(); ++i) {
+                    const IndustryInput& in = t.inputs[i];
                     if (!input_active(in, cargo, year)) continue;
-                    s.received_year_milli += take_stock(in.cargo, s.cx, s.cy, daily);
+                    const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
+                    s.received_year_milli += took;
+                    s.used_milli[i] += took;
                     demand(in.cargo, at, daily, balance_.industry_saturation_days);
                 }
             }
             if (s.port_mode != PortMode::Receive) {
-                for (CargoId c : t.outputs) {
+                for (std::size_t o = 0; o < t.outputs.size(); ++o) {
+                    const CargoId c = t.outputs[o];
                     if (!cargo_available(c, cargo, year)) continue;
                     add_stock(c, s.cx, s.cy, daily);
                     s.produced_milli += daily;
+                    s.made_milli[o] += daily;
                     supply(c, at);
                 }
             }
@@ -343,10 +353,33 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
 }
 
 void Economy::spoil(const CargoRegistry& cargo) {
+    // Which warehouse, if any, protects each cell (the first built wins).
+    std::vector<std::int64_t> cover;
+    for (const Site& w : sites_) {
+        if (w.closed || w.kind != IndustryKind::Warehouse) continue;
+        if (cover.empty()) cover.assign(scratch_.size(), -1);
+        const std::int32_t r = warehouse_radius_;
+        for (std::int32_t y = std::max(0, w.cy - r); y <= std::min(height_ - 1, w.cy + r); ++y) {
+            for (std::int32_t x = std::max(0, w.cx - r); x <= std::min(width_ - 1, w.cx + r); ++x) {
+                std::int64_t& c = cover[cell(x, y)];
+                if (c < 0) c = w.id;
+            }
+        }
+    }
     for (const CargoType& c : cargo.all()) {
         const std::int64_t per_mille = std::int64_t{c.decay_sensitivity} * balance_.spoilage_per_mille_per_sensitivity;
-        for (std::int32_t& s : stock_[c.id]) {
-            if (s > 0) s -= static_cast<std::int32_t>(std::max<std::int64_t>(1, s * per_mille / 1000));
+        std::vector<std::int32_t>& stock = stock_[c.id];
+        for (std::size_t i = 0; i < stock.size(); ++i) {
+            std::int32_t& s = stock[i];
+            if (s <= 0) continue;
+            const auto loss = static_cast<std::int32_t>(std::max<std::int64_t>(1, s * per_mille / 1000));
+            if (cover.empty() || cover[i] < 0) {
+                s -= loss;
+                continue;
+            }
+            const std::int32_t kept = loss - loss * warehouse_spoilage_percent_ / 100;
+            s -= loss - kept;
+            sites_[static_cast<std::size_t>(cover[i])].spoilage_saved += c.base_price.scaled(kept, kMilli);
         }
     }
 }
@@ -443,8 +476,10 @@ void Economy::settle(const CargoRegistry& cargo, const IndustryRegistry& industr
 
 // --- Industry accounts ---------------------------------------------------------
 
-bool ownable(IndustryKind k) { return k == IndustryKind::Raw || k == IndustryKind::Processor; }
-bool buildable(IndustryKind k) { return k == IndustryKind::Processor; }
+bool ownable(IndustryKind k) {
+    return k == IndustryKind::Raw || k == IndustryKind::Processor || k == IndustryKind::Warehouse;
+}
+bool buildable(IndustryKind k) { return k == IndustryKind::Processor || k == IndustryKind::Warehouse; }
 
 std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo, const IndustryRegistry& industries,
                                                       const Balance::Industries& b, std::int32_t months) {
@@ -453,7 +488,14 @@ std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo
         const IndustryType& t = industries.get(s.type);
         if (!ownable(t.kind)) continue;
         IndustryAccounts& a = out[s.id];
-        if (!s.closed) {
+        if (t.kind == IndustryKind::Warehouse) {
+            // Its income is the spoilage it saves; its only cost, overhead.
+            if (!s.closed) {
+                a.revenue = s.spoilage_saved;
+                a.costs = Money::dollars(b.overhead_per_level * s.level).scaled(months, 12);
+            }
+            s.spoilage_saved = Money{};
+        } else if (!s.closed) {
             for (std::size_t o = 0; o < t.outputs.size(); ++o) {
                 a.revenue += cargo.get(t.outputs[o]).base_price.scaled(s.made_milli[o], kMilli);
             }
@@ -547,6 +589,93 @@ Money industry_upgrade_cost(const Site& s, const Balance::Industries& b) {
 
 // --- Map population ----------------------------------------------------------
 
+namespace {
+
+// Can this industry run in `year`: are its products (or, for consumers, its
+// inputs) in use yet?
+bool industry_eligible(const IndustryType& t, const CargoRegistry& cargo, std::int32_t year) {
+    const auto avail = [&](CargoId c) { return cargo_available(c, cargo, year); };
+    const auto in_avail = [&](const IndustryInput& in) { return input_active(in, cargo, year); };
+    switch (t.kind) {
+    case IndustryKind::Raw: return std::any_of(t.outputs.begin(), t.outputs.end(), avail);
+    case IndustryKind::Processor:
+        return std::any_of(t.outputs.begin(), t.outputs.end(), avail) &&
+               std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
+    case IndustryKind::Sink: return std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
+    case IndustryKind::House:
+    case IndustryKind::Port:      // placed on the coast
+    case IndustryKind::Warehouse: // built by companies
+        return false;
+    }
+    return false;
+}
+
+// How many of each a 128 x 128 map usually has.
+std::int32_t usual_count(const IndustryType& t, const Balance::MapGeneration& mg) {
+    switch (t.kind) {
+    case IndustryKind::Raw: return mg.raw_per_type;
+    case IndustryKind::Processor: return mg.processors_per_type;
+    case IndustryKind::Sink: return mg.sinks_per_type;
+    default: return 0;
+    }
+}
+
+// Raw producers go anywhere on open land; processors and consumers go near
+// towns, where their customers are. `taken` marks occupied cells.
+std::optional<SiteId> place_site(Economy& economy, const Terrain& terrain, const IndustryRegistry& industries,
+                                 IndustryTypeId type, Random& rng, std::vector<bool>& taken) {
+    const std::int32_t w = economy.width(), h = economy.height();
+    const bool near_town = industries.get(type).kind != IndustryKind::Raw;
+    for (int attempt = 0; attempt < 300; ++attempt) {
+        std::int32_t x, y;
+        if (near_town && !economy.towns().empty()) {
+            const Town& t = economy.towns()[rng.below(static_cast<std::uint32_t>(economy.towns().size()))];
+            x = t.cx + rng.between(-6, 6);
+            y = t.cy + rng.between(-6, 6);
+        } else {
+            x = rng.between(0, w - 1);
+            y = rng.between(0, h - 1);
+        }
+        if (x < 0 || y < 0 || x >= w || y >= h || terrain.ground(x, y) == GroundType::Water) continue;
+        const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+        if (taken[i]) continue;
+        taken[i] = true;
+        return economy.add_site(industries, type, x, y);
+    }
+    return std::nullopt;
+}
+
+} // namespace
+
+std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+                                     const IndustryRegistry& industries, Random& rng, std::int32_t year,
+                                     const Balance& b) {
+    const std::int32_t w = economy.width(), h = economy.height();
+    std::vector<bool> taken(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
+    for (const Site& s : economy.sites()) {
+        if (!s.closed) taken[static_cast<std::size_t>(s.cy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(s.cx)] = true;
+    }
+    const std::int32_t area_scale = std::max(1, w * h / 16384);
+    std::vector<SiteId> opened;
+    for (const IndustryType& t : industries.all()) {
+        if (!industry_eligible(t, cargo, year)) continue;
+        std::int32_t open = 0;
+        for (const Site& s : economy.sites()) open += s.type == t.id && !s.closed;
+        const std::int32_t usual = usual_count(t, b.map) * area_scale;
+        // Below the usual number: one more (new types, and replacing closures).
+        // Otherwise a chance of one more, better in good times, up to a cap [I].
+        const bool short_of = open < usual;
+        const auto chance = static_cast<std::uint32_t>(
+            std::max<std::int64_t>(0, std::int64_t{b.map.appear_chance_percent} * economy.activity_percent() / 100));
+        const bool extra = open < usual * b.map.max_count_multiple && rng.chance(chance, 100);
+        if (!short_of && !extra) continue;
+        if (const auto id = place_site(economy, terrain, industries, t.id, rng, taken)) opened.push_back(*id);
+    }
+    return opened;
+}
+
+
+
 void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b) {
     const Balance::MapGeneration& mg = b.map;
@@ -598,49 +727,12 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
         }
     }
 
-    // Industries. Raw producers go anywhere on open land; processors and
-    // sinks go near towns, where their customers are.
-    const auto place = [&](IndustryTypeId type, bool near_town) {
-        for (int attempt = 0; attempt < 300; ++attempt) {
-            std::int32_t x, y;
-            if (near_town && !economy.towns().empty()) {
-                const Town& t = economy.towns()[rng.below(static_cast<std::uint32_t>(economy.towns().size()))];
-                x = t.cx + rng.between(-6, 6);
-                y = t.cy + rng.between(-6, 6);
-            } else {
-                x = rng.between(0, w - 1);
-                y = rng.between(0, h - 1);
-            }
-            if (!land(x, y) || taken[idx(x, y)]) continue;
-            economy.add_site(industries, type, x, y);
-            taken[idx(x, y)] = true;
-            return;
-        }
-    };
+    // Industries, in the map's usual numbers.
     for (const IndustryType& t : industries.all()) {
-        const auto avail = [&](CargoId c) { return cargo_available(c, cargo, year); };
-        const auto in_avail = [&](const IndustryInput& in) { return input_active(in, cargo, year); };
-        bool eligible = false;
-        std::int32_t count = 0;
-        switch (t.kind) {
-        case IndustryKind::Raw:
-            eligible = std::any_of(t.outputs.begin(), t.outputs.end(), avail);
-            count = mg.raw_per_type;
-            break;
-        case IndustryKind::Processor:
-            eligible = std::any_of(t.outputs.begin(), t.outputs.end(), avail) &&
-                       std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
-            count = mg.processors_per_type;
-            break;
-        case IndustryKind::Sink:
-            eligible = std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
-            count = mg.sinks_per_type;
-            break;
-        case IndustryKind::House:
-        case IndustryKind::Port: break; // placed on the coast, below
+        if (!industry_eligible(t, cargo, year)) continue;
+        for (std::int32_t i = 0; i < usual_count(t, mg) * area_scale; ++i) {
+            place_site(economy, terrain, industries, t.id, rng, taken);
         }
-        if (!eligible) continue;
-        for (std::int32_t i = 0; i < count * area_scale; ++i) place(t.id, t.kind != IndustryKind::Raw);
     }
 
     // Ports, on the coast; failing that, at the map edge [C].

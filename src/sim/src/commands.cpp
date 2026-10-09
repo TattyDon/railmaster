@@ -397,8 +397,9 @@ CommandResult World::run(const BuyIndustry& cmd) {
 CommandResult World::run(const BuildIndustry& cmd) {
     if (cmd.type >= data_.industries.all().size()) return fail("unknown industry");
     const IndustryType& t = data_.industries.get(cmd.type);
-    if (!buildable(t.kind)) return fail("only processing plants can be built; producers can only be bought");
-    for (CargoId c : t.outputs) {
+    if (!buildable(t.kind)) return fail("only processing plants and warehouses can be built; producers can only be bought");
+    // A warehouse trades whatever of its cargo exists; a plant needs its product to.
+    for (CargoId c : t.kind == IndustryKind::Warehouse ? std::vector<CargoId>{} : t.outputs) {
         const CargoType& ct = data_.cargo.get(c);
         if (date_.year() < ct.available_year) return fail(ct.name + " is not made until " + std::to_string(ct.available_year));
     }
@@ -423,7 +424,7 @@ CommandResult World::run(const UpgradeIndustry& cmd) {
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);
     if (s.owner != acting().id()) return fail("you can only upgrade your own industries");
-    if (data_.industries.get(s.type).kind != IndustryKind::Processor) return fail("only processing plants can be upgraded");
+    if (!buildable(data_.industries.get(s.type).kind)) return fail("only processing plants and warehouses can be upgraded");
     if (s.closed) return fail("that industry has closed");
     const Money cost = construction_cost(industry_upgrade_cost(s, data_.balance.industries));
     if (auto why = cannot_afford(cost)) return fail(*why);
@@ -431,6 +432,15 @@ CommandResult World::run(const UpgradeIndustry& cmd) {
     s.owner_paid += cost;
     s.level *= 2; // doubles capacity, and with it the overhead [D]
     return success(cost, s.id);
+}
+
+CommandResult World::run(const SetPortMode& cmd) {
+    if (cmd.site >= economy_.sites().size()) return fail("no such industry");
+    Site& s = economy_.site_mut(cmd.site);
+    if (s.kind != IndustryKind::Warehouse) return fail("only warehouses can be set");
+    if (s.owner != acting().id()) return fail("you can only set your own warehouses");
+    s.port_mode = cmd.mode;
+    return success(Money{}, s.id);
 }
 
 void World::merge(Company& buyer, CompanyId tid, Money offer) {

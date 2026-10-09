@@ -144,7 +144,7 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
     for (const Site& p : eco.sites()) {
         const IndustryType& pt = ind.get(p.type);
         const bool supplies = pt.kind == IndustryKind::Raw || pt.kind == IndustryKind::Processor ||
-                              (pt.kind == IndustryKind::Port && p.port_mode != PortMode::Receive);
+                              (trades(pt.kind) && p.port_mode != PortMode::Receive);
         if (!supplies || p.closed) continue;
         // A processor makes nothing without inputs; only count working ones.
         if (pt.kind == IndustryKind::Processor && p.produced_milli == 0) continue;
@@ -170,7 +170,7 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
             for (const Site& d : eco.sites()) {
                 const IndustryType& dt = ind.get(d.type);
                 const bool receives = dt.kind == IndustryKind::Sink || dt.kind == IndustryKind::Processor ||
-                                      (dt.kind == IndustryKind::Port && d.port_mode != PortMode::Supply);
+                                      (trades(dt.kind) && d.port_mode != PortMode::Supply);
                 if (!receives || d.closed) continue;
                 bool wanted = false;
                 for (const IndustryInput& in : dt.inputs) wanted |= in.cargo == c && input_wanted(in, year);

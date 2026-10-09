@@ -52,6 +52,11 @@
               {"cargo": "rice"}, {"cargo": "sugar"}, {"cargo": "diesel"}, {"cargo": "uranium"}],
    "outputs": ["rubber", "goods"]},
 
+  {"key": "warehouse", "name": "Warehouse", "kind": "warehouse", "rate": 12,
+   "inputs": [{"cargo": "grain"}, {"cargo": "cotton"}, {"cargo": "wool"}, {"cargo": "lumber"}, {"cargo": "coffee"},
+              {"cargo": "rice"}, {"cargo": "sugar"}, {"cargo": "diesel"}],
+   "outputs": ["rubber", "goods"]},
+
   {"key": "house", "name": "Houses", "kind": "house", "rate": 1,
    "inputs": [{"cargo": "alcohol"}, {"cargo": "automobiles"}, {"cargo": "cheese"}, {"cargo": "clothing"},
               {"cargo": "coal", "until": 1910}, {"cargo": "coffee"}, {"cargo": "corn"}, {"cargo": "furniture"},

@@ -29,7 +29,11 @@ enum class IndustryKind : std::uint8_t {
     Sink,      // consumes only
     House,     // a town's houses: consume goods, produce waste
     Port,      // trade beyond the map: takes its inputs (exports), supplies its outputs (imports) [C]
+    Warehouse, // an inland port a company builds, which also keeps nearby cargo from spoiling [D/C]
 };
+
+// Ports and warehouses trade: they take their inputs and supply their outputs.
+inline bool trades(IndustryKind k) { return k == IndustryKind::Port || k == IndustryKind::Warehouse; }
 
 // What a port does with its cargo lists: each port can be set to receive,
 // supply or exchange [C, research §8].
@@ -75,6 +79,7 @@ private:
 struct Site {
     SiteId id = 0;
     IndustryTypeId type = 0;
+    IndustryKind kind = IndustryKind::Raw; // the type's kind, kept here for speed
     std::int32_t cx = 0, cy = 0;
     std::int32_t level = 1;          // capacity multiplier; number of houses for houses
     std::vector<std::int32_t> buffer; // per input, milli-carloads held by a processor
@@ -82,6 +87,7 @@ struct Site {
 
     PortMode port_mode = PortMode::Exchange; // ports only
     std::int64_t received_year_milli = 0;    // consumers and ports: deliveries this year
+    Money spoilage_saved{};                  // warehouses: value kept from spoiling, since the accounts closed
 
     // Ownership and accounts (rt3-clone-spec §6.2); houses are never owned.
     std::optional<CompanyId> owner{};
@@ -101,8 +107,8 @@ struct IndustryAccounts {
     Money profit() const { return revenue - costs; }
 };
 
-// Can a company own this kind of industry (producers and processors), and
-// can one build it (processors only [C/D])?
+// Can a company own this kind of industry (producers, processors and
+// warehouses), and can one build it (processors and warehouses [C/D])?
 bool ownable(IndustryKind k);
 bool buildable(IndustryKind k);
 
@@ -215,6 +221,8 @@ private:
     std::vector<std::int32_t> east_w_;      // coupling to the cell to the east, permille; 0 at the edge
     std::vector<std::int32_t> south_w_;     // coupling to the cell to the south
     std::int32_t activity_percent_ = 100;
+    std::int32_t warehouse_radius_ = 2;
+    std::int32_t warehouse_spoilage_percent_ = 25;
     std::vector<Site> sites_;
     std::vector<Town> towns_;
     Balance::Economy balance_;
@@ -229,6 +237,14 @@ Money industry_price(const Site& s, const Balance::Industries& b);
 // doubling a plant's capacity costs a share of building another as big [I].
 Money industry_build_cost(const Balance::Industries& b);
 Money industry_upgrade_cost(const Site& s, const Balance::Industries& b);
+
+// Year end: new industries appear as the economy develops [C]. Each type
+// in use this year below the map's usual number gets one more; others may
+// get one by chance, more often in good times, up to a cap [I]. Returns
+// the sites opened.
+std::vector<SiteId> spawn_industries(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
+                                     const IndustryRegistry& industries, Random& rng, std::int32_t year,
+                                     const Balance& b);
 
 // Place towns and industries on a new map. A stand-in for authored scenario
 // maps: towns, and a spread of industries of every type whose products

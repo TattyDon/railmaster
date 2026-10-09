@@ -129,6 +129,11 @@ struct BuildIndustry {
 struct UpgradeIndustry {
     SiteId site = 0;
 };
+// Set what one of your warehouses does: receive, supply or exchange [C].
+struct SetPortMode {
+    SiteId site = 0;
+    PortMode mode = PortMode::Exchange;
+};
 
 // Declare the company bankrupt [D]: a last resort that halves its bond debt,
 // gives the bondholders new shares for the rest, and ruins its credit.
@@ -137,7 +142,7 @@ struct DeclareBankruptcy {};
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry>;
+                             UpgradeIndustry, SetPortMode>;
 
 struct CommandResult {
     bool ok = false;

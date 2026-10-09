@@ -148,10 +148,14 @@
     "profit_multiple": 10,
     "receiver_max_level": 8,
     "receiver_upgrade_permille": 900,
-    "upgrade_cost_percent": 50
+    "upgrade_cost_percent": 50,
+    "warehouse_radius_cells": 2,
+    "warehouse_spoilage_percent": 25
   },
   "map": {
+    "appear_chance_percent": 10,
     "cells_per_town": 2048,
+    "max_count_multiple": 2,
     "max_height_m": 400,
     "ports": 3,
     "processors_per_type": 2,

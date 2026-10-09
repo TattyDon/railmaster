@@ -29,8 +29,9 @@ Early development. Done so far:
 - short selling, takeovers and mergers by shareholder vote
 - owning industries: buy producers and plants, build and upgrade plants,
   and collect their profit
-- towns that grow with good service (star ratings by each name), and ports
-  on the coast that import and export
+- towns that grow with good service (star ratings by each name), ports on
+  the coast that import and export, warehouses you build, and new industries
+  appearing over the years
 - investor sentiment: bad years make shareholders grumble and then vote
   the chairman out (you included, unless you hold a majority); stock splits
 - terrain-aware middlemen and a business cycle of five economic states
@@ -76,7 +77,7 @@ rivals join by default; `--rivals=N` sets how many (0 to 7).
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
 | F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
-| F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant chosen with [ ] |
+| F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
 | F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |

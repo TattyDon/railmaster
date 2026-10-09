@@ -250,8 +250,52 @@ warehouses and power plants upgrade on demand [C].
 - **Upgrade on demand [C/I]:** at each year end, an unowned port or
   consumer (power plant and the like) that received 90% of its capacity
   doubles it, up to 8 times the original.
-- **Not yet:** owning ports; warehouses, the inland ports the player builds
-  [D/C].
+- **Not yet:** owning ports.
+
+## Warehouses (rt3-clone-spec §6.3, research §8)
+
+Researched: warehouses act as inland commodity ports, importing and
+exporting [D/C]. They store cargo longer and avoid spoilage, and "its profit
+is the loss it saves" [C]. They can be set to convert delivered cargo [D/C].
+
+Our design:
+
+- **Building:** a company builds a warehouse on any open dry cell, like a
+  processing plant ($450,000; doubled capacity on upgrade).
+- **Trade:** it trades its cargo lists like a port, in a mode its owner
+  sets: receive, supply or exchange. The shipped warehouse handles the
+  port's crops, lumber and diesel inbound and rubber and goods outbound, at
+  half a port's rate. It trades only cargo that exists that year.
+- **Spoilage [I numbers]:** stock within 2 cells spoils at a quarter of the
+  usual rate.
+- **Accounts:** the owner earns the value of the spoilage saved, at base
+  prices, less the usual overhead [C: "its profit is the loss it saves"].
+  It posts to the owner's Industry income and costs like any owned
+  industry.
+- **Not yet:** converting cargo (one observed case: goods to rubber at up
+  to 6 a year, low yield).
+
+## New industries over time (research §5)
+
+Researched: new industries appear as the economy develops, and the player
+can buy them [C]. Industry types appear only from their start year [C].
+
+Our design [I], at each year end after closures:
+
+- **Below the usual number:** every industry type in use that year (its
+  products, or a consumer's inputs, exist) with fewer open sites than a new
+  map would have gets one more. This brings in new kinds of industry as
+  their cargo arrives (rubber plantations and tire factories from 1900) and
+  replaces closed ones.
+- **By chance:** a type already at its usual number gets one more with a 10%
+  chance a year, times the economy's activity, up to twice its usual number.
+- **Placement:** as on a new map. Producers go anywhere on open land;
+  processing plants and consumers go near towns.
+- The news names each opening and the nearest town.
+  `WorldConfig::industries_appear = false` holds the map as it started.
+- **Measured:** 1895 to 1905 on the default map, 42 industries opened
+  (including 4 rubber plantations and 3 auto plants), 14 idle plants closed,
+  and a busy port expanded.
 
 ## Owning industries (rt3-clone-spec §6.1-6.2)
 

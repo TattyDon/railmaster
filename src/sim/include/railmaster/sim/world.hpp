@@ -45,6 +45,7 @@ struct WorldConfig {
     bool chairman_can_be_fired = true;
     bool chairman_can_resign = true;
     bool town_growth = true; // the editor/sandbox switch for towns growing [D]
+    bool industries_appear = true; // new industries open as the years go by [C]
     bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
 };
 
@@ -152,6 +153,7 @@ private:
     bool chairman_can_be_fired_ = true;
     bool chairman_can_resign_ = true;
     bool town_growth_ = true;
+    bool industries_appear_ = true;
     std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
     bool rival_ai_ = true;
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
@@ -192,6 +194,7 @@ private:
     CommandResult run(const BuyIndustry& cmd);
     CommandResult run(const BuildIndustry& cmd);
     CommandResult run(const UpgradeIndustry& cmd);
+    CommandResult run(const SetPortMode& cmd);
     // Post each owned industry's month to its owner's books.
     void account_industries(std::int32_t months);
     // Monthly: towns grow with the service they get (rt3-clone-spec §6.4).

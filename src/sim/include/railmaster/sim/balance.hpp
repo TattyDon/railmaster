@@ -115,6 +115,11 @@ struct Balance {
         std::int32_t sinks_per_type = 2;
         std::int32_t max_height_m = 400;
         std::int32_t ports = 3; // per 128 x 128 map, on the coast or else the map edge
+        // New industries over time [C/I]: the yearly chance of an extra one
+        // of each type (times the economy's activity), and the cap on how
+        // many a type may reach, as a multiple of its usual number.
+        std::int32_t appear_chance_percent = 10;
+        std::int32_t max_count_multiple = 2;
     } map;
 
     struct Freight {
@@ -160,6 +165,11 @@ struct Balance {
         // deliveries reach this share of it [C: "upgrade on demand"; I numbers].
         std::int32_t receiver_upgrade_permille = 900;
         std::int32_t receiver_max_level = 8;
+        // Warehouses keep cargo nearby from spoiling [D/C]: within this many
+        // cells, stock spoils at this share of the usual rate [I]; the owner
+        // earns the value saved [C: "its profit is the loss it saves"].
+        std::int32_t warehouse_radius_cells = 2;
+        std::int32_t warehouse_spoilage_percent = 25;
     } industries;
 
     // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,

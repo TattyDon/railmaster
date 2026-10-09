@@ -178,6 +178,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         case sim::IndustryKind::Sink: glColor3f(0.45f, 0.45f, 0.5f); break;
         case sim::IndustryKind::House: glColor3f(0.92f, 0.85f, 0.7f); break;
         case sim::IndustryKind::Port: glColor3f(0.95f, 0.6f, 0.15f); break; // stands out against the water
+        case sim::IndustryKind::Warehouse: glColor3f(0.75f, 0.55f, 0.3f); break;
         }
         const float half = t.kind == sim::IndustryKind::House ? 0.2f + 0.02f * static_cast<float>(std::min(s.level, 10))
                                                                 : 0.3f;

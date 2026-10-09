@@ -55,6 +55,7 @@ World::World(const WorldConfig& config, GameData data)
     chairman_can_be_fired_ = config.chairman_can_be_fired;
     chairman_can_resign_ = config.chairman_can_resign;
     town_growth_ = config.town_growth;
+    industries_appear_ = config.industries_appear;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
@@ -461,6 +462,24 @@ void World::on_new_year() {
     }
     for (const SiteId s : sites.upgraded) {
         news_.push_back("The " + data_.industries.get(economy_.sites()[s].type).name + " has expanded to meet demand");
+    }
+    if (industries_appear_) {
+        for (const SiteId id : spawn_industries(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(),
+                                                data_.balance)) {
+            // Name the nearest town, for the news.
+            const Site& s = economy_.sites()[id];
+            std::string near;
+            std::int32_t best = 1 << 20;
+            for (const Town& t : economy_.towns()) {
+                const std::int32_t d = std::max(std::abs(t.cx - s.cx), std::abs(t.cy - s.cy));
+                if (d < best) {
+                    best = d;
+                    near = t.name;
+                }
+            }
+            news_.push_back("A new " + data_.industries.get(s.type).name + " has opened" +
+                            (near.empty() ? std::string() : " near " + near));
+        }
     }
     for (Company& c : market_.companies) {
         c.retire_matured_bonds(date_.year());

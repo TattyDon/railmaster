@@ -536,6 +536,18 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     case Tool::Industry:
+        if (key == SDLK_m) {
+            const auto id = site_under_cursor();
+            if (!id || world_.economy().sites()[*id].kind != sim::IndustryKind::Warehouse) {
+                show("POINT AT ONE OF YOUR WAREHOUSES TO CHANGE WHAT IT DOES", false);
+                return true;
+            }
+            const auto next = static_cast<sim::PortMode>((static_cast<int>(world_.economy().sites()[*id].port_mode) + 1) % 3);
+            const sim::CommandResult r = world_.execute(sim::SetPortMode{.site = *id, .mode = next});
+            if (r.ok) show(std::string("THE WAREHOUSE NOW HANDLES ") + sim::port_mode_name(next), true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        }
         if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
             const std::size_t n = std::max<std::size_t>(1, buildable_types().size());
             build_choice_ = (build_choice_ + (key == SDLK_RIGHTBRACKET ? 1 : n - 1)) % n;
@@ -802,8 +814,10 @@ std::vector<sim::IndustryTypeId> Tools::buildable_types() const {
     std::vector<sim::IndustryTypeId> out;
     for (const sim::IndustryType& t : world_.data().industries.all()) {
         if (!sim::buildable(t.kind)) continue;
-        bool available = true;
-        for (sim::CargoId c : t.outputs) available &= world_.data().cargo.get(c).available_year <= world_.date().year();
+        bool available = true; // a warehouse trades whatever of its cargo exists
+        if (t.kind != sim::IndustryKind::Warehouse) {
+            for (sim::CargoId c : t.outputs) available &= world_.data().cargo.get(c).available_year <= world_.date().year();
+        }
         if (available) out.push_back(t.id);
     }
     return out;
@@ -831,7 +845,8 @@ std::string Tools::industry_text() const {
         text += "FOR SALE AT " + format_money(sim::industry_price(s, b));
     } else if (s.owner == world_.player_company()) {
         text += "YOURS";
-        if (world_.data().industries.get(s.type).kind == sim::IndustryKind::Processor) {
+        if (type.kind == sim::IndustryKind::Warehouse) text += std::string(", ") + sim::port_mode_name(s.port_mode) + " (M TO CHANGE)";
+        if (sim::buildable(type.kind)) {
             text += ", UPGRADE " + format_money(world_.construction_cost(sim::industry_upgrade_cost(s, b)));
         }
     } else {
