@@ -15,7 +15,8 @@ Each milestone ends with something playable or testable. Spec pages in
 - Stations (small/medium/large), service towers and maintenance facilities.
 - Locomotive data (`data/locomotives.json`) and loader.
 - Train movement: speed from power, consist weight and grade; routes as stop
-  lists with per-stop consists; priority-based meets on single track.
+  lists with per-stop consists; priority-based meets on single track (no signals).
+- Automatic consist selection: the train takes the highest-revenue cars.
 - Water, sand and oil consumption, with servicing.
 
 ## M2: The economy
@@ -34,6 +35,8 @@ Each milestone ends with something playable or testable. Spec pages in
 
 ## M4: Real 3D client
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
+- Discrete LOD with up to six variants per model, as the original used
+  (e.g. 931 to 55 polygons), so the art spec should ask for LOD chains.
 - Game UI: build tools, train manager, station and cargo overlays, finance screens.
 - Original art and audio pipeline (`assets/`, credits).
 
