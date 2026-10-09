@@ -9,6 +9,7 @@
 #include "tools.hpp"
 
 #include "railmaster/sim/demo.hpp"
+#include "railmaster/sim/game_speed.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <SDL.h>
@@ -27,8 +28,6 @@ namespace {
 namespace sim = railmaster::sim;
 namespace client = railmaster::client;
 
-// Game days advanced per real second at each speed setting.
-constexpr int kSpeedDaysPerSecond[] = {0, 2, 8, 32};
 
 std::string read_file(const std::string& path) {
     std::ifstream in(path);
@@ -108,7 +107,7 @@ int main(int argc, char* argv[]) {
 
     client::Tools tools(world, cam);
     if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
-    int speed = 0; // every game starts paused [D]
+    sim::SpeedControl speed; // every game starts paused [D]
     double tick_accumulator = 0.0;
     Uint64 last = SDL_GetPerformanceCounter();
 
@@ -139,11 +138,16 @@ int main(int argc, char* argv[]) {
                 break;
             case SDL_KEYDOWN:
                 if (tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod)) break;
+                // Game speed: + and - step through the six speeds, Pause
+                // stops and resumes [D]. Space pauses too.
                 switch (ev.key.keysym.sym) {
-                case SDLK_SPACE: speed = speed == 0 ? 1 : 0; break;
-                case SDLK_1: speed = 1; break;
-                case SDLK_2: speed = 2; break;
-                case SDLK_3: speed = 3; break;
+                case SDLK_EQUALS:
+                case SDLK_PLUS:
+                case SDLK_KP_PLUS: speed.faster(); break;
+                case SDLK_MINUS:
+                case SDLK_KP_MINUS: speed.slower(); break;
+                case SDLK_PAUSE:
+                case SDLK_SPACE: speed.toggle_pause(); break;
                 default: break;
                 }
                 break;
@@ -163,7 +167,8 @@ int main(int argc, char* argv[]) {
         if (keys[SDL_SCANCODE_DOWN]) cam.pan_y += pan_speed;
 
         // Fixed-step simulation, decoupled from frame rate.
-        tick_accumulator += dt * kSpeedDaysPerSecond[speed] * sim::World::kTicksPerDay;
+        tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
+                            1000.0 * sim::World::kTicksPerDay;
         for (int guard = 0; tick_accumulator >= 1.0 && guard < 4096; ++guard) {
             world.tick();
             tick_accumulator -= 1.0;
@@ -204,9 +209,11 @@ int main(int argc, char* argv[]) {
         client::draw_town_names(world.economy(), cam, world.data().balance.towns);
         std::string economy = sim::economic_state_name(world.economic_state());
         for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        const std::string status = world.date().month_year_label() + "  " + economy +
-                                   (speed == 0 ? "  PAUSED" : "  SPEED " + std::to_string(speed)) +
-                                   "  SPACE PAUSE, 1-3 SPEED";
+        std::string pace = sim::game_speed_name(speed.speed());
+        for (char& ch : pace) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        const std::string status =
+            world.date().month_year_label() + "  " + economy + " ECONOMY  " +
+            (speed.speed() == sim::GameSpeed::Paused ? pace : "SPEED " + pace) + "  +/- SPEED, PAUSE";
         tools.draw_ui(status);
         SDL_GL_SwapWindow(window);
     }

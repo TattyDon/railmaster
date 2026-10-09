@@ -13,6 +13,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_
                                                 service_threshold_permille, service_ticks, no_water_speed_permille,
                                                 no_sand_grade_permille, service_tower_cost,
                                                 maintenance_facility_cost)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Time, normal_seconds_per_year, speed_step_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Breakdowns, mean_distance_mm, empty_oil_multiplier,
                                                 breakdown_ticks, crash_ppb_per_tick, breakdown_age_years, crash_age_years,
                                                 maintenance_age_percent_per_year,
@@ -93,6 +94,7 @@ namespace {
 nlohmann::json to_tree(const Balance& b) {
     nlohmann::json j;
     j["version"] = Balance::kVersion;
+    j["time"] = b.time;
     j["trains"] = b.trains;
     j["servicing"] = b.servicing;
     j["breakdowns"] = b.breakdowns;
@@ -146,6 +148,7 @@ Balance Balance::from_json(std::string_view json_text) {
 
     Balance b;
     try {
+        read_section(j, "time", b.time);
         read_section(j, "trains", b.trains);
         read_section(j, "servicing", b.servicing);
         read_section(j, "breakdowns", b.breakdowns);

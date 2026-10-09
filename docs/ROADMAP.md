@@ -21,7 +21,8 @@ movement with grade and acceleration; looping routes; single-track meets by
 priority; service towers and maintenance facilities with water, sand and oil;
 breakdowns with a sandbox switch; age-based maintenance cost; a command
 layer through which every player action passes; and build tools in the
-client (track with preview, branching, stations, support buildings, trains).
+client (track with preview, branching, stations, support buildings, trains);
+and the six game speeds on `+`, `−` and Pause (rt3-clone-spec §2).
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
 numbers are in `data/balance.json`.
 

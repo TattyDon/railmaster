@@ -19,6 +19,14 @@ namespace railmaster::sim {
 struct Balance {
     static constexpr std::int32_t kVersion = 1;
 
+    // Game speed (rt3-clone-spec §2 [I]): real seconds per game year at
+    // Normal, and how much each step up (Fast, Very Fast) multiplies the
+    // pace, or each step down divides it, in percent.
+    struct Time {
+        std::int32_t normal_seconds_per_year = 240;
+        std::int32_t speed_step_percent = 200;
+    } time;
+
     struct Trains {
         std::int64_t seconds_per_tick = 40; // how much travel a simulation tick represents
         std::int32_t accel_ticks_to_top_speed = 8;

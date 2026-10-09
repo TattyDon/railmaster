@@ -254,6 +254,10 @@
     "split_price_cents": 12000,
     "starting_personal_cash": 500000
   },
+  "time": {
+    "normal_seconds_per_year": 240,
+    "speed_step_percent": 200
+  },
   "towns": {
     "base_growth_permille": 8,
     "express_permille_per_k_house": 3,

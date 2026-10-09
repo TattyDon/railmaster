@@ -49,6 +49,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §12.3 [C/I] | Share price: 0.8 × book, EPS trend × P/E by economy, dividend weighted by an unbroken record, 0.1 × revenue; ⅛ smoothing; trade pressure ∝ √size that decays | 0.6 × book + 8 × EPS + 10 × dividend, ¼ smoothing, permanent linear impact | as the spec; EPS trend read as a 3:2:1 weighting ([m3-finance-model.md](m3-finance-model.md)) |
 | §12.4 [C/I] | Ten grades A+ to D from a score of asset cover, interest cover, profit trend, bonds and bankruptcy; rate = prime + spread | eight grades from debt ÷ assets, bond notches, a rate table | as the spec; weights and thresholds ours |
 | §9.4, §11.2 [I] | Maintenance × (1 + 4% per year of age), × 1.5 with no oil; breakdowns × (1 + age/15); track upkeep 2% of cost a year | linear to 3× at 20 years, ×2 on low oil; no breakdown ageing; 6% a year | as the spec; building upkeep stays 6% (no figure in the spec) |
+| §2, §15.7 [D/C/I] | Six speeds (Paused to Very Fast) on `+`, `−` and Pause; ~4 minutes a game year at Normal, ×2 per step | three speeds on 1–3; `+`/`−` traded shares | as the spec; timings in `balance.json` (`time`); shares trade on A/S; Space also pauses |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -68,9 +69,10 @@ Last reviewed against spec v1.0 (9 October 2026).
 - §12.1 [D] two ledgers; purchasing power = cash + 0.5 × holdings; net worth.
 - §12.3 [D/C] issue at most twice a year; buybacks; dividends paid quarterly
   and cut if unaffordable; one 1,000-share lot on a $50 stock with 100K
-  shares moves the price about $1 [C], which our linear impact reproduces.
-- §12.5 [D/C] 1,000-share lots (5,000 with a modifier); margin call
-  force-sells in lots until purchasing power is positive.
+  shares moves the price about $1 [C], which our square-root impact
+  reproduces.
+- §12.5 [D/C] 1,000-share lots (5,000 with a modifier); a margin call
+  force-sells whole lots, in one trade, until purchasing power is positive.
 
 ## Our design differs from the spec's [C]/[I] proposal: decisions needed
 
@@ -82,9 +84,6 @@ Last reviewed against spec v1.0 (9 October 2026).
 2. **Catchment and map scale (§3.1, §7.1 [I]).** The spec uses 0.5-mile
    cells, radii of 2/3/4 cells, and maps of 256–1,024 cells. Ours: 1 km
    cells, radii of 1/2/3, and 128 × 128 maps. Similar real-world sizes.
-3. **Game speed keys (§2, §15.7 [D/C]).** The spec has six speeds on
-   `+`/`−`. Ours: three speeds on 1–3, and `+`/`−` trade shares on the
-   finance screen.
 
 ## Missing
 

@@ -524,10 +524,10 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         } else if (key == SDLK_r) {
             r = world_.execute(sim::RepayBond{});
             done = "REPAID A BOND";
-        } else if (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS) {
+        } else if (key == SDLK_a) {
             r = world_.execute(sim::BuyShares{.blocks = blocks});
             done = "BOUGHT " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
-        } else if (key == SDLK_MINUS || key == SDLK_KP_MINUS) {
+        } else if (key == SDLK_s) {
             r = world_.execute(sim::SellShares{.blocks = blocks});
             done = "SOLD " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
         } else if (key == SDLK_i) {
@@ -616,8 +616,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             else show("MERGER FAILED: " + r.error, false);
             return true;
         }
-        const bool buy = key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS;
-        const bool sell = key == SDLK_MINUS || key == SDLK_KP_MINUS;
+        const bool buy = key == SDLK_a;
+        const bool sell = key == SDLK_s;
         if (!buy && !sell) return false;
         const std::int64_t blocks = (mod & KMOD_SHIFT) != 0 ? 5 : 1;
         const std::string shares = format_count(blocks * target.stock_balance().share_block);
@@ -928,10 +928,10 @@ std::string Tools::hint() const {
                format_money(world_.construction_cost(sim::industry_build_cost(world_.data().balance.industries)));
     }
     case Tool::Market:
-        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
+        return "UP/DOWN CHOOSE  A/S BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
                "COMPANY";
     case Tool::Finance:
-        return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
+        return "B/R BOND ISSUE/REPAY   A/S BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND   KK BANKRUPTCY";
     }
     return {};

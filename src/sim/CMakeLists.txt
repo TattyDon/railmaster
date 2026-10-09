@@ -15,6 +15,7 @@ add_library(railmaster_sim
     src/date.cpp
     src/economy.cpp
     src/freight.cpp
+    src/game_speed.cpp
     src/locomotive.cpp
     src/railway.cpp
     src/stock.cpp
