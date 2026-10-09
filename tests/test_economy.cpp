@@ -235,8 +235,10 @@ TEST_CASE("a new world is populated with towns and industries on dry land") {
         const auto& t = w.data().industries.get(s.type);
         if (t.kind != IndustryKind::House) CHECK(industry_cells.insert({s.cx, s.cy}).second);
         // Nothing whose products do not exist yet (the default start is 1830).
-        // (Houses are exempt: their only freight output, waste, starts in 1990.)
-        bool makes_something_available = t.outputs.empty() || t.kind == IndustryKind::House;
+        // (Consumers and houses are exempt: houses' only freight output,
+        // waste, starts in 1990, and barracks produce only troops.)
+        bool makes_something_available =
+            t.outputs.empty() || t.kind == IndustryKind::House || t.kind == IndustryKind::Sink;
         for (CargoId o : t.outputs) makes_something_available |= w.data().cargo.get(o).available_year <= 1830;
         CHECK(makes_something_available);
     }

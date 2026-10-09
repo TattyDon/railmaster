@@ -405,6 +405,15 @@ std::string Tools::inspect_text() const {
                     world_.data().cargo.get(static_cast<sim::CargoId>(c)).name;
             any = true;
         }
+        // Express loads, totalled over destinations.
+        std::vector<std::int32_t> express(world_.data().cargo.all().size(), 0);
+        for (const sim::ExpressWaiting& e : s.express) express[e.cargo] += e.milli;
+        for (std::size_t c = 0; c < express.size(); ++c) {
+            if (express[c] < sim::kMilli) continue;
+            text += std::string(any ? ", " : " ") + std::to_string(express[c] / sim::kMilli) + " " +
+                    world_.data().cargo.get(static_cast<sim::CargoId>(c)).name;
+            any = true;
+        }
         return any ? text : text + " NOTHING";
     }
     return cell_text();

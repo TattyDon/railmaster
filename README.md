@@ -17,6 +17,7 @@ Early development. Done so far:
   price field along which cargo drifts, shown as a cargo price overlay
 - freight by rail: stations gather cargo, trains load the most valuable,
   and deliveries earn the price difference
+- passengers, mail and troops with destinations, paid by distance
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track

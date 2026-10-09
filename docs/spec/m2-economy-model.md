@@ -65,10 +65,13 @@ Researched rules [economy-cargo.md §1, §7, §9; trains-track-operations.md §2
 
 How we implement them (code: `freight.hpp`):
 
-1. **Gathering (daily).** For each station, find each cargo's best price
-   at any other stop of any train that calls there. From every catchment
-   cell where the cargo is cheaper than that, 20% of the stock moves into the
-   station's waiting pool, recording its price there as the pickup price.
+1. **Gathering (daily).** A station has one price per cargo: the best in
+   its catchment, used both for buying and selling there. Using the cheapest
+   cell for buying would let trains earn the price spread inside one town.
+   For each station, find each cargo's best price at any other stop of any
+   train that calls there. If that beats the station's own price, 20% of the
+   cargo's stock in every catchment cell moves into the station's waiting
+   pool, at the station's price.
 2. **Arrival, unloading.** Each loaded car is sold if the dearest cell in this
    station's catchment pays more than its pickup price. It is never sold
    back at the station it was loaded at; without that rule, price
@@ -92,8 +95,46 @@ also allows manual per-stop consists. Delivery income is tallied but not
 yet paid to a company, and running costs are not yet charged (M3), so
 profits are overstated for now.
 
-Express cargo (passengers, mail, troops) is not priced by the field; each
-load has a destination. That comes in a later slice.
+## Passengers, mail and troops (express cargo)
+
+Researched [economy-cargo.md §2, §8; trains-track-operations.md §2]:
+
+- Every express load has a destination [WP✓].
+- Loads only appear for places your network connects to.
+- Connecting more towns raises passenger demand.
+- Each town has a cap on the mail it pays for.
+- Waiting passengers give up and mail has a limited shelf life.
+- Houses make and receive passengers and mail; barracks make and receive troops.
+- No base price is listed for express cargo.
+
+How we implement them (code: `freight.hpp`):
+
+1. **Generation (daily).** For each station, *production* is the summed
+   yearly rate of catchment sites that output the cargo (houses: 1 per
+   house) × the cargo's `generation` multiplier. For every station sharing a
+   train route with it, add production × A ÷ (A + 20) per year to the
+   waiting pool for that destination, where A is the destination's
+   *attraction*: the summed rate of its catchment sites that take the cargo.
+   Each extra destination adds traffic, and a big town draws more than a
+   village but not without limit. Only stations a train links are
+   destinations; transfers between trains are not modelled.
+2. **Waiting.** Each pool loses 0.5% a day per point of decay sensitivity
+   (passengers 4.5%, mail 5%) and holds at most 20 loads.
+3. **Loading.** Express loads compete with freight for empty cars, valued
+   at their fare. Only loads whose destination is on this train's route
+   are taken.
+4. **Delivery.** Express loads leave the train only at their destination.
+   Fare = `fare_per_km` × straight-line distance between the stations ×
+   value left after the days in transit, so speed pays. Mail delivered to a
+   town past two months of its yearly demand in a month earns nothing
+   (`demand_cap`). Loads that go stale on board are dropped.
+
+| Item | Value | Notes |
+|---|---|---|
+| Fares | Passengers $500, mail $700, troops $400 per load per km. | No RT3 data. Distance-based, as in earlier Railroad Tycoon games. |
+| Generation | Passengers ×4, mail ×2, troops ×1 a year per unit of site rate. | |
+| Attraction half-point | 20 (for example 20 houses). | |
+| Mail cap | Two months of the town's yearly mail demand, per month. | "Each city has a mail demand cap." The size is ours. |
 
 New maps are populated with towns of 10 to 40 houses, about four of each
 raw producer type and two of each processor and consumer type per 128 × 128

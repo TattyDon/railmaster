@@ -13,6 +13,7 @@ add_executable(railmaster_tests
     test_commands.cpp
     test_date.cpp
     test_economy.cpp
+    test_express.cpp
     test_freight.cpp
     test_locomotive.cpp
     test_money.cpp

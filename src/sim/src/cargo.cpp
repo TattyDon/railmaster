@@ -32,6 +32,9 @@ CargoRegistry CargoRegistry::from_json(std::string_view json_text) {
         t.available_year = entry.value("available_year", 1800);
         t.base_price = Money::dollars(entry.value("base_price", std::int64_t{0}) * provisional::kCargoPriceUnitDollars);
         t.decay_sensitivity = entry.value("decay_sensitivity", 1);
+        t.fare_per_km = entry.value("fare_per_km", 0);
+        t.generation = entry.value("generation", 0);
+        t.demand_cap = entry.value("demand_cap", false);
         if (t.decay_sensitivity < 1 || t.decay_sensitivity > 10) {
             throw std::runtime_error("cargo data: decay_sensitivity out of 1..10 for '" + t.key + "'");
         }

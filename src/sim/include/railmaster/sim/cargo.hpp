@@ -33,6 +33,12 @@ struct CargoType {
     // 1 (insensitive) to 10 (most perishable). Believed to set how fast value
     // decays in transit; the exact mapping is not yet known.
     std::int32_t decay_sensitivity = 1;
+    // Express cargo only (all provisional): fare in dollars per carload per
+    // km of straight-line distance, how much of it a source generates, and
+    // whether destinations stop paying past their monthly demand (mail).
+    std::int32_t fare_per_km = 0;
+    std::int32_t generation = 0;
+    bool demand_cap = false;
 };
 
 class CargoRegistry {

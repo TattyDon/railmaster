@@ -62,12 +62,21 @@ struct WaitingCargo {
     std::int32_t average_price() const { return milli > 0 ? static_cast<std::int32_t>(value / milli) : 0; }
 };
 
+// Express loads (passengers, mail, troops) waiting at a station for one destination.
+struct ExpressWaiting {
+    CargoId cargo = 0;
+    std::uint32_t destination = 0; // StationId
+    std::int32_t milli = 0;
+};
+
 struct Station {
     StationId id = 0;
     std::string name;
     NodeId node = 0;
     StationSize size = StationSize::Small;
     std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
+    std::vector<ExpressWaiting> express{}; // sorted by (cargo, destination)
+    std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
 };
 
 // RT3 has two support buildings that sit on the track: the service tower
@@ -97,6 +106,7 @@ struct Car {
     std::int32_t pickup_price = 0; // dollars per carload where it was collected
     std::int32_t loaded_day = 0;   // Date::days_since_epoch() when loaded
     std::uint32_t loaded_at = 0;   // StationId where loaded; never sold back there
+    std::optional<std::uint32_t> destination; // express only: the StationId it must reach
 };
 
 struct Train {

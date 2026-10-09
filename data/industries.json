@@ -41,7 +41,7 @@
 
   {"key": "electric_plant", "name": "Electric Plant", "kind": "sink", "inputs": [{"cargo": "coal"}, {"cargo": "oil"}], "rate": 48},
   {"key": "nuclear_plant", "name": "Nuclear Power Plant", "kind": "sink", "inputs": [{"cargo": "uranium"}], "rate": 24},
-  {"key": "barracks", "name": "Barracks", "kind": "sink", "inputs": [{"cargo": "alcohol"}, {"cargo": "ammunition"}, {"cargo": "weapons"}], "rate": 24},
+  {"key": "barracks", "name": "Barracks", "kind": "sink", "inputs": [{"cargo": "alcohol"}, {"cargo": "ammunition"}, {"cargo": "weapons"}, {"cargo": "troops"}], "outputs": ["troops"], "rate": 24},
   {"key": "commercial_building", "name": "Commercial Building", "kind": "sink", "inputs": [{"cargo": "paper"}], "rate": 24},
   {"key": "bakery", "name": "Bakery", "kind": "sink", "inputs": [{"cargo": "grain"}, {"cargo": "sugar"}], "rate": 24},
 
@@ -50,6 +50,6 @@
               {"cargo": "coal", "until": 1910}, {"cargo": "coffee"}, {"cargo": "corn"}, {"cargo": "furniture"},
               {"cargo": "goods"}, {"cargo": "grain"}, {"cargo": "lumber"}, {"cargo": "meat"}, {"cargo": "milk"},
               {"cargo": "oil", "until": 1910}, {"cargo": "paper"}, {"cargo": "produce"}, {"cargo": "rice"},
-              {"cargo": "sugar"}, {"cargo": "toys"}],
-   "outputs": ["waste"]}
+              {"cargo": "sugar"}, {"cargo": "toys"}, {"cargo": "passengers"}, {"cargo": "mail"}],
+   "outputs": ["waste", "passengers", "mail"]}
 ]}

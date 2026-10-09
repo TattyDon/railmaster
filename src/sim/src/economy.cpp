@@ -32,12 +32,16 @@ std::int64_t base_dollars(const CargoType& c) { return c.base_price.whole_dollar
 
 std::int32_t percent_of(std::int64_t base, std::int32_t pct) { return static_cast<std::int32_t>(base * pct / 100); }
 
+// Express cargo (passengers, mail, troops) is handled by the freight code,
+// which sends each load to a destination; the price field only trades freight.
 bool input_active(const IndustryInput& in, const CargoRegistry& cargo, std::int32_t year) {
-    return year >= cargo.get(in.cargo).available_year && (!in.until_year || year <= *in.until_year);
+    const CargoType& c = cargo.get(in.cargo);
+    return c.cargo_class == CargoClass::Freight && year >= c.available_year &&
+           (!in.until_year || year <= *in.until_year);
 }
 
 bool cargo_available(CargoId c, const CargoRegistry& cargo, std::int32_t year) {
-    return year >= cargo.get(c).available_year;
+    return cargo.get(c).cargo_class == CargoClass::Freight && year >= cargo.get(c).available_year;
 }
 
 // Price at a consumer: high when it is starved, falling as unconsumed stock
