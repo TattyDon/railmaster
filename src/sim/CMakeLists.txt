@@ -7,7 +7,10 @@ find_package(nlohmann_json 3.10 REQUIRED)
 add_library(railmaster_sim
     src/cargo.cpp
     src/date.cpp
+    src/locomotive.cpp
+    src/railway.cpp
     src/terrain.cpp
+    src/track.cpp
     src/world.cpp
 )
 add_library(railmaster::sim ALIAS railmaster_sim)

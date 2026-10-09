@@ -1,5 +1,7 @@
 #pragma once
 
+#include "railmaster/sim/fixed_math.hpp"
+
 #include <cstdint>
 #include <vector>
 
@@ -40,6 +42,14 @@ public:
     // rise over horizontal run). Positive means uphill from a to b.
     // Track grade drives train speed and construction cost, so it must be exact.
     std::int32_t grade_bp(std::int32_t ax, std::int32_t ay, std::int32_t bx, std::int32_t by) const;
+
+    // Ground height in millimetres at any map position, bilinearly
+    // interpolated from the corners. Positions off the map are clamped.
+    std::int64_t height_at_mm(MapPoint p) const;
+
+    // Size of the whole map in millimetres.
+    std::int64_t width_mm() const { return static_cast<std::int64_t>(width_) * tile_size_m_ * 1000; }
+    std::int64_t height_mm() const { return static_cast<std::int64_t>(height_) * tile_size_m_ * 1000; }
 
     // Fill with gently rolling procedural hills. A stand-in until the real
     // map generator and scenario loader exist.

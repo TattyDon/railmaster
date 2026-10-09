@@ -9,15 +9,20 @@ Each milestone ends with something playable or testable. Spec pages in
 - Cargo registry loaded from `data/cargo.json` (41 cargo types).
 - Placeholder SDL2/OpenGL client; CI on gcc and clang.
 
-## M1: Track and trains
-- Free-angle track as spline segments over the heightfield (RT3 has no grid),
-  with single/double track, bridges (wood/stone/steel) and tunnels.
-- Stations (small/medium/large), service towers and maintenance facilities.
-- Locomotive data (`data/locomotives.json`) and loader.
-- Train movement: speed from power, consist weight and grade; routes as stop
-  lists with per-stop consists; priority-based meets on single track (no signals).
-- Automatic consist selection: the train takes the highest-revenue cars.
-- Water, sand and oil consumption, with servicing.
+## M1: Track and trains (in progress)
+Done in the first slice: track graph and ground-following builder, stations,
+locomotive data and loader, train movement with grade and acceleration,
+looping routes, single-track meets by priority, and a client demo.
+Provisional rules are listed in `docs/spec/m1-provisional-models.md`.
+
+Still to do:
+- Curve tool (spline sampled into short pieces), bridges (wood/stone/steel)
+  and tunnels, track construction costs, track removal.
+- Service towers and maintenance facilities; water, sand and oil use.
+- Breakdowns from reliability and oil level (with the sandbox toggle).
+- Per-stop consists, and automatic consist selection once cargo exists (M2).
+- Track rights: trains on another company's track always yield.
+- Track-building and train-management UI in the client.
 
 ## M2: The economy
 - The economy-node grid and the cargo price field, with off-rail drift of

@@ -1,16 +1,20 @@
 #include "railmaster/sim/world.hpp"
 
+#include <utility>
+
 namespace railmaster::sim {
 
-World::World(const WorldConfig& config)
+World::World(const WorldConfig& config, GameData data)
     : rng_(config.seed),
       date_(config.start_date),
-      terrain_(config.width_tiles, config.height_tiles, config.tile_size_m) {
+      terrain_(config.width_tiles, config.height_tiles, config.tile_size_m),
+      data_(std::move(data)) {
     terrain_.generate_rolling_hills(rng_, 400);
 }
 
 void World::tick() {
     ++total_ticks_;
+    railway_.tick(data_.locomotives);
     if (++tick_of_day_ < kTicksPerDay) return;
     tick_of_day_ = 0;
 

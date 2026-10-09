@@ -11,9 +11,12 @@ add_executable(railmaster_tests
     main.cpp
     test_cargo.cpp
     test_date.cpp
+    test_locomotive.cpp
     test_money.cpp
     test_random.cpp
+    test_railway.cpp
     test_terrain.cpp
+    test_track.cpp
     test_world.cpp
 )
 target_link_libraries(railmaster_tests PRIVATE railmaster::sim doctest::doctest railmaster_warnings)

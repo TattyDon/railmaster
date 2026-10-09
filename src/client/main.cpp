@@ -1,6 +1,7 @@
 // Railmaster client: opens a window, runs the simulation at a fixed rate
-// and draws the terrain. Rendering is deliberately throwaway (fixed-function
-// OpenGL, top-down view); the real 3D renderer replaces it later.
+// and draws the terrain, track and trains. Rendering is deliberately
+// throwaway (fixed-function OpenGL, top-down view); the real 3D renderer
+// replaces it later.
 
 #include "railmaster/sim/world.hpp"
 
@@ -9,13 +10,92 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 
 namespace {
 
-using railmaster::sim::GroundType;
-using railmaster::sim::Terrain;
-using railmaster::sim::World;
+namespace sim = railmaster::sim;
+using sim::GroundType;
+using sim::Terrain;
+using sim::World;
+
+constexpr std::int64_t kKm = 1'000'000;
+
+std::string read_file(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+sim::GameData load_game_data(const std::string& dir) {
+    return {sim::CargoRegistry::from_json(read_file(dir + "/cargo.json")),
+            sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"))};
+}
+
+// A demonstration network until the track-building UI exists: three towns
+// joined in a triangle, with two trains running round it in opposite
+// directions so single-track meets can be seen.
+void build_demo_network(World& world) {
+    sim::Railway& rw = world.railway();
+    const Terrain& terrain = world.terrain();
+    const sim::MapPoint towns[] = {{20 * kKm, 20 * kKm}, {105 * kKm, 35 * kKm}, {60 * kKm, 105 * kKm}};
+    const char* names[] = {"Ashford", "Brookvale", "Carrow"};
+
+    sim::NodeId nodes[3];
+    nodes[0] = rw.track().add_node(towns[0], terrain.height_at_mm(towns[0]));
+    nodes[1] = sim::lay_track_following_ground(rw.track(), terrain, nodes[0], towns[1], kKm);
+    nodes[2] = sim::lay_track_following_ground(rw.track(), terrain, nodes[1], towns[2], kKm);
+    sim::connect_following_ground(rw.track(), terrain, nodes[2], nodes[0], kKm);
+
+    sim::StationId st[3];
+    for (int i = 0; i < 3; ++i) st[i] = rw.add_station(names[i], nodes[i], sim::StationSize::Medium);
+
+    const auto& locos = world.data().locomotives.all();
+    sim::LocoTypeId loco = 0;
+    for (const auto& l : locos) {
+        if (l.available_in(world.date().year())) {
+            loco = l.id;
+            break;
+        }
+    }
+    rw.add_train(loco, std::vector<sim::CargoId>(4, 0), {st[0], st[1], st[2]}, /*priority=*/1);
+    rw.add_train(loco, std::vector<sim::CargoId>(4, 0), {st[0], st[2], st[1]}, /*priority=*/0);
+}
+
+void draw_railway(const sim::Railway& rw, float mm_per_tile) {
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+    glColor3f(0.35f, 0.25f, 0.15f);
+    for (const sim::TrackEdge& e : rw.track().edges()) {
+        const sim::MapPoint a = rw.track().node(e.a).pos, b = rw.track().node(e.b).pos;
+        glVertex2f(static_cast<float>(a.x_mm) / mm_per_tile, static_cast<float>(a.y_mm) / mm_per_tile);
+        glVertex2f(static_cast<float>(b.x_mm) / mm_per_tile, static_cast<float>(b.y_mm) / mm_per_tile);
+    }
+    glEnd();
+
+    auto square = [&](sim::MapPoint p, float half) {
+        const float x = static_cast<float>(p.x_mm) / mm_per_tile, y = static_cast<float>(p.y_mm) / mm_per_tile;
+        glVertex2f(x - half, y - half);
+        glVertex2f(x + half, y - half);
+        glVertex2f(x + half, y + half);
+        glVertex2f(x - half, y + half);
+    };
+
+    glBegin(GL_QUADS);
+    glColor3f(0.9f, 0.9f, 0.85f);
+    for (const sim::Station& s : rw.stations()) square(rw.track().node(s.node).pos, 1.2f);
+    for (const sim::Train& t : rw.trains()) {
+        if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);
+        else glColor3f(0.1f, 0.1f, 0.1f);
+        square(rw.train_position(t.id), 0.8f);
+    }
+    glEnd();
+}
 
 // Game days advanced per real second at each speed setting.
 constexpr int kSpeedDaysPerSecond[] = {0, 2, 8, 32};
@@ -28,12 +108,7 @@ void shade(const Terrain& t, int tx, int ty, int max_h) {
     }
 }
 
-void draw_terrain(const Terrain& t, float pan_x, float pan_y, float zoom) {
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    glScalef(zoom, zoom, 1.0f);
-    glTranslatef(-pan_x, -pan_y, 0.0f);
-
+void draw_terrain(const Terrain& t) {
     glBegin(GL_QUADS);
     for (int ty = 0; ty < t.height(); ++ty) {
         for (int tx = 0; tx < t.width(); ++tx) {
@@ -50,7 +125,16 @@ void draw_terrain(const Terrain& t, float pan_x, float pan_y, float zoom) {
 
 } // namespace
 
-int main(int /*argc*/, char* /*argv*/[]) {
+int main(int argc, char* argv[]) {
+    const std::string data_dir = argc > 1 ? argv[1] : RAILMASTER_DEFAULT_DATA_DIR;
+    sim::GameData data;
+    try {
+        data = load_game_data(data_dir);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "Failed to load game data from %s: %s\n", data_dir.c_str(), e.what());
+        return 1;
+    }
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
@@ -77,7 +161,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
     SDL_GL_SetSwapInterval(1);
 
-    World world(railmaster::sim::WorldConfig{});
+    World world(sim::WorldConfig{}, std::move(data));
+    build_demo_network(world);
+    const auto mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
 
     float pan_x = 0.0f, pan_y = 0.0f, zoom = 6.0f;
     int speed = 1;
@@ -136,7 +222,12 @@ int main(int /*argc*/, char* /*argv*/[]) {
         glOrtho(0, win_w, win_h, 0, -1, 1);
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        draw_terrain(world.terrain(), pan_x, pan_y, zoom);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glScalef(zoom, zoom, 1.0f);
+        glTranslatef(-pan_x, -pan_y, 0.0f);
+        draw_terrain(world.terrain());
+        draw_railway(world.railway(), mm_per_tile);
         SDL_GL_SwapWindow(window);
     }
 

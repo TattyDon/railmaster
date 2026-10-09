@@ -1,6 +1,9 @@
 #pragma once
 
+#include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/date.hpp"
+#include "railmaster/sim/locomotive.hpp"
+#include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/random.hpp"
 #include "railmaster/sim/terrain.hpp"
 
@@ -13,7 +16,13 @@ struct WorldConfig {
     Date start_date = Date::from_ymd(1830, 1, 1);
     std::int32_t width_tiles = 128;
     std::int32_t height_tiles = 128;
-    std::int32_t tile_size_m = 100;
+    std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
+};
+
+// Static definitions shared by the whole game, loaded from data/.
+struct GameData {
+    CargoRegistry cargo;
+    LocomotiveRegistry locomotives;
 };
 
 // Root of all simulation state. Advancing it is a pure function of its
@@ -25,7 +34,7 @@ public:
     // should come from measuring train movement in the original game.
     static constexpr std::int32_t kTicksPerDay = 16;
 
-    explicit World(const WorldConfig& config);
+    explicit World(const WorldConfig& config, GameData data = {});
 
     void tick();
 
@@ -34,6 +43,9 @@ public:
     std::uint64_t total_ticks() const { return total_ticks_; }
     const Terrain& terrain() const { return terrain_; }
     Terrain& terrain() { return terrain_; }
+    const GameData& data() const { return data_; }
+    Railway& railway() { return railway_; }
+    const Railway& railway() const { return railway_; }
 
 private:
     void on_new_day();
@@ -45,6 +57,8 @@ private:
     std::int32_t tick_of_day_ = 0;
     std::uint64_t total_ticks_ = 0;
     Terrain terrain_;
+    GameData data_;
+    Railway railway_;
 };
 
 } // namespace railmaster::sim

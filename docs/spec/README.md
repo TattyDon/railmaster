@@ -8,6 +8,7 @@ written in our own words (see [../CLEAN_ROOM.md](../CLEAN_ROOM.md)).
 | [economy-cargo.md](economy-cargo.md) | Price field, cargo list, production chains, industries, stations, decay |
 | [trains-track-operations.md](trains-track-operations.md) | Locomotive roster, consists, grades, track, servicing, routing |
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |
+| [m1-provisional-models.md](m1-provisional-models.md) | Stand-in rules used until real values are measured |
 
 ## Status of the research
 

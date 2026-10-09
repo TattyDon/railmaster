@@ -1,5 +1,6 @@
 #include "railmaster/sim/terrain.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
 #include "railmaster/sim/random.hpp"
 
 #include <algorithm>
@@ -7,22 +8,6 @@
 #include <stdexcept>
 
 namespace railmaster::sim {
-
-namespace {
-
-// Integer square root, so distance stays deterministic across platforms.
-std::int64_t isqrt(std::int64_t n) {
-    if (n <= 0) return 0;
-    std::int64_t x = n;
-    std::int64_t y = (x + 1) / 2;
-    while (y < x) {
-        x = y;
-        y = (x + n / x) / 2;
-    }
-    return x;
-}
-
-} // namespace
 
 Terrain::Terrain(std::int32_t width_tiles, std::int32_t height_tiles, std::int32_t tile_size_m)
     : width_(width_tiles), height_(height_tiles), tile_size_m_(tile_size_m) {
@@ -62,6 +47,24 @@ std::int32_t Terrain::grade_bp(std::int32_t ax, std::int32_t ay, std::int32_t bx
     const std::int64_t run = isqrt(dx * dx + dy * dy);
     if (run == 0) throw std::invalid_argument("grade between identical corners");
     return static_cast<std::int32_t>(rise * 10000 / run);
+}
+
+std::int64_t Terrain::height_at_mm(MapPoint p) const {
+    const std::int64_t tile_mm = static_cast<std::int64_t>(tile_size_m_) * 1000;
+    const std::int64_t max_x = static_cast<std::int64_t>(width_) * tile_mm;
+    const std::int64_t max_y = static_cast<std::int64_t>(height_) * tile_mm;
+    const std::int64_t x = std::clamp<std::int64_t>(p.x_mm, 0, max_x);
+    const std::int64_t y = std::clamp<std::int64_t>(p.y_mm, 0, max_y);
+    const auto cx = static_cast<std::int32_t>(std::min<std::int64_t>(x / tile_mm, width_ - 1));
+    const auto cy = static_cast<std::int32_t>(std::min<std::int64_t>(y / tile_mm, height_ - 1));
+    const std::int64_t fx = x - static_cast<std::int64_t>(cx) * tile_mm;
+    const std::int64_t fy = y - static_cast<std::int64_t>(cy) * tile_mm;
+    // Bilinear interpolation of the four corner heights, all in millimetres.
+    const std::int64_t h00 = corner_height(cx, cy) * 1000LL, h10 = corner_height(cx + 1, cy) * 1000LL;
+    const std::int64_t h01 = corner_height(cx, cy + 1) * 1000LL, h11 = corner_height(cx + 1, cy + 1) * 1000LL;
+    const std::int64_t top = h00 * (tile_mm - fx) + h10 * fx;
+    const std::int64_t bot = h01 * (tile_mm - fx) + h11 * fx;
+    return (top / tile_mm * (tile_mm - fy) + bot / tile_mm * fy) / tile_mm;
 }
 
 void Terrain::generate_rolling_hills(Random& rng, std::int32_t max_height_m) {
