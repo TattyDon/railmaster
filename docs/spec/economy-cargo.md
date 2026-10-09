@@ -2,11 +2,25 @@
 
 **How this was gathered:** WebFetch was blocked by the egress proxy for every relevant domain (Wikipedia, fandom, StrategyWiki, GameFAQs, Steam, dune2k, manualmachine, archive.org, neoseeker and others). Every fact below therefore came through WebSearch result summaries of those pages, not from reading the pages myself. Treat the numbers as second-hand. Before you hard-code anything, check it against the source pages or the game's own data files.
 
-Confidence tags: **[RT3]** means a source confirms it for RT3. **[RT2/RT1]** means it comes from an earlier game in the series and is a hint only. **[UNCERTAIN]** means the sources conflict or the point is unverified.
+Confidence tags: **[WP✓]** means confirmed against the full Wikipedia article text, supplied by the maintainer on 2026-10-09. **[RT3]** means a source confirms it for RT3. **[RT2/RT1]** means it comes from an earlier game in the series and is a hint only. **[UNCERTAIN]** means the sources conflict or the point is unverified.
 
 ---
 
 ## 1. The core economic model [RT3]
+
+**Confirmed by Wikipedia [WP✓]:**
+- Carloads move slowly across the map, standing in for road and water transport. They follow the gradient of a scalar price field, with supply sites as sources and demand sites as sinks.
+- Revenue depends on the price difference between pick-up and delivery.
+- Consequences:
+  - raw materials can reach industries and be processed without any trains;
+  - a train does not have to pick up goods at their source.
+- Every carload of mail, passengers and troops has a destination.
+- Warehouses complete the commodity market, as ports do.
+- Station improvements (post offices, restaurants and so on) are placed individually on the map.
+- Players can buy industries and build processing industries anywhere.
+- Processing industries have limited capacity, which can be upgraded.
+
+The bullets below add detail from other sources.
 
 - **The map is a network of economy nodes.** Phil Steinmeyer (PopTop president) said in a pre-release interview that a typical map has about **15,000 economy nodes** spread evenly across it, not only in cities. RT2 was different: each city simply supplied or demanded cargo, and only the player's railroad moved it. He called the economy the feature he was most proud of, and said it was designed to be harder to exploit. He also stressed that before railroads, moving cargo inland was hard and costly, especially over mountains, so linking the interior to coasts and river towns is a key strategy. https://www.gamespot.com/articles/railroad-tycoon-3-qanda/1100-6076739/
 - **Cargo flows on its own along a price field.** Carloads drift slowly across the map along the gradient of a scalar price field, standing in for road and water transport. Supply sites act as sources and demand sites as sinks. So raw materials can reach industries and be processed with no trains at all. https://en.wikipedia.org/wiki/Railroad_Tycoon_3 (via search summary)

@@ -17,6 +17,11 @@ as **unverified** until someone checks it against the source page or the
 game itself, and records how in the page. Gaps are listed at the end of each
 page and in the research backlog in [../ROADMAP.md](../ROADMAP.md).
 
+Facts tagged **[WP✓]** were checked against the full text of the Wikipedia
+article on 2026-10-09, covering its gameplay, campaign, development and
+add-ons sections. They are better sourced than the search-summary facts but
+still worth confirming in-game.
+
 Ways to help:
 - Check a value in the game and replace its tag with "verified in-game (method)".
 - Fill a gap from the manual or a guide, with the page or URL cited.

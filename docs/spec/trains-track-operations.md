@@ -25,7 +25,9 @@ Key source URLs:
 ## 1. Locomotive roster
 
 ### 1.1 General facts
-- **Roster size:** Wikipedia says "nearly 60" locomotives in the base game and "nearly 70" with Coast to Coast [WP]. The Steam and GOG store pages say "over 40" [GOG: https://www.gog.com/en/game/railroad_tycoon_3]. *These conflict.* The likely reason is that the store counts only the North American / base set, or omits fictional and regional engines.
+- **Roster size [WP✓]:** nearly 60 locomotives in the base game and nearly 70 with Coast to Coast, the most of any game in the series. Engines come from the United States, Britain, France, Germany, Italy, Japan, South Africa, Poland, Russia and elsewhere, plus fictional engines (E-88, and TransEuro as a renamed Eurostar).
+  - Our table in §1.2 has about 35 rows, so roughly 25 to 35 engines are still missing, likely including the Italian, Japanese, South African, Polish and Russian ones.
+  - Earlier note: The Steam and GOG store pages say "over 40" [GOG: https://www.gog.com/en/game/railroad_tycoon_3]. *These conflict.* The likely reason is that the store counts only the North American / base set, or omits fictional and regional engines.
 - **Era range:** The roster starts with the Planet 2-2-0 in 1829. It ends with fictional future trains: the **TransEuro** (2005, a fictional stand-in for Eurostar) and the **E-88** electric (2012, 300 mph) [WP, GN, W1]. Diesels start appearing in the 1940s [GN].
 - **Stats the game shows for each engine:**
   - purchase cost (cars are free; you pay only for the engine) [GN]
@@ -115,6 +117,7 @@ Columns are availability years, top speed, cost and annual maintenance. Fuel typ
   - specific cargo types, or "any cargo"
   - a minimum car count
   - Players commonly set the maximum and apply it to every stop in the route [dune2k: https://forum.dune2k.com/topic/22492-how-do-i-retain-cargo-in-a-consist/, https://forum.dune2k.com/topic/22557-latercomer-discovers-rt3-and-some-questions/].
+- **Automatic car setup [WP✓]:** consist selection can be automated, so a train always takes the cars that will earn the most revenue. Implement it as a per-stop "auto" option alongside manual consists.
 - Cargo cannot be kept on board through an intermediate stop's consist change; this is a reported limitation [same dune2k threads].
 - **Train classes:** freight, express and mixed [SW, M].
   - Passengers, mail (and troops) are express cargo.
@@ -174,7 +177,7 @@ Columns are availability years, top speed, cost and annual maintenance. Fuel typ
   - A higher-priority train of the same company always gets right of way.
   - A train on another company's track always yields to the owner's trains, whatever its priority.
   - Players often give express trains priority over freight [Steam threads].
-- **No signals and no real collisions in normal play:**
+- **No signals and no real collisions in normal play [WP✓ for passing and no signal towers]:** Wikipedia confirms that trains pass each other on single track, as on the original Railroad Tycoon's lowest difficulty, and that signal towers are not needed.
   - Trains can pass "through" each other on single track [SC1].
   - When two trains meet, the lower-priority train (players say the less profitable one) stops while the other passes; players describe this as an abstracted siding meet [SC1].
   - Double track reduces these waits.

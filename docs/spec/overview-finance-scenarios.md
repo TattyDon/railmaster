@@ -27,7 +27,17 @@
 
 ## 2. Game structure and modes
 
-- **Campaign.** 16 scenarios grouped into themed "rooms". Some summaries say five continents, others four rooms. Every campaign scenario is unlocked from the start, though the narrator recommends playing them in order. Finishing all of them at bronze or better gives a reward (a "key to the city"). Sources: https://en.wikipedia.org/wiki/Railroad_Tycoon_3 , https://strategywiki.org/wiki/Railroad_Tycoon_3/Walkthrough , https://worthplaying.com/article/2003/11/19/reviews/13818-pc-review-railroad-tycoon-3/
+- **Campaign [WP✓].** 16 scenarios in four campaigns, set across five continents:
+
+  | Campaign | Years | Scenarios |
+  |---|---|---|
+  | USA | 1840–1941 | 5 |
+  | Europe | 1840–1914 | 5 |
+  | World | 1880–1985 | 3 |
+  | Future | 2025–2080 | 3 |
+
+  By continent, 7 maps are in North America, 6 in Europe, and 1 each in Asia, Africa and South America. This matches the room list in §3 if the two Future maps set in Greenland and California count as North America and Dutchlantis counts as Europe.
+- **Campaign (other sources).** Every campaign scenario is unlocked from the start, though the narrator recommends playing them in order. Finishing all of them at bronze or better gives a reward (a "key to the city"). Sources: https://en.wikipedia.org/wiki/Railroad_Tycoon_3 , https://strategywiki.org/wiki/Railroad_Tycoon_3/Walkthrough , https://worthplaying.com/article/2003/11/19/reviews/13818-pc-review-railroad-tycoon-3/
 - **Scenario mode.** Standalone scenarios beyond the campaign. GOG and Steam say "25 scenarios" in total, which presumably counts campaign plus standalone maps. **[UNCERTAIN count]** Source: https://www.gog.com/en/game/railroad_tycoon_3
 - **Sandbox.** Pick a map and a period. The economy and financial constraints are switched off, so it plays like a model-railway mode. Source: https://www.mobygames.com/game/10844/railroad-tycoon-3/
 - **Map/scenario editor.**
@@ -73,6 +83,9 @@ Format: name — region, years. Goals are listed where they were found.
 **Future room**
 14. **The Seeder** — Greenland, 2020, tactical.
 15. **Dutchlantis** — Western Europe, 2021–51.
+
+**Conflict:** Wikipedia gives the Future campaign as 2025–2080, but fan sources start The Seeder in 2020 and Dutchlantis in 2021. Check in-game. **[WP✓ vs fan]**
+
 16. **A Chip off the Old Block** — California, 2050–80.
 
 The base-game campaign era range is roughly 1840s to 2080. Most medal thresholds were not retrievable. The best sources to fetch later are the StrategyWiki per-scenario pages, the GameFAQs "Zoogz" full guide (2008), and the fandom wiki's Category:Railroad_Tycoon_3.
@@ -93,7 +106,7 @@ The base-game campaign era range is roughly 1840s to 2080. Most medal thresholds
 | Russia / Imperial Russia | Groundwork for the Trans-Siberian |
 | Southern Pacific | Mentioned in a Steam thread |
 
-Gamicus also mentions an alternate-history scenario in which the American Revolution never happened. Sources: https://www.moddb.com/games/railroad-tycoon-3/downloads/railroad-tycoon-3-v104-patch-coast-to-coast-exp , https://www.neowin.net/news/railroad-tycoon-3-coast-to-coast-expansion/ , https://gamicus.fandom.com/wiki/Railroad_Tycoon_3 , https://steamcommunity.com/app/7610/discussions/0/343787283768859730/
+**[WP✓]** Coast to Coast includes an Imperial Russia scenario, a People's Republic of China scenario, and an alternate-history scenario in which the American Revolution never happened and the territory is split into seven separate nations. Gamicus also mentions the alternate-history scenario. Sources: https://www.moddb.com/games/railroad-tycoon-3/downloads/railroad-tycoon-3-v104-patch-coast-to-coast-exp , https://www.neowin.net/news/railroad-tycoon-3-coast-to-coast-expansion/ , https://gamicus.fandom.com/wiki/Railroad_Tycoon_3 , https://steamcommunity.com/app/7610/discussions/0/343787283768859730/
 
 **[UNCERTAIN]** The remaining C2C names and all medal conditions are missing. Hawk & Badger's RT3 Map Archive (https://hawkdawg.com/rrt/rrt3/rrt3_base_maps.php) catalogues them.
 
@@ -194,6 +207,12 @@ Gamicus also mentions an alternate-history scenario in which the American Revolu
   - There is no rigid grid. Track is laid as curves at any angle, and buildings rotate 360°.
   - Tunnels and water bridges are supported.
   - Sources: https://en.wikipedia.org/wiki/Railroad_Tycoon_3 , https://www.gamespot.com/articles/railroad-tycoon-3-preview/1100-6030899/
+- **Development facts [WP✓].**
+  - The team was 13 people. Development took about 2.5 years, after about 1.5 years spent on the engine.
+  - Phil Steinmeyer had said in 2002 that he disliked 3D in strategy games.
+  - **LOD design (relevant to our renderer):** to hide level-of-detail popping, the team made up to six detail variants of each vehicle, building and other object. One example building ranged from 931 polygons close up down to 55 far away.
+  - The Mac port was developed and published by MacSoft in 2004. Wikipedia credits MacSoft; Macworld names Beenox as the porting studio. **[UNCERTAIN]**
+- **Bonus content (out of scope) [WP✓].** The play disc included *Loco Commotion*, a separate 141 MB train-shunting puzzle game. It is not part of the RT3 simulation.
 - **Graphics options.** Hardware T&L can be toggled. The default resolution is 800x600; higher or widescreen resolutions need config hacks. Source: https://www.wsgf.org/dr/railroad-tycoon-3
 - **Config files.** `Data\Configuration\engine.cfg` and `game.cfg` are binary. The open-source **rt3conf** project (GitHub) reverse-engineered engine.cfg by diffing the file before and after changing settings; unknown fields are labeled `fieldN`. Source: https://github.com/MichaelMcDonnell/rt3conf (fetched directly)
 - **Map sizes.** Not found. The C2C full-USA map is reportedly the largest. **[UNCERTAIN]**
