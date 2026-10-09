@@ -43,8 +43,9 @@ Money YearAccounts::expenses() const {
     return m;
 }
 
-Company::Company(std::string name, Money starting_cash, std::int32_t year)
-    : name_(std::move(name)), cash_(starting_cash) {
+Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance)
+    : name_(std::move(name)), finance_(balance.finance), stock_(balance.stock), cash_(starting_cash),
+      shares_(balance.stock.founding_shares) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
 }
@@ -121,7 +122,7 @@ CreditRating Company::credit_rating() const {
     const std::int64_t leverage_pct =
         assets > Money{} ? debt().in_cents() * 100 / assets.in_cents() : (debt() > Money{} ? 100 : 0);
     int grade = 0;
-    while (grade < 7 && leverage_pct >= provisional::kRatingLeverageLimits[grade]) ++grade;
+    while (grade < 7 && leverage_pct >= finance_.rating_leverage_limits[static_cast<std::size_t>(grade)]) ++grade;
 
     // A young company, with no completed profitable year, is marginal.
     const bool proven = std::any_of(history_.begin(), history_.end() - 1,
@@ -131,19 +132,19 @@ CreditRating Company::credit_rating() const {
     // has a profitable year behind it (so a strong company can reach 20).
     const int bonds = static_cast<int>(bonds_.size());
     if (!proven) grade = std::max(grade, static_cast<int>(CreditRating::BB)) + bonds;
-    else grade += bonds / 4;
+    else grade += bonds / std::max(1, finance_.bonds_per_notch_when_proven);
     return static_cast<CreditRating>(std::min(grade, static_cast<int>(CreditRating::D)));
 }
 
 std::int32_t Company::bond_rate_bp() const {
-    return provisional::kBondRateBp[static_cast<std::size_t>(credit_rating())];
+    return finance_.bond_rate_bp[static_cast<std::size_t>(credit_rating())];
 }
 
 void Company::issue_bond(std::int32_t year) {
-    const Money face = Money::dollars(kBondFaceValue);
+    const Money face = Money::dollars(finance_.bond_face_value);
     bonds_.push_back({face, bond_rate_bp(), year});
     cash_ += face;
-    post(Ledger::BondFees, face.scaled(kBondUnderwritingPercent, 100));
+    post(Ledger::BondFees, face.scaled(finance_.bond_underwriting_percent, 100));
 }
 
 void Company::repay_bond() {
@@ -151,13 +152,13 @@ void Company::repay_bond() {
     const auto worst = std::max_element(bonds_.begin(), bonds_.end(),
                                         [](const Bond& a, const Bond& b) { return a.rate_bp < b.rate_bp; });
     cash_ -= worst->principal;
-    post(Ledger::BondFees, worst->principal.scaled(kBondEarlyRepaymentPercent, 100));
+    post(Ledger::BondFees, worst->principal.scaled(finance_.bond_early_repayment_percent, 100));
     bonds_.erase(worst);
 }
 
 void Company::retire_matured_bonds(std::int32_t year) {
     for (auto it = bonds_.begin(); it != bonds_.end();) {
-        if (year - it->issued_year >= provisional::kBondMaturityYears) {
+        if (year - it->issued_year >= finance_.bond_maturity_years) {
             cash_ -= it->principal;
             it = bonds_.erase(it);
         } else {

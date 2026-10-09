@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/money.hpp"
 
 #include <array>
@@ -10,37 +11,10 @@
 
 namespace railmaster::sim {
 
-// Stand-ins for finance rules the research has not pinned down. Documented
-// in docs/spec/m3-finance-model.md.
-namespace provisional {
-constexpr std::int64_t kStartingCash = 6'000'000;
-// Running costs.
-constexpr std::int64_t kFuelPerKmSteam = 20;    // dollars per km per train
-constexpr std::int64_t kFuelPerKmDiesel = 15;
-constexpr std::int64_t kFuelPerKmElectric = 10;
-constexpr std::int64_t kFuelPerKmPerCar = 2;
-constexpr std::int32_t kTrackUpkeepPerMillePerMonth = 5;    // 0.5% of track cost a month (RT2's rate)
-constexpr std::int32_t kBuildingUpkeepPerMillePerMonth = 5; // same for stations and support buildings
-// Credit rating: debt as a share of total assets, in percent, at which each grade ends.
-constexpr std::int32_t kRatingLeverageLimits[] = {5, 15, 25, 35, 45, 55, 70}; // AAA..C; above: D
-// Interest by rating, in basis points a year (AAA..D), in a normal economy.
-constexpr std::int32_t kBondRateBp[] = {400, 450, 500, 600, 700, 800, 1000, 1200};
-// Shares: the company is founded with this many, at a price equal to its
-// starting cash per share; the player holds half.
-constexpr std::int64_t kFoundingShares = 600'000;
-constexpr std::int64_t kFoundingPlayerShares = 300'000;
-} // namespace provisional
-
-// Researched (docs/spec/rt3-clone-spec.md §12.4): bonds are $500,000, need a
-// rating of at least B, cost 2% of face value to underwrite and about 2% to
-// repay early; at most 20 may be outstanding; interest is paid quarterly.
-constexpr std::int64_t kBondFaceValue = 500'000;
-constexpr std::int32_t kBondUnderwritingPercent = 2;
-constexpr std::int32_t kBondEarlyRepaymentPercent = 2;
-constexpr std::size_t kMaxBonds = 20;
-namespace provisional {
-constexpr std::int32_t kBondMaturityYears = 30; // [I] in the spec
-} // namespace provisional
+// Bond rules (docs/spec/rt3-clone-spec.md §12.4): bonds need a rating of
+// at least B and pay interest quarterly [D]. Their face value, fees, cap and
+// maturity, the rating thresholds and rates, and the founding share count
+// are in Balance::Finance and Balance::Stock.
 
 enum class CreditRating : std::uint8_t { AAA, AA, A, BBB, BB, B, C, D };
 const char* rating_name(CreditRating r);
@@ -86,9 +60,11 @@ struct YearAccounts {
 // The player's railroad company. Assets are carried at what they cost.
 class Company {
 public:
-    Company(std::string name, Money starting_cash, std::int32_t year);
+    Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance = default_balance());
 
     const std::string& name() const { return name_; }
+    const Balance::Finance& finance_balance() const { return finance_; }
+    const Balance::Stock& stock_balance() const { return stock_; }
     Money cash() const { return cash_; }
 
     // Record money coming in or going out on a ledger line this year.
@@ -112,10 +88,10 @@ public:
     CreditRating credit_rating() const;
     std::int32_t bond_rate_bp() const;
     const std::vector<Bond>& bonds() const { return bonds_; }
-    bool can_issue_bond() const { return credit_rating() <= CreditRating::B && bonds_.size() < kMaxBonds; }
+    bool can_issue_bond() const { return credit_rating() <= CreditRating::B && bonds_.size() < static_cast<std::size_t>(finance_.max_bonds); }
     // Issue one bond: cash in, less the underwriting fee. Caller checks can_issue_bond.
     void issue_bond(std::int32_t year);
-    // Repay the most expensive bond early: face value plus the 2% penalty.
+    // Repay the most expensive bond early: face value plus the penalty.
     // Caller checks there is one and enough cash.
     void repay_bond();
     // Repay at face value any bond that has reached maturity in `year`.
@@ -154,11 +130,13 @@ public:
 
 private:
     std::string name_;
+    Balance::Finance finance_;
+    Balance::Stock stock_;
     Money cash_;
     Money track_, buildings_, rolling_stock_;
     std::vector<Bond> bonds_;
     std::vector<YearAccounts> history_;
-    std::int64_t shares_ = provisional::kFoundingShares;
+    std::int64_t shares_ = 0;
     Money price_;
     Money dividend_;
     std::int32_t issues_this_year_ = 0;

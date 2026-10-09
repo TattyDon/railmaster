@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/fixed_math.hpp"
 
@@ -14,22 +15,6 @@ namespace railmaster::sim {
 class Random;
 class Terrain;
 
-// Stand-ins for economy rules the research has not pinned down. Documented
-// in docs/spec/m2-economy-model.md.
-namespace provisional {
-constexpr std::int32_t kDemandPricePercent = 150;     // price at an unsatisfied consumer
-constexpr std::int32_t kSupplyPricePercent = 50;      // price at a producer
-constexpr std::int32_t kNeutralPricePercent = 50;     // price far from any consumer
-constexpr std::int32_t kScreeningPerMille = 10;       // how fast a consumer's pull fades with distance
-constexpr std::int32_t kDriftPercentPerDay = 5;       // share of a cell's stock that moves on each day
-constexpr std::int32_t kTransportCostPercent = 1;     // price gain needed per cell before cargo moves
-constexpr std::int32_t kSaturationDays = 30;          // stock equal to this many days of demand halves the price
-constexpr std::int32_t kIndustrySaturationDays = 120; // industries are much harder to oversupply
-constexpr std::int32_t kSpoilagePerMillePerSensitivity = 1; // daily loss: 0.1% x decay sensitivity
-constexpr std::int32_t kMaxStockMilli = 50'000;       // 50 carloads per cell
-constexpr std::int32_t kInputBufferDays = 30;         // a processor stockpiles this many days of input
-constexpr std::int32_t kBoostPercent = 50;            // a supplied booster raises output by half
-} // namespace provisional
 
 constexpr std::int32_t kMilli = 1000; // stock is counted in thousandths of a carload
 
@@ -108,7 +93,7 @@ struct Town {
 class Economy {
 public:
     Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64_t cell_size_mm,
-            const CargoRegistry& cargo);
+            const CargoRegistry& cargo, const Balance& balance = default_balance());
 
     std::int32_t width() const { return width_; }
     std::int32_t height() const { return height_; }
@@ -156,12 +141,14 @@ private:
     std::vector<std::int32_t> scratch_;
     std::vector<Site> sites_;
     std::vector<Town> towns_;
+    Balance::Economy balance_;
 };
 
 // Place towns and industries on a new map. A stand-in for authored scenario
-// maps: towns of 10-40 houses, and a spread of industries of every type
-// whose products exist in `year`, all on dry land.
+// maps: towns, and a spread of industries of every type whose products
+// exist in `year`, all on dry land (sizes and counts: Balance::map).
 void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
-                      const IndustryRegistry& industries, Random& rng, std::int32_t year);
+                      const IndustryRegistry& industries, Random& rng, std::int32_t year,
+                      const Balance& b = default_balance());
 
 } // namespace railmaster::sim

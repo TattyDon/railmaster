@@ -16,28 +16,10 @@ namespace railmaster::sim {
 // docs/spec/economy-cargo.md; the rest is documented in
 // docs/spec/m2-economy-model.md.
 
-namespace provisional {
-// Catchment radius in economy cells (Chebyshev distance), by station size.
-constexpr std::int32_t kCatchmentSmall = 1;  // 3 x 3 cells
-constexpr std::int32_t kCatchmentMedium = 2; // 5 x 5
-constexpr std::int32_t kCatchmentLarge = 3;  // 7 x 7
-constexpr std::int32_t kGatherPercentPerDay = 20;   // share of catchment stock that moves to the station
-constexpr std::int32_t kStationCapMilli = 20'000;  // 20 carloads of each cargo waiting
-// Value left after transit = exp(-0.0023 x sensitivity x days)
-// [rt3-clone-spec §8.2, I]: sensitivity 10 loses half in 30 days, 1 loses 5%.
-// Below 10% the load has expired.
-constexpr std::int32_t kExpiredPermille = 100;
-// Express: a destination's pull saturates; one with this much attraction
-// (e.g. 20 houses) draws half the traffic it could.
-constexpr std::int32_t kExpressAttractionHalf = 20;
-constexpr std::int32_t kExpressCapMilli = 20'000; // 20 loads per destination waiting
-// Waiting express loads give up, per day per point of decay sensitivity,
-// in tenths of a percent: passengers (9) lose 4.5% a day.
-constexpr std::int32_t kExpressWaitLossPerMillePerSensitivity = 5;
-constexpr std::int32_t kMailCapMonths = 2; // a town pays for two months' worth of mail a month
-} // namespace provisional
+// Catchment, gathering, decay and express rates come from the railway's
+// Balance (stations, freight, express sections).
 
-std::int32_t catchment_radius(StationSize size);
+std::int32_t catchment_radius(StationSize size, const Balance& b = default_balance());
 
 // What a train earned at one stop, in total and by cargo.
 struct Earnings {
@@ -58,8 +40,8 @@ struct CatchmentPrices {
 CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const Station& s, CargoId c);
 
 // Share of a load's value left after `days` in transit, in thousandths;
-// 0 once it falls below kExpiredPermille.
-std::int32_t value_left_permille(const CargoType& c, std::int32_t days);
+// 0 once it falls below the expiry level.
+std::int32_t value_left_permille(const CargoType& c, std::int32_t days, const Balance& b = default_balance());
 
 // Revenue modifiers at a destination [D, rt3-clone-spec §8.4].
 enum class Difficulty : std::uint8_t { Easy, Medium, Hard, Expert };

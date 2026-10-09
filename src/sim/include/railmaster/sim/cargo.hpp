@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/money.hpp"
 
 #include <cstdint>
@@ -12,12 +13,6 @@ namespace railmaster::sim {
 
 using CargoId = std::uint16_t;
 
-namespace provisional {
-// cargo.json base prices are read as thousands of dollars per carload.
-// See docs/spec/m2-economy-model.md.
-constexpr std::int64_t kCargoPriceUnitDollars = 1000;
-} // namespace provisional
-
 // Freight is priced by the regional price field; express cargo (passengers,
 // mail, troops) travels to a specific destination. See docs/spec/economy-cargo.md.
 enum class CargoClass : std::uint8_t { Freight, Express };
@@ -29,7 +24,7 @@ struct CargoType {
     std::string name; // display name
     CargoClass cargo_class = CargoClass::Freight;
     std::int32_t available_year = 1800;
-    Money base_price; // per carload (data value x kCargoPriceUnitDollars); zero for express cargo
+    Money base_price; // per carload (data value x Balance::Economy::cargo_price_unit); zero for express cargo
     // 1 (insensitive) to 10 (most perishable). Believed to set how fast value
     // decays in transit; the exact mapping is not yet known.
     std::int32_t decay_sensitivity = 1;
@@ -44,8 +39,10 @@ struct CargoType {
 class CargoRegistry {
 public:
     // Parse a JSON document of the form {"cargo": [{"key": ..., ...}, ...]}.
-    // Throws std::runtime_error on malformed or duplicate entries.
-    static CargoRegistry from_json(std::string_view json_text);
+    // base_price values are multiplied by `price_unit` dollars. Throws
+    // std::runtime_error on malformed or duplicate entries.
+    static CargoRegistry from_json(std::string_view json_text,
+                                   std::int64_t price_unit = default_balance().economy.cargo_price_unit);
 
     const std::vector<CargoType>& all() const { return types_; }
     const CargoType& get(CargoId id) const { return types_.at(id); }

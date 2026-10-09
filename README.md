@@ -76,7 +76,7 @@ dark tunnels), with its price next to the cursor.
 | `src/sim/` | Headless, deterministic game simulation |
 | `src/client/` | SDL2/OpenGL front end |
 | `tests/` | Unit tests for the simulation |
-| `data/` | Game data in original JSON formats |
+| `data/` | Game data in original JSON formats; `balance.json` holds every tunable number ([docs/spec/balance.md](docs/spec/balance.md)) |
 | `docs/spec/` | Sourced specification of the original game's rules |
 | `docs/ROADMAP.md` | Milestones and research backlog |
 

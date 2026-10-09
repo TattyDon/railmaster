@@ -25,10 +25,9 @@ bool outranks(const Train& a, const Train& b) {
     return a.id < b.id;
 }
 
-std::int32_t bridge_speed_permille(const TrackEdge& e) {
+std::int32_t bridge_speed_permille(const TrackEdge& e, const Balance& b) {
     if (e.kind != TrackKind::Bridge) return 1000;
-    return e.bridge == BridgeType::Wood ? provisional::kWoodBridgeSpeedPermille
-                                        : provisional::kOtherBridgeSpeedPermille;
+    return e.bridge == BridgeType::Wood ? b.trains.wood_bridge_speed_permille : b.trains.other_bridge_speed_permille;
 }
 
 // A train is physically on the track (rather than at a station node) in these states.
@@ -36,11 +35,12 @@ bool on_path(TrainState s) {
     return s == TrainState::Moving || s == TrainState::Servicing || s == TrainState::BrokenDown;
 }
 
-std::int64_t speed_for(std::int64_t top, std::int64_t grade_rating, std::size_t cars, std::int32_t grade_bp) {
+std::int64_t speed_for(std::int64_t top, std::int64_t grade_rating, std::size_t cars, std::int32_t grade_bp,
+                       const Balance& b) {
     if (grade_bp <= 0) return top;
     const std::int64_t load = 2 + static_cast<std::int64_t>(cars);
-    const std::int64_t penalty = static_cast<std::int64_t>(grade_bp) * load * 25 / grade_rating;
-    const std::int64_t permille = std::max<std::int64_t>(provisional::kMinSpeedPermille, 1000 - penalty);
+    const std::int64_t penalty = static_cast<std::int64_t>(grade_bp) * load * b.trains.grade_penalty / grade_rating;
+    const std::int64_t permille = std::max<std::int64_t>(b.trains.min_speed_permille, 1000 - penalty);
     return top * permille / 1000;
 }
 
@@ -48,10 +48,11 @@ std::int32_t gauge_after(std::int64_t used, std::int64_t range) {
     return static_cast<std::int32_t>(std::max<std::int64_t>(0, kGaugeFull - used * kGaugeFull / range));
 }
 
-bool needs(const Train& t, ServiceType type, const LocomotiveType& loco) {
-    if (type == ServiceType::MaintenanceFacility) return t.oil < provisional::kServiceThresholdPermille;
-    const bool water_low = loco.fuel == Fuel::Steam && t.water < provisional::kServiceThresholdPermille;
-    return water_low || t.sand < provisional::kServiceThresholdPermille;
+bool needs(const Train& t, ServiceType type, const LocomotiveType& loco, const Balance& b) {
+    const std::int32_t low = b.servicing.service_threshold_permille;
+    if (type == ServiceType::MaintenanceFacility) return t.oil < low;
+    const bool water_low = loco.fuel == Fuel::Steam && t.water < low;
+    return water_low || t.sand < low;
 }
 
 void refill(Train& t, ServiceType type) {
@@ -68,44 +69,46 @@ void refill(Train& t, ServiceType type) {
 
 } // namespace
 
-Money station_cost(StationSize size) {
+Money station_cost(StationSize size, const Balance& b) {
     switch (size) {
-    case StationSize::Small: return Money::dollars(50'000);
-    case StationSize::Medium: return Money::dollars(100'000);
-    case StationSize::Large: return Money::dollars(200'000);
+    case StationSize::Small: return Money::dollars(b.stations.small_cost);
+    case StationSize::Medium: return Money::dollars(b.stations.medium_cost);
+    case StationSize::Large: return Money::dollars(b.stations.large_cost);
     }
     throw std::invalid_argument("unknown station size");
 }
 
-Money service_building_cost(ServiceType type) {
+Money service_building_cost(ServiceType type, const Balance& b) {
     switch (type) {
-    case ServiceType::ServiceTower: return Money::dollars(provisional::kServiceTowerCost);
-    case ServiceType::MaintenanceFacility: return Money::dollars(provisional::kMaintenanceFacilityCost);
+    case ServiceType::ServiceTower: return Money::dollars(b.servicing.service_tower_cost);
+    case ServiceType::MaintenanceFacility: return Money::dollars(b.servicing.maintenance_facility_cost);
     }
     throw std::invalid_argument("unknown service building type");
 }
 
-std::int64_t mph_to_mm_per_tick(std::int64_t mph) {
-    return mph * kMmPerMile * provisional::kTrainSecondsPerTick / 3600;
+std::int64_t mph_to_mm_per_tick(std::int64_t mph, const Balance& b) {
+    return mph * kMmPerMile * b.trains.seconds_per_tick / 3600;
 }
 
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp) {
-    return speed_for(mph_to_mm_per_tick(loco.top_speed_mph), loco.grade_rating, cars, grade_bp);
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp,
+                                      const Balance& b) {
+    return speed_for(mph_to_mm_per_tick(loco.top_speed_mph, b), loco.grade_rating, cars, grade_bp, b);
 }
 
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp) {
-    std::int64_t top = mph_to_mm_per_tick(loco.top_speed_mph);
-    if (loco.fuel == Fuel::Steam && train.water == 0) top = top * provisional::kNoWaterSpeedPermille / 1000;
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
+                                      const Balance& b) {
+    std::int64_t top = mph_to_mm_per_tick(loco.top_speed_mph, b);
+    if (loco.fuel == Fuel::Steam && train.water == 0) top = top * b.servicing.no_water_speed_permille / 1000;
     std::int64_t rating = loco.grade_rating;
-    if (train.sand == 0) rating = std::max<std::int64_t>(1, rating * provisional::kNoSandGradePermille / 1000);
-    return speed_for(top, rating, train.cars.size(), grade_bp);
+    if (train.sand == 0) rating = std::max<std::int64_t>(1, rating * b.servicing.no_sand_grade_permille / 1000);
+    return speed_for(top, rating, train.cars.size(), grade_bp, b);
 }
 
-Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil) {
-    const std::int64_t age = std::clamp(age_years, 0, provisional::kMaintenanceAgeCapYears);
-    Money m = loco.maintenance_per_year.scaled(provisional::kMaintenanceAgeCapYears + 2 * age,
-                                               provisional::kMaintenanceAgeCapYears);
-    if (oil < provisional::kServiceThresholdPermille) m = m * provisional::kMaintenanceLowOilMultiplier;
+Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil, const Balance& b) {
+    const std::int32_t cap = b.breakdowns.maintenance_age_cap_years;
+    const std::int64_t age = std::clamp(age_years, 0, cap);
+    Money m = loco.maintenance_per_year.scaled(cap + 2 * age, cap);
+    if (oil < b.servicing.service_threshold_permille) m = m * b.breakdowns.maintenance_low_oil_multiplier;
     return m;
 }
 
@@ -197,7 +200,7 @@ void Railway::plan_to_current_stop(Train& t) {
     }
     if (path->empty()) { // already there
         t.state = TrainState::Dwelling;
-        t.wait_ticks_left = provisional::kStationDwellTicks;
+        t.wait_ticks_left = balance_.trains.station_dwell_ticks;
         ++t.stops_made;
         arrivals_.emplace_back(t.id, t.route[t.stop_index]);
         return;
@@ -228,14 +231,14 @@ bool Railway::must_yield(const Train& t) const {
 void Railway::use_supplies(Train& t, const LocomotiveType& loco, std::int64_t distance_mm, std::int32_t grade_bp) {
     if (loco.fuel == Fuel::Steam) {
         t.water_used_mm += distance_mm;
-        t.water = gauge_after(t.water_used_mm, provisional::kWaterRangeMm);
+        t.water = gauge_after(t.water_used_mm, balance_.servicing.water_range_mm);
     }
     if (grade_bp > 0) {
         t.sand_used_climb_mm += distance_mm * grade_bp / 10000;
-        t.sand = gauge_after(t.sand_used_climb_mm, provisional::kSandRangeClimbMm);
+        t.sand = gauge_after(t.sand_used_climb_mm, balance_.servicing.sand_range_climb_mm);
     }
     t.oil_used_mm += distance_mm;
-    t.oil = gauge_after(t.oil_used_mm, provisional::kOilRangeMm);
+    t.oil = gauge_after(t.oil_used_mm, balance_.servicing.oil_range_mm);
 }
 
 bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) {
@@ -244,8 +247,8 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
     // Chance in parts per billion: distance over the mean distance between
     // failures, raised as oil runs low and scaled by reliability.
     const std::int64_t oil_factor_permille =
-        1000 + (provisional::kEmptyOilBreakdownMultiplier - 1) * (kGaugeFull - t.oil);
-    std::int64_t ppb = distance_mm * kBillion / provisional::kMeanBreakdownDistanceMm;
+        1000 + (balance_.breakdowns.empty_oil_multiplier - 1) * (kGaugeFull - t.oil);
+    std::int64_t ppb = distance_mm * kBillion / balance_.breakdowns.mean_distance_mm;
     ppb = ppb * oil_factor_permille / 1000;
     ppb = ppb * 100 / loco.reliability;
     return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < ppb;
@@ -254,7 +257,7 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
 bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco) {
     bool stopped = false;
     for (const ServiceBuilding& b : service_buildings_) {
-        if (b.node != node || !needs(t, b.type, loco)) continue;
+        if (b.node != node || !needs(t, b.type, loco, balance_)) continue;
         refill(t, b.type);
         stopped = true;
     }
@@ -269,7 +272,7 @@ void Railway::arrive_at_stop(Train& t) {
     t.offset_mm = 0;
     t.speed_mm_per_tick = 0;
     t.state = TrainState::Dwelling;
-    t.wait_ticks_left = provisional::kStationDwellTicks;
+    t.wait_ticks_left = balance_.trains.station_dwell_ticks;
     ++t.stops_made;
     arrivals_.emplace_back(t.id, t.route[t.stop_index]);
 }
@@ -283,7 +286,7 @@ std::vector<TrainId> Railway::take_crashes() {
 bool Railway::roll_crash(const Train& t, const LocomotiveType& loco) {
     if (!rules_.breakdowns) return false;
     const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
-    std::int64_t ppb = provisional::kCrashPpbPerTick * 100 / loco.reliability;
+    std::int64_t ppb = balance_.breakdowns.crash_ppb_per_tick * 100 / loco.reliability;
     ppb = ppb * (20 + age_years) / 20;
     if (t.oil == 0) ppb *= 3;
     return static_cast<std::int64_t>(rng_.below(1'000'000'000u)) < ppb;
@@ -329,10 +332,10 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
     }
 
     const std::int64_t accel = std::max<std::int64_t>(
-        1, mph_to_mm_per_tick(loco.top_speed_mph) / provisional::kAccelTicksToTopSpeed);
+        1, mph_to_mm_per_tick(loco.top_speed_mph, balance_) / balance_.trains.accel_ticks_to_top_speed);
     const PathStep here = t.path[t.step];
-    const std::int64_t target = target_speed_mm_per_tick(loco, t, track_.grade_bp(here)) *
-                                bridge_speed_permille(track_.edge(here.edge)) / 1000;
+    const std::int64_t target = target_speed_mm_per_tick(loco, t, track_.grade_bp(here), balance_) *
+                                bridge_speed_permille(track_.edge(here.edge), balance_) / 1000;
     t.speed_mm_per_tick = std::min(target, t.speed_mm_per_tick + accel);
 
     std::int64_t remaining = t.speed_mm_per_tick;
@@ -359,7 +362,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         t.offset_mm = 0;
         if (service_at(t, node, loco)) {
             t.state = TrainState::Servicing;
-            t.wait_ticks_left = provisional::kServiceTicks;
+            t.wait_ticks_left = balance_.servicing.service_ticks;
             t.speed_mm_per_tick = 0;
             return;
         }
@@ -367,7 +370,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
 
     if (roll_breakdown(t, loco, travelled)) {
         t.state = TrainState::BrokenDown;
-        t.wait_ticks_left = provisional::kBreakdownTicks;
+        t.wait_ticks_left = balance_.breakdowns.breakdown_ticks;
         t.speed_mm_per_tick = 0;
         ++t.breakdowns;
     } else if (travelled > 0 && roll_crash(t, loco)) {

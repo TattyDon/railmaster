@@ -12,8 +12,6 @@ namespace railmaster::sim {
 
 namespace {
 
-constexpr std::int64_t kScreening = 25; // per ten thousand: lambda = 0.0025, so pull fades over ~10 cells
-
 IndustryKind parse_kind(const std::string& s, const std::string& key) {
     if (s == "raw") return IndustryKind::Raw;
     if (s == "processor") return IndustryKind::Processor;
@@ -46,8 +44,9 @@ bool cargo_available(CargoId c, const CargoRegistry& cargo, std::int32_t year) {
 
 // Price at a consumer: high when it is starved, falling as unconsumed stock
 // piles up around it.
-std::int32_t demand_price(const CargoType& c, std::int64_t daily_milli, std::int32_t days, std::int64_t leftover) {
-    const std::int64_t high = base_dollars(c) * provisional::kDemandPricePercent / 100;
+std::int32_t demand_price(const CargoType& c, std::int64_t daily_milli, std::int32_t days, std::int64_t leftover,
+                          std::int32_t demand_percent) {
+    const std::int64_t high = base_dollars(c) * demand_percent / 100;
     const std::int64_t s = std::max<std::int64_t>(1, daily_milli * days);
     return static_cast<std::int32_t>(high * s / (s + leftover));
 }
@@ -119,8 +118,8 @@ std::optional<IndustryTypeId> IndustryRegistry::find(std::string_view key) const
 // --- The economy grid --------------------------------------------------------
 
 Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64_t cell_size_mm,
-                 const CargoRegistry& cargo)
-    : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm) {
+                 const CargoRegistry& cargo, const Balance& balance)
+    : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm), balance_(balance.economy) {
     if (width_ <= 0 || height_ <= 0 || cell_size_mm_ <= 0) throw std::invalid_argument("bad economy grid size");
     const auto cells = static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_);
     const std::size_t n = cargo.all().size();
@@ -129,7 +128,7 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
     anchors_.resize(n);
     active_.assign(n, false);
     for (const CargoType& c : cargo.all()) {
-        price_[c.id].assign(cells, percent_of(base_dollars(c), provisional::kNeutralPricePercent));
+        price_[c.id].assign(cells, percent_of(base_dollars(c), balance_.neutral_price_percent));
     }
     scratch_.resize(cells);
 }
@@ -164,7 +163,7 @@ SiteId Economy::add_site(const IndustryRegistry& industries, IndustryTypeId type
 
 void Economy::add_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli) {
     std::int32_t& s = stock_[c][cell(cx, cy)];
-    s = std::min(provisional::kMaxStockMilli, s + milli);
+    s = std::min(balance_.max_stock_milli, s + milli);
 }
 
 std::int32_t Economy::take_stock(CargoId c, std::int32_t cx, std::int32_t cy, std::int32_t milli) {
@@ -177,10 +176,10 @@ std::int32_t Economy::take_stock(CargoId c, std::int32_t cx, std::int32_t cy, st
 void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year) {
     for (auto& a : anchors_) a.clear();
     auto supply = [&](CargoId c, std::size_t at) {
-        anchors_[c].push_back({at, percent_of(base_dollars(cargo.get(c)), provisional::kSupplyPricePercent)});
+        anchors_[c].push_back({at, percent_of(base_dollars(cargo.get(c)), balance_.supply_price_percent)});
     };
     auto demand = [&](CargoId c, std::size_t at, std::int64_t daily, std::int32_t days) {
-        anchors_[c].push_back({at, demand_price(cargo.get(c), daily, days, stock_[c][at])});
+        anchors_[c].push_back({at, demand_price(cargo.get(c), daily, days, stock_[c][at], balance_.demand_price_percent)});
     };
 
     for (Site& s : sites_) {
@@ -195,9 +194,9 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(in, cargo, year)) continue;
                 const std::int32_t want = daily / 2;
                 if (take_stock(in.cargo, s.cx, s.cy, want) >= want && want > 0) boosted = true;
-                demand(in.cargo, at, daily, provisional::kIndustrySaturationDays);
+                demand(in.cargo, at, daily, balance_.industry_saturation_days);
             }
-            const std::int32_t out = daily * (100 + (boosted ? provisional::kBoostPercent : 0)) / 100;
+            const std::int32_t out = daily * (100 + (boosted ? balance_.boost_percent : 0)) / 100;
             for (CargoId c : t.outputs) {
                 if (!cargo_available(c, cargo, year)) continue;
                 add_stock(c, s.cx, s.cy, out);
@@ -207,7 +206,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
             break;
         }
         case IndustryKind::Processor: {
-            const std::int32_t cap = daily * provisional::kInputBufferDays;
+            const std::int32_t cap = daily * balance_.input_buffer_days;
             std::int32_t can_make = t.rule == InputRule::All ? daily : 0;
             bool any_input = false;
             for (std::size_t i = 0; i < t.inputs.size(); ++i) {
@@ -215,7 +214,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(in, cargo, year)) continue;
                 any_input = true;
                 s.buffer[i] += take_stock(in.cargo, s.cx, s.cy, cap - s.buffer[i]);
-                demand(in.cargo, at, daily, provisional::kIndustrySaturationDays);
+                demand(in.cargo, at, daily, balance_.industry_saturation_days);
                 if (t.rule == InputRule::All) can_make = std::min(can_make, s.buffer[i]);
                 else can_make += s.buffer[i];
             }
@@ -242,8 +241,8 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         }
         case IndustryKind::Sink:
         case IndustryKind::House: {
-            const std::int32_t days = t.kind == IndustryKind::House ? provisional::kSaturationDays
-                                                                    : provisional::kIndustrySaturationDays;
+            const std::int32_t days = t.kind == IndustryKind::House ? balance_.saturation_days
+                                                                    : balance_.industry_saturation_days;
             for (const IndustryInput& in : t.inputs) {
                 if (!input_active(in, cargo, year)) continue;
                 take_stock(in.cargo, s.cx, s.cy, daily);
@@ -266,7 +265,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
 
 void Economy::spoil(const CargoRegistry& cargo) {
     for (const CargoType& c : cargo.all()) {
-        const std::int64_t per_mille = std::int64_t{c.decay_sensitivity} * provisional::kSpoilagePerMillePerSensitivity;
+        const std::int64_t per_mille = std::int64_t{c.decay_sensitivity} * balance_.spoilage_per_mille_per_sensitivity;
         for (std::int32_t& s : stock_[c.id]) {
             if (s > 0) s -= static_cast<std::int32_t>(std::max<std::int64_t>(1, s * per_mille / 1000));
         }
@@ -279,7 +278,7 @@ void Economy::relax(const CargoRegistry& cargo) {
     for (const CargoType& c : cargo.all()) {
         if (!active_[c.id]) continue;
         std::vector<std::int32_t>& p = price_[c.id];
-        const std::int64_t neutral = percent_of(base_dollars(c), provisional::kNeutralPricePercent);
+        const std::int64_t neutral = percent_of(base_dollars(c), balance_.neutral_price_percent);
         for (std::size_t y = 0; y < h; ++y) {
             for (std::size_t x = 0; x < w; ++x) {
                 const std::size_t i = y * w + x;
@@ -287,8 +286,8 @@ void Economy::relax(const CargoRegistry& cargo) {
                 const std::int64_t sum = std::int64_t{x > 0 ? p[i - 1] : p[i]} + (x + 1 < w ? p[i + 1] : p[i]) +
                                          (y > 0 ? p[i - w] : p[i]) + (y + 1 < h ? p[i + w] : p[i]);
                 // (mean of neighbours + lambda * neutral) / (1 + lambda), in integers.
-                scratch_[i] = static_cast<std::int32_t>((sum * 10000 + 4 * kScreening * neutral) /
-                                                        (4 * (10000 + kScreening)));
+                const std::int64_t screen = balance_.screening_per_10000;
+                scratch_[i] = static_cast<std::int32_t>((sum * 10000 + 4 * screen * neutral) / (4 * (10000 + screen)));
             }
         }
         for (const Anchor& a : anchors_[c.id]) scratch_[a.cell] = a.price;
@@ -303,7 +302,7 @@ void Economy::drift(const CargoRegistry& cargo) {
         if (!active_[c.id]) continue;
         const std::vector<std::int32_t>& p = price_[c.id];
         std::vector<std::int32_t>& s = stock_[c.id];
-        const std::int32_t threshold = percent_of(base_dollars(c), provisional::kTransportCostPercent);
+        const std::int32_t threshold = percent_of(base_dollars(c), balance_.transport_cost_percent);
         std::fill(scratch_.begin(), scratch_.end(), 0);
         for (std::size_t y = 0; y < h; ++y) {
             for (std::size_t x = 0; x < w; ++x) {
@@ -323,13 +322,13 @@ void Economy::drift(const CargoRegistry& cargo) {
                 if (x > 0) consider(i - 1);
                 if (x + 1 < w) consider(i + 1);
                 if (best == i) continue;
-                const std::int32_t move = std::max(1, s[i] * provisional::kDriftPercentPerDay / 100);
+                const std::int32_t move = std::max(1, s[i] * balance_.drift_percent_per_day / 100);
                 scratch_[i] -= move;
                 scratch_[best] += move;
             }
         }
         for (std::size_t i = 0; i < s.size(); ++i) {
-            s[i] = std::min(provisional::kMaxStockMilli, s[i] + scratch_[i]);
+            s[i] = std::min(balance_.max_stock_milli, s[i] + scratch_[i]);
         }
     }
 }
@@ -348,7 +347,8 @@ void Economy::settle(const CargoRegistry& cargo, const IndustryRegistry& industr
 // --- Map population ----------------------------------------------------------
 
 void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegistry& cargo,
-                      const IndustryRegistry& industries, Random& rng, std::int32_t year) {
+                      const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b) {
+    const Balance::MapGeneration& mg = b.map;
     const std::int32_t w = economy.width(), h = economy.height();
     const auto land = [&](std::int32_t x, std::int32_t y) {
         return x >= 0 && y >= 0 && x < w && y < h && terrain.ground(x, y) != GroundType::Water;
@@ -361,14 +361,14 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
 
     // Towns.
     const std::optional<IndustryTypeId> house = industries.find("house");
-    const std::int32_t town_count = std::max(1, w * h / 2048);
+    const std::int32_t town_count = std::max(1, w * h / mg.cells_per_town);
     std::vector<std::string> used_names;
     for (std::int32_t t = 0; t < town_count; ++t) {
         for (int attempt = 0; attempt < 200; ++attempt) {
             const std::int32_t cx = rng.between(3, std::max(3, w - 4)), cy = rng.between(3, std::max(3, h - 4));
             if (!land(cx, cy) || taken[idx(cx, cy)]) continue;
             const bool crowded = std::any_of(economy.towns().begin(), economy.towns().end(), [&](const Town& o) {
-                return std::abs(o.cx - cx) + std::abs(o.cy - cy) < 12;
+                return std::abs(o.cx - cx) + std::abs(o.cy - cy) < mg.town_spacing_cells;
             });
             if (crowded && attempt < 150) continue;
             std::string name = town_name(rng);
@@ -378,7 +378,7 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
 
             if (house) {
                 std::vector<std::int32_t> houses(25, 0); // 5 x 5 around the centre
-                const std::int32_t count = rng.between(10, 40);
+                const std::int32_t count = rng.between(mg.town_min_houses, mg.town_max_houses);
                 for (std::int32_t i = 0; i < count; ++i) {
                     const std::int32_t dx = rng.between(-2, 2), dy = rng.between(-2, 2);
                     if (land(cx + dx, cy + dy)) ++houses[static_cast<std::size_t>((dy + 2) * 5 + dx + 2)];
@@ -423,16 +423,16 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
         switch (t.kind) {
         case IndustryKind::Raw:
             eligible = std::any_of(t.outputs.begin(), t.outputs.end(), avail);
-            count = 4;
+            count = mg.raw_per_type;
             break;
         case IndustryKind::Processor:
             eligible = std::any_of(t.outputs.begin(), t.outputs.end(), avail) &&
                        std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
-            count = 2;
+            count = mg.processors_per_type;
             break;
         case IndustryKind::Sink:
             eligible = std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
-            count = 2;
+            count = mg.sinks_per_type;
             break;
         case IndustryKind::House: break;
         }

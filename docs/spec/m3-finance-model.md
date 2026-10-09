@@ -53,6 +53,9 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 
 ## Provisional constants
 
+In the `finance` and `stock` sections of
+[`data/balance.json`](../../data/balance.json); see [balance.md](balance.md).
+
 | Item | Value |
 |---|---|
 | Starting cash | $6,000,000 |

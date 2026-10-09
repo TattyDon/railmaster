@@ -1,6 +1,7 @@
 #include "railmaster/sim/freight.hpp"
 
 #include <algorithm>
+#include <map>
 
 namespace railmaster::sim {
 
@@ -19,7 +20,7 @@ Cell station_cell(const Economy& eco, const Railway& rw, const Station& s) {
 template <typename F>
 void for_catchment(const Economy& eco, const Railway& rw, const Station& s, F&& f) {
     const Cell c = station_cell(eco, rw, s);
-    const std::int32_t r = catchment_radius(s.size);
+    const std::int32_t r = catchment_radius(s.size, rw.balance());
     for (std::int32_t y = std::max(0, c.y - r); y <= std::min(eco.height() - 1, c.y + r); ++y) {
         for (std::int32_t x = std::max(0, c.x - r); x <= std::min(eco.width() - 1, c.x + r); ++x) f(x, y);
     }
@@ -80,13 +81,13 @@ std::vector<std::int32_t> best_onward_prices(const Economy& eco, const Railway& 
 
 } // namespace
 
-std::int32_t catchment_radius(StationSize size) {
+std::int32_t catchment_radius(StationSize size, const Balance& b) {
     switch (size) {
-    case StationSize::Small: return provisional::kCatchmentSmall;
-    case StationSize::Medium: return provisional::kCatchmentMedium;
-    case StationSize::Large: return provisional::kCatchmentLarge;
+    case StationSize::Small: return b.stations.catchment_small;
+    case StationSize::Medium: return b.stations.catchment_medium;
+    case StationSize::Large: return b.stations.catchment_large;
     }
-    return provisional::kCatchmentSmall;
+    return b.stations.catchment_small;
 }
 
 CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const Station& s, CargoId c) {
@@ -105,7 +106,7 @@ CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const St
 std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const IndustryRegistry& industries,
                             const Station& s, CargoId c, bool outputs) {
     const MapPoint p = rw.track().node(s.node).pos;
-    const std::int32_t cx = eco.cell_x(p), cy = eco.cell_y(p), r = catchment_radius(s.size);
+    const std::int32_t cx = eco.cell_x(p), cy = eco.cell_y(p), r = catchment_radius(s.size, rw.balance());
     std::int64_t total = 0;
     for (const Site& site : eco.sites()) {
         if (std::abs(site.cx - cx) > r || std::abs(site.cy - cy) > r) continue;
@@ -132,31 +133,33 @@ void start_new_month(Railway& rw) {
 
 namespace {
 
-// exp(-0.0023 x) for x = 0..kDecaySteps, as Q30 fixed point, built by
-// repeated integer multiplication so every platform gets the same table.
-constexpr std::int64_t kDecayStepQ30 = 1'071'275'056; // round(exp(-0.0023) * 2^30)
+// exp(-k x) for x = 0..kDecaySteps, in thousandths, built by repeated
+// integer multiplication of a Q30 factor so every platform gets the same
+// table. One table per decay rate in use, cached.
 constexpr std::size_t kDecaySteps = 3000;
 
-const std::vector<std::int32_t>& decay_table() {
-    static const std::vector<std::int32_t> table = [] {
-        std::vector<std::int32_t> t(kDecaySteps + 1);
+const std::vector<std::int32_t>& decay_table(std::int64_t step_q30) {
+    static std::map<std::int64_t, std::vector<std::int32_t>> tables;
+    auto [it, fresh] = tables.try_emplace(step_q30);
+    if (fresh) {
+        std::vector<std::int32_t>& t = it->second;
+        t.resize(kDecaySteps + 1);
         std::int64_t v = std::int64_t{1} << 30;
         for (std::size_t i = 0; i <= kDecaySteps; ++i) {
             t[i] = static_cast<std::int32_t>(v * 1000 >> 30);
-            v = v * kDecayStepQ30 >> 30;
+            v = v * step_q30 >> 30;
         }
-        return t;
-    }();
-    return table;
+    }
+    return it->second;
 }
 
 } // namespace
 
-std::int32_t value_left_permille(const CargoType& c, std::int32_t days) {
+std::int32_t value_left_permille(const CargoType& c, std::int32_t days, const Balance& b) {
     const std::int64_t x = std::int64_t{std::max(0, days)} * c.decay_sensitivity;
     if (x > static_cast<std::int64_t>(kDecaySteps)) return 0;
-    const std::int32_t v = decay_table()[static_cast<std::size_t>(x)];
-    return v < provisional::kExpiredPermille ? 0 : v;
+    const std::int32_t v = decay_table(b.decay_step_q30())[static_cast<std::size_t>(x)];
+    return v < b.freight.expired_permille ? 0 : v;
 }
 
 std::int32_t difficulty_revenue_permille(Difficulty d) {
@@ -201,17 +204,18 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             if (onward[c.id] == 0) continue; // no train here could sell it anywhere
             WaitingCargo& pool = st.waiting[c.id];
             const std::int32_t threshold = static_cast<std::int32_t>(
-                c.base_price.whole_dollars() * provisional::kTransportCostPercent / 100);
+                c.base_price.whole_dollars() * rw.balance().economy.transport_cost_percent / 100);
             // A station has one price per cargo, the best in its catchment, used
             // both to buy here and to sell here. Pricing pickups by the cheapest
             // cell instead would pay out on the spread within a town.
             const std::int32_t price = best_at[sid][c.id];
             if (price + threshold >= onward[c.id]) continue;
             for_catchment(eco, rw, st, [&](std::int32_t x, std::int32_t y) {
-                const std::int32_t room = provisional::kStationCapMilli - pool.milli;
+                const std::int32_t room = rw.balance().stations.cap_milli - pool.milli;
                 const std::int32_t stock = eco.stock_milli(c.id, x, y);
                 if (room <= 0 || stock <= 0) return;
-                const std::int32_t want = std::min(room, std::max(1, stock * provisional::kGatherPercentPerDay / 100));
+                const std::int32_t want =
+                    std::min(room, std::max(1, stock * rw.balance().stations.gather_percent_per_day / 100));
                 const std::int32_t got = eco.take_stock(c.id, x, y, want);
                 pool.milli += got;
                 pool.value += std::int64_t{price} * got;
@@ -224,7 +228,7 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     for (StationId sid = 0; sid < n_stations; ++sid) {
         for (ExpressWaiting& e : rw.station_mut(sid).express) {
             const std::int32_t per_mille =
-                cargo.get(e.cargo).decay_sensitivity * provisional::kExpressWaitLossPerMillePerSensitivity;
+                cargo.get(e.cargo).decay_sensitivity * rw.balance().express.wait_loss_per_mille_per_sensitivity;
             if (e.milli > 0) e.milli -= std::max(1, e.milli * per_mille / 1000);
         }
     }
@@ -243,8 +247,8 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                 const std::int64_t a = attraction[dest];
                 if (a == 0) continue;
                 ExpressWaiting& pool = express_pool(rw.station_mut(sid), c.id, dest);
-                const auto add = static_cast<std::int32_t>(daily * a / (a + provisional::kExpressAttractionHalf));
-                pool.milli = std::min(provisional::kExpressCapMilli, pool.milli + add);
+                const auto add = static_cast<std::int32_t>(daily * a / (a + rw.balance().express.attraction_half));
+                pool.milli = std::min(rw.balance().express.cap_milli, pool.milli + add);
             }
         }
     }
@@ -262,12 +266,12 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     for (Car& car : rw.train_mut(train_id).cars) {
         if (!car.cargo) continue;
         const CargoType& c = cargo.get(*car.cargo);
-        const std::int32_t left = value_left_permille(c, today - car.loaded_day);
+        const std::int32_t left = value_left_permille(c, today - car.loaded_day, rw.balance());
         if (car.destination) {
             if (*car.destination == station_id) {
                 std::int32_t& received = st.received_this_month[c.id];
                 const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) * kMilli / 12 *
-                                         provisional::kMailCapMonths;
+                                         rw.balance().express.mail_cap_months;
                 if (!c.demand_cap || received < cap) {
                     income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
                                          .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli)

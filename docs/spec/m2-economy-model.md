@@ -145,7 +145,8 @@ history, so it opens with prices and cargo already in place.
 
 ## Provisional constants
 
-All in the `provisional` namespace of `economy.hpp` and `cargo.hpp`.
+In the `economy`, `map`, `freight` and `express` sections of
+[`data/balance.json`](../../data/balance.json); see [balance.md](balance.md).
 
 | Item | Value | Notes |
 |---|---|---|

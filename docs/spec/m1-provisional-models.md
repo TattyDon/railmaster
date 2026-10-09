@@ -2,12 +2,13 @@
 
 The research has not established these rules; see the gaps listed in
 [trains-track-operations.md](trains-track-operations.md) §7. Each is a
-deliberately simple stand-in, kept behind one named constant or function so
+deliberately simple stand-in, kept behind one named number or function so
 it can be replaced once someone measures the real game. **None of these is
 a claim about how RT3 works.**
 
-Source of each constant: `src/sim/include/railmaster/sim/railway.hpp`
-(namespace `provisional`).
+The numbers live in [`data/balance.json`](../../data/balance.json)
+(sections `trains`, `servicing`, `breakdowns`, `track`, `stations`); see
+[balance.md](balance.md).
 
 ## What is confirmed and implemented as researched
 - At most 8 cars per train [M].
@@ -40,7 +41,9 @@ Source of each constant: `src/sim/include/railmaster/sim/railway.hpp`
 Crashes destroy the train [D, rt3-clone-spec §9.4]. Scheduled service stops
 in a route are still to do.
 
-Source of the track-building constants: `src/sim/include/railmaster/sim/track_builder.hpp`.
+Track-building numbers are in the `track` section of `data/balance.json`.
+The bridge eras (1865, 1895) are documented rules and stay in
+`track_builder.hpp`.
 
 ### How a run of track is planned
 1. The player's drag becomes a series of points: a straight line, or a

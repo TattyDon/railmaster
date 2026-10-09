@@ -19,7 +19,7 @@ TEST_CASE("cargo registry parses entries and looks up by key") {
     CHECK(reg.get(0).cargo_class == CargoClass::Freight);
     CHECK(reg.get(2).cargo_class == CargoClass::Express);
     CHECK(reg.get(2).base_price == Money{});
-    CHECK(reg.get(0).base_price == Money::dollars(100 * provisional::kCargoPriceUnitDollars));
+    CHECK(reg.get(0).base_price == Money::dollars(100 * default_balance().economy.cargo_price_unit));
     CHECK_FALSE(reg.find("gold").has_value());
 }
 

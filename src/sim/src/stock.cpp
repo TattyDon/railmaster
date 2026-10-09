@@ -6,7 +6,9 @@ namespace railmaster::sim {
 
 namespace {
 
-Money floor_price(Money p) { return std::max(p, Money::cents(provisional::kMinSharePriceCents)); }
+Money floor_price(const Company& c, Money p) { return std::max(p, Money::cents(c.stock_balance().min_share_price_cents)); }
+
+std::int64_t block_size(const Company& c) { return std::max<std::int64_t>(1, c.stock_balance().share_block); }
 
 std::string dollars(Money m) {
     const std::string digits = std::to_string(std::max<std::int64_t>(0, m.whole_dollars()));
@@ -19,8 +21,8 @@ std::string dollars(Money m) {
 }
 
 std::int64_t issue_size(const Company& c) {
-    return std::max<std::int64_t>(kShareBlock,
-                                  c.shares_outstanding() * provisional::kIssuePercent / 100 / kShareBlock * kShareBlock);
+    const std::int64_t block = block_size(c);
+    return std::max<std::int64_t>(block, c.shares_outstanding() * c.stock_balance().issue_percent / 100 / block * block);
 }
 
 } // namespace
@@ -30,25 +32,26 @@ Money holdings_value(const Investor& inv, const Company& c) { return c.share_pri
 Money net_worth(const Investor& inv, const Company& c) { return inv.cash + holdings_value(inv, c); }
 
 Money purchasing_power(const Investor& inv, const Company& c) {
-    return inv.cash + holdings_value(inv, c).scaled(provisional::kMarginPercent, 100);
+    return inv.cash + holdings_value(inv, c).scaled(c.stock_balance().margin_percent, 100);
 }
 
 std::int64_t public_float(const Investor& inv, const Company& c) { return c.shares_outstanding() - inv.shares; }
 
 Money trade_with_impact(Company& c, std::int64_t shares, bool buying) {
     Money total;
-    for (std::int64_t done = 0; done < shares; done += kShareBlock) {
-        const std::int64_t block = std::min(kShareBlock, shares - done);
-        const Money move = c.share_price().scaled(block * provisional::kImpactPerShareOfCompany,
+    const std::int64_t lot = block_size(c);
+    for (std::int64_t done = 0; done < shares; done += lot) {
+        const std::int64_t block = std::min(lot, shares - done);
+        const Money move = c.share_price().scaled(block * c.stock_balance().impact_per_share_of_company,
                                                   std::max<std::int64_t>(1, c.shares_outstanding()));
-        c.set_share_price(floor_price(buying ? c.share_price() + move : c.share_price() - move));
+        c.set_share_price(floor_price(c, buying ? c.share_price() + move : c.share_price() - move));
         total += c.share_price() * block;
     }
     return total;
 }
 
 std::optional<std::string> buy_shares(Investor& inv, Company& c, std::int64_t blocks) {
-    const std::int64_t shares = blocks * kShareBlock;
+    const std::int64_t shares = blocks * block_size(c);
     if (blocks <= 0) return "nothing to buy";
     if (shares > public_float(inv, c)) return "not enough shares on the market";
     // Price the trade without committing to it, and check it against what
@@ -67,7 +70,7 @@ std::optional<std::string> buy_shares(Investor& inv, Company& c, std::int64_t bl
 }
 
 std::optional<std::string> sell_shares(Investor& inv, Company& c, std::int64_t blocks) {
-    const std::int64_t shares = blocks * kShareBlock;
+    const std::int64_t shares = blocks * block_size(c);
     if (blocks <= 0) return "nothing to sell";
     if (shares > inv.shares) return "you do not hold that many shares";
     inv.cash += trade_with_impact(c, shares, false);
@@ -84,7 +87,7 @@ std::optional<std::string> issue_stock(const Investor&, Company& c) {
 }
 
 std::optional<std::string> buy_back_stock(const Investor& inv, Company& c) {
-    const std::int64_t shares = std::min(issue_size(c), public_float(inv, c) / kShareBlock * kShareBlock);
+    const std::int64_t shares = std::min(issue_size(c), public_float(inv, c) / block_size(c) * block_size(c));
     if (shares <= 0) return "no shares in public hands to buy back";
     Company trial = c;
     const Money cost = trade_with_impact(trial, shares, true);
@@ -96,23 +99,26 @@ std::optional<std::string> buy_back_stock(const Investor& inv, Company& c) {
 
 Money target_share_price(const Company& c) {
     const std::int64_t n = std::max<std::int64_t>(1, c.shares_outstanding());
-    Money target = c.book_value_per_share().scaled(provisional::kBookWeightPercent, 100);
-    if (const auto profit = c.trailing_profit()) target += profit->scaled(provisional::kEarningsMultiple, n);
-    target += c.dividend_per_share() * provisional::kDividendMultiple;
-    return floor_price(target);
+    const Balance::Stock& b = c.stock_balance();
+    Money target = c.book_value_per_share().scaled(b.book_weight_percent, 100);
+    if (const auto profit = c.trailing_profit()) target += profit->scaled(b.earnings_multiple, n);
+    target += c.dividend_per_share() * b.dividend_multiple;
+    return floor_price(c, target);
 }
 
 std::int64_t monthly_market(Investor& inv, Company& c) {
     const Money target = target_share_price(c);
-    c.set_share_price(floor_price(c.share_price() + (target - c.share_price()).scaled(provisional::kPriceAdjustPercent, 100)));
+    const Balance::Stock& b = c.stock_balance();
+    c.set_share_price(floor_price(c, c.share_price() + (target - c.share_price()).scaled(b.price_adjust_percent, 100)));
 
-    inv.cash += Money::dollars(provisional::kSalaryPerYear).scaled(1, 12);
-    if (inv.cash < Money{}) inv.cash -= (-inv.cash).scaled(provisional::kMarginInterestBp, 10000 * 12);
+    inv.cash += Money::dollars(b.salary_per_year).scaled(1, 12);
+    if (inv.cash < Money{}) inv.cash -= (-inv.cash).scaled(b.margin_interest_bp, 10000 * 12);
 
     std::int64_t sold = 0;
-    while (purchasing_power(inv, c) < Money{} && inv.shares >= kShareBlock) {
+    const std::int64_t lot = block_size(c);
+    while (purchasing_power(inv, c) < Money{} && inv.shares >= lot) {
         sell_shares(inv, c, 1);
-        sold += kShareBlock;
+        sold += lot;
     }
     return sold;
 }

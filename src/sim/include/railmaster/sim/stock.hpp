@@ -13,31 +13,19 @@ namespace railmaster::sim {
 // docs/spec/overview-finance-scenarios.md §4.1 and §4.3; the rest is
 // documented in docs/spec/m3-finance-model.md.
 
-namespace provisional {
-constexpr std::int64_t kStartingPersonalCash = 500'000;
-constexpr std::int64_t kSalaryPerYear = 50'000;    // ~$50K, set by the board [C]
-constexpr std::int32_t kMarginPercent = 50;        // holdings count at half their value towards purchasing power
-constexpr std::int32_t kMarginInterestBp = 1000;   // 10% a year on negative personal cash
-constexpr std::int32_t kImpactPerShareOfCompany = 2; // trading 1% of a company moves its price 2%
-constexpr std::int32_t kIssuePercent = 10;         // an issue or buyback is 10% of the shares outstanding
-// Share price target = book value per share x 0.6 + earnings per share x 8
-// + dividend per share x 10, approached a quarter of the way each month.
-constexpr std::int32_t kBookWeightPercent = 60;
-constexpr std::int32_t kEarningsMultiple = 8;
-constexpr std::int32_t kDividendMultiple = 10;
-constexpr std::int32_t kPriceAdjustPercent = 25;
-constexpr std::int64_t kMinSharePriceCents = 50;
-} // namespace provisional
-
-// Researched: shares trade in blocks of 1,000; stock may be issued at most
-// twice a year.
-constexpr std::int64_t kShareBlock = 1'000;
+// Documented [D]: stock may be issued at most twice a year. The share block,
+// margin, salary and price model are in Balance::Stock, read from the
+// company each function is given.
 constexpr std::int32_t kMaxStockIssuesPerYear = 2;
 
 // The player as a private investor.
 struct Investor {
-    Money cash = Money::dollars(provisional::kStartingPersonalCash);
-    std::int64_t shares = provisional::kFoundingPlayerShares; // in the player's company
+    Money cash = Money::dollars(default_balance().stock.starting_personal_cash);
+    std::int64_t shares = default_balance().stock.founding_player_shares; // in the player's company
+
+    static Investor founder(const Balance& b) {
+        return {Money::dollars(b.stock.starting_personal_cash), b.stock.founding_player_shares};
+    }
 };
 
 Money holdings_value(const Investor& inv, const Company& c);

@@ -69,7 +69,7 @@ TEST_CASE("sand is used only when climbing") {
     run_until(l.rw, reg, t, 1);
     const std::int32_t after_climb = l.rw.train(t).sand;
     CHECK(after_climb < kGaugeFull);
-    CHECK(after_climb == kGaugeFull - 100'000LL * kGaugeFull / provisional::kSandRangeClimbMm);
+    CHECK(after_climb == kGaugeFull - 100'000LL * kGaugeFull / default_balance().servicing.sand_range_climb_mm);
     run_until(l.rw, reg, t, 2); // back downhill
     CHECK(l.rw.train(t).sand == after_climb);
 }
@@ -80,7 +80,7 @@ TEST_CASE("a steam engine with no water crawls") {
     Train full, dry;
     dry.water = 0;
     const std::int64_t normal = target_speed_mm_per_tick(steam, full, 0);
-    CHECK(target_speed_mm_per_tick(steam, dry, 0) == normal * provisional::kNoWaterSpeedPermille / 1000);
+    CHECK(target_speed_mm_per_tick(steam, dry, 0) == normal * default_balance().servicing.no_water_speed_permille / 1000);
     // Diesels do not care about water.
     CHECK(target_speed_mm_per_tick(reg.get(kDiesel), dry, 0) == normal);
 }
@@ -110,7 +110,7 @@ TEST_CASE("a train passing a service tower stops to refill only when low") {
     }
     CHECK(seen_servicing);
     CHECK(l.rw.train(t).service_stops == 1); // skipped the first tower: not yet low
-    CHECK(lowest_water < provisional::kServiceThresholdPermille);
+    CHECK(lowest_water < default_balance().servicing.service_threshold_permille);
     CHECK(l.rw.train(t).water > 400); // refilled at km 120, then ran 80 km
 }
 
@@ -178,7 +178,7 @@ TEST_CASE("a broken-down train stays put, then carries on") {
     const MapPoint where = l.rw.train_position(t);
     const auto progress = [&] { return std::pair{l.rw.train(t).step, l.rw.train(t).offset_mm}; };
     const auto stopped_at = progress();
-    for (int i = 0; i < provisional::kBreakdownTicks - 1; ++i) {
+    for (int i = 0; i < default_balance().breakdowns.breakdown_ticks - 1; ++i) {
         l.rw.tick(reg);
         CHECK(l.rw.train_position(t) == where);
     }

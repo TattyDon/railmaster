@@ -27,6 +27,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §6.3 [C] | Refinery: oil → diesel; rubber plantation (1900) | missing (rubber had no source) | added |
 | §6.3 [C] | Houses take milk only until ~1890 | always | until 1890 |
 | §2 [D] | Every game starts paused | started running | starts paused |
+| §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
 
@@ -58,34 +59,29 @@ Last reviewed against spec v1.0 (9 October 2026).
    (per unit of footprint, or before demand-driven growth) or our other
    rates need to fall with it. **Recommend calibrating in-game before
    changing.**
-2. **Where tunable numbers live (§0 rule).** The spec requires every [C] and
-   [I] number in data files. Ours are named constants in `provisional`
-   namespaces in the headers, which is documented but compiled in. Moving
-   them to `content/balance.json` (§16) needs a balance object passed
-   through the simulation; a contained refactor.
-3. **Price field (§5.3 [I]).** The spec proposes an equilibrium price from
+2. **Price field (§5.3 [I]).** The spec proposes an equilibrium price from
    the demand/supply ratio, relaxing over 6–12 months, with middleman flow
    weighted by terrain conductance. Ours is a screened-Poisson field with
    uniform drift. The spec's [D] requirement we don't yet meet is
    **terrain**: middlemen are cheap along rivers and coasts and slow over
    mountains.
-4. **Stock price (§12.3 [I]).** The spec weights book value 0.8, a 3-year
+3. **Stock price (§12.3 [I]).** The spec weights book value 0.8, a 3-year
    EPS trend × P/E by economy, a dividend term that grows with an unbroken
    record, revenue, ⅛ monthly smoothing, and trade pressure that decays.
    Ours: 0.6 × book value + 8 × trailing EPS + 10 × dividend, ¼ smoothing,
    permanent trade impact.
-5. **Credit rating (§12.4 [I]).** The spec uses ten grades, A+ to D, and a
+4. **Credit rating (§12.4 [I]).** The spec uses ten grades, A+ to D, and a
    score from assets/debt, interest cover, profit trend and bonds, with
    rate = prime + spread. Ours: eight grades from debt/assets with
    bond notches and a fixed rate table. Prime rates arrive with economic states.
-6. **Maintenance and upkeep (§9.4, §11.2 [I]).** The spec proposes
+5. **Maintenance and upkeep (§9.4, §11.2 [I]).** The spec proposes
    maintenance × (1 + 4% per year of age) and track upkeep at 2% of cost a
    year. Ours: linear to 3× at 20 years (from a community page) and 6% a
    year (RT2's rate).
-7. **Catchment and map scale (§3.1, §7.1 [I]).** The spec uses 0.5-mile
+6. **Catchment and map scale (§3.1, §7.1 [I]).** The spec uses 0.5-mile
    cells, radii of 2/3/4 cells, and maps of 256–1,024 cells. Ours: 1 km
    cells, radii of 1/2/3, and 128 × 128 maps. Similar real-world sizes.
-8. **Game speed keys (§2, §15.7 [D/C]).** The spec has six speeds on
+7. **Game speed keys (§2, §15.7 [D/C]).** The spec has six speeds on
    `+`/`−`. Ours: three speeds on 1–3, and `+`/`−` trade shares on the
    finance screen.
 

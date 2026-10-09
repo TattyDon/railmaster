@@ -13,6 +13,7 @@
 #include "railmaster/sim/terrain.hpp"
 
 #include <cstdint>
+#include <optional>
 
 namespace railmaster::sim {
 
@@ -23,7 +24,8 @@ struct WorldConfig {
     std::int32_t height_tiles = 128;
     std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
     bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
-    std::int64_t starting_cash = provisional::kStartingCash; // company's opening cash, dollars
+    // Company's opening cash in dollars; by default Balance::Finance::starting_cash.
+    std::optional<std::int64_t> starting_cash;
     bool populate = true;            // place towns and industries (when industry data is present)
     Difficulty difficulty = Difficulty::Medium;
 };
@@ -33,6 +35,7 @@ struct GameData {
     CargoRegistry cargo{};
     LocomotiveRegistry locomotives{};
     IndustryRegistry industries{};
+    Balance balance{}; // data/balance.json
 };
 
 // Root of all simulation state. Advancing it is a pure function of its

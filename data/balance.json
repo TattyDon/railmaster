@@ -1,0 +1,144 @@
+{
+  "_about": "Community [C] and inferred [I] numbers, per docs/spec/rt3-clone-spec.md section 0. Edit to calibrate; keys starting with _ are comments. Units are in each key name (mm, cents, permille, bp = basis points); money without a unit is dollars. See docs/spec/balance.md.",
+  "breakdowns": {
+    "breakdown_ticks": 32,
+    "crash_ppb_per_tick": 342,
+    "empty_oil_multiplier": 4,
+    "maintenance_age_cap_years": 20,
+    "maintenance_low_oil_multiplier": 2,
+    "mean_distance_mm": 2000000000
+  },
+  "economy": {
+    "boost_percent": 50,
+    "cargo_price_unit": 1000,
+    "demand_price_percent": 150,
+    "drift_percent_per_day": 5,
+    "history_days": 365,
+    "industry_saturation_days": 120,
+    "input_buffer_days": 30,
+    "max_stock_milli": 50000,
+    "neutral_price_percent": 50,
+    "saturation_days": 30,
+    "screening_per_10000": 25,
+    "spoilage_per_mille_per_sensitivity": 1,
+    "supply_price_percent": 50,
+    "transport_cost_percent": 1
+  },
+  "express": {
+    "attraction_half": 20,
+    "cap_milli": 20000,
+    "mail_cap_months": 2,
+    "wait_loss_per_mille_per_sensitivity": 5
+  },
+  "finance": {
+    "bond_early_repayment_percent": 2,
+    "bond_face_value": 500000,
+    "bond_maturity_years": 30,
+    "bond_rate_bp": [
+      400,
+      450,
+      500,
+      600,
+      700,
+      800,
+      1000,
+      1200
+    ],
+    "bond_underwriting_percent": 2,
+    "bonds_per_notch_when_proven": 4,
+    "building_upkeep_per_mille_month": 5,
+    "easy_cost_percent": 85,
+    "fuel_per_km_diesel": 15,
+    "fuel_per_km_electric": 10,
+    "fuel_per_km_per_car": 2,
+    "fuel_per_km_steam": 20,
+    "max_bonds": 20,
+    "rating_leverage_limits": [
+      5,
+      15,
+      25,
+      35,
+      45,
+      55,
+      70
+    ],
+    "starting_cash": 6000000,
+    "track_upkeep_per_mille_month": 5
+  },
+  "freight": {
+    "decay_ppm_per_sensitivity_day": 2300,
+    "expired_permille": 100
+  },
+  "map": {
+    "cells_per_town": 2048,
+    "max_height_m": 400,
+    "processors_per_type": 2,
+    "raw_per_type": 4,
+    "sinks_per_type": 2,
+    "town_max_houses": 40,
+    "town_min_houses": 10,
+    "town_spacing_cells": 12
+  },
+  "servicing": {
+    "maintenance_facility_cost": 100000,
+    "no_sand_grade_permille": 400,
+    "no_water_speed_permille": 250,
+    "oil_range_mm": 1500000000,
+    "sand_range_climb_mm": 600000,
+    "service_threshold_permille": 500,
+    "service_ticks": 4,
+    "service_tower_cost": 30000,
+    "water_range_mm": 150000000
+  },
+  "stations": {
+    "cap_milli": 20000,
+    "catchment_large": 3,
+    "catchment_medium": 2,
+    "catchment_small": 1,
+    "gather_percent_per_day": 20,
+    "large_cost": 200000,
+    "medium_cost": 100000,
+    "small_cost": 50000,
+    "town_reach_cells": 4
+  },
+  "stock": {
+    "book_weight_percent": 60,
+    "dividend_multiple": 10,
+    "earnings_multiple": 8,
+    "founding_player_shares": 300000,
+    "founding_shares": 600000,
+    "impact_per_share_of_company": 2,
+    "issue_percent": 10,
+    "margin_interest_bp": 1000,
+    "margin_percent": 50,
+    "min_share_price_cents": 50,
+    "price_adjust_percent": 25,
+    "salary_per_year": 50000,
+    "share_block": 1000,
+    "starting_personal_cash": 500000
+  },
+  "track": {
+    "default_max_grade_bp": 300,
+    "double_track_percent": 170,
+    "ground_per_km": 25000,
+    "piece_mm": 500000,
+    "steel_bridge_multiple": 5,
+    "stone_bridge_multiple": 6,
+    "suspension_bridge_multiple": 10,
+    "suspension_min_span_mm": 2000000,
+    "tunnel_cover_mm": 12000,
+    "tunnel_multiple": 15,
+    "viaduct_clearance_mm": 10000,
+    "wood_bridge_multiple": 3
+  },
+  "trains": {
+    "accel_ticks_to_top_speed": 8,
+    "grade_penalty": 25,
+    "min_speed_permille": 100,
+    "other_bridge_speed_permille": 900,
+    "seconds_per_tick": 40,
+    "station_dwell_ticks": 8,
+    "wood_bridge_speed_permille": 500
+  },
+  "version": 1
+}

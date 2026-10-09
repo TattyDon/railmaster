@@ -346,16 +346,17 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         std::string done;
         if (key == SDLK_b) {
             r = world_.execute(sim::IssueBond{});
-            done = "ISSUED A $500,000 BOND";
+            done = "ISSUED A " + format_money(sim::Money::dollars(world_.company().finance_balance().bond_face_value)) +
+                   " BOND";
         } else if (key == SDLK_r) {
             r = world_.execute(sim::RepayBond{});
             done = "REPAID A BOND";
         } else if (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS) {
             r = world_.execute(sim::BuyShares{.blocks = blocks});
-            done = "BOUGHT " + format_count(blocks * sim::kShareBlock) + " SHARES";
+            done = "BOUGHT " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
         } else if (key == SDLK_MINUS || key == SDLK_KP_MINUS) {
             r = world_.execute(sim::SellShares{.blocks = blocks});
-            done = "SOLD " + format_count(blocks * sim::kShareBlock) + " SHARES";
+            done = "SOLD " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
         } else if (key == SDLK_i) {
             r = world_.execute(sim::IssueStock{});
             done = "ISSUED NEW STOCK";

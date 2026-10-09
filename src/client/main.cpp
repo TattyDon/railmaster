@@ -38,7 +38,8 @@ std::string read_file(const std::string& path) {
 
 sim::GameData load_game_data(const std::string& dir) {
     sim::GameData d;
-    d.cargo = sim::CargoRegistry::from_json(read_file(dir + "/cargo.json"));
+    d.balance = sim::Balance::from_json(read_file(dir + "/balance.json"));
+    d.cargo = sim::CargoRegistry::from_json(read_file(dir + "/cargo.json"), d.balance.economy.cargo_price_unit);
     d.locomotives = sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"));
     d.industries = sim::IndustryRegistry::from_json(read_file(dir + "/industries.json"), d.cargo);
     return d;

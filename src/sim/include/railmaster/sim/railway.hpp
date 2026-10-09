@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/money.hpp"
@@ -14,42 +15,6 @@
 
 namespace railmaster::sim {
 
-// Stand-ins for rules the research has not pinned down. Every value here is
-// documented in docs/spec/m1-provisional-models.md and is expected to change.
-namespace provisional {
-constexpr std::int64_t kTrainSecondsPerTick = 40;
-constexpr std::int32_t kAccelTicksToTopSpeed = 8;
-constexpr std::int32_t kStationDwellTicks = 8;
-constexpr std::int32_t kMinSpeedPermille = 100;
-
-// Servicing. Gauges run from 0 (empty) to 1000 (full).
-constexpr std::int64_t kWaterRangeMm = 150'000'000;     // a steam engine empties its tender in 150 km
-constexpr std::int64_t kSandRangeClimbMm = 600'000;      // sand runs out after 600 m of total climb
-constexpr std::int64_t kOilRangeMm = 1'500'000'000;      // oil runs out after 1,500 km
-constexpr std::int32_t kServiceThresholdPermille = 500;  // stop to service when a gauge is below half
-constexpr std::int32_t kServiceTicks = 4;                // a quarter of a day per stop
-constexpr std::int32_t kNoWaterSpeedPermille = 250;      // steam with no water: a quarter of top speed
-constexpr std::int32_t kNoSandGradePermille = 400;       // no sand: 40% of normal climbing ability
-constexpr std::int64_t kServiceTowerCost = 30'000;
-constexpr std::int64_t kMaintenanceFacilityCost = 100'000;
-
-// Breakdowns.
-constexpr std::int64_t kMeanBreakdownDistanceMm = 2'000'000'000; // 2,000 km at reliability 100, full oil
-constexpr std::int32_t kEmptyOilBreakdownMultiplier = 4;         // empty oil: 4x the breakdown rate
-constexpr std::int32_t kBreakdownTicks = 32;                     // two days stopped
-
-// Crashes [D: a rare event that destroys the train; rate from rt3-clone-spec §9.4, I]:
-// 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20) and
-// tripled with no oil.
-constexpr std::int64_t kCrashPpbPerTick = 342; // 0.002 a year over 5,840 ticks
-// Bridges slow trains [D]: wood a lot, others a little [I numbers].
-constexpr std::int32_t kWoodBridgeSpeedPermille = 500;
-constexpr std::int32_t kOtherBridgeSpeedPermille = 900;
-
-// Maintenance cost growth.
-constexpr std::int32_t kMaintenanceAgeCapYears = 20;
-constexpr std::int32_t kMaintenanceLowOilMultiplier = 2;
-} // namespace provisional
 
 constexpr std::size_t kMaxCarsPerTrain = 8;  // RT3 manual
 constexpr std::int32_t kGaugeFull = 1000;
@@ -60,7 +25,7 @@ using ServiceBuildingId = std::uint32_t;
 
 enum class StationSize : std::uint8_t { Small, Medium, Large };
 
-Money station_cost(StationSize size);
+Money station_cost(StationSize size, const Balance& b = default_balance());
 
 // Cargo gathered at a station, waiting for a train.
 struct WaitingCargo {
@@ -93,7 +58,7 @@ struct Station {
 // (water and sand) and the maintenance facility (oil).
 enum class ServiceType : std::uint8_t { ServiceTower, MaintenanceFacility };
 
-Money service_building_cost(ServiceType type);
+Money service_building_cost(ServiceType type, const Balance& b = default_balance());
 
 struct ServiceBuilding {
     ServiceBuildingId id = 0;
@@ -167,18 +132,21 @@ struct OperatingRules {
 };
 
 // Convert a speed in miles per hour into distance per simulation tick.
-std::int64_t mph_to_mm_per_tick(std::int64_t mph);
+std::int64_t mph_to_mm_per_tick(std::int64_t mph, const Balance& b = default_balance());
 
 // Speed a locomotive can hold on a given grade with a given number of cars,
 // before servicing effects.
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp);
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp,
+                                      const Balance& b = default_balance());
 
 // As above, including the effect of the train's water and sand gauges.
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp);
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
+                                      const Balance& b = default_balance());
 
 // Yearly maintenance for one locomotive: rises with age to 3x by year 20,
 // and doubles while oil is below the service threshold.
-Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil);
+Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil,
+                         const Balance& b = default_balance());
 
 // Track, stations, support buildings and trains, and the rules that move trains.
 class Railway {
@@ -189,6 +157,8 @@ public:
     const TrackNetwork& track() const { return track_; }
 
     void set_rules(OperatingRules rules) { rules_ = rules; }
+    void set_balance(const Balance& b) { balance_ = b; }
+    const Balance& balance() const { return balance_; }
     const OperatingRules& rules() const { return rules_; }
 
     // Split a piece of track (see TrackNetwork::split_edge) and patch the
@@ -244,6 +214,7 @@ private:
     std::vector<TrainId> crashes_;
     std::int32_t today_ = 0;
     OperatingRules rules_;
+    Balance balance_ = default_balance();
     Random rng_;
 };
 

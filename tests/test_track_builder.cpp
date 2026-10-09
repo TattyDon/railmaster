@@ -76,7 +76,7 @@ TEST_CASE("on flat land the plan is all ground track and builds as planned") {
     REQUIRE(r.plan.has_value());
     CHECK(r.plan->pieces.size() == 5);
     CHECK(count_kind(*r.plan, TrackKind::Ground) == 5);
-    CHECK(r.plan->total_cost == Money::dollars(5 * provisional::kGroundTrackPerKm));
+    CHECK(r.plan->total_cost == Money::dollars(5 * default_balance().track.ground_per_km));
 
     const NodeId end = build_track(net, *r.plan);
     CHECK(net.node(end).pos == MapPoint{6 * kKm, kKm});
@@ -111,7 +111,7 @@ TEST_CASE("a ridge is tunnelled, keeping the grade under the limit") {
 
     const NodeId end = build_track(net, *r.plan);
     const auto path = net.shortest_path(start, end);
-    for (const PathStep& s : *path) CHECK(std::abs(net.grade_bp(s)) <= provisional::kDefaultMaxGradeBp);
+    for (const PathStep& s : *path) CHECK(std::abs(net.grade_bp(s)) <= default_balance().track.default_max_grade_bp);
 }
 
 TEST_CASE("with tunnels disallowed the line climbs over the ridge") {
@@ -138,7 +138,7 @@ TEST_CASE("the default blend tunnels the crest and stays within the grade limit"
     const NodeId end = build_track(net, *r.plan);
     const auto path = net.shortest_path(start, end);
     REQUIRE(path.has_value());
-    for (const PathStep& s : *path) CHECK(std::abs(net.grade_bp(s)) <= provisional::kDefaultMaxGradeBp);
+    for (const PathStep& s : *path) CHECK(std::abs(net.grade_bp(s)) <= default_balance().track.default_max_grade_bp);
 }
 
 TEST_CASE("water is bridged: wood for single track, steel or stone for double") {
@@ -220,8 +220,8 @@ TEST_CASE("long water crossings get suspension bridges once available") {
 }
 
 TEST_CASE("bridge prices follow the researched order: wood < steel < stone") {
-    CHECK(provisional::kWoodBridgePerKm < provisional::kSteelBridgePerKm);
-    CHECK(provisional::kSteelBridgePerKm < provisional::kStoneBridgePerKm);
+    CHECK(default_balance().track.wood_bridge_multiple < default_balance().track.steel_bridge_multiple);
+    CHECK(default_balance().track.steel_bridge_multiple < default_balance().track.stone_bridge_multiple);
 }
 
 TEST_CASE("a run can finish on an existing node") {

@@ -16,16 +16,16 @@ std::int64_t pieces_for(std::int64_t length_mm, std::int64_t max_piece_mm) {
 
 MapPoint midpoint(MapPoint a, MapPoint b) { return {(a.x_mm + b.x_mm) / 2, (a.y_mm + b.y_mm) / 2}; }
 
-std::int64_t per_km_rate(TrackKind kind, BridgeType bridge) {
+std::int64_t per_km_rate(TrackKind kind, BridgeType bridge, const Balance::Track& t) {
     switch (kind) {
-    case TrackKind::Ground: return provisional::kGroundTrackPerKm;
-    case TrackKind::Tunnel: return provisional::kTunnelPerKm;
+    case TrackKind::Ground: return t.ground_per_km;
+    case TrackKind::Tunnel: return t.ground_per_km * t.tunnel_multiple;
     case TrackKind::Bridge:
         switch (bridge) {
-        case BridgeType::Wood: return provisional::kWoodBridgePerKm;
-        case BridgeType::Steel: return provisional::kSteelBridgePerKm;
-        case BridgeType::Stone: return provisional::kStoneBridgePerKm;
-        case BridgeType::Suspension: return provisional::kSuspensionBridgePerKm;
+        case BridgeType::Wood: return t.ground_per_km * t.wood_bridge_multiple;
+        case BridgeType::Steel: return t.ground_per_km * t.steel_bridge_multiple;
+        case BridgeType::Stone: return t.ground_per_km * t.stone_bridge_multiple;
+        case BridgeType::Suspension: return t.ground_per_km * t.suspension_bridge_multiple;
         case BridgeType::None: break;
         }
         break;
@@ -110,14 +110,14 @@ std::optional<MapPoint> continuing_control_point(const TrackNetwork& net, NodeId
 }
 
 PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId from, std::vector<MapPoint> points,
-                      std::optional<NodeId> end_node, const TrackBuildOptions& options) {
+                      std::optional<NodeId> end_node, const TrackBuildOptions& options, const Balance& b) {
     if (end_node && !points.empty() && net.node(*end_node).pos != points.back()) {
         return {std::nullopt, "run does not finish at the end node"};
     }
     const std::optional<std::int64_t> end_z =
         end_node ? std::optional<std::int64_t>{net.node(*end_node).z_mm} : std::nullopt;
     PlanResult r = plan_track_between(terrain, net.node(from).pos, net.node(from).z_mm, std::move(points), end_z,
-                                      options);
+                                      options, b);
     if (r.plan) {
         r.plan->from = from;
         r.plan->end_node = end_node;
@@ -127,7 +127,7 @@ PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId fr
 
 PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::int64_t start_z,
                               std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
-                              const TrackBuildOptions& options) {
+                              const TrackBuildOptions& options, const Balance& b) {
     PlanResult result;
     if (points.empty()) {
         result.error = "no track to lay";
@@ -169,7 +169,7 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
     // The rail is a blend set by the tunnel preference. Blending two lines that
     // respect the grade limit gives a line that respects it too. Water places
     // no limit on either envelope, so lakes are spanned between the banks.
-    const std::int64_t m = options.max_grade_bp;
+    const std::int64_t m = options.max_grade_bp.value_or(b.track.default_max_grade_bp);
     const auto step = [&](std::size_t i) { return m * run[i] / 10000; };
     constexpr std::int64_t kFree = std::int64_t{1} << 50;
     std::vector<std::int64_t> cut(n + 1), fill(n + 1);
@@ -214,14 +214,14 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
 
         PlannedPiece piece;
         piece.length_mm = run[i];
-        if (over_water || mid_rail - mid_ground > provisional::kViaductClearanceMm) {
+        if (over_water || mid_rail - mid_ground > b.track.viaduct_clearance_mm) {
             if (!bridge) {
                 bridge = choose_bridge(options, result.error);
                 if (!bridge) return result;
             }
             piece.kind = TrackKind::Bridge;
             piece.bridge = *bridge;
-        } else if (mid_ground - mid_rail > provisional::kTunnelCoverMm) {
+        } else if (mid_ground - mid_rail > b.track.tunnel_cover_mm) {
             piece.kind = TrackKind::Tunnel;
         }
         plan.pieces.push_back(piece);
@@ -238,16 +238,16 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
             std::size_t j = i;
             std::int64_t span = 0;
             while (j <= n && piece_over_water[j]) span += run[j++];
-            if (span >= provisional::kSuspensionMinSpanMm) {
+            if (span >= b.track.suspension_min_span_mm) {
                 for (std::size_t k = i; k < j; ++k) plan.pieces[k - 1].bridge = BridgeType::Suspension;
             }
             i = j;
         }
     }
 
-    const std::int64_t percent = options.double_track ? provisional::kDoubleTrackPercent : 100;
+    const std::int64_t percent = options.double_track ? b.track.double_track_percent : 100;
     for (PlannedPiece& piece : plan.pieces) {
-        piece.cost = Money::dollars(per_km_rate(piece.kind, piece.bridge))
+        piece.cost = Money::dollars(per_km_rate(piece.kind, piece.bridge, b.track))
                          .scaled(piece.length_mm * percent, 100LL * 1'000'000);
         plan.total_cost += piece.cost;
     }

@@ -15,11 +15,11 @@ Ledger revenue_line(const CargoType& c) {
     return Ledger::FreightRevenue;
 }
 
-std::int64_t fuel_per_km(const LocomotiveType& loco, std::size_t cars) {
-    std::int64_t base = provisional::kFuelPerKmSteam;
-    if (loco.fuel == Fuel::Diesel) base = provisional::kFuelPerKmDiesel;
-    if (loco.fuel == Fuel::Electric) base = provisional::kFuelPerKmElectric;
-    return base + provisional::kFuelPerKmPerCar * static_cast<std::int64_t>(cars);
+std::int64_t fuel_per_km(const Balance::Finance& f, const LocomotiveType& loco, std::size_t cars) {
+    std::int64_t base = f.fuel_per_km_steam;
+    if (loco.fuel == Fuel::Diesel) base = f.fuel_per_km_diesel;
+    if (loco.fuel == Fuel::Electric) base = f.fuel_per_km_electric;
+    return base + f.fuel_per_km_per_car * static_cast<std::int64_t>(cars);
 }
 
 } // namespace
@@ -29,17 +29,22 @@ World::World(const WorldConfig& config, GameData data)
       date_(config.start_date),
       terrain_(config.width_tiles, config.height_tiles, config.tile_size_m),
       data_(std::move(data)),
-      economy_(config.width_tiles, config.height_tiles, std::int64_t{config.tile_size_m} * 1000, data_.cargo),
+      economy_(config.width_tiles, config.height_tiles, std::int64_t{config.tile_size_m} * 1000, data_.cargo,
+               data_.balance),
       railway_(config.seed),
       sandbox_(config.sandbox),
       difficulty_(config.difficulty),
-      company_("Railmaster Railroad", Money::dollars(config.starting_cash), config.start_date.year()) {
-    terrain_.generate_rolling_hills(rng_, 400);
+      company_("Railmaster Railroad",
+               Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)),
+               config.start_date.year(), data_.balance),
+      investor_(Investor::founder(data_.balance)) {
+    terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     if (config.populate && !data_.industries.all().empty()) {
-        populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year());
-        // A year of history, so the map starts with prices and cargo in place.
-        economy_.settle(data_.cargo, data_.industries, date_.year(), 365);
+        populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
+        // History, so the map starts with prices and cargo in place.
+        economy_.settle(data_.cargo, data_.industries, date_.year(), data_.balance.economy.history_days);
     }
+    railway_.set_balance(data_.balance);
     railway_.set_rules({.breakdowns = !config.sandbox});
 }
 
@@ -83,23 +88,24 @@ std::int32_t World::revenue_permille(StationId s) const {
 
 void World::charge_running_costs() {
     const std::int32_t today = date_.days_since_epoch();
+    const Balance::Finance& f = data_.balance.finance;
     Money maintenance, fuel;
     for (const Train& t : railway_.trains()) {
         if (t.state == TrainState::Crashed) continue;
         const LocomotiveType& loco = data_.locomotives.get(t.loco);
-        maintenance += annual_maintenance(loco, (today - t.built_day) / 365, t.oil).scaled(1, 12);
+        maintenance += annual_maintenance(loco, (today - t.built_day) / 365, t.oil, data_.balance).scaled(1, 12);
         const std::int64_t run_mm = t.distance_mm - t.fuel_billed_mm;
-        fuel += Money::dollars(fuel_per_km(loco, t.cars.size())).scaled(run_mm, 1'000'000);
+        fuel += Money::dollars(fuel_per_km(f, loco, t.cars.size())).scaled(run_mm, 1'000'000);
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
-    // Easy games cut maintenance, fuel and track costs [D]; by 15% [I].
-    const std::int64_t cost_pct = difficulty_ == Difficulty::Easy ? 85 : 100;
+    // Easy games cut maintenance, fuel and track costs [D]; by how much is [I].
+    const std::int64_t cost_pct = difficulty_ == Difficulty::Easy ? f.easy_cost_percent : 100;
     company_.post(Ledger::TrainMaintenance, maintenance.scaled(cost_pct, 100));
     company_.post(Ledger::Fuel, fuel.scaled(cost_pct, 100));
     company_.post(Ledger::TrackUpkeep,
-                  company_.track_value().scaled(provisional::kTrackUpkeepPerMillePerMonth * cost_pct, 1000 * 100));
+                  company_.track_value().scaled(f.track_upkeep_per_mille_month * cost_pct, 1000 * 100));
     company_.post(Ledger::BuildingUpkeep,
-                  company_.building_value().scaled(provisional::kBuildingUpkeepPerMillePerMonth, 1000));
+                  company_.building_value().scaled(f.building_upkeep_per_mille_month, 1000));
 }
 
 void World::on_new_day() {

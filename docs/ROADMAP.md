@@ -22,7 +22,8 @@ priority; service towers and maintenance facilities with water, sand and oil;
 breakdowns with a sandbox switch; age-based maintenance cost; a command
 layer through which every player action passes; and build tools in the
 client (track with preview, branching, stations, support buildings, trains).
-Provisional rules are listed in `docs/spec/m1-provisional-models.md`.
+Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
+numbers are in `data/balance.json`.
 
 Still to do:
 - Track removal and upgrades (single to double, electrification), with refunds.

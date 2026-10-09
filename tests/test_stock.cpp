@@ -77,7 +77,7 @@ TEST_CASE("each month: salary in, margin interest out, and forced sales if under
     const Money before = inv.cash;
     monthly_market(inv, c);
     // Salary in, then 10% a year on what is still owed.
-    const Money salary = Money::dollars(provisional::kSalaryPerYear).scaled(1, 12);
+    const Money salary = Money::dollars(default_balance().stock.salary_per_year).scaled(1, 12);
     const Money owed = -(before + salary);
     CHECK(inv.cash == before + salary - owed.scaled(1000, 120'000));
 
@@ -87,7 +87,7 @@ TEST_CASE("each month: salary in, margin interest out, and forced sales if under
     c.set_share_price(Money::dollars(5)); // holdings $1.5M count for $750K
     const std::int64_t sold = monthly_market(bust, c);
     CHECK(sold > 0);
-    CHECK(sold % kShareBlock == 0);
+    CHECK(sold % default_balance().stock.share_block == 0);
     CHECK(purchasing_power(bust, c) >= Money{});
 }
 
@@ -176,5 +176,5 @@ TEST_CASE("in the world, dividends land at quarter ends and commands trade share
     const Money dividend = Money::dollars(1).scaled(305'000, 4);
     CHECK(w.company().this_year().dividends_paid > Money{});
     CHECK(w.investor().cash ==
-          cash_before + dividend + Money::dollars(provisional::kSalaryPerYear).scaled(1, 12) * 3); // three salaries
+          cash_before + dividend + Money::dollars(default_balance().stock.salary_per_year).scaled(1, 12) * 3); // three salaries
 }

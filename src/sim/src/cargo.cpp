@@ -6,7 +6,7 @@
 
 namespace railmaster::sim {
 
-CargoRegistry CargoRegistry::from_json(std::string_view json_text) {
+CargoRegistry CargoRegistry::from_json(std::string_view json_text, std::int64_t price_unit) {
     nlohmann::json doc;
     try {
         doc = nlohmann::json::parse(json_text);
@@ -30,7 +30,7 @@ CargoRegistry CargoRegistry::from_json(std::string_view json_text) {
             throw std::runtime_error("cargo data: unknown class '" + cls + "' for '" + t.key + "'");
         }
         t.available_year = entry.value("available_year", 1800);
-        t.base_price = Money::dollars(entry.value("base_price", std::int64_t{0}) * provisional::kCargoPriceUnitDollars);
+        t.base_price = Money::dollars(entry.value("base_price", std::int64_t{0}) * price_unit);
         t.decay_sensitivity = entry.value("decay_sensitivity", 1);
         t.fare_per_km = entry.value("fare_per_km", 0);
         t.generation = entry.value("generation", 0);
