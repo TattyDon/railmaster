@@ -28,6 +28,9 @@ struct LocomotiveType {
     // Hill-climbing ability. 100 is the provisional default; higher climbs
     // better. RT3 shows this as a word scale whose numbers are not yet known.
     std::int32_t grade_rating = 100;
+    // Relative chance of breaking down: 100 is average, 200 fails half as
+    // often. RT3 shows a word rating; per-engine values are not yet known.
+    std::int32_t reliability = 100;
     bool scenario_only = false;
 
     bool available_in(std::int32_t year) const {

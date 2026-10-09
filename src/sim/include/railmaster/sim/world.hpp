@@ -17,6 +17,7 @@ struct WorldConfig {
     std::int32_t width_tiles = 128;
     std::int32_t height_tiles = 128;
     std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
+    bool sandbox = false;            // sandbox games have breakdowns off by default
 };
 
 // Static definitions shared by the whole game, loaded from data/.

@@ -21,8 +21,10 @@ struct Line {
     EdgeId edge = 0;
 };
 
+// Breakdowns are off so these tests exercise movement alone; see test_servicing.cpp.
 Line make_line(std::int64_t km, std::int64_t rise_m, bool double_track = false) {
     Line l;
+    l.rw.set_rules({.breakdowns = false});
     const NodeId a = l.rw.track().add_node({0, 0}, 0);
     const NodeId b = l.rw.track().add_node({km * kKm, 0}, rise_m * 1000);
     l.edge = l.rw.track().add_edge(a, b, double_track);
@@ -143,6 +145,7 @@ TEST_CASE("double track removes the wait") {
 TEST_CASE("a train with no route to its next stop waits and recovers") {
     const auto locos = test_locos();
     Railway rw;
+    rw.set_rules({.breakdowns = false});
     const NodeId a = rw.track().add_node({0, 0}, 0);
     const NodeId b = rw.track().add_node({5 * kKm, 0}, 0);
     const StationId sa = rw.add_station("A", a, StationSize::Small);

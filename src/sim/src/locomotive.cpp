@@ -39,9 +39,11 @@ LocomotiveRegistry LocomotiveRegistry::from_json(std::string_view json_text) {
         t.cost = Money::dollars(entry.at("cost").get<std::int64_t>());
         t.maintenance_per_year = Money::dollars(entry.at("maintenance_per_year").get<std::int64_t>());
         t.grade_rating = entry.value("grade_rating", 100);
+        t.reliability = entry.value("reliability", 100);
         t.scenario_only = entry.value("scenario_only", false);
         if (t.top_speed_mph <= 0) throw std::runtime_error("locomotive data: bad top speed for '" + t.key + "'");
         if (t.grade_rating <= 0) throw std::runtime_error("locomotive data: bad grade_rating for '" + t.key + "'");
+        if (t.reliability <= 0) throw std::runtime_error("locomotive data: bad reliability for '" + t.key + "'");
         if (t.available_until && *t.available_until < t.available_from) {
             throw std::runtime_error("locomotive data: availability ends before it starts for '" + t.key + "'");
         }

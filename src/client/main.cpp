@@ -77,7 +77,16 @@ void build_demo_network(World& world) {
     build_run(world, nodes[2], sim::curve_points(towns[2], c2, towns[0], piece), nodes[0]);
 
     sim::StationId st[3];
-    for (int i = 0; i < 3; ++i) st[i] = rw.add_station(names[i], nodes[i], sim::StationSize::Medium);
+    for (int i = 0; i < 3; ++i) {
+        st[i] = rw.add_station(names[i], nodes[i], sim::StationSize::Medium);
+        rw.add_service_building(sim::ServiceType::ServiceTower, nodes[i]);
+    }
+    rw.add_service_building(sim::ServiceType::MaintenanceFacility, nodes[0]);
+    // Steam tenders run dry in about 150 km, so add towers along the line too.
+    // Nodes are numbered in building order, about half a kilometre apart.
+    for (sim::NodeId n = 120; n < net.nodes().size(); n += 120) {
+        rw.add_service_building(sim::ServiceType::ServiceTower, n);
+    }
 
     const auto& locos = world.data().locomotives.all();
     sim::LocoTypeId loco = 0;
@@ -117,8 +126,15 @@ void draw_railway(const sim::Railway& rw, float mm_per_tile) {
     glBegin(GL_QUADS);
     glColor3f(0.9f, 0.9f, 0.85f);
     for (const sim::Station& s : rw.stations()) square(rw.track().node(s.node).pos, 1.2f);
+    for (const sim::ServiceBuilding& b : rw.service_buildings()) {
+        if (b.type == sim::ServiceType::ServiceTower) glColor3f(0.3f, 0.6f, 0.95f);
+        else glColor3f(0.95f, 0.75f, 0.2f);
+        square(rw.track().node(b.node).pos, 0.5f);
+    }
     for (const sim::Train& t : rw.trains()) {
-        if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);
+        if (t.state == sim::TrainState::BrokenDown) glColor3f(1.0f, 0.55f, 0.0f);
+        else if (t.state == sim::TrainState::Servicing) glColor3f(0.2f, 0.4f, 1.0f);
+        else if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);
         else glColor3f(0.1f, 0.1f, 0.1f);
         square(rw.train_position(t.id), 0.8f);
     }

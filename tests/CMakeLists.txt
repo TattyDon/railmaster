@@ -15,6 +15,7 @@ add_executable(railmaster_tests
     test_money.cpp
     test_random.cpp
     test_railway.cpp
+    test_servicing.cpp
     test_terrain.cpp
     test_track.cpp
     test_track_builder.cpp

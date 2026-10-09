@@ -26,6 +26,21 @@ Source of each constant: `src/sim/include/railmaster/sim/railway.hpp`
 - Tunnels exist, and a build setting controls how readily the router digs
   them instead of following the surface [SW]. Ours is `tunnel_preference`.
 
+- Two support buildings sit on the track: the service tower (water and
+  sand) and the maintenance facility (oil) [M]. A train passing one stops
+  by itself if it is low, and stands still while serviced [M, RG].
+- A steam engine out of water slows greatly; any engine out of sand loses
+  much of its climbing ability; low oil makes breakdowns much more likely [M].
+- Reliability is a locomotive's relative chance of breaking down [M].
+  Sandbox games have a breakdown switch, off by default [M]; ours is
+  `WorldConfig::sandbox` / `OperatingRules::breakdowns`.
+- Maintenance is a fixed yearly cost that rises with age to about 3× by
+  year 20, and rises sharply when oil is low [EM, possibly RT2].
+
+Not modelled yet: **crashes.** The manual pairs them with breakdowns under
+reliability, but no source says what a crash does to the train (destroyed?
+repaired?). Scheduled service stops in a route are also still to do.
+
 Source of the track-building constants: `src/sim/include/railmaster/sim/track_builder.hpp`.
 
 ### How a run of track is planned
@@ -62,4 +77,15 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Default tunnel preference | 50 (halfway between climbing over and cutting through). | The default of RT3's "Tunnels" setting. |
 | Steel bridges | Available from 1870. | The year steel appears in RT3. |
 | Track prices per km of single track | Ground $25K; tunnel $250K; wood bridge $100K; steel $160K; stone $200K. Double track costs 2×. Only the bridge ordering (wood < steel < stone) is researched. | The in-game build cost readout. |
+| Water | A steam tender lasts 150 km. | Observation. |
+| Sand | Used only climbing; runs out after 600 m of total climb. | Observation. |
+| Oil | Lasts 1,500 km. | Observation. |
+| Service threshold | A train stops at a support building when the relevant gauge is below half. | Observation. |
+| Service stop | A quarter of a day; at a station it happens during the station stop. | Observation. |
+| Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
+| Out of sand | Climbing ability drops to 40%. | "Much of its grade performance" [M]. |
+| Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability. Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
+| Breakdown | The train stops where it is for two days. | Observation. |
+| Maintenance growth | Linear to 3× at 20 years, then flat; 2× while oil is below half. | [EM] gives only the 3× figure. |
+| Support building prices | Service tower $30K; maintenance facility $100K ("relatively expensive" [M]). | In-game prices. |
 | Piece length | Curves are sampled every 0.5 km or less. This is a modelling choice, not a game rule. | — |

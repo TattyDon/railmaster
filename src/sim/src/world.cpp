@@ -8,8 +8,10 @@ World::World(const WorldConfig& config, GameData data)
     : rng_(config.seed),
       date_(config.start_date),
       terrain_(config.width_tiles, config.height_tiles, config.tile_size_m),
-      data_(std::move(data)) {
+      data_(std::move(data)),
+      railway_(config.seed) {
     terrain_.generate_rolling_hills(rng_, 400);
+    railway_.set_rules({.breakdowns = !config.sandbox});
 }
 
 void World::tick() {

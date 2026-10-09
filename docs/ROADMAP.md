@@ -14,14 +14,15 @@ Done so far: track graph; a track planner with straight and curved runs,
 grade-limited rail profiles, automatic bridges (wood/stone/steel) and
 tunnels, and cost quotes; stations; locomotive data and loader; train
 movement with grade and acceleration; looping routes; single-track meets by
-priority; and a client demo.
+priority; service towers and maintenance facilities with water, sand and oil;
+breakdowns with a sandbox switch; age-based maintenance cost; and a client
+demo.
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`.
 
 Still to do:
 - Track removal and upgrades (single to double, electrification), with refunds.
 - Charging track costs to a company (needs M3 ledgers).
-- Service towers and maintenance facilities; water, sand and oil use.
-- Breakdowns from reliability and oil level (with the sandbox toggle).
+- Crashes (needs research on what happens), and scheduled service stops in routes.
 - Per-stop consists, and automatic consist selection once cargo exists (M2).
 - Track rights: trains on another company's track always yield.
 - Track-building and train-management UI in the client.

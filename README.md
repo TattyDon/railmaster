@@ -16,6 +16,7 @@ Early development. Done so far:
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
+- water, sand and oil, service towers, maintenance facilities and breakdowns
 - a placeholder top-down client with a demo line of three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
