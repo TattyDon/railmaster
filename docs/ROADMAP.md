@@ -69,8 +69,14 @@ traded in 1,000-share blocks with price impact, margin with interest and
 forced sales, stock issues (twice a year) and buybacks, quarterly dividends,
 and a monthly share-price model.
 
+Done in the third slice: rival companies. Every track piece, station,
+building and train has an owner; trains may run on rivals' track and use
+their stations, paying trackage; the market covers every company; and AI
+tycoons with personalities build and run their own lines through the same
+commands as the player. See `docs/spec/rivals-model.md`.
+
 Still to do:
-- Rival AI companies, and with them short selling, takeovers and mergers.
+- Short selling, takeovers and mergers.
 - Bankruptcy, depreciation, bond maturity.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 

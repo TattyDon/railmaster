@@ -88,12 +88,31 @@ void draw_terrain(const sim::Terrain& t) {
     glEnd();
 }
 
+void owner_rgb(sim::CompanyId owner, float& r, float& g, float& b) {
+    static constexpr float kPalette[][3] = {
+        {0.95f, 0.95f, 0.90f}, {0.90f, 0.35f, 0.20f}, {0.20f, 0.75f, 0.85f}, {0.80f, 0.30f, 0.75f},
+        {0.90f, 0.80f, 0.20f}, {0.35f, 0.80f, 0.35f}, {0.40f, 0.50f, 0.95f}, {0.65f, 0.45f, 0.25f},
+    };
+    const auto& c = kPalette[owner % (sizeof(kPalette) / sizeof(kPalette[0]))];
+    r = c[0];
+    g = c[1];
+    b = c[2];
+}
+
 void draw_railway(const sim::Railway& rw, const Camera& cam) {
     const sim::TrackNetwork& net = rw.track();
     for (const sim::TrackEdge& e : net.edges()) {
         glLineWidth(e.double_track ? 4.0f : 2.0f);
         glBegin(GL_LINES);
-        track_colour(e.kind, 1.0f);
+        if (e.owner == 0) {
+            track_colour(e.kind, 1.0f);
+        } else {
+            // Rivals' track in their colour, darker in tunnels.
+            float r, g, b;
+            owner_rgb(e.owner, r, g, b);
+            const float k = e.kind == sim::TrackKind::Tunnel ? 0.4f : 0.8f;
+            glColor3f(r * k, g * k, b * k);
+        }
         vertex(net.node(e.a).pos, cam);
         vertex(net.node(e.b).pos, cam);
         glEnd();
@@ -102,8 +121,12 @@ void draw_railway(const sim::Railway& rw, const Camera& cam) {
     // Markers stay the same size on screen at any zoom.
     const float px = 1.0f / cam.zoom;
     glBegin(GL_QUADS);
-    glColor3f(0.95f, 0.95f, 0.9f);
-    for (const sim::Station& s : rw.stations()) square(net.node(s.node).pos, cam, 6 * px);
+    for (const sim::Station& s : rw.stations()) {
+        float r, g, b;
+        owner_rgb(s.owner, r, g, b);
+        glColor3f(r, g, b);
+        square(net.node(s.node).pos, cam, 6 * px);
+    }
     for (const sim::ServiceBuilding& b : rw.service_buildings()) {
         if (b.type == sim::ServiceType::ServiceTower) glColor3f(0.3f, 0.6f, 0.95f);
         else glColor3f(0.95f, 0.75f, 0.2f);
@@ -114,7 +137,12 @@ void draw_railway(const sim::Railway& rw, const Camera& cam) {
         if (t.state == sim::TrainState::BrokenDown) glColor3f(1.0f, 0.55f, 0.0f);
         else if (t.state == sim::TrainState::Servicing) glColor3f(0.2f, 0.4f, 1.0f);
         else if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);
-        else glColor3f(0.1f, 0.1f, 0.1f);
+        else if (t.owner == 0) glColor3f(0.1f, 0.1f, 0.1f);
+        else {
+            float r, g, b;
+            owner_rgb(t.owner, r, g, b);
+            glColor3f(r * 0.5f, g * 0.5f, b * 0.5f);
+        }
         square(rw.train_position(t.id), cam, 4 * px);
     }
     glEnd();

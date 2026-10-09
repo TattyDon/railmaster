@@ -22,6 +22,10 @@ Early development. Done so far:
   bonds, shown on a finance screen
 - a personal account and a stock market: trade shares on margin, issue or
   buy back stock, set dividends, grow your net worth
+- rival companies run by AI tycoons with their own personalities: each
+  builds and runs its own lines, may run over yours (paying trackage) and
+  trades shares; the market screen lists every company
+- terrain-aware middlemen and a business cycle of five economic states
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
@@ -48,7 +52,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 Run `./build/src/client/railmaster --empty` to start on a blank map instead
-of the demo network.
+of the demo network. Three AI rivals join by default; `--rivals=N` sets how
+many (0 to 7).
 
 ### Playing
 
@@ -61,6 +66,7 @@ of the demo network.
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
 | F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend |
+| F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks) |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |

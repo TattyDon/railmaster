@@ -43,6 +43,7 @@ sim::GameData load_game_data(const std::string& dir) {
     d.cargo = sim::CargoRegistry::from_json(read_file(dir + "/cargo.json"), d.balance.economy.cargo_price_unit);
     d.locomotives = sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"));
     d.industries = sim::IndustryRegistry::from_json(read_file(dir + "/industries.json"), d.cargo);
+    d.tycoons = sim::TycoonRegistry::from_json(read_file(dir + "/tycoons.json"));
     return d;
 }
 
@@ -107,9 +108,11 @@ void build_demo_network(sim::World& world) {
 int main(int argc, char* argv[]) {
     std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
     bool empty = false;
+    int rivals = 3;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
+        else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
         else data_dir = arg;
     }
 
@@ -121,7 +124,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    sim::World world(sim::WorldConfig{}, std::move(data));
+    sim::WorldConfig config;
+    config.rivals = rivals;
+    sim::World world(config, std::move(data));
     if (!empty) {
         try {
             build_demo_network(world);

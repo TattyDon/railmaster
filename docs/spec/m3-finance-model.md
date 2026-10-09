@@ -70,7 +70,9 @@ In the `finance` and `stock` sections of
 
 ## Personal account, shares and the stock market
 
-Code: `src/sim/include/railmaster/sim/stock.hpp`.
+Code: `src/sim/include/railmaster/sim/stock.hpp`. With rival companies the
+market covers every company and every player; see
+[rivals-model.md](rivals-model.md).
 
 Researched [overview-finance-scenarios.md §4.1, §4.3]:
 

@@ -34,11 +34,10 @@ World::World(const WorldConfig& config, GameData data)
       railway_(config.seed),
       sandbox_(config.sandbox),
       difficulty_(config.difficulty),
-      company_("Railmaster Railroad",
-               Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)),
-               config.start_date.year(), data_.balance),
-      investor_(Investor::founder(data_.balance)),
       business_cycle_(config.business_cycle) {
+    found_company("Railmaster Railroad", "You",
+                  Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)));
+    rival_ai_ = config.rival_ai;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
@@ -48,6 +47,23 @@ World::World(const WorldConfig& config, GameData data)
     }
     railway_.set_balance(data_.balance);
     railway_.set_rules({.breakdowns = !config.sandbox});
+
+    // Rivals: a random choice of the tycoons, each founding a company.
+    std::vector<std::size_t> pool(data_.tycoons.all().size());
+    for (std::size_t i = 0; i < pool.size(); ++i) pool[i] = i;
+    const auto wanted = std::min<std::size_t>(pool.size(), static_cast<std::size_t>(std::max(0, config.rivals)));
+    for (std::size_t i = 0; i < wanted; ++i) {
+        const std::size_t pick = i + rng_.below(static_cast<std::uint32_t>(pool.size() - i));
+        std::swap(pool[i], pool[pick]);
+        const Tycoon& t = data_.tycoons.all()[pool[i]];
+        rivals_.push_back({add_player_company(t.company, t.name), pool[i], -1'000'000, {}});
+    }
+}
+
+PlayerId World::add_player_company(std::string company_name, std::string chairman) {
+    const auto who = static_cast<PlayerId>(market_.investors.size());
+    found_company(std::move(company_name), std::move(chairman), Money::dollars(data_.balance.finance.starting_cash));
+    return who;
 }
 
 void World::tick() {
@@ -55,13 +71,17 @@ void World::tick() {
     railway_.set_today(date_.days_since_epoch());
     railway_.tick(data_.locomotives);
     for (TrainId id : railway_.take_crashes()) {
-        company_.write_off_train(data_.locomotives.get(railway_.train(id).loco).cost);
+        const Train& t = railway_.train(id);
+        company(t.owner).write_off_train(data_.locomotives.get(t.loco).cost);
     }
     for (const auto& [train, station] : railway_.take_arrivals()) {
         const Earnings e = handle_arrival(railway_, economy_, data_.cargo, data_.industries, train, station,
                                           date_.days_since_epoch(), total_ticks_, revenue_permille(station));
-        earned_ += e.total;
-        for (const auto& [cargo, amount] : e.by_cargo) company_.post(revenue_line(data_.cargo.get(cargo)), amount);
+        Train& t = railway_.train_mut(train);
+        Company& runner = company(t.owner);
+        if (t.owner == company().id()) earned_ += e.total;
+        for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
+        pay_trackage(t, e.total);
     }
     if (++tick_of_day_ < kTicksPerDay) return;
     tick_of_day_ = 0;
@@ -75,6 +95,31 @@ void World::tick() {
     if (after.year != before.year) on_new_year();
 }
 
+CompanyId World::found_company(std::string name, std::string chairman, Money cash) {
+    const auto id = static_cast<CompanyId>(market_.companies.size());
+    market_.companies.emplace_back(std::move(name), cash, date_.year(), data_.balance, id);
+    market_.companies.back().set_economic_state(economic_state());
+    market_.investors.push_back(Investor::founder(std::move(chairman), id, data_.balance));
+    return id;
+}
+
+// The track's owners get the share of a stop's income matching the share of
+// the leg run on their track; the runner still pays all its fuel [D].
+void World::pay_trackage(Train& t, Money income) {
+    std::int64_t total = 0;
+    for (std::int64_t mm : t.leg_mm_by_owner) total += mm;
+    if (total > 0 && income > Money{}) {
+        for (std::size_t o = 0; o < t.leg_mm_by_owner.size(); ++o) {
+            const auto owner = static_cast<CompanyId>(o);
+            if (owner == t.owner || t.leg_mm_by_owner[o] == 0 || o >= market_.companies.size()) continue;
+            const Money share = income.scaled(t.leg_mm_by_owner[o], total);
+            company(owner).post(Ledger::TrackageIncome, share);
+            company(t.owner).post(Ledger::TrackagePaid, share);
+        }
+    }
+    t.leg_mm_by_owner.clear();
+}
+
 void World::refresh_economy_terrain() {
     economy_.set_terrain(terrain_);
     economy_terrain_revision_ = terrain_.revision();
@@ -85,8 +130,9 @@ std::int32_t World::cost_percent() const {
 }
 
 void World::set_economic_state(EconomicState s) {
-    if (s != economic_state()) economy_news_ = s;
-    company_.set_economic_state(s);
+    if (s != economic_state_) economy_news_ = s;
+    economic_state_ = s;
+    for (Company& c : market_.companies) c.set_economic_state(s);
     economy_.set_activity_percent(data_.balance.economic_states.activity_percent[index_of(s)]);
 }
 
@@ -108,25 +154,27 @@ std::int32_t World::revenue_permille(StationId s) const {
 void World::charge_running_costs() {
     const std::int32_t today = date_.days_since_epoch();
     const Balance::Finance& f = data_.balance.finance;
-    Money maintenance, fuel;
+    const std::size_t n = market_.companies.size();
+    std::vector<Money> maintenance(n), fuel(n);
     for (const Train& t : railway_.trains()) {
         if (t.state == TrainState::Crashed) continue;
         const LocomotiveType& loco = data_.locomotives.get(t.loco);
-        maintenance += annual_maintenance(loco, (today - t.built_day) / 365, t.oil, data_.balance).scaled(1, 12);
+        maintenance[t.owner] += annual_maintenance(loco, (today - t.built_day) / 365, t.oil, data_.balance).scaled(1, 12);
         const std::int64_t run_mm = t.distance_mm - t.fuel_billed_mm;
-        fuel += Money::dollars(fuel_per_km(f, loco, t.cars.size())).scaled(run_mm, 1'000'000);
+        fuel[t.owner] += Money::dollars(fuel_per_km(f, loco, t.cars.size())).scaled(run_mm, 1'000'000);
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
-    // Easy games cut maintenance, fuel and track costs [D]; by how much is [I].
-    // The economic state moves fuel, labour and upkeep costs [C].
-    const std::int64_t cost_pct = (difficulty_ == Difficulty::Easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
-    company_.post(Ledger::TrainMaintenance, maintenance.scaled(cost_pct, 100));
-    company_.post(Ledger::Fuel, fuel.scaled(cost_pct, 100));
-    company_.post(Ledger::TrackUpkeep,
-                  company_.track_value().scaled(f.track_upkeep_per_mille_month * cost_pct, 1000 * 100));
-    company_.post(Ledger::BuildingUpkeep,
-                  company_.building_value().scaled(f.building_upkeep_per_mille_month * std::int64_t{cost_percent()},
-                                                                   1000 * 100));
+    for (Company& c : market_.companies) {
+        // Easy games cut the player's maintenance, fuel and track costs [D];
+        // by how much is [I]. The economic state moves fuel, labour and upkeep [C].
+        const bool easy = difficulty_ == Difficulty::Easy && c.id() == company().id();
+        const std::int64_t cost_pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
+        c.post(Ledger::TrainMaintenance, maintenance[c.id()].scaled(cost_pct, 100));
+        c.post(Ledger::Fuel, fuel[c.id()].scaled(cost_pct, 100));
+        c.post(Ledger::TrackUpkeep, c.track_value().scaled(f.track_upkeep_per_mille_month * cost_pct, 1000 * 100));
+        c.post(Ledger::BuildingUpkeep,
+               c.building_value().scaled(f.building_upkeep_per_mille_month * std::int64_t{cost_percent()}, 1000 * 100));
+    }
 }
 
 void World::on_new_day() {
@@ -140,22 +188,32 @@ void World::on_new_day() {
 void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
-    company_.record_month();
+    for (Company& c : market_.companies) c.record_month();
     const std::int32_t checks = data_.balance.economic_states.checks_per_year;
     if (business_cycle_ && checks > 0 && (date_.month() - 1) % std::max(1, 12 / checks) == 0) {
         set_economic_state(next_economic_state(economic_state(), rng_, data_.balance.economic_states));
     }
-    last_forced_sale_ = monthly_market(investor_, company_);
+    last_forced_sale_ = monthly_market(market_)[kHumanPlayer];
     // Bond interest [D] and dividends are paid at the end of each quarter.
     if ((date_.month() - 1) % 3 == 0) {
-        company_.charge_interest(3);
-        pay_dividends(investor_, company_);
+        for (Company& c : market_.companies) {
+            c.charge_interest(3);
+            pay_dividends(market_, c.id());
+        }
     }
+    run_rivals();
+}
+
+void World::run_rivals() {
+    if (!rival_ai_) return;
+    for (Rival& r : rivals_) run_rival(*this, r, data_.tycoons.all()[r.tycoon]);
 }
 
 void World::on_new_year() {
-    company_.retire_matured_bonds(date_.year());
-    company_.start_year(date_.year());
+    for (Company& c : market_.companies) {
+        c.retire_matured_bonds(date_.year());
+        c.start_year(date_.year());
+    }
 }
 
 } // namespace railmaster::sim

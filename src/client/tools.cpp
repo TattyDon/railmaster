@@ -132,10 +132,11 @@ void Tools::draw_finance_panel() const {
     row("YOU", "", "", 1.0f, 0.9f, 0.5f);
     row("PERSONAL CASH", format_money(me.cash), "", me.cash < sim::Money{} ? 0.95f : 0.9f,
         me.cash < sim::Money{} ? 0.65f : 0.9f, me.cash < sim::Money{} ? 0.6f : 0.9f);
-    row("SHARES HELD", format_count(me.shares) + " (" + pct(me.shares, co.shares_outstanding()) + ")",
-        format_money(sim::holdings_value(me, co)), 0.9f, 0.9f, 0.9f);
-    row("PURCHASING POWER", format_money(sim::purchasing_power(me, co)), "", 0.9f, 0.9f, 0.9f);
-    row("NET WORTH", format_money(sim::net_worth(me, co)), "", 1, 1, 1);
+    const std::int64_t mine = me.shares_in(co.id());
+    row("SHARES HELD", format_count(mine) + " (" + pct(mine, co.shares_outstanding()) + ")",
+        format_money(co.share_price() * mine), 0.9f, 0.9f, 0.9f);
+    row("PURCHASING POWER", format_money(sim::purchasing_power(me, world_.market())), "", 0.9f, 0.9f, 0.9f);
+    row("NET WORTH", format_money(sim::net_worth(me, world_.market())), "", 1, 1, 1);
 }
 
 std::string format_count(std::int64_t n) {
@@ -239,7 +240,8 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     on_mouse_move(sx, sy);
     switch (tool_) {
     case Tool::Inspect:
-    case Tool::Finance: return;
+    case Tool::Finance:
+    case Tool::Market: return;
     case Tool::Track: {
         if (!track_start_) {
             track_start_ = hover_pick_;
@@ -293,6 +295,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_F5: select(Tool::Maintenance); return true;
     case SDLK_F6: select(Tool::Train); return true;
     case SDLK_F7: select(Tool::Finance); return true;
+    case SDLK_F8: select(Tool::Market); return true;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -379,7 +382,110 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else show("CANNOT: " + r.error, false);
         return true;
     }
+    case Tool::Market: {
+        const auto n = static_cast<sim::CompanyId>(world_.companies().size());
+        if (key == SDLK_UP) {
+            market_choice_ = static_cast<sim::CompanyId>((market_choice_ + n - 1) % n);
+            return true;
+        }
+        if (key == SDLK_DOWN) {
+            market_choice_ = static_cast<sim::CompanyId>((market_choice_ + 1) % n);
+            return true;
+        }
+        const bool buy = key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS;
+        const bool sell = key == SDLK_MINUS || key == SDLK_KP_MINUS;
+        if (!buy && !sell) return false;
+        const sim::Company& target = world_.company(market_choice_ % n);
+        const std::int64_t blocks = (mod & KMOD_SHIFT) != 0 ? 5 : 1;
+        const std::string shares = format_count(blocks * target.stock_balance().share_block);
+        const sim::CommandResult r =
+            buy ? world_.execute(sim::BuyShares{.blocks = blocks, .company = target.id()})
+                : world_.execute(sim::SellShares{.blocks = blocks, .company = target.id()});
+        if (r.ok) show((buy ? "BOUGHT " : "SOLD ") + shares + " " + target.name() + " SHARES", true);
+        else show("CANNOT: " + r.error, false);
+        return true;
+    }
     default: return false;
+    }
+}
+
+void Tools::draw_market_panel() const {
+    constexpr float kRow = 16.0f;
+    const auto& companies = world_.companies();
+    const float x0 = 40, y0 = 56, w = 1100;
+    const float h = kRow * static_cast<float>(companies.size() + 16);
+    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    float y = y0 + 10;
+    // Name, then right-aligned columns ending at each later position.
+    const float cols[] = {x0 + 14, 0, x0 + 600, x0 + 780, x0 + 950, x0 + 1090};
+    const auto cells = [&](const std::vector<std::string>& v, float r, float g, float b) {
+        glColor3f(r, g, b);
+        draw_text(cols[0], y, v[0], kScale);
+        for (std::size_t i = 1; i < v.size(); ++i) {
+            draw_text(cols[i + 1] - static_cast<float>(text_width(v[i], kScale)), y, v[i], kScale);
+        }
+        y += kRow;
+    };
+    cells({"STOCK MARKET", "PRICE", "BOOK/SHARE", "LAST YEAR", "YOU HOLD"}, 1.0f, 0.9f, 0.5f);
+    const sim::Investor& me = world_.investor();
+    const auto n = static_cast<sim::CompanyId>(companies.size());
+    const sim::CompanyId chosen = static_cast<sim::CompanyId>(market_choice_ % n);
+    for (const sim::Company& c : companies) {
+        const auto& hist = c.history();
+        const sim::Money last = hist.size() > 1 ? hist[hist.size() - 2].profit() : hist.back().profit();
+        const bool sel = c.id() == chosen;
+        float r, g, b;
+        owner_rgb(c.id(), r, g, b);
+        const float swatch = cols[0] + static_cast<float>(text_width("> ", kScale));
+        fill_rect(swatch, y + 2, swatch + 8, y + 10, r, g, b, 1.0f);
+        cells({std::string(sel ? ">" : " ") + "    " + c.name(), format_cents(c.share_price()),
+               format_cents(c.book_value_per_share()), format_money(last), format_count(me.shares_in(c.id()))},
+              sel ? 1.0f : 0.85f, sel ? 1.0f : 0.85f, sel ? 0.7f : 0.85f);
+    }
+    y += kRow / 2;
+
+    const sim::Company& c = world_.company(chosen);
+    std::string chairman = "NONE";
+    std::string bio;
+    for (const sim::Investor& inv : world_.investors()) {
+        if (inv.chairs && *inv.chairs == c.id()) chairman = inv.name;
+    }
+    for (const sim::Rival& rv : world_.rivals()) {
+        if (world_.investors()[rv.player].chairs == c.id()) bio = world_.data().tycoons.all()[rv.tycoon].bio;
+    }
+    std::int32_t stations = 0, trains = 0;
+    for (const sim::Station& s : world_.railway().stations()) stations += s.owner == c.id();
+    for (const sim::Train& t : world_.railway().trains()) trains += t.owner == c.id() && t.state != sim::TrainState::Crashed;
+    glColor3f(1.0f, 0.9f, 0.5f);
+    draw_text(cols[0], y, c.name() + "   CHAIRMAN: " + chairman, kScale);
+    y += kRow;
+    glColor3f(0.8f, 0.8f, 0.8f);
+    if (!bio.empty()) {
+        draw_text(cols[0], y, bio, kScale);
+        y += kRow;
+    }
+    const auto line = [&](const std::string& s) {
+        draw_text(cols[0], y, s, kScale);
+        y += kRow;
+    };
+    line("CASH " + format_money(c.cash()) + "   BOOK VALUE " + format_money(c.book_value()) + "   BONDS " +
+         std::to_string(c.bonds().size()) + "   RATING " + sim::rating_name(c.credit_rating()));
+    line("TRACK " + format_money(c.track_value()) + "   STATIONS " + std::to_string(stations) + "   TRAINS " +
+         std::to_string(trains));
+    line("SHARES " + format_count(c.shares_outstanding()) + "   IN PUBLIC HANDS " +
+         format_count(sim::public_float(world_.market(), c.id())) + "   DIVIDEND " + format_cents(c.dividend_per_share()) +
+         " A YEAR");
+    const sim::YearAccounts& now = c.this_year();
+    line("THIS YEAR: REVENUE " + format_money(now.revenue()) + "   PROFIT " + format_money(now.profit()) +
+         "   TRACKAGE IN " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackageIncome)]) +
+         " OUT " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackagePaid)]));
+    y += kRow / 2;
+    glColor3f(1.0f, 0.9f, 0.5f);
+    line("PLAYERS");
+    for (const sim::Investor& inv : world_.investors()) {
+        glColor3f(0.85f, 0.85f, 0.85f);
+        line(inv.name + "   NET WORTH " + format_money(sim::net_worth(inv, world_.market())) + "   CASH " +
+             format_money(inv.cash));
     }
 }
 
@@ -462,7 +568,8 @@ void Tools::draw_world_overlay() const {
         return;
     }
     case Tool::Inspect:
-    case Tool::Finance: return;
+    case Tool::Finance:
+    case Tool::Market: return;
     }
 }
 
@@ -470,7 +577,7 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
         {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTENANCE"}, {Tool::Train, "F6 TRAIN"},
-        {Tool::Finance, "F7 FINANCES"},
+        {Tool::Finance, "F7 FINANCES"}, {Tool::Market, "F8 MARKET"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -512,6 +619,8 @@ std::string Tools::hint() const {
         return "CLICK STATIONS IN ORDER, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
+    case Tool::Market:
+        return "UP/DOWN CHOOSE A COMPANY   +/- BUY/SELL ITS SHARES (SHIFT FOR 5 BLOCKS)";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND";
@@ -526,6 +635,7 @@ std::string Tools::inspect_text() const {
         if (sim::distance_mm(rw.train_position(t.id), hover_) > snap) continue;
         const auto& loco = world_.data().locomotives.get(t.loco);
         std::string s = "TRAIN " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ". ";
+        if (t.owner != world_.company().id()) s = world_.company(t.owner).name() + " " + s;
         // Load, grouped by cargo: "2 COAL, 1 STEEL, 1 EMPTY".
         std::vector<std::pair<std::string, int>> load;
         for (const sim::Car& car : t.cars) {
@@ -544,7 +654,9 @@ std::string Tools::inspect_text() const {
     }
     if (const auto st = station_near(hover_)) {
         const sim::Station& s = rw.station(*st);
-        std::string text = "STATION: " + s.name + " (" + size_name(s.size) + "). WAITING:";
+        std::string text = "STATION: " + s.name + " (" + size_name(s.size) + ")" +
+                           (s.owner != world_.company().id() ? ", " + world_.company(s.owner).name() : std::string()) +
+                           ". WAITING:";
         bool any = false;
         for (std::size_t c = 0; c < s.waiting.size(); ++c) {
             if (s.waiting[c].milli < sim::kMilli) continue;
@@ -576,7 +688,7 @@ void Tools::draw_ui(const std::string& status) const {
     draw_text(8, 4, status, kScale);
     const std::string spent = (world_.sandbox() ? std::string("SANDBOX   ") : std::string()) + "COMPANY " +
                               format_money(world_.company().cash()) + "   NET WORTH " +
-                              format_money(sim::net_worth(world_.investor(), world_.company()));
+                              format_money(sim::net_worth(world_.investor(), world_.market()));
     draw_text(w - static_cast<float>(text_width(spent, kScale)) - 8, 4, spent, kScale);
 
     for (const Button& b : layout_buttons()) {
@@ -619,6 +731,7 @@ void Tools::draw_ui(const std::string& status) const {
     }
 
     if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
+    if (tool_ == Tool::Market) draw_market_panel();
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

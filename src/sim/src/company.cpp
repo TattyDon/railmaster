@@ -16,8 +16,10 @@ const char* ledger_name(Ledger line) {
     case Ledger::PassengerRevenue: return "Passenger revenue";
     case Ledger::MailRevenue: return "Mail revenue";
     case Ledger::TroopRevenue: return "Troop revenue";
+    case Ledger::TrackageIncome: return "Trackage income";
     case Ledger::TrainMaintenance: return "Train maintenance";
     case Ledger::Fuel: return "Fuel";
+    case Ledger::TrackagePaid: return "Trackage paid";
     case Ledger::TrackUpkeep: return "Track upkeep";
     case Ledger::BuildingUpkeep: return "Building upkeep";
     case Ledger::Interest: return "Interest";
@@ -27,7 +29,7 @@ const char* ledger_name(Ledger line) {
     return "?";
 }
 
-bool is_revenue(Ledger line) { return line <= Ledger::TroopRevenue; }
+bool is_revenue(Ledger line) { return line <= Ledger::TrackageIncome; }
 
 Money YearAccounts::revenue() const {
     Money m;
@@ -43,8 +45,8 @@ Money YearAccounts::expenses() const {
     return m;
 }
 
-Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance)
-    : name_(std::move(name)), finance_(balance.finance), stock_(balance.stock),
+Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance, CompanyId id)
+    : name_(std::move(name)), id_(id), finance_(balance.finance), stock_(balance.stock),
       states_(balance.economic_states), cash_(starting_cash),
       shares_(balance.stock.founding_shares) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});

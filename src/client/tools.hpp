@@ -12,7 +12,7 @@
 
 namespace railmaster::client {
 
-enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance };
+enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market };
 
 // The player's build tools. Every change to the game is sent to the world
 // as a command; the tools only hold in-progress choices (where a run of
@@ -55,6 +55,7 @@ private:
     void cycle_overlay(int direction);
     std::string cell_text() const;
     void draw_finance_panel() const;
+    void draw_market_panel() const;
 
     sim::World& world_;
     const Camera& cam_;
@@ -77,6 +78,7 @@ private:
 
     std::optional<sim::CargoId> overlay_;
 
+    sim::CompanyId market_choice_ = 0; // the company selected on the market screen
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;

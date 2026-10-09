@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/ai.hpp"
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/commands.hpp"
 #include "railmaster/sim/company.hpp"
@@ -29,6 +30,8 @@ struct WorldConfig {
     bool populate = true;            // place towns and industries (when industry data is present)
     Difficulty difficulty = Difficulty::Medium;
     bool business_cycle = true; // the economic state moves; off holds it at Normal
+    std::int32_t rivals = 0;    // AI companies, up to the number of tycoons in the data
+    bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
 };
 
 // Static definitions shared by the whole game, loaded from data/.
@@ -37,6 +40,7 @@ struct GameData {
     LocomotiveRegistry locomotives{};
     IndustryRegistry industries{};
     Balance balance{}; // data/balance.json
+    TycoonRegistry tycoons{};
 };
 
 // Root of all simulation state. Advancing it is a pure function of its
@@ -60,22 +64,33 @@ public:
     const GameData& data() const { return data_; }
     Economy& economy() { return economy_; }
     const Economy& economy() const { return economy_; }
-    Company& company() { return company_; }
-    const Company& company() const { return company_; }
+    // The human player's company and account.
+    Company& company() { return market_.companies.front(); }
+    const Company& company() const { return market_.companies.front(); }
+    Company& company(CompanyId id) { return market_.companies.at(id); }
+    const Company& company(CompanyId id) const { return market_.companies.at(id); }
+    const std::vector<Company>& companies() const { return market_.companies; }
+    const std::vector<Investor>& investors() const { return market_.investors; }
+    const Market& market() const { return market_; }
+    // The AI players, in the order they act each month.
+    const std::vector<Rival>& rivals() const { return rivals_; }
+    // Found a company for a new player (an AI rival, or for tests). Returns
+    // the new player; their company is the next CompanyId.
+    PlayerId add_player_company(std::string company_name, std::string chairman);
     bool sandbox() const { return sandbox_; }
     Difficulty difficulty() const { return difficulty_; }
     // Difficulty x station age, in thousandths, for income at a station.
     std::int32_t revenue_permille(StationId s) const;
-    Investor& investor() { return investor_; }
-    const Investor& investor() const { return investor_; }
+    Investor& investor() { return market_.investors.front(); }
+    const Investor& investor() const { return market_.investors.front(); }
     // Shares sold automatically at the last month end because purchasing
     // power went negative.
     std::int64_t last_forced_sale() const { return last_forced_sale_; }
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
-    // Apply a player command: all of it, or none of it with a reason.
-    CommandResult execute(const Command& cmd);
+    // Apply a command made by player `who`: all of it, or none of it with a reason.
+    CommandResult execute(const Command& cmd, PlayerId who = kHumanPlayer);
     // What a BuildTrack would build and cost, without building it.
     PlanResult preview(const BuildTrack& cmd) const;
     // Everything spent through commands so far. A stand-in until companies
@@ -85,7 +100,7 @@ public:
     Money total_revenue() const { return earned_; }
 
     // The business cycle (rt3-clone-spec §5.5): checked a few times a year.
-    EconomicState economic_state() const { return company_.economic_state(); }
+    EconomicState economic_state() const { return economic_state_; }
     void set_economic_state(EconomicState s); // for scenarios and tests
     // Construction, fuel and labour costs, in percent of Normal.
     std::int32_t cost_percent() const;
@@ -110,14 +125,25 @@ private:
     Money earned_;
     bool sandbox_ = false;
     Difficulty difficulty_ = Difficulty::Medium;
-    Company company_;
-    Investor investor_;
+    Market market_;
+    std::vector<Rival> rivals_;
+    bool rival_ai_ = true;
+    PlayerId actor_ = kHumanPlayer; // who the command being run is for
     std::int64_t last_forced_sale_ = 0;
     bool business_cycle_ = true;
     std::optional<EconomicState> economy_news_;
+    EconomicState economic_state_ = EconomicState::Normal;
     std::uint64_t economy_terrain_revision_ = 0;
 
     void refresh_economy_terrain();
+    CompanyId found_company(std::string name, std::string chairman, Money cash);
+    void pay_trackage(Train& t, Money income);
+    void run_rivals();
+    // The company of the player whose command is being run.
+    Company& acting();
+    const Company& acting() const;
+    bool money_no_object() const; // sandbox, for the human player
+    bool owns_track_at(const TrackEnd& at);
     // A track plan with its costs moved by the economic state.
     PlanResult priced(PlanResult r) const;
 

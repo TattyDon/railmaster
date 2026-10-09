@@ -31,6 +31,8 @@ struct Camera {
 
 void draw_terrain(const sim::Terrain& t);
 void draw_railway(const sim::Railway& rw, const Camera& cam);
+// Each company's colour: the player's is pale; rivals get distinct hues.
+void owner_rgb(sim::CompanyId owner, float& r, float& g, float& b);
 
 // Industries and houses as small squares: raw producers brown, processors
 // purple, consumers grey, houses cream. With `cargo` set, producers of it

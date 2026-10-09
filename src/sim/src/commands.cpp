@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <type_traits>
 
 namespace railmaster::sim {
 
@@ -99,10 +100,38 @@ PlanResult World::priced(PlanResult r) const {
     return r;
 }
 
-CommandResult World::execute(const Command& cmd) {
-    CommandResult r = std::visit([this](const auto& c) { return run(c); }, cmd);
-    if (r.ok) spent_ += r.cost;
+CommandResult World::execute(const Command& cmd, PlayerId who) {
+    if (who >= market_.investors.size()) return fail("unknown player");
+    actor_ = who;
+    CommandResult r = std::visit(
+        [this](const auto& c) {
+            using T = std::decay_t<decltype(c)>;
+            // Trading shares is personal; everything else acts for a company.
+            if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares>) {
+                if (!market_.investors[actor_].chairs) return fail("you do not run a company");
+            }
+            return run(c);
+        },
+        cmd);
+    actor_ = kHumanPlayer;
+    if (r.ok && who == kHumanPlayer) spent_ += r.cost;
     return r;
+}
+
+Company& World::acting() { return market_.companies.at(*market_.investors.at(actor_).chairs); }
+const Company& World::acting() const { return market_.companies.at(*market_.investors.at(actor_).chairs); }
+
+bool World::money_no_object() const { return sandbox_ && actor_ == kHumanPlayer; }
+
+bool World::owns_track_at(const TrackEnd& at) {
+    const TrackNetwork& net = railway_.track();
+    const CompanyId me = acting().id();
+    if (at.kind == TrackEnd::Kind::OnEdge) return net.edge(at.edge).owner == me;
+    if (at.kind == TrackEnd::Kind::Node) {
+        for (EdgeId e : net.edges_at(at.node))
+            if (net.edge(e).owner == me) return true;
+    }
+    return false;
 }
 
 NodeId World::resolve_on_track(const TrackEnd& at) {
@@ -125,8 +154,8 @@ NodeId World::resolve_on_track(const TrackEnd& at) {
 }
 
 std::optional<std::string> World::cannot_afford(Money cost) const {
-    if (sandbox_ || cost <= company_.cash()) return std::nullopt;
-    return "not enough cash: costs " + dollars(cost) + ", the company has " + dollars(company_.cash());
+    if (money_no_object() || cost <= acting().cash()) return std::nullopt;
+    return "not enough cash: costs " + dollars(cost) + ", the company has " + dollars(acting().cash());
 }
 
 CommandResult World::run(const BuildTrack& cmd) {
@@ -142,13 +171,14 @@ CommandResult World::run(const BuildTrack& cmd) {
     PlanResult plan = priced(plan_track(railway_.track(), terrain_, from, std::move(points), to,
                                         options_for(cmd, date_.year()), data_.balance));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
-    build_track(railway_.track(), *plan.plan);
-    company_.invest_track(plan.plan->total_cost);
+    build_track(railway_.track(), *plan.plan, acting().id());
+    acting().invest_track(plan.plan->total_cost);
     return success(plan.plan->total_cost, to);
 }
 
 CommandResult World::run(const BuildStation& cmd) {
     if (cmd.at.kind == TrackEnd::Kind::Free) return fail("stations must be built on track");
+    if (!owns_track_at(cmd.at)) return fail("stations must be built on your own track");
     if (cmd.at.kind == TrackEnd::Kind::Node) {
         for (const Station& s : railway_.stations()) {
             if (s.node == cmd.at.node) return fail("there is already a station here");
@@ -156,9 +186,9 @@ CommandResult World::run(const BuildStation& cmd) {
     }
     if (auto why = cannot_afford(construction_cost(station_cost(cmd.size, data_.balance)))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
-    company_.invest_buildings(construction_cost(station_cost(cmd.size, data_.balance)));
+    acting().invest_buildings(construction_cost(station_cost(cmd.size, data_.balance)));
     std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
-    const StationId id = railway_.add_station(std::move(name), node, cmd.size);
+    const StationId id = railway_.add_station(std::move(name), node, cmd.size, acting().id());
     // Which town it serves, for the station-age modifier: the nearest town
     // centre within the reach of a town's houses.
     Station& st = railway_.station_mut(id);
@@ -182,6 +212,7 @@ CommandResult World::run(const BuildStation& cmd) {
 
 CommandResult World::run(const BuildServiceBuilding& cmd) {
     if (cmd.at.kind == TrackEnd::Kind::Free) return fail("support buildings must be built on track");
+    if (!owns_track_at(cmd.at)) return fail("support buildings must be built on your own track");
     if (cmd.at.kind == TrackEnd::Kind::Node) {
         for (const ServiceBuilding& b : railway_.service_buildings()) {
             if (b.node == cmd.at.node && b.type == cmd.type) return fail("there is already one here");
@@ -189,8 +220,8 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
     }
     if (auto why = cannot_afford(construction_cost(service_building_cost(cmd.type, data_.balance)))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
-    company_.invest_buildings(construction_cost(service_building_cost(cmd.type, data_.balance)));
-    const ServiceBuildingId id = railway_.add_service_building(cmd.type, node);
+    acting().invest_buildings(construction_cost(service_building_cost(cmd.type, data_.balance)));
+    const ServiceBuildingId id = railway_.add_service_building(cmd.type, node, acting().id());
     return success(construction_cost(service_building_cost(cmd.type, data_.balance)), id);
 }
 
@@ -204,24 +235,24 @@ CommandResult World::run(const BuyTrain& cmd) {
         if (s >= railway_.stations().size()) return fail("unknown station in route");
     }
     if (auto why = cannot_afford(loco.cost)) return fail(*why);
-    const TrainId id = railway_.add_train(cmd.loco, cmd.cars, cmd.route, cmd.priority);
+    const TrainId id = railway_.add_train(cmd.loco, cmd.cars, cmd.route, cmd.priority, acting().id());
     railway_.train_mut(id).built_day = date_.days_since_epoch();
-    company_.invest_train(loco.cost);
+    acting().invest_train(loco.cost);
     return success(loco.cost, id);
 }
 
 CommandResult World::run(const IssueBond&) {
     const Balance::Finance& f = data_.balance.finance;
-    if (company_.bonds().size() >= static_cast<std::size_t>(f.max_bonds)) {
+    if (acting().bonds().size() >= static_cast<std::size_t>(f.max_bonds)) {
         return fail("the company already has the maximum of " + std::to_string(f.max_bonds) + " bonds");
     }
-    if (!company_.can_issue_bond()) {
-        return fail(std::string("credit rating ") + rating_name(company_.credit_rating()) +
+    if (!acting().can_issue_bond()) {
+        return fail(std::string("credit rating ") + rating_name(acting().credit_rating()) +
                     " is too low: bonds need B or better");
     }
-    company_.issue_bond(date_.year());
+    acting().issue_bond(date_.year());
     // Cash raised, net of the fee; not counted as spending.
-    CommandResult r = success(Money{}, static_cast<std::uint32_t>(company_.bonds().size() - 1));
+    CommandResult r = success(Money{}, static_cast<std::uint32_t>(acting().bonds().size() - 1));
     return r;
 }
 
@@ -232,23 +263,23 @@ CommandResult from(const std::optional<std::string>& error) {
 }
 } // namespace
 
-CommandResult World::run(const BuyShares& cmd) { return from(buy_shares(investor_, company_, cmd.blocks)); }
-CommandResult World::run(const SellShares& cmd) { return from(sell_shares(investor_, company_, cmd.blocks)); }
-CommandResult World::run(const IssueStock&) { return from(issue_stock(investor_, company_)); }
-CommandResult World::run(const BuyBackStock&) { return from(buy_back_stock(investor_, company_)); }
+CommandResult World::run(const BuyShares& cmd) { return from(buy_shares(market_, actor_, cmd.company, cmd.blocks)); }
+CommandResult World::run(const SellShares& cmd) { return from(sell_shares(market_, actor_, cmd.company, cmd.blocks)); }
+CommandResult World::run(const IssueStock&) { return from(issue_stock(acting())); }
+CommandResult World::run(const BuyBackStock&) { return from(buy_back_stock(market_, acting().id())); }
 
 CommandResult World::run(const SetDividend& cmd) {
     if (cmd.per_share < Money{}) return fail("a dividend cannot be negative");
-    company_.set_dividend_per_share(cmd.per_share);
+    acting().set_dividend_per_share(cmd.per_share);
     return success(Money{}, 0);
 }
 
 CommandResult World::run(const RepayBond&) {
-    if (company_.bonds().empty()) return fail("there are no bonds to repay");
+    if (acting().bonds().empty()) return fail("there are no bonds to repay");
     const Money due = Money::dollars(data_.balance.finance.bond_face_value)
                           .scaled(100 + data_.balance.finance.bond_early_repayment_percent, 100);
-    if (!sandbox_ && company_.cash() < due) return fail("not enough cash to repay a bond (" + dollars(due) + ")");
-    company_.repay_bond();
+    if (!money_no_object() && acting().cash() < due) return fail("not enough cash to repay a bond (" + dollars(due) + ")");
+    acting().repay_bond();
     return success(Money{}, 0);
 }
 

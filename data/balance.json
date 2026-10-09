@@ -1,5 +1,19 @@
 {
   "_about": "Community [C] and inferred [I] numbers, per docs/spec/rt3-clone-spec.md section 0. Edit to calibrate; keys starting with _ are comments. Units are in each key name (mm, cents, permille, bp = basis points); money without a unit is dollars. See docs/spec/balance.md.",
+  "ai": {
+    "build_interval_months_max": 24,
+    "build_interval_months_min": 3,
+    "buy_below_book_percent": 80,
+    "candidates_previewed": 8,
+    "cars_per_train": 4,
+    "cash_reserve": 250000,
+    "cover_cells": 2,
+    "max_route_km": 40,
+    "max_trains_per_route": 3,
+    "min_route_km": 8,
+    "sell_above_book_percent": 150,
+    "waiting_carloads_for_train": 6
+  },
   "breakdowns": {
     "breakdown_ticks": 32,
     "crash_ppb_per_tick": 342,

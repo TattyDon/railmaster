@@ -29,6 +29,9 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §2 [D] | Every game starts paused | started running | starts paused |
 | §5.1, §5.3 [D] | Middlemen cheap along water and coasts, slower over mountains; prices flat along coasts, steep across ranges | uniform | per-cell conductance from terrain weights price coupling and drift cost and speed [I numbers] |
 | §5.5 [C] | Five economic states, checked twice a year; production, costs, prime rate, share prices | none | as the spec's table; transitions as its [I] matrix |
+| §8.5 [D] | Any company may run over a rival's track and use its stations; the owner gets the share of revenue matching the distance on its track; the runner pays all fuel | one company | as documented, measured per leg [I] ([rivals-model.md](rivals-model.md)) |
+| §12.1, §12.5 [D] | Net worth and purchasing power across every company; trading any company | one company | portfolios across companies; margin call sells the most valuable holding first [I] |
+| §13 [D/C/I] | Historical tycoons as AI rivals with personalities, building and running lines | none | seven tycoons; monthly route planner, train manager, finance and speculation |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -123,8 +126,9 @@ Grouped by the spec's own build order (§17).
 - Bankruptcy (§12.4 [D]).
 - Investor sentiment and ousting the chairman; resigning (§12.2 [D]).
 - Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]); stock splits (§12.3 [C]).
-- Rival companies, and with them short selling (§12.5), takeovers and
-  mergers (§12.6), trackage rights (§8.5 [D]) and AI (§13).
+- Short selling (§12.5), takeovers and mergers (§12.6).
+- AI: replacing engines, buying industries, recession caution, AI
+  difficulty multipliers (§13.2, §8.4).
 
 **Scenarios and presentation**
 - Territories and access rights (§3.3 [D]).

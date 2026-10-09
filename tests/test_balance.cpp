@@ -77,7 +77,7 @@ TEST_CASE("a world takes its numbers from its balance") {
     CHECK(w.company().cash() == Money::dollars(1'234'000));
     CHECK(w.company().shares_outstanding() == 200'000);
     CHECK(w.investor().cash == Money::dollars(77'000));
-    CHECK(w.investor().shares == 50'000);
+    CHECK(w.investor().shares_in(0) == 50'000);
 
     REQUIRE(w.execute(IssueBond{}).ok);
     CHECK(w.company().debt() == Money::dollars(100'000));

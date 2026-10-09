@@ -17,6 +17,7 @@ with it.
 | [trains-track-operations.md](trains-track-operations.md) | Locomotive roster, consists, grades, track, servicing, routing |
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |
 | [balance.md](balance.md) | `data/balance.json`: where every tunable number lives and how to change it |
+| [rivals-model.md](rivals-model.md) | Rival companies: ownership, trackage rights, the market across companies, the AI |
 | [m1-provisional-models.md](m1-provisional-models.md) | Stand-in rules used until real values are measured |
 | [m2-economy-model.md](m2-economy-model.md) | How the cargo economy works: researched facts vs our design, and its constants |
 | [m3-finance-model.md](m3-finance-model.md) | Company accounts, running costs, credit rating and bonds |

@@ -13,9 +13,11 @@
 
 namespace railmaster::sim {
 
-// Every change a player makes to the game goes through a command. The world
-// checks a command against the current state and either applies all of it
-// or none of it. Commands are plain data, so they can later be recorded for
+// Every change a player makes to the game goes through a command, the AI's
+// included. A command is made by a player (World::execute's `who`); building,
+// buying trains and company finance act for the company that player chairs.
+// The world checks a command against the current state and either applies
+// all of it or none of it. Commands are plain data, so they can later be recorded for
 // replays or sent to other players for lockstep multiplayer.
 
 // Where one end of a new piece of track, or a building, goes.
@@ -69,12 +71,14 @@ struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
 struct RepayBond {};
 
-// The player trades shares in the company, in blocks of 1,000.
+// A player trades shares in any company, in blocks (1,000 by default).
 struct BuyShares {
     std::int64_t blocks = 1;
+    CompanyId company = 0;
 };
 struct SellShares {
     std::int64_t blocks = 1;
+    CompanyId company = 0;
 };
 // The company sells new shares (at most twice a year) or buys some back.
 struct IssueStock {};

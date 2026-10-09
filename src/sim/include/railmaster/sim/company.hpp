@@ -3,6 +3,7 @@
 #include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/economic_state.hpp"
 #include "railmaster/sim/money.hpp"
+#include "railmaster/sim/track.hpp"
 
 #include <array>
 #include <cstdint>
@@ -32,8 +33,10 @@ enum class Ledger : std::uint8_t {
     PassengerRevenue,
     MailRevenue,
     TroopRevenue,
+    TrackageIncome, // rivals' share of income for running on our track [D]
     TrainMaintenance,
     Fuel,
+    TrackagePaid,
     TrackUpkeep,
     BuildingUpkeep,
     Interest,
@@ -61,8 +64,10 @@ struct YearAccounts {
 // The player's railroad company. Assets are carried at what they cost.
 class Company {
 public:
-    Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance = default_balance());
+    Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance = default_balance(),
+            CompanyId id = 0);
 
+    CompanyId id() const { return id_; }
     const std::string& name() const { return name_; }
     const Balance::Finance& finance_balance() const { return finance_; }
     const Balance::Stock& stock_balance() const { return stock_; }
@@ -142,6 +147,7 @@ public:
 
 private:
     std::string name_;
+    CompanyId id_ = 0;
     Balance::Finance finance_;
     Balance::Stock stock_;
     Balance::EconomicStates states_;

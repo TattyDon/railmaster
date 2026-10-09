@@ -15,7 +15,8 @@ NodeId TrackNetwork::add_node(MapPoint pos, std::int64_t z_mm) {
     return id;
 }
 
-EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind kind, BridgeType bridge) {
+EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind kind, BridgeType bridge,
+                              CompanyId owner) {
     if (a == b) throw std::invalid_argument("track edge must join two different nodes");
     if ((kind == TrackKind::Bridge) != (bridge != BridgeType::None)) {
         throw std::invalid_argument("bridge type must be set for bridges and only for bridges");
@@ -24,7 +25,7 @@ EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind k
     const std::int64_t len = distance_mm(node(a).pos, node(b).pos);
     if (len <= 0) throw std::invalid_argument("track edge must have positive length");
     const auto id = static_cast<EdgeId>(edges_.size());
-    edges_.push_back({id, a, b, len, double_track, kind, bridge});
+    edges_.push_back({id, a, b, len, double_track, kind, bridge, owner});
     adjacency_[a].push_back(id);
     adjacency_[b].push_back(id);
     return id;
@@ -87,7 +88,7 @@ NodeId TrackNetwork::split_edge(EdgeId id, MapPoint at, EdgeId* second) {
     first.b = mid;
     first.length_mm = da;
     const auto new_id = static_cast<EdgeId>(edges_.size());
-    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge});
+    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge, old.owner});
     std::replace(adjacency_[old.b].begin(), adjacency_[old.b].end(), id, new_id);
     adjacency_[mid] = {id, new_id};
     if (second) *second = new_id;

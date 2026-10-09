@@ -10,6 +10,8 @@ namespace railmaster::sim {
 
 using NodeId = std::uint32_t;
 using EdgeId = std::uint32_t;
+// A railroad company; 0 is the human player's.
+using CompanyId = std::uint16_t;
 
 // RT3 has no tile grid for track: lines run at any angle and curve freely.
 // We model the network as a graph of points joined by straight pieces.
@@ -37,6 +39,7 @@ struct TrackEdge {
     bool double_track = false;
     TrackKind kind = TrackKind::Ground;
     BridgeType bridge = BridgeType::None; // set exactly when kind == Bridge
+    CompanyId owner = 0;                  // who built it and is paid trackage for it
 
     NodeId other(NodeId n) const { return n == a ? b : a; }
 };
@@ -62,7 +65,7 @@ public:
     // Throws if a bridge has no bridge type (or a non-bridge has one), or
     // if a wooden bridge is asked to carry double track.
     EdgeId add_edge(NodeId a, NodeId b, bool double_track = false, TrackKind kind = TrackKind::Ground,
-                    BridgeType bridge = BridgeType::None);
+                    BridgeType bridge = BridgeType::None, CompanyId owner = 0);
 
     const TrackNode& node(NodeId id) const { return nodes_.at(id); }
     const TrackEdge& edge(EdgeId id) const { return edges_.at(id); }

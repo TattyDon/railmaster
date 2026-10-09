@@ -153,22 +153,22 @@ NodeId Railway::split_edge(EdgeId e, MapPoint at) {
     return mid;
 }
 
-StationId Railway::add_station(std::string name, NodeId node, StationSize size) {
+StationId Railway::add_station(std::string name, NodeId node, StationSize size, CompanyId owner) {
     if (node >= track_.nodes().size()) throw std::out_of_range("station node out of range");
     const auto id = static_cast<StationId>(stations_.size());
-    stations_.push_back({id, std::move(name), node, size});
+    stations_.push_back({id, std::move(name), node, size, owner});
     return id;
 }
 
-ServiceBuildingId Railway::add_service_building(ServiceType type, NodeId node) {
+ServiceBuildingId Railway::add_service_building(ServiceType type, NodeId node, CompanyId owner) {
     if (node >= track_.nodes().size()) throw std::out_of_range("service building node out of range");
     const auto id = static_cast<ServiceBuildingId>(service_buildings_.size());
-    service_buildings_.push_back({id, type, node});
+    service_buildings_.push_back({id, type, node, owner});
     return id;
 }
 
 TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<StationId> route,
-                           std::int32_t priority) {
+                           std::int32_t priority, CompanyId owner) {
     if (car_count > kMaxCarsPerTrain) throw std::invalid_argument("too many cars for one train");
     if (route.empty()) throw std::invalid_argument("train route must have at least one stop");
     for (StationId s : route) {
@@ -176,6 +176,7 @@ TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<S
     }
     Train t;
     t.id = static_cast<TrainId>(trains_.size());
+    t.owner = owner;
     t.loco = loco;
     t.cars.resize(car_count);
     t.priority = priority;
@@ -220,7 +221,15 @@ bool Railway::must_yield(const Train& t) const {
         if (o.id == t.id || !on_path(o.state)) continue;
         const PathStep theirs = o.path[o.step];
         if (theirs.edge != mine.edge || theirs.forward == mine.forward) continue;
-        if (!outranks(o, t)) continue;
+        // A train on another company's track yields to the owner's trains,
+        // whatever its priority [M]; otherwise priority and cargo decide.
+        const CompanyId owner = track_.edge(mine.edge).owner;
+        const bool o_home = o.owner == owner, t_home = t.owner == owner;
+        if (o_home != t_home) {
+            if (!o_home) continue;
+        } else if (!outranks(o, t)) {
+            continue;
+        }
         // Both measured from my starting end: they have not yet passed me
         // while their position is still ahead of mine.
         if (len - o.offset_mm >= t.offset_mm) return true;
@@ -346,6 +355,9 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         const std::int64_t moved = std::min(remaining, room);
         use_supplies(t, loco, moved, track_.grade_bp(step));
         t.distance_mm += moved;
+        const CompanyId owner = track_.edge(step.edge).owner;
+        if (t.leg_mm_by_owner.size() <= owner) t.leg_mm_by_owner.resize(std::size_t{owner} + 1, 0);
+        t.leg_mm_by_owner[owner] += moved;
         travelled += moved;
         remaining -= moved;
         if (moved < room) {

@@ -47,6 +47,7 @@ struct Station {
     std::string name;
     NodeId node = 0;
     StationSize size = StationSize::Small;
+    CompanyId owner = 0; // any company's trains may use it [D]
     std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
     std::vector<ExpressWaiting> express{}; // sorted by (cargo, destination)
     std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
@@ -64,6 +65,7 @@ struct ServiceBuilding {
     ServiceBuildingId id = 0;
     ServiceType type = ServiceType::ServiceTower;
     NodeId node = 0;
+    CompanyId owner = 0;
 };
 
 enum class TrainState : std::uint8_t {
@@ -88,6 +90,7 @@ struct Car {
 
 struct Train {
     TrainId id = 0;
+    CompanyId owner = 0;
     LocoTypeId loco = 0;
     std::vector<Car> cars;
     std::int32_t priority = 0; // higher wins meets on single track; then more valuable cargo [D]
@@ -118,6 +121,9 @@ struct Train {
     std::int32_t built_day = 0;       // Date::days_since_epoch() when bought
     std::int64_t distance_mm = 0;     // lifetime distance run
     std::int64_t fuel_billed_mm = 0;  // distance already charged for fuel
+    // Distance run on each company's track (indexed by CompanyId) since the
+    // last stop, to share that stop's income with the track's owners.
+    std::vector<std::int64_t> leg_mm_by_owner{};
 
     Money revenue;                    // lifetime earnings
     Money last_income;                // from the most recent stop
@@ -165,17 +171,17 @@ public:
     // paths of trains using it, so they carry on undisturbed.
     NodeId split_edge(EdgeId e, MapPoint at);
 
-    StationId add_station(std::string name, NodeId node, StationSize size);
+    StationId add_station(std::string name, NodeId node, StationSize size, CompanyId owner = 0);
     const Station& station(StationId id) const { return stations_.at(id); }
     const std::vector<Station>& stations() const { return stations_; }
 
-    ServiceBuildingId add_service_building(ServiceType type, NodeId node);
+    ServiceBuildingId add_service_building(ServiceType type, NodeId node, CompanyId owner = 0);
     const std::vector<ServiceBuilding>& service_buildings() const { return service_buildings_; }
 
     // The train starts stopped at the first station of its route.
     // Throws if there are more than kMaxCarsPerTrain cars or the route is empty.
     TrainId add_train(LocoTypeId loco, std::size_t car_count, std::vector<StationId> route,
-                      std::int32_t priority = 0);
+                      std::int32_t priority = 0, CompanyId owner = 0);
     Train& train_mut(TrainId id) { return trains_.at(id); }
     Station& station_mut(StationId id) { return stations_.at(id); }
 

@@ -140,6 +140,22 @@ struct Balance {
         std::int32_t toward_normal_percent = 30; // the rest moves one step away
     } economic_states;
 
+    // Rival companies' decisions (rt3-clone-spec §13.2, all [I]).
+    struct Ai {
+        std::int32_t min_route_km = 8;
+        std::int32_t max_route_km = 40;           // plus up to half again for the keenest builders
+        std::int32_t build_interval_months_min = 3; // the most expansive tycoon
+        std::int32_t build_interval_months_max = 24; // the least
+        std::int64_t cash_reserve = 250'000;
+        std::int32_t candidates_previewed = 8;    // best rough guesses costed in full each time
+        std::int32_t cars_per_train = 4;
+        std::int32_t max_trains_per_route = 3;
+        std::int32_t waiting_carloads_for_train = 6;
+        std::int32_t cover_cells = 2;             // a station this near already serves a place
+        std::int32_t buy_below_book_percent = 80;
+        std::int32_t sell_above_book_percent = 150;
+    } ai;
+
     struct Finance {
         std::int64_t starting_cash = 6'000'000;
         std::int64_t fuel_per_km_steam = 20;
