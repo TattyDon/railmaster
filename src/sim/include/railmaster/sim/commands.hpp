@@ -67,6 +67,14 @@ struct BuyTrain {
     std::int32_t priority = 0;
 };
 
+// Put a new engine on one of your trains, keeping its route, cars and
+// priority (rt3-clone-spec §9.3 [D]). The new engine starts at age 0 with
+// full water, sand and oil; the old one is scrapped with nothing back [I].
+struct ReplaceLocomotive {
+    TrainId train = 0;
+    LocoTypeId loco = 0;
+};
+
 // Borrow $500,000 (needs a credit rating of B or better).
 struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
@@ -146,7 +154,7 @@ struct SetPortMode {
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
-using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
+using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
                              UpgradeIndustry, SetPortMode, BuildStationBuilding>;

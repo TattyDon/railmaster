@@ -260,6 +260,16 @@ struct Balance {
         std::int32_t buy_below_value_percent = 80;
         std::int32_t sell_above_value_percent = 120;
         std::int32_t short_above_value_percent = 125;
+        // Train manager (rt3-clone-spec §13.2 [I]): re-engine trains whose
+        // engine is this old, one a month.
+        std::int32_t replace_engine_age_years = 25;
+        // Recession caution [I]: a tycoon's caution x 1 in a recession, x 2
+        // in a depression. From recession_stop_building it builds no new
+        // lines; per 100 it holds recession_reserve_percent more cash in
+        // reserve and cuts dividends and borrowing by recession_cut_percent.
+        std::int32_t recession_stop_building = 80;
+        std::int32_t recession_reserve_percent = 100;
+        std::int32_t recession_cut_percent = 50;
     } ai;
 
     struct Finance {

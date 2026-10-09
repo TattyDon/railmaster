@@ -452,6 +452,25 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     }
 
     switch (tool_) {
+    case Tool::Inspect: {
+        if (key != SDLK_r) return false;
+        // Re-engine the train under the cursor with the Train tool's engine.
+        const sim::Railway& rw = world_.railway();
+        const auto locos = available_locos();
+        for (const sim::Train& t : rw.trains()) {
+            if (t.state == sim::TrainState::Crashed || sim::distance_mm(rw.train_position(t.id), hover_) > snap_mm()) continue;
+            if (locos.empty()) {
+                show("NO ENGINE IS AVAILABLE", false);
+                return true;
+            }
+            const sim::LocoTypeId loco = locos[loco_choice_ % locos.size()];
+            const sim::CommandResult r = world_.execute(sim::ReplaceLocomotive{.train = t.id, .loco = loco});
+            if (r.ok) show("TRAIN " + std::to_string(t.id + 1) + " NOW PULLED BY A NEW " + world_.data().locomotives.get(loco).name, true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        }
+        return false;
+    }
     case Tool::Track:
         if (key == SDLK_d) double_track_ = !double_track_;
         else if (key == SDLK_c) curves_ = !curves_;
@@ -889,7 +908,7 @@ std::string Tools::hint() const {
     case Tool::Inspect: {
         std::string cargo_map = "O/P CARGO MAP: ";
         cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name + " (RED CHEAP, GREEN DEAR)" : "OFF";
-        return "HOVER FOR DETAILS.  " + cargo_map;
+        return "HOVER FOR DETAILS, R TO RE-ENGINE A TRAIN (F6 L PICKS THE ENGINE).  " + cargo_map;
     }
     case Tool::Track:
         return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP." : "CLICK TO START A LINE.") +
@@ -955,7 +974,8 @@ std::string Tools::inspect_text() const {
         for (std::size_t i = 0; i < load.size(); ++i) {
             s += (i ? ", " : "") + std::to_string(load[i].second) + " " + load[i].first;
         }
-        s += ". EARNED " + format_money(t.revenue) + ".";
+        const std::int32_t age = (world_.date().days_since_epoch() - t.built_day) / 365;
+        s += ". ENGINE " + std::to_string(age) + (age == 1 ? " YEAR" : " YEARS") + " OLD. EARNED " + format_money(t.revenue) + ".";
         if (loco.fuel == sim::Fuel::Steam) s += " WATER " + percent(t.water);
         s += " SAND " + percent(t.sand) + " OIL " + percent(t.oil);
         return s;

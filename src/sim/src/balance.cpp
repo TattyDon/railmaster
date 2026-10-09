@@ -63,7 +63,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_r
                                                 build_interval_months_max, cash_reserve, candidates_previewed,
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
                                                 cover_cells, buy_below_value_percent, sell_above_value_percent,
-                                                short_above_value_percent)
+                                                short_above_value_percent, replace_engine_age_years,
+                                                recession_stop_building, recession_reserve_percent,
+                                                recession_cut_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, fuel_per_km_steam, fuel_per_km_diesel,
                                                 fuel_per_km_electric, fuel_per_km_per_car,
                                                 track_upkeep_bp_per_year, building_upkeep_bp_per_year,

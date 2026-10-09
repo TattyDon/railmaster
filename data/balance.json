@@ -11,6 +11,10 @@
     "max_route_km": 40,
     "max_trains_per_route": 3,
     "min_route_km": 8,
+    "recession_cut_percent": 50,
+    "recession_reserve_percent": 100,
+    "recession_stop_building": 80,
+    "replace_engine_age_years": 25,
     "sell_above_value_percent": 120,
     "short_above_value_percent": 125,
     "waiting_carloads_for_train": 6

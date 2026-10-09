@@ -244,6 +244,25 @@ CommandResult World::run(const BuyTrain& cmd) {
     return success(loco.cost, id);
 }
 
+CommandResult World::run(const ReplaceLocomotive& cmd) {
+    if (cmd.train >= railway_.trains().size()) return fail("no such train");
+    if (cmd.loco >= data_.locomotives.all().size()) return fail("unknown locomotive");
+    const Train& t = railway_.train(cmd.train);
+    if (t.state == TrainState::Crashed) return fail("that train has been wrecked");
+    if (t.owner != acting().id()) return fail("you can only re-engine your own trains");
+    const LocomotiveType& loco = data_.locomotives.get(cmd.loco);
+    if (!loco.available_in(date_.year())) return fail(loco.name + " is not available in " + std::to_string(date_.year()));
+    if (auto why = cannot_afford(loco.cost)) return fail(*why);
+    acting().write_off_train(data_.locomotives.get(t.loco).cost); // scrapped
+    acting().invest_train(loco.cost);
+    Train& tm = railway_.train_mut(cmd.train);
+    tm.loco = cmd.loco;
+    tm.built_day = date_.days_since_epoch();
+    tm.water = tm.sand = tm.oil = kGaugeFull;
+    tm.water_used_mm = tm.sand_used_climb_mm = tm.oil_used_mm = 0;
+    return success(loco.cost, cmd.train);
+}
+
 CommandResult World::run(const IssueBond&) {
     const Balance::Finance& f = data_.balance.finance;
     if (acting().bonds().size() >= static_cast<std::size_t>(f.max_bonds)) {

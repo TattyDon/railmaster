@@ -87,7 +87,9 @@ middleman speeds and how fast the price map reshapes.
 Rival tycoons now value town pairs by the express code's own rates and
 freight by the stations' catchment prices, so they build freight lines as
 well as passenger ones (about a quarter of their revenue in the
-calibration game).
+calibration game). They also re-engine trains at 25 years, and each has
+a recession caution that holds back building, borrowing and dividends in
+bad times. Players can re-engine any of their trains (R in Inspect).
 
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.

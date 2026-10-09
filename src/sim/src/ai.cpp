@@ -32,7 +32,9 @@ TycoonRegistry TycoonRegistry::from_json(std::string_view json_text) {
             t.speculation = entry.value("speculation", 30);
             t.takeovers = entry.value("takeovers", 30);
             t.industry = entry.value("industry", 30);
-            for (const std::int32_t v : {t.expansion, t.leverage, t.dividend, t.speculation, t.takeovers, t.industry}) {
+            t.recession_caution = entry.value("recession_caution", 50);
+            for (const std::int32_t v :
+                 {t.expansion, t.leverage, t.dividend, t.speculation, t.takeovers, t.industry, t.recession_caution}) {
                 if (v < 0 || v > 100) throw std::runtime_error("tycoon data: personality out of 0..100 for '" + t.key + "'");
             }
             for (const Tycoon& other : reg.tycoons_) {
@@ -223,6 +225,27 @@ std::optional<LocoTypeId> pick_loco(const World& w, Money budget) {
     return best;
 }
 
+// How much a tycoon holds back now: its caution x 1 in a recession, x 2 in
+// a depression, 0 otherwise [I].
+std::int32_t caution(const World& w, const Tycoon& ty) {
+    switch (w.economic_state()) {
+    case EconomicState::Recession: return ty.recession_caution;
+    case EconomicState::Depression: return 2 * ty.recession_caution;
+    default: return 0;
+    }
+}
+
+// The cash a tycoon keeps in hand, more in bad times by its caution.
+Money reserve(const World& w, const Tycoon& ty) {
+    const Balance::Ai& b = w.data().balance.ai;
+    return Money::dollars(b.cash_reserve).scaled(100 + std::int64_t{b.recession_reserve_percent} * caution(w, ty) / 100, 100);
+}
+
+// What is left of dividends and borrowing in bad times, in percent.
+std::int64_t kept_percent(const World& w, const Tycoon& ty) {
+    return std::max<std::int64_t>(0, 100 - std::int64_t{w.data().balance.ai.recession_cut_percent} * caution(w, ty) / 100);
+}
+
 void manage_finance(World& w, const Rival& r, const Tycoon& ty, Company& co) {
     const Balance& b = w.data().balance;
     // Borrow to stay solvent; failing that, go bankrupt as a last resort [C].
@@ -233,12 +256,12 @@ void manage_finance(World& w, const Rival& r, const Tycoon& ty, Company& co) {
     // Pay out a share of profit, by temperament.
     const auto profit = co.trailing_profit();
     const Money dividend = profit && *profit > Money{} && co.shares_outstanding() > 0
-                               ? profit->scaled(ty.dividend, 100 * co.shares_outstanding())
+                               ? profit->scaled(ty.dividend * kept_percent(w, ty), 100 * 100 * co.shares_outstanding())
                                : Money{};
     if (dividend != co.dividend_per_share()) w.execute(SetDividend{.per_share = dividend}, r.player);
     // Repay debt when flush, the cautious more readily.
     const Money face = Money::dollars(b.finance.bond_face_value);
-    if (!co.bonds().empty() && co.cash() > face * (2 + ty.leverage / 20) + Money::dollars(b.ai.cash_reserve)) {
+    if (!co.bonds().empty() && co.cash() > face * (2 + ty.leverage / 20) + reserve(w, ty)) {
         w.execute(RepayBond{}, r.player);
     }
 }
@@ -276,6 +299,23 @@ void add_trains(World& w, Rival& r, Company& co) {
     }
 }
 
+// Re-engine the oldest train whose engine has reached the replacement age,
+// with the fastest engine the company can spare the money for; one a month
+// (rt3-clone-spec §13.2 [I]).
+void replace_old_engines(World& w, const Rival& r, const Tycoon& ty, const Company& co) {
+    const std::int32_t today = w.date().days_since_epoch();
+    const std::int32_t age_days = w.data().balance.ai.replace_engine_age_years * 365;
+    std::optional<TrainId> oldest;
+    for (const Train& t : w.railway().trains()) {
+        if (t.owner != co.id() || t.state == TrainState::Crashed || today - t.built_day < age_days) continue;
+        if (!oldest || t.built_day < w.railway().train(*oldest).built_day) oldest = t.id;
+    }
+    if (!oldest) return;
+    const auto loco = pick_loco(w, co.cash() - reserve(w, ty));
+    if (!loco) return;
+    w.execute(ReplaceLocomotive{.train = *oldest, .loco = *loco}, r.player);
+}
+
 // A station of ours near `p`, or a new one at `node` named for the place.
 std::optional<StationId> station_at(World& w, const Rival& r, NodeId node, const Place& p) {
     for (const Station& st : w.railway().stations())
@@ -308,6 +348,8 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
         b.ai.build_interval_months_max -
         (b.ai.build_interval_months_max - b.ai.build_interval_months_min) * ty.expansion / 100;
     if (now - r.last_build_month < interval) return;
+    // The cautious build nothing new in bad times.
+    if (caution(w, ty) >= b.ai.recession_stop_building) return;
 
     std::vector<Candidate> cands = candidates(w, ty);
     if (cands.empty()) return;
@@ -355,12 +397,12 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
     if (!best) return;
 
     // Borrow for it if the tycoon is willing.
-    const Money reserve = Money::dollars(b.ai.cash_reserve);
-    const auto max_bonds = static_cast<std::size_t>(ty.leverage / 10);
-    while (co.cash() < best->total + reserve && co.can_issue_bond() && co.bonds().size() < max_bonds) {
+    const Money keep = reserve(w, ty);
+    const auto max_bonds = static_cast<std::size_t>(ty.leverage * kept_percent(w, ty) / 1000);
+    while (co.cash() < best->total + keep && co.can_issue_bond() && co.bonds().size() < max_bonds) {
         if (!w.execute(IssueBond{}, r.player).ok) break;
     }
-    if (co.cash() < best->total + reserve) return;
+    if (co.cash() < best->total + keep) return;
 
     r.last_build_month = now;
     const CommandResult track = w.execute(best->cmd, r.player);
@@ -533,6 +575,7 @@ void run_rival(World& w, Rival& r, const Tycoon& ty) {
         manage_finance(w, r, ty, co);
         expand(w, r, ty, co);
         add_trains(w, r, co);
+        replace_old_engines(w, r, ty, co);
         invest_in_industry(w, r, ty, co);
         add_station_buildings(w, r, co);
     }

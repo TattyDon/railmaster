@@ -172,7 +172,7 @@ The news reports each split.
 
 Tycoons are listed in [`data/tycoons.json`](../../data/tycoons.json): the
 historical figures RT3 used as opponents (§13.1 [D/C]) plus two more famous
-railroad builders. Each has an original one-line bio and four personality
+railroad builders. Each has an original one-line bio and personality
 values from 0 to 100 (§13.2 [I]):
 
 | Trait | Effect |
@@ -182,6 +182,7 @@ values from 0 to 100 (§13.2 [I]):
 | dividend | Share of trailing profit paid out as a dividend |
 | speculation | From 40 up: trades rivals' shares against the price the market is heading for (the monthly target price), buying below 80% of it and selling above 120%. From 70 up it also sells short above 125% and buys back once the price has fallen to it |
 | industry | From 40 up: buys profitable industries its stations serve, at no more than 12 years' profit, and doubles plants running at 90% or more of capacity when a year's profit covers the cost |
+| recession_caution | Holding back in bad times: caution × 1 in a recession, × 2 in a depression. From 80 points it builds no new lines; per 100 points it keeps twice its usual cash reserve and pays half the dividend and takes half the bonds it otherwise would. Morgan (80) and Kodama (85) stop building in any recession; Stanford (15) and Rhodes (20) build on even in a depression |
 | takeovers | From 50 up: builds a stake in the rival trading furthest below book value, up to a majority. With over 35% of a company trading below book it bids for control: always if it has no company of its own, otherwise only from 80 (when its own company passes to the ousted chairman). From 70 up it merges companies where it holds a majority, offering a 25% premium, if its company can pay |
 
 Each month, after the market, each rival in turn:
@@ -217,6 +218,9 @@ Each month, after the market, each rival in turn:
      cars.
 3. **More trains:** adds a train to a line whose stations have more cargo
    waiting than its trains can carry, up to three a line.
+   **Old engines:** re-engines its oldest train whose engine has reached
+   25 years (§13.2 [I]) with the fastest engine it can afford above its
+   reserve, one a month.
 4. **Speculation**, as above. A tycoon whose company was merged away
    still trades and can bid for control of another.
 5. **Control:** stake building, takeover bids and mergers, as above.

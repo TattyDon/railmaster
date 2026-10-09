@@ -197,6 +197,7 @@ private:
     CommandResult run(const BuildStation& cmd);
     CommandResult run(const BuildServiceBuilding& cmd);
     CommandResult run(const BuyTrain& cmd);
+    CommandResult run(const ReplaceLocomotive& cmd);
     CommandResult run(const IssueBond& cmd);
     CommandResult run(const RepayBond& cmd);
     CommandResult run(const BuyShares& cmd);

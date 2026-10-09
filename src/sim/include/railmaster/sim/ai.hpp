@@ -25,6 +25,7 @@ struct Tycoon {
     std::int32_t speculation = 30; // trading in rivals' shares, short selling from 70
     std::int32_t takeovers = 30;   // building stakes in rivals, takeovers and mergers from 50
     std::int32_t industry = 30;    // buying and upgrading industries its lines serve, from 40
+    std::int32_t recession_caution = 50; // holding back in recessions and depressions
 };
 
 class TycoonRegistry {

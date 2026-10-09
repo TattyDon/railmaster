@@ -82,6 +82,7 @@ and checks the economy against the spec's targets
 | F1 to F9, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train |
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
+| R (Inspect) | Re-engine the train under the cursor with the engine chosen in the Train tool (L there), keeping its route and cars |
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
