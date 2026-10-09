@@ -47,10 +47,85 @@ Money YearAccounts::expenses() const {
 
 Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance, CompanyId id)
     : name_(std::move(name)), id_(id), finance_(balance.finance), stock_(balance.stock),
-      states_(balance.economic_states), cash_(starting_cash),
+      states_(balance.economic_states), corporate_(balance.corporate), cash_(starting_cash),
       shares_(balance.stock.founding_shares) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
+    history_.back().start_price = price_;
+}
+
+const char* sentiment_name(Sentiment s) {
+    switch (s) {
+    case Sentiment::Happy: return "Happy";
+    case Sentiment::Content: return "Content";
+    case Sentiment::Grumbling: return "Grumbling";
+    case Sentiment::Hostile: return "Hostile";
+    }
+    return "?";
+}
+
+void Company::close_year() {
+    YearAccounts& y = history_.back();
+    if (y.start_price <= Money{}) return;
+    const Money gain = price_ + y.dividends_per_share - y.start_price;
+    y.share_return_permille = static_cast<std::int32_t>(gain.in_cents() * 1000 / y.start_price.in_cents());
+}
+
+bool Company::bad_year(std::size_t i) const {
+    const YearAccounts& y = history_.at(i);
+    if (y.profit() < Money{}) return true;
+    const bool price_down = y.share_return_permille && *y.share_return_permille < 0;
+    return price_down && i > 0 && y.profit() < history_[i - 1].profit();
+}
+
+std::int32_t Company::bad_year_streak() const {
+    std::int32_t streak = 0;
+    for (std::size_t i = history_.size(); i-- > 0;) {
+        if (!history_[i].share_return_permille) continue; // the year still open
+        if (!bad_year(i)) break;
+        ++streak;
+    }
+    return streak;
+}
+
+std::int32_t Company::weighted_return_permille() const {
+    std::int64_t sum = 0, weights = 0;
+    std::int64_t w = 5;
+    for (std::size_t i = history_.size(); i-- > 0 && w > 0;) {
+        if (!history_[i].share_return_permille) continue;
+        sum += w * *history_[i].share_return_permille;
+        weights += w;
+        --w;
+    }
+    return weights > 0 ? static_cast<std::int32_t>(sum / weights) : 0;
+}
+
+Sentiment Company::sentiment() const {
+    const std::int32_t streak = bad_year_streak();
+    if (streak >= corporate_.oust_after_bad_years) return Sentiment::Hostile;
+    if (streak >= corporate_.grumble_after_bad_years) return Sentiment::Grumbling;
+    if (weighted_return_permille() >= corporate_.happy_return_permille) return Sentiment::Happy;
+    return Sentiment::Content;
+}
+
+std::optional<std::int32_t> Company::check_split() {
+    if (defunct() || price_ < Money::cents(stock_.split_price_cents)) {
+        months_above_split_ = 0;
+        return std::nullopt;
+    }
+    if (++months_above_split_ < stock_.split_months) return std::nullopt;
+    return price_ >= Money::cents(stock_.big_split_price_cents) ? 3 : 2;
+}
+
+void Company::split(std::int32_t ratio) {
+    shares_ *= ratio;
+    price_ = price_.scaled(1, ratio);
+    dividend_ = dividend_.scaled(1, ratio);
+    for (YearAccounts& y : history_) {
+        y.start_price = y.start_price.scaled(1, ratio);
+        y.dividends_per_share = y.dividends_per_share.scaled(1, ratio);
+    }
+    months_above_split_ = 0;
 }
 
 void Company::post(Ledger line, Money amount) {
@@ -103,6 +178,7 @@ Money Company::pay_quarterly_dividend() {
     }
     cash_ -= payout;
     history_.back().dividends_paid += payout;
+    history_.back().dividends_per_share += dividend_.scaled(1, 4);
     return payout;
 }
 
@@ -197,6 +273,7 @@ void Company::charge_interest(std::int32_t months) {
 
 void Company::start_year(std::int32_t year) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
+    history_.back().start_price = price_;
     issues_this_year_ = 0;
 }
 

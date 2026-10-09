@@ -79,6 +79,7 @@ private:
     std::optional<sim::CargoId> overlay_;
 
     sim::CompanyId market_choice_ = 0; // the company selected on the market screen
+    Uint32 resign_armed_until_ = 0;     // a first Q press arms resigning for a few seconds
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;
@@ -88,5 +89,6 @@ std::string format_money(sim::Money m);
 // Dollars and cents, for share prices and dividends.
 std::string format_cents(sim::Money m);
 std::string format_count(std::int64_t n); // 600,000
+std::string format_permille(std::int32_t p); // +12.5%
 
 } // namespace railmaster::client

@@ -101,9 +101,13 @@ struct AttemptMerger {
     Money offer_per_share{};
 };
 
+// Step down as chairman, keeping your shares [D]. The board appoints a
+// successor.
+struct Resign {};
+
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
-                             AttemptMerger>;
+                             AttemptMerger, Resign>;
 
 struct CommandResult {
     bool ok = false;

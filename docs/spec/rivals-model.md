@@ -118,6 +118,53 @@ company [D].
 - A failed attempt waits a year [C]. A rival cannot merge the player's own
   company away [I, for now].
 
+## Investors and the chair (§12.2)
+
+- **Shareholders' return:** each year closes with the return investors
+  made: the change in share price plus the dividends paid per share, as a
+  share of the opening price. Splits adjust the stored prices so returns
+  stay comparable.
+- **Bad year [I]:** a loss, or a year when profit and share price both
+  fell. Investors want rising earnings and share price [D].
+- **Five-year weighted return [I]:** the last five closed years' returns,
+  weighted 5 (latest), 4, 3, 2, 1.
+- **Sentiment:**
+
+  | Mood | When |
+  |---|---|
+  | Hostile | 3 bad years in a row |
+  | Grumbling | 2 bad years in a row [D: "2-3 bad years"] |
+  | Happy | five-year weighted return of 10% or more |
+  | Content | otherwise |
+
+  It shows on the finance and market screens.
+- **Firing [D/C/I]:** at each year end, two bad years in a row bring a
+  warning in the news; three bring a vote to remove the chairman. The other
+  shareholders vote against them, so only a chairman holding over half the
+  shares survives [C]. A founder holding exactly half can be voted out.
+  `WorldConfig::chairman_can_be_fired = false` locks the chair, as some
+  scenarios do.
+- **Resigning [D]:** a chairman may step down and keeps their shares
+  (`Resign`; market screen, Q twice). `chairman_can_resign = false` forbids
+  it.
+- **Successor [I]:** the company's biggest shareholder who runs nothing
+  else. If there is none, a tycoon not yet in the game arrives to run it as
+  a new AI player. If none is left, the company has no chairman.
+- **The player without a company:** a fired or resigned player keeps
+  trading. They can win a chair back by takeover, or be appointed when a
+  company they hold the most of needs a chairman. Until then the client
+  shows the company they last ran, and company commands are refused.
+- **Salary [I]:** the board pays $50,000 a year × (1 + 2 × the five-year
+  weighted return), held between half and double.
+
+## Stock splits (§12.3 [C/I])
+
+At each month end, a price above $120 for three month ends in a row splits
+the stock 2 for 1, or 3 for 1 if it is above $200. Shares outstanding and
+every holding (shorts included) multiply by the ratio. The price, dividend
+per share and per-share history divide by it, so nobody's net worth moves.
+The news reports each split.
+
 ## The AI [I]
 
 Tycoons are listed in [`data/tycoons.json`](../../data/tycoons.json): the

@@ -199,6 +199,16 @@ struct Balance {
         // together may not exceed this share of net worth [C].
         std::int32_t short_margin_percent = 150;
         std::int32_t short_cap_percent_of_net_worth = 50;
+        // Salary [I]: salary_per_year x (1 + this% x five-year weighted
+        // return), held between the two limits (rt3-clone-spec §12.2).
+        std::int32_t salary_return_factor_percent = 200;
+        std::int32_t salary_min_percent = 50;
+        std::int32_t salary_max_percent = 200;
+        // Stock splits [C/I]: a price over this for split_months month ends
+        // in a row splits 2 for 1, or 3 for 1 over the higher price.
+        std::int64_t split_price_cents = 12'000;
+        std::int64_t big_split_price_cents = 20'000;
+        std::int32_t split_months = 3;
     } stock;
 
     // Takeovers and mergers (rt3-clone-spec §12.6, the vote models [I]).
@@ -214,6 +224,12 @@ struct Balance {
         std::int32_t merger_support_slope = 3; // permille of the float per permille of premium
         std::int32_t merger_chairman_premium_percent = 125;
         std::int32_t retry_days = 365; // after a failed attempt [C]
+        // Investor sentiment (§12.2): bad years in a row before investors
+        // grumble [D/I], and before they vote the chairman out [D/I]; a
+        // five-year weighted return that makes them happy [I].
+        std::int32_t grumble_after_bad_years = 2;
+        std::int32_t oust_after_bad_years = 3;
+        std::int32_t happy_return_permille = 100;
     } corporate;
 
     // Parse a balance file. Missing keys keep their defaults; unknown keys

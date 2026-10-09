@@ -33,6 +33,9 @@ struct WorldConfig {
     Difficulty difficulty = Difficulty::Medium;
     bool business_cycle = true; // the economic state moves; off holds it at Normal
     std::int32_t rivals = 0;    // AI companies, up to the number of tycoons in the data
+    // Scenarios may lock the chair: no firing and no resigning (Go West!).
+    bool chairman_can_be_fired = true;
+    bool chairman_can_resign = true;
     bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
 };
 
@@ -66,10 +69,15 @@ public:
     const GameData& data() const { return data_; }
     Economy& economy() { return economy_; }
     const Economy& economy() const { return economy_; }
-    // The company the human player chairs (company 0 unless a takeover
-    // changed hands), and their account.
-    Company& company() { return market_.companies.at(*market_.investors.front().chairs); }
-    const Company& company() const { return market_.companies.at(*market_.investors.front().chairs); }
+    // The company the human player chairs (company 0 unless control changed
+    // hands), or, after being fired or resigning, the one they last ran.
+    Company& company() { return market_.companies.at(player_company().value_or(last_player_company_)); }
+    const Company& company() const { return market_.companies.at(player_company().value_or(last_player_company_)); }
+    // The company the human player runs now, if any.
+    std::optional<CompanyId> player_company() const { return market_.investors.front().chairs; }
+    // Things that happened since the last call, for the news ticker:
+    // splits, grumbling investors, chairmen fired, appointed or resigning.
+    std::vector<std::string> take_news() { return std::exchange(news_, {}); }
     Company& company(CompanyId id) { return market_.companies.at(id); }
     const Company& company(CompanyId id) const { return market_.companies.at(id); }
     const std::vector<Company>& companies() const { return market_.companies; }
@@ -130,6 +138,10 @@ private:
     Difficulty difficulty_ = Difficulty::Medium;
     Market market_;
     std::vector<Rival> rivals_;
+    std::vector<std::string> news_;
+    CompanyId last_player_company_ = 0;
+    bool chairman_can_be_fired_ = true;
+    bool chairman_can_resign_ = true;
     std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
     bool rival_ai_ = true;
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
@@ -164,6 +176,13 @@ private:
     CommandResult run(const SetDividend& cmd);
     CommandResult run(const AttemptTakeover& cmd);
     CommandResult run(const AttemptMerger& cmd);
+    CommandResult run(const Resign& cmd);
+    // Year end: grumbling, and the vote to fire a chairman after too many bad years.
+    void review_chairmen();
+    // Give a company with no chairman one: its biggest shareholder who runs
+    // nothing else, or a newly arrived tycoon. Never `excluded`.
+    void appoint_chairman(CompanyId c, std::optional<PlayerId> excluded);
+    void note_player_company();
     // Refuse a second attempt on the same company within a year of a failed one [C].
     std::optional<std::string> too_soon(CompanyId target) const;
     void record_failure(CompanyId target);

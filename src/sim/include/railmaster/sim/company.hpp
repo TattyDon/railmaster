@@ -18,6 +18,10 @@ namespace railmaster::sim {
 // maturity, the rating thresholds and rates, and the founding share count
 // are in Balance::Finance and Balance::Stock.
 
+// How shareholders feel about the chairman (rt3-clone-spec §12.2 [D]).
+enum class Sentiment : std::uint8_t { Happy, Content, Grumbling, Hostile };
+const char* sentiment_name(Sentiment s);
+
 enum class CreditRating : std::uint8_t { AAA, AA, A, BBB, BB, B, C, D };
 const char* rating_name(CreditRating r);
 
@@ -56,6 +60,12 @@ struct YearAccounts {
     Money trains_bought;
     Money dividends_paid; // a distribution to shareholders, not an expense
     Money acquisitions;   // paid to buy out other companies' shareholders
+    // For shareholders' return: the share price when the year opened, the
+    // dividends paid per share during it, and, once the year is closed, the
+    // return they made, in thousandths (price change plus dividends).
+    Money start_price{};
+    Money dividends_per_share{};
+    std::optional<std::int32_t> share_return_permille{};
 
     Money revenue() const;
     Money expenses() const;
@@ -154,7 +164,25 @@ public:
     // Monthly: remember the running profit total, for trailing_profit().
     void record_month();
 
+    // At year end, before start_year: record the shareholders' return.
+    void close_year();
     void start_year(std::int32_t year);
+
+    // A bad year: a loss, or profit and share price both down [I].
+    bool bad_year(std::size_t index) const;
+    // Closed years in a row, most recent first, that were bad.
+    std::int32_t bad_year_streak() const;
+    // Return over up to five closed years, the latest weighted 5, then 4, 3,
+    // 2, 1, in thousandths; zero before the first year closes.
+    std::int32_t weighted_return_permille() const;
+    Sentiment sentiment() const;
+
+    // Monthly: count month ends at a high price; returns the split ratio
+    // (2 or 3) when one is due.
+    std::optional<std::int32_t> check_split();
+    // Split every share into `ratio`: the price, dividend and per-share
+    // history fall in proportion. Holders' shares are the market's to adjust.
+    void split(std::int32_t ratio);
     const YearAccounts& this_year() const { return history_.back(); }
     const std::vector<YearAccounts>& history() const { return history_; }
 
@@ -165,6 +193,8 @@ private:
     Balance::Finance finance_;
     Balance::Stock stock_;
     Balance::EconomicStates states_;
+    Balance::Corporate corporate_;
+    std::int32_t months_above_split_ = 0;
     EconomicState state_ = EconomicState::Normal;
     Money cash_;
     Money track_, buildings_, rolling_stock_;

@@ -72,7 +72,8 @@ In the `finance` and `stock` sections of
 
 Code: `src/sim/include/railmaster/sim/stock.hpp`. With rival companies the
 market covers every company and every player; see
-[rivals-model.md](rivals-model.md).
+[rivals-model.md](rivals-model.md). Investor sentiment, firing, resigning,
+salary and stock splits are described there too.
 
 Researched [overview-finance-scenarios.md §4.1, §4.3]:
 

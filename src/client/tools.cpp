@@ -71,7 +71,7 @@ void Tools::draw_finance_panel() const {
         draw_text(x0 + 720 - static_cast<float>(text_width(b, kScale)), y, b, kScale);
         y += kRow;
     };
-    row(co.name(), "", "", 1.0f, 0.9f, 0.5f);
+    row(co.name() + (world_.player_company() ? "" : "   (YOU NO LONGER RUN IT)"), "", "", 1.0f, 0.9f, 0.5f);
     row("INCOME STATEMENT", std::to_string(now.year) + " SO FAR", last ? std::to_string(last->year) : "", 1.0f, 0.9f,
         0.5f);
     y += 4;
@@ -117,6 +117,14 @@ void Tools::draw_finance_panel() const {
             std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
         "", "", 1.0f, 0.9f, 0.5f);
     row("BONDS OUTSTANDING: " + (bonds.empty() ? std::string("NONE") : bonds), "", "", 0.9f, 0.9f, 0.9f);
+    {
+        const sim::Sentiment mood = co.sentiment();
+        const bool worried = mood == sim::Sentiment::Grumbling || mood == sim::Sentiment::Hostile;
+        row(std::string("INVESTORS: ") + sim::sentiment_name(mood) + "   5-YEAR RETURN " +
+                format_permille(co.weighted_return_permille()) + "   BAD YEARS IN A ROW " +
+                std::to_string(co.bad_year_streak()) + "   SALARY " + format_money(sim::chairman_salary(co)),
+            "", "", worried ? 0.95f : 0.9f, worried ? 0.65f : 0.9f, worried ? 0.6f : 0.9f);
+    }
 
     y += kRow / 2;
     const sim::Investor& me = world_.investor();
@@ -139,6 +147,11 @@ void Tools::draw_finance_panel() const {
         format_money(co.share_price() * mine), 0.9f, 0.9f, 0.9f);
     row("PURCHASING POWER", format_money(sim::purchasing_power(me, world_.market())), "", 0.9f, 0.9f, 0.9f);
     row("NET WORTH", format_money(sim::net_worth(me, world_.market())), "", 1, 1, 1);
+}
+
+std::string format_permille(std::int32_t p) {
+    const std::int32_t a = p < 0 ? -p : p;
+    return (p < 0 ? "-" : "+") + std::to_string(a / 10) + "." + std::to_string(a % 10) + "%";
 }
 
 std::string format_count(std::int64_t n) {
@@ -395,6 +408,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             return true;
         }
         const sim::Company& target = world_.company(market_choice_ % n);
+        if (key == SDLK_q) {
+            // Resigning cannot be undone: ask for a second press.
+            if (SDL_GetTicks() > resign_armed_until_) {
+                resign_armed_until_ = SDL_GetTicks() + 3000;
+                show("PRESS Q AGAIN TO RESIGN AS CHAIRMAN", false);
+                return true;
+            }
+            resign_armed_until_ = 0;
+            const sim::CommandResult r = world_.execute(sim::Resign{});
+            if (r.ok) show("YOU HAVE RESIGNED. YOU KEEP YOUR SHARES", true);
+            else show("CANNOT RESIGN: " + r.error, false);
+            return true;
+        }
         if (key == SDLK_t) {
             const sim::CommandResult r = world_.execute(sim::AttemptTakeover{.target = target.id()});
             if (r.ok) show("THE SHAREHOLDERS MADE YOU CHAIRMAN OF " + target.name(), true);
@@ -501,6 +527,8 @@ void Tools::draw_market_panel() const {
          std::to_string(c.bonds().size()) + "   RATING " + sim::rating_name(c.credit_rating()));
     line("TRACK " + format_money(c.track_value()) + "   STATIONS " + std::to_string(stations) + "   TRAINS " +
          std::to_string(trains));
+    line(std::string("INVESTORS ") + sim::sentiment_name(c.sentiment()) + "   5-YEAR RETURN " +
+         format_permille(c.weighted_return_permille()) + "   BAD YEARS IN A ROW " + std::to_string(c.bad_year_streak()));
     line("SHARES " + format_count(c.shares_outstanding()) + "   IN PUBLIC HANDS " +
          format_count(sim::public_float(world_.market(), c.id())) + "   DIVIDEND " + format_cents(c.dividend_per_share()) +
          " A YEAR");
@@ -650,7 +678,7 @@ std::string Tools::hint() const {
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
     case Tool::Market:
-        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT (SHIFT X5)  T TAKEOVER  M MERGE AT +20% (SHIFT +50%)";
+        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND";

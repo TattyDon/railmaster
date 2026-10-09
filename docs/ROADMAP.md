@@ -80,8 +80,12 @@ for the chair) and mergers (buying out a rival's shareholders and absorbing
 everything it owns), used by the player from the market screen and by the
 AI according to personality.
 
+Done in the fifth slice: investor sentiment from yearly shareholder
+returns, grumbling and votes to fire a chairman, resigning, successors,
+salary set by the five-year return, and stock splits.
+
 Still to do:
-- Investor sentiment, ousting the chairman and resigning; stock splits.
+- Brokerage fees; the founding dialog.
 - Bankruptcy, depreciation, bond maturity.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 

@@ -2,6 +2,7 @@
 
 #include "railmaster/sim/freight.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace railmaster::sim {
@@ -38,6 +39,8 @@ World::World(const WorldConfig& config, GameData data)
     found_company("Railmaster Railroad", "You",
                   Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)));
     rival_ai_ = config.rival_ai;
+    chairman_can_be_fired_ = config.chairman_can_be_fired;
+    chairman_can_resign_ = config.chairman_can_resign;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
@@ -195,6 +198,9 @@ void World::on_new_month() {
         set_economic_state(next_economic_state(economic_state(), rng_, data_.balance.economic_states));
     }
     last_forced_sale_ = monthly_market(market_)[kHumanPlayer];
+    for (const auto& [id, ratio] : apply_splits(market_)) {
+        news_.push_back(company(id).name() + " shares split " + std::to_string(ratio) + " for 1");
+    }
     // Bond interest [D] and dividends are paid at the end of each quarter.
     if ((date_.month() - 1) % 3 == 0) {
         for (Company& c : market_.companies) {
@@ -206,12 +212,82 @@ void World::on_new_month() {
     run_rivals();
 }
 
+void World::note_player_company() {
+    if (const auto c = player_company()) last_player_company_ = *c;
+}
+
+void World::review_chairmen() {
+    const Balance::Corporate& b = data_.balance.corporate;
+    for (const Company& c : market_.companies) {
+        if (c.defunct()) continue;
+        std::optional<PlayerId> chairman;
+        for (std::size_t i = 0; i < market_.investors.size(); ++i) {
+            if (market_.investors[i].chairs == c.id()) chairman = static_cast<PlayerId>(i);
+        }
+        const std::int32_t streak = c.bad_year_streak();
+        if (!chairman || streak < b.grumble_after_bad_years) continue;
+        const std::string who = market_.investors[*chairman].name;
+        if (streak < b.oust_after_bad_years || !chairman_can_be_fired_) {
+            news_.push_back("Investors in " + c.name() + " are grumbling after " + std::to_string(streak) +
+                            " bad years under " + who);
+            continue;
+        }
+        // The other shareholders vote the chairman out; a chairman holding
+        // over half the shares cannot be removed [C].
+        if (market_.investors[*chairman].shares_in(c.id()) * 2 > c.shares_outstanding()) {
+            news_.push_back(who + " keeps the chair of " + c.name() + " with a majority of its shares");
+            continue;
+        }
+        market_.investors[*chairman].chairs.reset();
+        news_.push_back("The shareholders of " + c.name() + " have voted " + who + " out as chairman");
+        appoint_chairman(c.id(), chairman);
+    }
+}
+
+void World::appoint_chairman(CompanyId cid, std::optional<PlayerId> excluded) {
+    // The biggest shareholder who runs nothing else.
+    std::optional<PlayerId> pick;
+    std::int64_t most = 0;
+    for (std::size_t i = 0; i < market_.investors.size(); ++i) {
+        const Investor& inv = market_.investors[i];
+        if (excluded == static_cast<PlayerId>(i) || inv.chairs) continue;
+        if (inv.shares_in(cid) > most) {
+            pick = static_cast<PlayerId>(i);
+            most = inv.shares_in(cid);
+        }
+    }
+    // Otherwise the board brings in a tycoon not yet in the game [I].
+    if (!pick) {
+        for (std::size_t t = 0; t < data_.tycoons.all().size() && !pick; ++t) {
+            const bool playing = std::any_of(rivals_.begin(), rivals_.end(), [&](const Rival& r) { return r.tycoon == t; });
+            if (playing) continue;
+            Investor inv;
+            inv.name = data_.tycoons.all()[t].name;
+            inv.cash = Money::dollars(data_.balance.stock.starting_personal_cash);
+            pick = static_cast<PlayerId>(market_.investors.size());
+            market_.investors.push_back(std::move(inv));
+            rivals_.push_back({*pick, t, -1'000'000, {}});
+        }
+    }
+    if (!pick) {
+        news_.push_back(company(cid).name() + " has no chairman");
+        return;
+    }
+    market_.investors[*pick].chairs = cid;
+    news_.push_back(market_.investors[*pick].name + " is now chairman of " + company(cid).name());
+    note_player_company();
+}
+
 void World::run_rivals() {
     if (!rival_ai_) return;
     for (Rival& r : rivals_) run_rival(*this, r, data_.tycoons.all()[r.tycoon]);
 }
 
 void World::on_new_year() {
+    for (Company& c : market_.companies) {
+        if (!c.defunct()) c.close_year();
+    }
+    review_chairmen();
     for (Company& c : market_.companies) {
         c.retire_matured_bonds(date_.year());
         c.start_year(date_.year());

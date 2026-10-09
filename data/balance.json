@@ -24,9 +24,12 @@
     "mean_distance_mm": 2000000000
   },
   "corporate": {
+    "grumble_after_bad_years": 2,
+    "happy_return_permille": 100,
     "merger_chairman_premium_percent": 125,
     "merger_neutral_premium_percent": 110,
     "merger_support_slope": 3,
+    "oust_after_bad_years": 3,
     "retry_days": 365,
     "takeover_base_support_permille": 250,
     "takeover_below_book_permille": 250,
@@ -165,6 +168,7 @@
     "town_reach_cells": 4
   },
   "stock": {
+    "big_split_price_cents": 20000,
     "book_weight_percent": 60,
     "dividend_multiple": 10,
     "earnings_multiple": 8,
@@ -176,10 +180,15 @@
     "margin_percent": 50,
     "min_share_price_cents": 50,
     "price_adjust_percent": 25,
+    "salary_max_percent": 200,
+    "salary_min_percent": 50,
     "salary_per_year": 50000,
+    "salary_return_factor_percent": 200,
     "share_block": 1000,
     "short_cap_percent_of_net_worth": 50,
     "short_margin_percent": 150,
+    "split_months": 3,
+    "split_price_cents": 12000,
     "starting_personal_cash": 500000
   },
   "track": {

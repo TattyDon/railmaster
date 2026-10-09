@@ -180,6 +180,29 @@ Money target_share_price(const Company& c) {
     return floor_price(c, target.scaled(c.stock_index_percent(), 100));
 }
 
+Money chairman_salary(const Company& c) {
+    const Balance::Stock& b = c.stock_balance();
+    const std::int64_t pct = std::clamp<std::int64_t>(
+        100 + std::int64_t{b.salary_return_factor_percent} * c.weighted_return_permille() / 1000, b.salary_min_percent,
+        b.salary_max_percent);
+    return Money::dollars(b.salary_per_year).scaled(pct, 100);
+}
+
+std::vector<std::pair<CompanyId, std::int32_t>> apply_splits(Market& m) {
+    std::vector<std::pair<CompanyId, std::int32_t>> done;
+    for (Company& c : m.companies) {
+        const auto ratio = c.check_split();
+        if (!ratio) continue;
+        c.split(*ratio);
+        for (Investor& inv : m.investors) {
+            const std::int64_t h = inv.shares_in(c.id());
+            if (h != 0) inv.add_shares(c.id(), h * (*ratio - 1));
+        }
+        done.emplace_back(c.id(), *ratio);
+    }
+    return done;
+}
+
 std::vector<std::int64_t> monthly_market(Market& m) {
     for (Company& c : m.companies) {
         if (c.defunct()) continue;
@@ -195,7 +218,7 @@ std::vector<std::int64_t> monthly_market(Market& m) {
     const Balance::Stock& b = ref.stock_balance();
     for (std::size_t i = 0; i < m.investors.size(); ++i) {
         Investor& inv = m.investors[i];
-        if (inv.chairs) inv.cash += Money::dollars(b.salary_per_year).scaled(1, 12);
+        if (inv.chairs) inv.cash += chairman_salary(m.companies.at(*inv.chairs)).scaled(1, 12);
         if (inv.cash < Money{}) {
             inv.cash -= (-inv.cash).scaled(std::max(0, b.margin_interest_bp + ref.prime_offset_bp()), 10000 * 12);
         }

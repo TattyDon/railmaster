@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace railmaster::sim {
@@ -69,6 +70,12 @@ std::optional<std::string> buy_back_stock(Market& m, CompanyId c);
 // traded that way, by player.
 std::vector<std::int64_t> monthly_market(Market& m);
 Money target_share_price(const Company& c);
+// A chairman's yearly salary, set by the board from the company's five-year
+// weighted return [I].
+Money chairman_salary(const Company& c);
+// Monthly: split any company whose price has been high for long enough,
+// multiplying every holder's shares (shorts too). Returns the splits made.
+std::vector<std::pair<CompanyId, std::int32_t>> apply_splits(Market& m);
 
 // A shareholder vote on a takeover or merger (rt3-clone-spec §12.6).
 struct Vote {

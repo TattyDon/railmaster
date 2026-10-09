@@ -231,6 +231,13 @@ int main(int argc, char* argv[]) {
             const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
             tools.show("THE ECONOMY IS NOW IN " + name, better);
         }
+        // Corporate news: splits, grumbling investors, chairmen fired or appointed.
+        if (const auto news = world.take_news(); !news.empty()) {
+            std::string text;
+            for (const std::string& n : news) text += (text.empty() ? "" : "   ") + n;
+            const bool bad = text.find("voted") != std::string::npos || text.find("grumbling") != std::string::npos;
+            tools.show(text, !bad);
+        }
 
         cam.apply();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);

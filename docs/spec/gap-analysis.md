@@ -34,6 +34,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §13 [D/C/I] | Historical tycoons as AI rivals with personalities, building and running lines | none | seven tycoons; monthly route planner, train manager, finance and speculation |
 | §12.5 [D/C] | Short selling: not your own company, capped at ~50% of net worth | none | as documented; shorts held at 150% against purchasing power, pay dividends, can be margin-called [I] |
 | §12.6 [D/C/I] | Takeovers and mergers by shareholder vote; >50% forces it; retry after a year; everything incl. bonds transfers | none | as documented; vote models [I] in [rivals-model.md](rivals-model.md) |
+| §12.2 [D/C/I] | Investor sentiment; warning after 2 bad years, ouster vote after 3; >50% cannot be removed; resign keeps shares; salary from 5-year weighted return | none | as the spec's defaults; successor rules ours |
+| §12.3 [C/I] | Splits: > $120 for 3 months → 2:1, > $200 → 3:1 | none | as the spec |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -126,8 +128,7 @@ Grouped by the spec's own build order (§17).
 
 **Company and market**
 - Bankruptcy (§12.4 [D]).
-- Investor sentiment and ousting the chairman; resigning (§12.2 [D]).
-- Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]); stock splits (§12.3 [C]).
+- Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]).
 - AI: replacing engines, buying industries, recession caution, AI
   difficulty multipliers (§13.2, §8.4).
 

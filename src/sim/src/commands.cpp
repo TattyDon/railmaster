@@ -109,7 +109,7 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
             // Trading shares and bidding for control are personal; everything
             // else acts for a company.
             if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares> &&
-                          !std::is_same_v<T, AttemptTakeover>) {
+                          !std::is_same_v<T, AttemptTakeover> && !std::is_same_v<T, Resign>) {
                 if (!market_.investors[actor_].chairs) return fail("you do not run a company");
             }
             return run(c);
@@ -318,6 +318,7 @@ CommandResult World::run(const AttemptTakeover& cmd) {
     const std::optional<CompanyId> old = bidder.chairs;
     bidder.chairs = cmd.target;
     if (incumbent) market_.investors[*incumbent].chairs = old;
+    note_player_company();
     return success(Money{}, cmd.target);
 }
 
@@ -346,6 +347,17 @@ CommandResult World::run(const AttemptMerger& cmd) {
     }
     merge(buyer, cmd.target, cmd.offer_per_share);
     return success(cost, cmd.target);
+}
+
+CommandResult World::run(const Resign&) {
+    Investor& me = market_.investors[actor_];
+    if (!me.chairs) return fail("you do not run a company");
+    if (!chairman_can_resign_) return fail("the chairman may not resign in this game");
+    const CompanyId c = *me.chairs;
+    me.chairs.reset();
+    news_.push_back(me.name + " has resigned as chairman of " + company(c).name());
+    appoint_chairman(c, actor_);
+    return success(Money{}, c);
 }
 
 void World::merge(Company& buyer, CompanyId tid, Money offer) {

@@ -58,11 +58,14 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stock, founding_shares,
                                                 margin_interest_bp, impact_per_share_of_company, issue_percent,
                                                 book_weight_percent, earnings_multiple, dividend_multiple,
                                                 price_adjust_percent, min_share_price_cents, share_block,
-                                                short_margin_percent, short_cap_percent_of_net_worth)
+                                                short_margin_percent, short_cap_percent_of_net_worth,
+                                                salary_return_factor_percent, salary_min_percent, salary_max_percent,
+                                                split_price_cents, big_split_price_cents, split_months)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Corporate, takeover_base_support_permille,
                                                 takeover_below_book_permille, takeover_loss_year_permille,
                                                 merger_neutral_premium_percent, merger_support_slope,
-                                                merger_chairman_premium_percent, retry_days)
+                                                merger_chairman_premium_percent, retry_days, grumble_after_bad_years,
+                                                oust_after_bad_years, happy_return_permille)
 
 namespace {
 
