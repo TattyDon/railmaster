@@ -307,6 +307,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         const std::int64_t room = track_.edge(step.edge).length_mm - t.offset_mm;
         const std::int64_t moved = std::min(remaining, room);
         use_supplies(t, loco, moved, track_.grade_bp(step));
+        t.distance_mm += moved;
         travelled += moved;
         remaining -= moved;
         if (moved < room) {

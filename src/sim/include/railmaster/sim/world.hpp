@@ -2,6 +2,7 @@
 
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/commands.hpp"
+#include "railmaster/sim/company.hpp"
 #include "railmaster/sim/date.hpp"
 #include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/locomotive.hpp"
@@ -19,7 +20,8 @@ struct WorldConfig {
     std::int32_t width_tiles = 128;
     std::int32_t height_tiles = 128;
     std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
-    bool sandbox = false;            // sandbox games have breakdowns off by default
+    bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
+    std::int64_t starting_cash = provisional::kStartingCash; // company's opening cash, dollars
     bool populate = true;            // place towns and industries (when industry data is present)
 };
 
@@ -51,6 +53,9 @@ public:
     const GameData& data() const { return data_; }
     Economy& economy() { return economy_; }
     const Economy& economy() const { return economy_; }
+    Company& company() { return company_; }
+    const Company& company() const { return company_; }
+    bool sandbox() const { return sandbox_; }
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
@@ -79,11 +84,18 @@ private:
     Railway railway_;
     Money spent_;
     Money earned_;
+    bool sandbox_ = false;
+    Company company_;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);
     CommandResult run(const BuildServiceBuilding& cmd);
     CommandResult run(const BuyTrain& cmd);
+    CommandResult run(const IssueBond& cmd);
+    CommandResult run(const RepayBond& cmd);
+    // Sandbox games ignore cash; otherwise the company must be able to pay.
+    std::optional<std::string> cannot_afford(Money cost) const;
+    void charge_running_costs();
     NodeId resolve_on_track(const TrackEnd& at);
 };
 

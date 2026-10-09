@@ -141,12 +141,12 @@ TEST_CASE("cargo is unloaded at the first stop that pays more, earning the diffe
     train.cars[0] = Car{s.c("coal"), kMilli, 15'000, 100, s.stations[0], std::nullopt};
 
     // Never sold back where it was loaded.
-    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[0], 110, 1) == Money{});
+    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[0], 110, 1).total == Money{});
     CHECK(s.rw.train(t).cars[0].cargo.has_value());
 
     const std::int32_t plant_price = s.eco.price(s.c("coal"), 30, 10);
     const std::int32_t stock_before = s.eco.stock_milli(s.c("coal"), 30, 10);
-    const Money income = handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 110, 2);
+    const Money income = handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 110, 2).total;
     // Ten days in transit at 0.5% a day: 95% of the price gain.
     CHECK(income == Money::dollars(std::int64_t{plant_price - 15'000} * 950 / 1000));
     CHECK_FALSE(s.rw.train(t).cars[0].cargo.has_value());
@@ -160,7 +160,7 @@ TEST_CASE("spoiled cargo is dumped for nothing") {
     s.days(10);
     const TrainId t = s.rw.add_train(0, 1, {s.stations[0], s.stations[1]});
     s.rw.train_mut(t).cars[0] = Car{s.c("milk"), kMilli, 55'000, 0, s.stations[0], std::nullopt};
-    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 40, 1) == Money{});
+    CHECK(handle_arrival(s.rw, s.eco, s.cargo, s.ind, t, s.stations[1], 40, 1).total == Money{});
     CHECK_FALSE(s.rw.train(t).cars[0].cargo.has_value());
 }
 

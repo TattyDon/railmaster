@@ -64,7 +64,12 @@ struct BuyTrain {
     std::int32_t priority = 0;
 };
 
-using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain>;
+// Borrow $500,000 (needs a credit rating of B or better).
+struct IssueBond {};
+// Repay the most expensive bond outstanding at face value.
+struct RepayBond {};
+
+using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond>;
 
 struct CommandResult {
     bool ok = false;

@@ -51,6 +51,67 @@ void fill_rect(float x0, float y0, float x1, float y1, float r, float g, float b
 
 } // namespace
 
+void Tools::draw_finance_panel() const {
+    const sim::Company& co = world_.company();
+    const auto& years = co.history();
+    const sim::YearAccounts& now = years.back();
+    const sim::YearAccounts* last = years.size() > 1 ? &years[years.size() - 2] : nullptr;
+
+    constexpr float kRow = 18.0f;
+    const float x0 = 40, y0 = 70, w = 760;
+    const float h = kRow * 31;
+    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    float y = y0 + 10;
+    const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
+                         float bl) {
+        glColor3f(r, g, bl);
+        draw_text(x0 + 14, y, label, kScale);
+        draw_text(x0 + 500 - static_cast<float>(text_width(a, kScale)), y, a, kScale);
+        draw_text(x0 + 720 - static_cast<float>(text_width(b, kScale)), y, b, kScale);
+        y += kRow;
+    };
+    row(co.name(), "", "", 1.0f, 0.9f, 0.5f);
+    row("INCOME STATEMENT", std::to_string(now.year) + " SO FAR", last ? std::to_string(last->year) : "", 1.0f, 0.9f,
+        0.5f);
+    y += 4;
+    for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
+        const auto line = static_cast<sim::Ledger>(i);
+        const bool rev = sim::is_revenue(line);
+        const auto cell = [&](const sim::YearAccounts& ya) {
+            const sim::Money m = ya.lines[i];
+            return (rev || m == sim::Money{} ? "" : "-") + format_money(m);
+        };
+        row(sim::ledger_name(line), cell(now), last ? cell(*last) : "", rev ? 0.6f : 0.95f, rev ? 0.95f : 0.65f,
+            rev ? 0.6f : 0.6f);
+    }
+    row("PROFIT", format_money(now.profit()), last ? format_money(last->profit()) : "", 1, 1, 1);
+    y += kRow / 2;
+    row("INVESTED IN TRACK", format_money(now.track_built), last ? format_money(last->track_built) : "", 0.8f, 0.8f,
+        0.8f);
+    row("INVESTED IN BUILDINGS", format_money(now.buildings_built), last ? format_money(last->buildings_built) : "",
+        0.8f, 0.8f, 0.8f);
+    row("INVESTED IN TRAINS", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
+        0.8f, 0.8f);
+    y += kRow / 2;
+    row("BALANCE SHEET", "", "", 1.0f, 0.9f, 0.5f);
+    row("CASH", format_money(co.cash()), "", 0.9f, 0.9f, 0.9f);
+    row("TRACK", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
+    row("STATIONS AND BUILDINGS", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
+    row("TRAINS", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
+    row("BONDS", "-" + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
+    row("BOOK VALUE", format_money(co.book_value()), "", 1, 1, 1);
+    y += kRow / 2;
+    std::string bonds;
+    for (const sim::Bond& b : co.bonds()) {
+        bonds += (bonds.empty() ? "" : ", ") + std::to_string(b.rate_bp / 100) + "." +
+                 std::to_string(b.rate_bp % 100 / 10) + "%";
+    }
+    row(std::string("CREDIT RATING ") + sim::rating_name(co.credit_rating()) + "   NEW BONDS AT " +
+            std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
+        "", "", 1.0f, 0.9f, 0.5f);
+    row("BONDS OUTSTANDING: " + (bonds.empty() ? std::string("NONE") : bonds), "", "", 0.9f, 0.9f, 0.9f);
+}
+
 std::string format_money(sim::Money m) {
     std::int64_t d = m.whole_dollars();
     const bool negative = d < 0;
@@ -135,7 +196,8 @@ void Tools::on_click(float sx, float sy, bool right_button) {
 
     on_mouse_move(sx, sy);
     switch (tool_) {
-    case Tool::Inspect: return;
+    case Tool::Inspect:
+    case Tool::Finance: return;
     case Tool::Track: {
         if (!track_start_) {
             track_start_ = hover_pick_;
@@ -188,6 +250,7 @@ bool Tools::on_key(SDL_Keycode key) {
     case SDLK_F4: select(Tool::ServiceTower); return true;
     case SDLK_F5: select(Tool::Maintenance); return true;
     case SDLK_F6: select(Tool::Train); return true;
+    case SDLK_F7: select(Tool::Finance); return true;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -235,6 +298,15 @@ bool Tools::on_key(SDL_Keycode key) {
         } else {
             return false;
         }
+        return true;
+    }
+    case Tool::Finance: {
+        sim::CommandResult r;
+        if (key == SDLK_b) r = world_.execute(sim::IssueBond{});
+        else if (key == SDLK_r) r = world_.execute(sim::RepayBond{});
+        else return false;
+        if (r.ok) show(key == SDLK_b ? "ISSUED A $500,000 BOND" : "REPAID A BOND", true);
+        else show("CANNOT: " + r.error, false);
         return true;
     }
     default: return false;
@@ -319,7 +391,8 @@ void Tools::draw_world_overlay() const {
         if (const auto s = station_near(hover_)) draw_marker(net.node(world_.railway().station(*s).node).pos, cam_, 8, 1, 1, 1);
         return;
     }
-    case Tool::Inspect: return;
+    case Tool::Inspect:
+    case Tool::Finance: return;
     }
 }
 
@@ -327,6 +400,7 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
         {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTENANCE"}, {Tool::Train, "F6 TRAIN"},
+        {Tool::Finance, "F7 FINANCES"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -368,6 +442,7 @@ std::string Tools::hint() const {
         return "CLICK STATIONS IN ORDER, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
+    case Tool::Finance: return "B ISSUE A $500,000 BOND   R REPAY THE DEAREST BOND";
     }
     return {};
 }
@@ -427,8 +502,9 @@ void Tools::draw_ui(const std::string& status) const {
     fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
     glColor3f(0.95f, 0.95f, 0.9f);
     draw_text(8, 4, status, kScale);
-    const std::string spent =
-        "EARNED " + format_money(world_.total_revenue()) + "   SPENT " + format_money(world_.total_spent());
+    const std::string spent = (world_.sandbox() ? std::string("SANDBOX   ") : std::string()) + "CASH " +
+                              format_money(world_.company().cash()) + "   PROFIT THIS YEAR " +
+                              format_money(world_.company().this_year().profit());
     draw_text(w - static_cast<float>(text_width(spent, kScale)) - 8, 4, spent, kScale);
 
     for (const Button& b : layout_buttons()) {
@@ -469,6 +545,8 @@ void Tools::draw_ui(const std::string& status) const {
         glColor3f(0.4f, 1.0f, 0.4f);
         draw_text(sx - static_cast<float>(text_width(label, kScale)) / 2, sy - 26, label, kScale);
     }
+
+    if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

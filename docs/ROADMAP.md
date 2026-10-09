@@ -48,9 +48,15 @@ Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
 - Ports and warehouses; new industries appearing over time; town growth.
 
-## M3: Company and finance
-- Company and personal ledgers, income statement, balance sheet.
-- Bonds and credit rating, stock issue and buyback, dividends.
+## M3: Company and finance (in progress)
+Done in the first slice: company cash that pays for everything (refusing
+what it cannot afford, except in sandbox); revenue by line; monthly running
+costs (train maintenance, fuel, track and building upkeep, interest); yearly
+income statements; balance sheet and book value; credit rating; bonds; a
+finance screen in the client. See `docs/spec/m3-finance-model.md`.
+
+Still to do:
+- Personal account, shares, stock issue and buyback, dividends.
 - Stock market: trading, margin, short selling, takeovers and mergers.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 - Economic cycle states.
@@ -80,3 +86,5 @@ The values most needed from observing the original game, in rough order:
 4. Industry conversion ratios and production rates per upgrade level.
 5. Share-price formula, bond-rate table, economic-state transitions.
 6. Map dimensions and world scale.
+7. Balance: what a typical RT3 passenger run pays, track prices, and
+   starting capital. Current fares and costs make lines far too profitable.

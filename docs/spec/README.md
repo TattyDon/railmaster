@@ -10,6 +10,7 @@ written in our own words (see [../CLEAN_ROOM.md](../CLEAN_ROOM.md)).
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |
 | [m1-provisional-models.md](m1-provisional-models.md) | Stand-in rules used until real values are measured |
 | [m2-economy-model.md](m2-economy-model.md) | How the cargo economy works: researched facts vs our design, and its constants |
+| [m3-finance-model.md](m3-finance-model.md) | Company accounts, running costs, credit rating and bonds |
 
 ## Status of the research
 

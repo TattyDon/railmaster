@@ -7,6 +7,7 @@ find_package(nlohmann_json 3.10 REQUIRED)
 add_library(railmaster_sim
     src/cargo.cpp
     src/commands.cpp
+    src/company.cpp
     src/date.cpp
     src/economy.cpp
     src/freight.cpp

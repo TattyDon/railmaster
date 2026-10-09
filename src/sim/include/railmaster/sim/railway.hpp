@@ -138,6 +138,10 @@ struct Train {
     std::uint32_t service_stops = 0;
     std::uint32_t breakdowns = 0;
 
+    std::int32_t built_day = 0;       // Date::days_since_epoch() when bought
+    std::int64_t distance_mm = 0;     // lifetime distance run
+    std::int64_t fuel_billed_mm = 0;  // distance already charged for fuel
+
     Money revenue;                    // lifetime earnings
     Money last_income;                // from the most recent stop
     std::uint64_t last_income_tick = 0;

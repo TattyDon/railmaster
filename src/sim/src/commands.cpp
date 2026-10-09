@@ -2,6 +2,7 @@
 
 #include "railmaster/sim/world.hpp"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -12,6 +13,16 @@ CommandResult fail(std::string why) {
     CommandResult r;
     r.error = std::move(why);
     return r;
+}
+
+std::string dollars(Money m) {
+    const std::string digits = std::to_string(std::max<std::int64_t>(0, m.whole_dollars()));
+    std::string out;
+    for (std::size_t i = 0; i < digits.size(); ++i) {
+        if (i > 0 && (digits.size() - i) % 3 == 0) out += ',';
+        out += digits[i];
+    }
+    return "$" + out;
 }
 
 CommandResult success(Money cost, std::uint32_t id) {
@@ -101,10 +112,16 @@ NodeId World::resolve_on_track(const TrackEnd& at) {
     throw std::logic_error("unknown track end");
 }
 
+std::optional<std::string> World::cannot_afford(Money cost) const {
+    if (sandbox_ || cost <= company_.cash()) return std::nullopt;
+    return "not enough cash: costs " + dollars(cost) + ", the company has " + dollars(company_.cash());
+}
+
 CommandResult World::run(const BuildTrack& cmd) {
     // Validate everything before changing anything.
     const PlanResult check = preview(cmd);
     if (!check.plan) return fail(check.error);
+    if (auto why = cannot_afford(check.plan->total_cost)) return fail(*why);
 
     const NodeId from = resolve_on_track(cmd.start);
     const NodeId to = resolve_on_track(cmd.end);
@@ -113,6 +130,7 @@ CommandResult World::run(const BuildTrack& cmd) {
     PlanResult plan = plan_track(railway_.track(), terrain_, from, std::move(points), to, options_for(cmd, date_.year()));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
     build_track(railway_.track(), *plan.plan);
+    company_.invest_track(plan.plan->total_cost);
     return success(plan.plan->total_cost, to);
 }
 
@@ -123,7 +141,9 @@ CommandResult World::run(const BuildStation& cmd) {
             if (s.node == cmd.at.node) return fail("there is already a station here");
         }
     }
+    if (auto why = cannot_afford(station_cost(cmd.size))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
+    company_.invest_buildings(station_cost(cmd.size));
     std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
     const StationId id = railway_.add_station(std::move(name), node, cmd.size);
     return success(station_cost(cmd.size), id);
@@ -136,7 +156,9 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
             if (b.node == cmd.at.node && b.type == cmd.type) return fail("there is already one here");
         }
     }
+    if (auto why = cannot_afford(service_building_cost(cmd.type))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
+    company_.invest_buildings(service_building_cost(cmd.type));
     const ServiceBuildingId id = railway_.add_service_building(cmd.type, node);
     return success(service_building_cost(cmd.type), id);
 }
@@ -150,8 +172,31 @@ CommandResult World::run(const BuyTrain& cmd) {
     for (StationId s : cmd.route) {
         if (s >= railway_.stations().size()) return fail("unknown station in route");
     }
+    if (auto why = cannot_afford(loco.cost)) return fail(*why);
     const TrainId id = railway_.add_train(cmd.loco, cmd.cars, cmd.route, cmd.priority);
+    railway_.train_mut(id).built_day = date_.days_since_epoch();
+    company_.invest_train(loco.cost);
     return success(loco.cost, id);
+}
+
+CommandResult World::run(const IssueBond&) {
+    if (!company_.can_issue_bond()) {
+        return fail(std::string("credit rating ") + rating_name(company_.credit_rating()) +
+                    " is too low: bonds need B or better");
+    }
+    company_.issue_bond(date_.year());
+    // Cash raised, net of the fee; not counted as spending.
+    CommandResult r = success(Money{}, static_cast<std::uint32_t>(company_.bonds().size() - 1));
+    return r;
+}
+
+CommandResult World::run(const RepayBond&) {
+    if (company_.bonds().empty()) return fail("there are no bonds to repay");
+    if (!sandbox_ && company_.cash() < Money::dollars(kBondFaceValue)) {
+        return fail("not enough cash to repay a bond (" + dollars(Money::dollars(kBondFaceValue)) + ")");
+    }
+    company_.repay_bond();
+    return success(Money{}, 0);
 }
 
 } // namespace railmaster::sim

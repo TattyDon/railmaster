@@ -59,7 +59,7 @@ struct Towns {
         return 0;
     }
     Money arrive(TrainId t, StationId s, std::int32_t day) {
-        return handle_arrival(rw, eco, cargo, ind, t, s, day, static_cast<std::uint64_t>(day));
+        return handle_arrival(rw, eco, cargo, ind, t, s, day, static_cast<std::uint64_t>(day)).total;
     }
 };
 

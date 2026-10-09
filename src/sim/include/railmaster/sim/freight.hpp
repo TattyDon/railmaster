@@ -6,6 +6,8 @@
 #include "railmaster/sim/railway.hpp"
 
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace railmaster::sim {
 
@@ -35,6 +37,17 @@ constexpr std::int32_t kMailCapMonths = 2; // a town pays for two months' worth 
 } // namespace provisional
 
 std::int32_t catchment_radius(StationSize size);
+
+// What a train earned at one stop, in total and by cargo.
+struct Earnings {
+    Money total;
+    std::vector<std::pair<CargoId, Money>> by_cargo;
+
+    void add(CargoId c, Money m) {
+        total += m;
+        by_cargo.emplace_back(c, m);
+    }
+};
 
 // The best (highest) and cheapest prices for a cargo within a station's catchment.
 struct CatchmentPrices {
@@ -73,7 +86,7 @@ void start_new_month(Railway& rw);
 // local economy. Returns the income.
 // Express loads are only unloaded at their destination, earning the fare
 // less decay (mail past the town's monthly demand earns nothing).
-Money handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
-                     TrainId train, StationId station, std::int32_t today, std::uint64_t tick);
+Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
+                        TrainId train, StationId station, std::int32_t today, std::uint64_t tick);
 
 } // namespace railmaster::sim

@@ -18,6 +18,8 @@ Early development. Done so far:
 - freight by rail: stations gather cargo, trains load the most valuable,
   and deliveries earn the price difference
 - passengers, mail and troops with destinations, paid by distance
+- a company with cash, running costs, yearly accounts, credit rating and
+  bonds, shown on a finance screen
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
@@ -50,12 +52,13 @@ of the demo network.
 
 | Key or action | Does |
 |---|---|
-| F1 / F2 / F3 / F4 / F5 / F6, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train |
+| F1 to F6, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train |
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
+| F7, then B / R | Finance screen; issue or repay a bond |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |

@@ -204,11 +204,11 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     }
 }
 
-Money handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
-                     TrainId train_id, StationId station_id, std::int32_t today, std::uint64_t tick) {
+Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
+                        TrainId train_id, StationId station_id, std::int32_t today, std::uint64_t tick) {
     Station& st = rw.station_mut(station_id);
     size_pool(st, cargo);
-    Money income;
+    Earnings income;
 
     // Unload express loads that have arrived, and freight that sells here
     // for more than it cost.
@@ -222,8 +222,8 @@ Money handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, cons
                 const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) * kMilli / 12 *
                                          provisional::kMailCapMonths;
                 if (!c.demand_cap || received < cap) {
-                    income += express_fare(c, rw, car.loaded_at, station_id).scaled(std::int64_t{left} * car.milli,
-                                                                                   1000LL * kMilli);
+                    income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
+                                         .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli));
                 }
                 received += car.milli;
                 car = Car{};
@@ -235,7 +235,7 @@ Money handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, cons
         const CatchmentPrices here = catchment_prices(eco, rw, st, c.id);
         if (car.loaded_at != station_id && here.best > car.pickup_price) {
             const std::int64_t gain = std::int64_t{here.best - car.pickup_price};
-            income += Money::dollars(gain * left / 1000 * car.milli / kMilli);
+            income.add(c.id, Money::dollars(gain * left / 1000 * car.milli / kMilli));
             eco.add_stock(c.id, here.best_cx, here.best_cy, car.milli);
             car = Car{};
         } else if (left == 0) {
@@ -292,9 +292,9 @@ Money handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, cons
         }
     }
 
-    if (income > Money{}) {
-        train.revenue += income;
-        train.last_income = income;
+    if (income.total > Money{}) {
+        train.revenue += income.total;
+        train.last_income = income.total;
         train.last_income_tick = tick;
     }
     return income;
