@@ -1,5 +1,6 @@
 #include "railmaster/sim/ai.hpp"
 
+#include "railmaster/sim/freight.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <nlohmann/json.hpp>
@@ -73,19 +74,6 @@ std::int64_t distance_km(const World& w, const Place& a, const Place& b) {
 
 bool input_wanted(const IndustryInput& in, std::int32_t year) { return !in.until_year || year <= *in.until_year; }
 
-// Houses within a town's reach, counting each house cell's level.
-std::int64_t houses(const World& w, const Town& town) {
-    const Economy& eco = w.economy();
-    const std::int32_t reach = w.data().balance.stations.town_reach_cells;
-    std::int64_t n = 0;
-    for (const Site& s : eco.sites()) {
-        if (w.data().industries.get(s.type).kind == IndustryKind::House &&
-            eco.cells_between(s.cx, s.cy, town.cx, town.cy) <= reach)
-            n += s.level;
-    }
-    return n;
-}
-
 // Stations of `owner` (or of anyone, if unset) near a cell.
 std::optional<StationId> station_near(const World& w, std::int32_t cx, std::int32_t cy, std::int32_t cells,
                                       std::optional<CompanyId> owner) {
@@ -96,6 +84,34 @@ std::optional<StationId> station_near(const World& w, std::int32_t cx, std::int3
         if (w.economy().cells_between(w.economy().cell_x(p), w.economy().cell_y(p), cx, cy) <= cells) return st.id;
     }
     return std::nullopt;
+}
+
+// The yearly rate, in carload thousandths, of the sites within a town's
+// reach that make (or, with outputs false, take) cargo `c`.
+std::int64_t town_rate(const World& w, const Town& town, CargoId c, bool outputs) {
+    const Economy& eco = w.economy();
+    const std::int32_t reach = w.data().balance.stations.town_reach_cells;
+    std::int64_t total = 0;
+    for (const Site& s : eco.sites()) {
+        if (s.closed || eco.cells_between(s.cx, s.cy, town.cx, town.cy) > reach) continue;
+        const IndustryType& t = w.data().industries.get(s.type);
+        const bool has = outputs ? std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end()
+                                 : std::any_of(t.inputs.begin(), t.inputs.end(),
+                                               [&](const IndustryInput& in) { return in.cargo == c; });
+        if (has) total += t.rate_milli * s.level;
+    }
+    return total;
+}
+
+// What a medium station at `p` would buy or sell cargo `c` for: the best
+// price in its catchment, as the freight code uses.
+std::int64_t station_price(const World& w, const Place& p, CargoId c) {
+    const Economy& eco = w.economy();
+    const std::int64_t r = eco.cells_mm(catchment_radius(StationSize::Medium, w.data().balance));
+    std::int64_t best = 0;
+    eco.for_nodes_within(eco.node_centre(p.cx, p.cy), r,
+                         [&](std::int32_t x, std::int32_t y) { best = std::max<std::int64_t>(best, eco.price(c, x, y)); });
+    return best;
 }
 
 std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
@@ -113,24 +129,40 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
     const auto covered = [&](const Place& p) { return station_near(w, p.cx, p.cy, b.ai.cover_cells, std::nullopt).has_value(); };
 
     std::vector<Place> towns;
-    std::vector<std::int64_t> town_houses;
     for (const Town& t : eco.towns()) {
         towns.push_back({t.cx, t.cy, t.name});
-        town_houses.push_back(houses(w, t));
     }
 
     std::vector<Candidate> out;
-    // Passengers and mail between towns: a fare for each load, and loads in
-    // proportion to the smaller town [I].
-    std::int64_t express_per_km = 0;
+    // Passengers and mail between towns, estimated as the express code
+    // generates them: each town's rate x the cargo's generation, sent to the
+    // other in proportion to its draw A / (A + half), at the fare per km.
+    struct ExpressRates {
+        const CargoType* cargo;
+        std::vector<std::int64_t> made, drawn; // per town, carload thousandths a year
+    };
+    std::vector<ExpressRates> express;
     for (const CargoType& c : cargo.all()) {
-        if (c.cargo_class == CargoClass::Express && year >= c.available_year) express_per_km += std::int64_t{c.fare_per_km} * c.generation;
+        if (c.cargo_class != CargoClass::Express || c.generation <= 0 || year < c.available_year) continue;
+        ExpressRates e{&c, {}, {}};
+        for (const Town& t : eco.towns()) {
+            e.made.push_back(town_rate(w, t, c.id, true) * c.generation);
+            e.drawn.push_back(town_rate(w, t, c.id, false));
+        }
+        express.push_back(std::move(e));
     }
+    const std::int64_t half = std::int64_t{b.express.attraction_half} * kMilli;
     for (std::size_t i = 0; i < towns.size(); ++i) {
         for (std::size_t j = i + 1; j < towns.size(); ++j) {
             if (!in_range(towns[i], towns[j]) || (covered(towns[i]) && covered(towns[j]))) continue;
             const std::int64_t d = distance_km(w, towns[i], towns[j]);
-            out.push_back({towns[i], towns[j], express_per_km * d * std::min(town_houses[i], town_houses[j]), 0});
+            std::int64_t value = 0;
+            for (const ExpressRates& e : express) {
+                const std::int64_t ij = e.made[i] * e.drawn[j] / std::max<std::int64_t>(1, e.drawn[j] + half);
+                const std::int64_t ji = e.made[j] * e.drawn[i] / std::max<std::int64_t>(1, e.drawn[i] + half);
+                value += std::int64_t{e.cargo->fare_per_km} * d * (ij + ji) / kMilli;
+            }
+            if (value > 0) out.push_back({towns[i], towns[j], value, 0});
         }
     }
 
@@ -146,11 +178,12 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
         for (CargoId c : pt.outputs) {
             const CargoType& ct = cargo.get(c);
             if (ct.cargo_class != CargoClass::Freight || year < ct.available_year || !eco.active(c)) continue;
-            const std::int64_t here = eco.price(c, p.cx, p.cy);
+            // Bought and sold at the stations' prices: the best in each catchment.
+            const std::int64_t here = station_price(w, from, c);
             const std::int64_t loads_milli = pt.rate_milli * p.level;
             const auto consider = [&](const Place& to) {
                 if (!in_range(from, to) || (covered(from) && covered(to))) return;
-                const std::int64_t gain = eco.price(c, to.cx, to.cy) - here;
+                const std::int64_t gain = station_price(w, to, c) - here;
                 if (gain > 0) out.push_back({from, to, gain * loads_milli / kMilli, 0});
             };
             for (std::size_t t = 0; t < towns.size(); ++t) {

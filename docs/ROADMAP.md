@@ -84,10 +84,13 @@ from each node's demand and supply, prices relax over months, middlemen
 carry stock toward every dearer neighbour, and the calibration tool checks
 middleman speeds and how fast the price map reshapes.
 
+Rival tycoons now value town pairs by the express code's own rates and
+freight by the stations' catchment prices, so they build freight lines as
+well as passenger ones (about a quarter of their revenue in the
+calibration game).
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
-- AI rivals choosing freight lines: in the calibration game all three run
-  only passengers and mail.
 - Warehouse cargo conversion.
 
 ## M3: Company and finance (in progress)

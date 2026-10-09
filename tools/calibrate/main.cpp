@@ -248,19 +248,22 @@ void rivals(const GameData& data) {
     World w(cfg, data);
     run_years(w, 5);
     int profitable = 0, n = 0;
-    double revenue = 0, buildings = 0;
+    double revenue = 0, buildings = 0, freight = 0;
     for (const Rival& r : w.rivals()) {
         const auto co = w.investors()[r.player].chairs;
         if (!co) continue;
         const YearAccounts& y = w.company(*co).history()[w.company(*co).history().size() - 2];
         profitable += y.profit() > Money{};
         revenue += dollars(y.revenue());
+        freight += dollars(y.lines[static_cast<std::size_t>(Ledger::FreightRevenue)]);
         buildings += dollars(y.lines[static_cast<std::size_t>(Ledger::StationBuildingIncome)]);
         ++n;
     }
     const auto count = static_cast<double>(std::max<std::size_t>(1, w.railway().station_buildings().size()));
     report("rivals profitable in year 5", n ? 100.0 * profitable / n : 0, 60, 100, "%", "spec §13 [I]: competent AI");
     report("rival revenue, year 5", n ? revenue / n : 0, 200'000, 5'000'000, "$/yr", "[I] as the demo network");
+    report("rival revenue from freight, year 5", revenue > 0 ? 100 * freight / revenue : 0, 10, 80, "%",
+           "spec §13 [I]: plans city pairs and industry-consumer pairs alike");
     report("station building income each", buildings / count, 0, 20'000, "$/yr", "spec §7.2 [C]: ~$1K");
 }
 

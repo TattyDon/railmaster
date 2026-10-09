@@ -241,3 +241,36 @@ TEST_CASE("rivals are deterministic, and can be held still") {
     const auto still = snapshot(false);
     CHECK(still.back() == 0); // no trains bought
 }
+
+TEST_CASE("a rival plans freight lines too: a mine and a power plant with no towns about [I]") {
+    WorldConfig cfg;
+    testing::legacy_scale(cfg);
+    cfg.width_tiles = 60;
+    cfg.height_tiles = 20;
+    cfg.populate = false;
+    cfg.business_cycle = false;
+    cfg.industries_appear = false;
+    cfg.rivals = 1;
+    World w(cfg, shipped_data());
+    for (int y = 0; y <= 20; ++y)
+        for (int x = 0; x <= 60; ++x) w.terrain().set_corner_height(x, y, 10);
+    for (int y = 0; y < 20; ++y)
+        for (int x = 0; x < 60; ++x) w.terrain().set_ground(x, y, GroundType::Grass);
+    const auto add = [&](const char* key, int cx, int cy) {
+        return w.economy().add_site(w.data().industries, *w.data().industries.find(key), cx, cy);
+    };
+    // Two mines, so the line is worth its track; the plant 20 km east.
+    add("coal_mine", 10, 10);
+    add("coal_mine", 10, 11);
+    add("electric_plant", 30, 10);
+    run_days(w, 3 * 365);
+
+    const CompanyId co = *w.investors()[w.rivals()[0].player].chairs;
+    std::int32_t stations = 0;
+    for (const Station& s : w.railway().stations()) stations += s.owner == co;
+    Money freight;
+    for (const YearAccounts& y : w.company(co).history()) freight += y.lines[static_cast<std::size_t>(Ledger::FreightRevenue)];
+    MESSAGE(w.company(co).name() << ": " << stations << " stations, freight $" << freight.whole_dollars());
+    CHECK(stations >= 2);
+    CHECK(freight > Money{});
+}

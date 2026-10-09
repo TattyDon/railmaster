@@ -189,12 +189,24 @@ Each month, after the market, each rival in turn:
 1. **Finance.** Issues a bond if its cash is negative; sets its dividend;
    repays a bond when it holds several bonds' worth of spare cash.
 2. **Expansion**, when its build interval has passed:
-   - Lists candidate lines. These are town pairs, valued by passenger and
-     mail fares × distance × the smaller town's houses. They are also
-     freight lines from a working producer to a town or industry that pays
-     more for its cargo, valued by price gap × output. Only lines between 8
-     and 40 km (more for keen builders) are listed. A place another station
-     already serves at both ends is skipped.
+   - Lists candidate lines, city pairs and industry–consumer pairs alike
+     (rt3-clone-spec §13 [I]), each valued in dollars a year the way the
+     game will pay them:
+     - **Town pairs:** for each express cargo, each town's yearly rate of
+       houses (and barracks) making it × the cargo's generation, sent to the
+       other town in proportion to its draw A ÷ (A + 2 loads), both ways, ×
+       the fare per km × distance. This is the express code's own rule.
+     - **Freight:** from a working producer to a town or industry that pays
+       more, the gap between what a medium station at each end would buy and
+       sell for (the best price in its catchment) × the producer's output.
+
+     Only lines between 8 and 40 km (more for keen builders) are listed. A
+     place another station already serves at both ends is skipped.
+
+     An earlier estimate valued town pairs at fares × distance × the smaller
+     town's houses. That counted each house as a load a year, ten times its
+     calibrated rate, so freight never won and rivals carried none. In the
+     calibration game about a quarter of rival revenue is now freight.
    - Ranks them by value per rough cost, then costs the best eight
      exactly with the track planner. It picks the best value per dollar it
      can afford, borrowing if its temperament allows.

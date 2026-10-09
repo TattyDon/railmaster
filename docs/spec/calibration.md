@@ -1,7 +1,7 @@
 # Calibration
 
 `railmaster_calibrate` (built from `tools/calibrate/`) runs a few headless
-games and scores sixteen metrics against the spec's targets. It exits 0
+games and scores seventeen metrics against the spec's targets. It exits 0
 when every metric is in range and 1 otherwise, so it can gate a balance
 change. A run takes about half a minute.
 
@@ -39,6 +39,7 @@ cmake --build build
 | Demo company's credit grade, worst seed | A+ to B | §12.4 [C]: a profitable railroad can borrow |
 | Rivals in profit in year 5 | 60–100% | §13 [I]: a competent AI |
 | Rival revenue, year 5 | $200K–$5M a year | [I], as the demo network |
+| Rival revenue from freight, year 5 | 10–80% | §13 [I]: the planner weighs city pairs and industry–consumer pairs alike |
 | Station-building income | $0–$20K a year each | §7.2 [C]: about $1K |
 
 The [I] targets are derived from scenario goals: the spec's scenarios ask
@@ -94,6 +95,11 @@ in mountains, 90% of an unsold mine's coal within 8 cells after three
 years (the top of its band), the map reshaped in 1.2 years. The demo and
 rivals barely moved (return 8.3%), as their revenue is mostly passengers;
 the calibration game's three rivals carry no freight at all.
+
+Rivals then valued town pairs at ten times their calibrated passenger
+rate, so they built no freight lines. With the express code's own rates in
+the estimate, 27% of rival revenue in year 5 is freight; total rival revenue
+is about the same ($947K a year).
 
 ## What changed
 
