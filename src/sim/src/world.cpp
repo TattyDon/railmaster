@@ -242,11 +242,11 @@ void World::charge_running_costs() {
     const std::size_t n = market_.companies.size();
     std::vector<Money> maintenance(n), fuel(n);
     for (const Train& t : railway_.trains()) {
-        if (t.state == TrainState::Crashed) continue;
+        if (!t.in_service()) continue;
         const LocomotiveType& loco = data_.locomotives.get(t.loco);
         maintenance[t.owner] += annual_maintenance(loco, (today - t.built_day) / 365, t.oil, data_.balance).scaled(1, 12);
         const std::int64_t run_mm = t.distance_mm - t.fuel_billed_mm;
-        fuel[t.owner] += Money::dollars(fuel_per_km(f, loco, t.cars.size())).scaled(run_mm, 1'000'000);
+        fuel[t.owner] += Money::dollars(fuel_per_km(f, loco, t.hauled_cars())).scaled(run_mm, 1'000'000);
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
     for (Company& c : market_.companies) {
@@ -355,7 +355,7 @@ void World::pay_station_buildings() {
 
 bool World::town_connected(std::size_t t) const {
     for (const Train& tr : railway_.trains()) {
-        if (tr.state == TrainState::Crashed) continue;
+        if (!tr.in_service()) continue;
         for (const StationId s : tr.route)
             if (railway_.station(s).town == t) return true;
     }

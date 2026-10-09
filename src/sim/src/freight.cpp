@@ -34,7 +34,7 @@ ExpressWaiting& express_pool(Station& s, CargoId c, StationId dest) {
 std::vector<std::vector<StationId>> route_partners(const Railway& rw) {
     std::vector<std::vector<StationId>> partners(rw.stations().size());
     for (const Train& t : rw.trains()) {
-        if (t.state == TrainState::Crashed) continue;
+        if (!t.in_service()) continue;
         for (StationId a : t.route)
             for (StationId b : t.route)
                 if (a != b) partners[a].push_back(b);
@@ -55,7 +55,7 @@ std::vector<std::int32_t> best_onward_prices(const Economy& eco, const Railway& 
                                              const std::vector<std::vector<std::int32_t>>& best_at) {
     std::vector<std::int32_t> best(cargo.all().size(), 0);
     for (const Train& t : rw.trains()) {
-        if (t.state == TrainState::Crashed) continue;
+        if (!t.in_service()) continue;
         if (std::find(t.route.begin(), t.route.end(), station) == t.route.end()) continue;
         for (StationId other : t.route) {
             if (other == station) continue;
@@ -272,9 +272,12 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                 const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) / 12 *
                                          rw.balance().express.mail_cap_months;
                 if (!c.demand_cap || received < cap) {
+                    // A dining car makes passengers pay more [D].
+                    const std::int32_t diner = c.key == "passengers" && rw.train(train_id).diner ? kDinerPassengerPercent : 100;
                     income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
                                          .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli)
-                                         .scaled(revenue_permille, 1000));
+                                         .scaled(revenue_permille, 1000)
+                                         .scaled(diner, 100));
                 }
                 received += car.milli;
                 if (c.key == "passengers") st.passengers_arrived_milli += car.milli;
@@ -296,12 +299,22 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         }
     }
 
-    // Load: the waiting cargo worth most at the train's other stops, a full
-    // carload per car, while any remains. Cargo nobody further on wants stays.
-    // Express cars may leave part-full, from the minimum load [C: load
-    // fraction 0.5-1.0], since passengers and mail will not wait for ever.
+    // Load, by the consist rule for this stop (rt3-clone-spec §9.3): the
+    // waiting cargo of the allowed kinds worth most at the train's other
+    // stops, a full carload per car, up to the rule's cars. Cargo nobody
+    // further on wants stays. Express cars may leave part-full, from the
+    // minimum load [C: load fraction 0.5-1.0], since passengers and mail will
+    // not wait for ever.
     const std::int32_t express_min = rw.balance().express.min_load_milli;
     const Train& t = rw.train(train_id);
+    const std::size_t stop = t.stop_index;
+    const ConsistRule rule = stop < t.rules.size() ? t.rules[stop] : ConsistRule{};
+    const auto allowed = [&](const CargoType& c) {
+        if (rule.custom) return std::find(rule.cars.begin(), rule.cars.end(), c.id) != rule.cars.end();
+        if (rule.filter == CargoFilter::Freight) return c.cargo_class == CargoClass::Freight;
+        if (rule.filter == CargoFilter::Express) return c.cargo_class == CargoClass::Express;
+        return true;
+    };
     struct Candidate {
         CargoId cargo;
         std::optional<StationId> destination;
@@ -310,7 +323,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     std::vector<Candidate> candidates;
     for (const CargoType& c : cargo.all()) {
         const WaitingCargo& pool = st.waiting[c.id];
-        if (pool.milli < kMilli) continue;
+        if (pool.milli < kMilli || !allowed(c)) continue;
         std::int32_t onward = 0;
         for (StationId other : t.route) {
             if (other != station_id) onward = std::max(onward, catchment_prices(eco, rw, rw.station(other), c.id).best);
@@ -319,7 +332,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         if (gain > 0) candidates.push_back({c.id, std::nullopt, gain});
     }
     for (const ExpressWaiting& e : st.express) {
-        if (e.milli < express_min || !on_route(t, e.destination)) continue;
+        if (e.milli < express_min || !on_route(t, e.destination) || !allowed(cargo.get(e.cargo))) continue;
         candidates.push_back({e.cargo, e.destination,
                               express_fare(cargo.get(e.cargo), rw, station_id, e.destination).whole_dollars()});
     }
@@ -330,13 +343,26 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     const auto waiting_milli = [&](const Candidate& c) {
         return c.destination ? express_pool(st, c.cargo, *c.destination).milli : st.waiting[c.cargo].milli;
     };
-    const auto enough = [&](const Candidate& c) { return waiting_milli(c) >= (c.destination ? express_min : kMilli); };
+    // A custom consist takes each listed car once (a cargo listed twice, twice).
+    std::vector<std::int32_t> wanted(cargo.all().size(), 0);
+    for (CargoId c : rule.cars) ++wanted[c];
+    const auto enough = [&](const Candidate& c) {
+        return waiting_milli(c) >= (c.destination ? express_min : kMilli) && (!rule.custom || wanted[c.cargo] > 0);
+    };
+    // Loaded cars first; the train has as many slots as the rule allows,
+    // after any caboose and dining car (more only if through loads need them).
+    std::stable_partition(train.cars.begin(), train.cars.end(), [](const Car& c) { return c.cargo.has_value(); });
+    for (const Car& car : train.cars)
+        if (car.cargo && rule.custom && wanted[*car.cargo] > 0) --wanted[*car.cargo]; // already aboard
+    const std::size_t loaded = train.loaded_cars();
+    train.cars.resize(std::max(train.slots_at(stop), loaded));
     std::size_t next = 0;
     for (Car& car : train.cars) {
         if (car.cargo) continue;
         while (next < candidates.size() && !enough(candidates[next])) ++next;
         if (next == candidates.size()) break;
         const Candidate& pick = candidates[next];
+        --wanted[pick.cargo];
         if (pick.destination) {
             std::int32_t& pool = express_pool(st, pick.cargo, *pick.destination).milli;
             const std::int32_t load = std::min(kMilli, pool);
@@ -351,6 +377,9 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             car = Car{pick.cargo, kMilli, price, today, station_id, std::nullopt, static_cast<std::int32_t>(pick.gain)};
         }
     }
+
+    // Short of the rule's minimum: wait here for more ("wait for a full load").
+    train.holding = train.loaded_cars() < rule.min;
 
     if (income.total > Money{}) {
         train.revenue += income.total;

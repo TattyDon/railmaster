@@ -245,11 +245,9 @@ CommandResult World::run(const BuyTrain& cmd) {
 }
 
 CommandResult World::run(const ReplaceLocomotive& cmd) {
-    if (cmd.train >= railway_.trains().size()) return fail("no such train");
     if (cmd.loco >= data_.locomotives.all().size()) return fail("unknown locomotive");
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
     const Train& t = railway_.train(cmd.train);
-    if (t.state == TrainState::Crashed) return fail("that train has been wrecked");
-    if (t.owner != acting().id()) return fail("you can only re-engine your own trains");
     const LocomotiveType& loco = data_.locomotives.get(cmd.loco);
     if (!loco.available_in(date_.year())) return fail(loco.name + " is not available in " + std::to_string(date_.year()));
     if (auto why = cannot_afford(loco.cost)) return fail(*why);
@@ -261,6 +259,68 @@ CommandResult World::run(const ReplaceLocomotive& cmd) {
     tm.water = tm.sand = tm.oil = kGaugeFull;
     tm.water_used_mm = tm.sand_used_climb_mm = tm.oil_used_mm = 0;
     return success(loco.cost, cmd.train);
+}
+
+std::optional<std::string> World::own_train_problem(TrainId id) const {
+    if (id >= railway_.trains().size()) return "no such train";
+    const Train& t = railway_.train(id);
+    if (!t.in_service()) return "that train is no longer in service";
+    if (t.owner != acting().id()) return "you can only change your own trains";
+    return std::nullopt;
+}
+
+CommandResult World::run(const SetConsist& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    const Train& t = railway_.train(cmd.train);
+    if (cmd.stop && *cmd.stop >= t.route.size()) return fail("the train has no such stop");
+    const ConsistRule& r = cmd.rule;
+    const std::size_t room = kMaxCarsPerTrain - std::size_t{t.caboose} - std::size_t{t.diner};
+    if (r.capacity() > room) return fail("only " + std::to_string(room) + " car slots are free");
+    if (r.min > r.capacity()) return fail("the minimum is more cars than the consist has");
+    for (CargoId c : r.cars)
+        if (c >= data_.cargo.all().size()) return fail("unknown cargo in the consist");
+    Train& tm = railway_.train_mut(cmd.train);
+    if (cmd.stop) tm.rules[*cmd.stop] = r;
+    else std::fill(tm.rules.begin(), tm.rules.end(), r);
+    return success(Money{}, cmd.train);
+}
+
+CommandResult World::run(const SetSpecialCars& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    const Train& t = railway_.train(cmd.train);
+    const std::size_t room = kMaxCarsPerTrain - std::size_t{cmd.caboose} - std::size_t{cmd.diner};
+    for (const ConsistRule& r : t.rules)
+        if (r.capacity() > room) return fail("the consist needs more slots than would be left; take cars off first");
+    Train& tm = railway_.train_mut(cmd.train);
+    tm.caboose = cmd.caboose;
+    tm.diner = cmd.diner;
+    return success(Money{}, cmd.train);
+}
+
+CommandResult World::run(const CopyTrain& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    const Train original = railway_.train(cmd.train);
+    const CommandResult bought = run(BuyTrain{.loco = original.loco,
+                                              .cars = static_cast<std::uint8_t>(original.slots_at(0)),
+                                              .route = original.route,
+                                              .priority = original.priority});
+    if (!bought.ok) return bought;
+    Train& copy = railway_.train_mut(bought.created_id);
+    copy.rules = original.rules;
+    copy.caboose = original.caboose;
+    copy.diner = original.diner;
+    return bought;
+}
+
+CommandResult World::run(const RetireTrain& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    Train& t = railway_.train_mut(cmd.train);
+    acting().write_off_train(data_.locomotives.get(t.loco).cost);
+    t.state = TrainState::Retired;
+    t.cars.clear();
+    t.path.clear();
+    t.holding = false;
+    return success(Money{}, cmd.train);
 }
 
 CommandResult World::run(const IssueBond&) {

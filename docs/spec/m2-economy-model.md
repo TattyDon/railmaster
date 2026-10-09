@@ -174,10 +174,29 @@ How we implement them (code: `freight.hpp`):
 | Revenue modifiers | Difficulty (Easy +20%, Medium 0, Hard −10%, Expert −20%) × station age (+15% for a town's first station when new, 0 at 4 years, −10% from 20 years, half in open country) [D, §8.4]. A station belongs to the nearest town centre within 4 cells. | The 4-cell reach is ours. |
 | Waiting at a station | No loss while waiting. | The research says decay is slower at a station than on a train. |
 
-Known simplifications: one consist rule (automatic) for every stop; RT3
-also allows manual per-stop consists. Delivery income is tallied but not
-yet paid to a company, and running costs are not yet charged (M3), so
-profits are overstated for now.
+### Consists (rt3-clone-spec §9.3 [D])
+
+Each stop on a train's route has a rule for what it takes on there:
+
+- **Auto** (the default): the most profitable loads for the stops ahead,
+  filtered to Any Cargo, Any Freight or Any Express, up to the rule's
+  maximum (default 4).
+- **Custom:** exactly the listed cars, one per entry (a cargo listed twice
+  fills two cars), whatever else is waiting.
+- **Minimum:** the train waits at the stop until it has at least that many
+  loaded cars, trying again each dwell ("wait for a full load"). Default 0.
+- **Slots:** cargo cars, a caboose and a dining car share 8. A caboose
+  halves the breakdown chance per distance run; a dining car makes
+  passengers on the train pay 20% more.
+- **Hauled cars:** only loaded cars, the caboose and the dining car are
+  pulled; empty cars stay behind. Speed on grades and fuel per km count
+  hauled cars, so a train running light is faster and cheaper. The
+  train's car slots are resized to the rule at each stop, keeping any
+  through loads.
+- A rule set on one stop changes only that stop; set without a stop it
+  applies to all (RT3's "apply this consist to all stations").
+- Copying a train buys the same engine type, route, rules and special
+  cars; retiring one takes it out of service and writes off its engine.
 
 ## Passengers, mail and troops (express cargo)
 

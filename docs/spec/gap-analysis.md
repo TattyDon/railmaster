@@ -53,6 +53,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §3.1, §5.2, §7.1 [I] | 0.5-mile cells; Small/Medium/Large maps of 256 × 256, 384 × 512, 768 × 1024; economy nodes every few cells (~15,000 [D]); catchment radius 2/3/4 cells | 1 km cells, one node per cell, 128 × 128 maps, radii 1/2/3 | as the spec; 2 × 2-cell nodes on Small, 4 × 4 on Medium, 7 × 7 on Large; map counts scale with area |
 | §5.3 [I] | Equilibrium price base × ((D+ε)/(S+ε))^0.5 within 0.3–3×; relaxation over months; middleman flow ∝ gap × stock × conductance; conductance-weighted coupling | screened-Poisson field pinned at sites (consumers 150%, producers 50%, neutral 50%); stock to the single best neighbour | as the spec, except site nodes are not smoothed (it would flatten every market; see m2-economy-model.md); calibrated to the spec's [C] middleman speeds and reshaping time |
 | §9.3 [D], §13.2 [I] | Replace locomotive (keeps route and consist); AI replaces engines over 25 years; a recessionCaution trait | none | as the spec; the old engine is scrapped with no trade-in, and what caution does is ours ([rivals-model.md](rivals-model.md)) |
+| §9.3 [D] | Consist rules per stop: auto (Any/Freight/Express, min/max, default 0/4) or custom cars; wait for a full load; 8 slots with caboose (−50% breakdowns) and dining car (+20% passengers); copy, retire | a fixed number of cars, one automatic rule | as documented; empty cars are not hauled (our reading of "picks cars for the next stop") |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -90,10 +91,6 @@ Grouped by the spec's own build order (§17).
 - Era car weights (§4.2 [D]) and the speed model with free weight,
   acceleration and appeal (§9.1 [D], §10.2 [I]). Needs per-locomotive
   numbers (§17 item 1).
-- Consist rules (§9.3 [D]): min/max cars (default 0/4) and waiting for a
-  full load; Any/Freight/Express filters; custom consists per stop;
-  caboose (−50% breakdowns); dining car (+20% passengers); copy and retire.
-  (Replacing a locomotive is done.)
 - Electrification, and electric engines needing it (§10.2, §11.2 [D]).
 - Free undo while laying track; removing track (10% refund); overpasses
   (§11.1–11.2 [D]).

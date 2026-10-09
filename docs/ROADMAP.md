@@ -32,9 +32,9 @@ Still to do:
 - Track removal and upgrades (single to double, electrification), with refunds.
 - Charging track costs to a company (needs M3 ledgers).
 - Crashes (needs research on what happens), and scheduled service stops in routes.
-- Per-stop consists, and automatic consist selection once cargo exists (M2).
 - Track rights: trains on another company's track always yield.
-- Train management: edit routes, sell trains, per-stop consists.
+- Train management: edit routes; per-stop consists and custom cars in the
+  client (the simulation has them: rt3-clone-spec §9.3).
 
 ## M2: The economy (in progress)
 Done in the first slice: the economy-node grid and cargo price field, with
@@ -91,8 +91,12 @@ calibration game). They also re-engine trains at 25 years, and each has
 a recession caution that holds back building, borrowing and dividends in
 bad times. Players can re-engine any of their trains (R in Inspect).
 
+Consist rules (rt3-clone-spec §9.3): per-stop auto or custom consists with
+minimum and maximum cars, waiting for full loads, caboose and dining car,
+copying and retiring trains; empty cars are no longer hauled.
+
 Still to do:
-- Manual per-stop consists; transfers of express loads between trains.
+- Transfers of express loads between trains.
 - Warehouse cargo conversion.
 
 ## M3: Company and finance (in progress)

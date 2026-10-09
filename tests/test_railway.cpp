@@ -91,9 +91,17 @@ TEST_CASE("uphill trips take longer than flat ones") {
     Line hill = make_line(20, 400); // 2% grade
     const TrainId tf = flat.rw.add_train(0, 8, {flat.west, flat.east});
     const TrainId th = hill.rw.add_train(0, 8, {hill.west, hill.east});
+    // Eight loaded cars: empty ones are left behind and do not slow a train.
+    for (Railway* rw : {&flat.rw, &hill.rw})
+        for (Car& c : rw->train_mut(0).cars) c.cargo = CargoId{0};
     const int flat_ticks = ticks_until_stop(flat.rw, locos, tf, 1);
     const int hill_ticks = ticks_until_stop(hill.rw, locos, th, 1);
     CHECK(hill_ticks > flat_ticks * 3 / 2);
+
+    // The same train running light climbs faster.
+    Line light = make_line(20, 400);
+    const TrainId tl = light.rw.add_train(0, 8, {light.west, light.east});
+    CHECK(ticks_until_stop(light.rw, locos, tl, 1) < hill_ticks);
 }
 
 TEST_CASE("on single track the lower-priority train waits while the other passes") {

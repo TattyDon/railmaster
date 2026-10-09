@@ -34,6 +34,7 @@ const char* state_name(sim::TrainState s) {
     case sim::TrainState::BrokenDown: return "BROKEN DOWN";
     case sim::TrainState::NoRoute: return "NO ROUTE";
     case sim::TrainState::Crashed: return "WRECKED";
+    case sim::TrainState::Retired: return "RETIRED";
     }
     return "?";
 }
@@ -453,23 +454,80 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
 
     switch (tool_) {
     case Tool::Inspect: {
-        if (key != SDLK_r) return false;
-        // Re-engine the train under the cursor with the Train tool's engine.
+        // Keys act on the train under the cursor (rt3-clone-spec §9.3).
         const sim::Railway& rw = world_.railway();
-        const auto locos = available_locos();
+        std::optional<sim::TrainId> id;
         for (const sim::Train& t : rw.trains()) {
-            if (t.state == sim::TrainState::Crashed || sim::distance_mm(rw.train_position(t.id), hover_) > snap_mm()) continue;
+            if (t.in_service() && sim::distance_mm(rw.train_position(t.id), hover_) <= snap_mm()) {
+                id = t.id;
+                break;
+            }
+        }
+        if (!id) return false;
+        const sim::Train& t = rw.train(*id);
+        const std::string name = "TRAIN " + std::to_string(*id + 1);
+        const auto report = [&](const sim::CommandResult& r, const std::string& done) {
+            if (r.ok) show(done, true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        };
+        // Change every stop's rule the same way ("apply to all stations").
+        const auto every_stop = [&](auto&& change, const std::string& done) {
+            sim::ConsistRule rule = t.rules.empty() ? sim::ConsistRule{} : t.rules.front();
+            rule.custom = false;
+            change(rule);
+            return report(world_.execute(sim::SetConsist{.train = *id, .rule = rule}), done);
+        };
+        switch (key) {
+        case SDLK_r: {
+            const auto locos = available_locos();
             if (locos.empty()) {
                 show("NO ENGINE IS AVAILABLE", false);
                 return true;
             }
             const sim::LocoTypeId loco = locos[loco_choice_ % locos.size()];
-            const sim::CommandResult r = world_.execute(sim::ReplaceLocomotive{.train = t.id, .loco = loco});
-            if (r.ok) show("TRAIN " + std::to_string(t.id + 1) + " NOW PULLED BY A NEW " + world_.data().locomotives.get(loco).name, true);
-            else show("CANNOT: " + r.error, false);
-            return true;
+            return report(world_.execute(sim::ReplaceLocomotive{.train = *id, .loco = loco}),
+                          name + " NOW PULLED BY A NEW " + world_.data().locomotives.get(loco).name);
         }
-        return false;
+        case SDLK_f:
+            return every_stop(
+                [](sim::ConsistRule& r) { r.filter = static_cast<sim::CargoFilter>((static_cast<int>(r.filter) + 1) % 3); },
+                name + " CONSIST CHANGED");
+        case SDLK_w:
+            return every_stop([](sim::ConsistRule& r) { r.min = r.min > 0 ? 0 : r.max; },
+                              name + (t.rules.empty() || t.rules.front().min == 0 ? " WILL WAIT FOR FULL LOADS"
+                                                                                 : " NO LONGER WAITS FOR FULL LOADS"));
+        case SDLK_LEFTBRACKET:
+        case SDLK_RIGHTBRACKET:
+            return every_stop(
+                [&](sim::ConsistRule& r) {
+                    if (key == SDLK_LEFTBRACKET && r.max > 0) --r.max;
+                    if (key == SDLK_RIGHTBRACKET) ++r.max;
+                    r.min = std::min(r.min, r.max);
+                },
+                name + " CONSIST CHANGED");
+        case SDLK_c:
+            return report(world_.execute(sim::SetSpecialCars{.train = *id, .caboose = !t.caboose, .diner = t.diner}),
+                          name + (t.caboose ? " DROPS ITS CABOOSE" : " GETS A CABOOSE"));
+        case SDLK_d:
+            return report(world_.execute(sim::SetSpecialCars{.train = *id, .caboose = t.caboose, .diner = !t.diner}),
+                          name + (t.diner ? " DROPS ITS DINING CAR" : " GETS A DINING CAR"));
+        case SDLK_y: {
+            const sim::CommandResult r = world_.execute(sim::CopyTrain{.train = *id});
+            return report(r, "BOUGHT TRAIN " + std::to_string(r.created_id + 1) + ", A COPY OF " + name);
+        }
+        case SDLK_x:
+            // Retiring cannot be undone: ask for a second press.
+            if (SDL_GetTicks() > retire_armed_until_ || retire_armed_ != *id) {
+                retire_armed_until_ = SDL_GetTicks() + 3000;
+                retire_armed_ = *id;
+                show("PRESS X AGAIN TO RETIRE " + name, false);
+                return true;
+            }
+            retire_armed_until_ = 0;
+            return report(world_.execute(sim::RetireTrain{.train = *id}), name + " RETIRED");
+        default: return false;
+        }
     }
     case Tool::Track:
         if (key == SDLK_d) double_track_ = !double_track_;
@@ -707,7 +765,7 @@ void Tools::draw_market_panel() const {
     }
     std::int32_t stations = 0, trains = 0;
     for (const sim::Station& s : world_.railway().stations()) stations += s.owner == c.id();
-    for (const sim::Train& t : world_.railway().trains()) trains += t.owner == c.id() && t.state != sim::TrainState::Crashed;
+    for (const sim::Train& t : world_.railway().trains()) trains += t.owner == c.id() && t.in_service();
     glColor3f(1.0f, 0.9f, 0.5f);
     draw_text(cols[0], y, c.name() + "   CHAIRMAN: " + chairman, kScale);
     y += kRow;
@@ -906,9 +964,9 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
 std::string Tools::hint() const {
     switch (tool_) {
     case Tool::Inspect: {
-        std::string cargo_map = "O/P CARGO MAP: ";
-        cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name + " (RED CHEAP, GREEN DEAR)" : "OFF";
-        return "HOVER FOR DETAILS, R TO RE-ENGINE A TRAIN (F6 L PICKS THE ENGINE).  " + cargo_map;
+        std::string cargo_map = "O/P MAP: ";
+        cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "OFF";
+        return "TRAIN: F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
     }
     case Tool::Track:
         return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP." : "CLICK TO START A LINE.") +
@@ -976,6 +1034,16 @@ std::string Tools::inspect_text() const {
         }
         const std::int32_t age = (world_.date().days_since_epoch() - t.built_day) / 365;
         s += ". ENGINE " + std::to_string(age) + (age == 1 ? " YEAR" : " YEARS") + " OLD. EARNED " + format_money(t.revenue) + ".";
+        if (!t.rules.empty()) {
+            const sim::ConsistRule& r = t.rules.front();
+            std::string what = r.custom ? std::string("CUSTOM") : std::string(sim::cargo_filter_name(r.filter));
+            for (char& ch : what) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            s += " " + what + " " + std::to_string(r.min) + "-" + std::to_string(r.capacity()) + " CARS";
+            if (t.holding) s += ", WAITING FOR A FULL LOAD";
+            if (t.caboose) s += ", CABOOSE";
+            if (t.diner) s += ", DINER";
+            s += ".";
+        }
         if (loco.fuel == sim::Fuel::Steam) s += " WATER " + percent(t.water);
         s += " SAND " + percent(t.sand) + " OIL " + percent(t.oil);
         return s;

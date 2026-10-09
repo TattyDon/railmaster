@@ -75,6 +75,32 @@ struct ReplaceLocomotive {
     LocoTypeId loco = 0;
 };
 
+// Set what one of your trains takes on at route stop `stop`, or at every
+// stop if unset ("apply this consist to all stations") (rt3-clone-spec
+// §9.3 [D]). Cars, caboose and dining car share 8 slots.
+struct SetConsist {
+    TrainId train = 0;
+    std::optional<std::size_t> stop{};
+    ConsistRule rule{};
+};
+// Add or remove a train's caboose (halves breakdowns) and dining car
+// (passengers pay 20% more); each takes a car slot [D].
+struct SetSpecialCars {
+    TrainId train = 0;
+    bool caboose = false;
+    bool diner = false;
+};
+// Buy a copy of one of your trains: the same engine type, route, consist
+// rules and special cars [D], at the engine's price.
+struct CopyTrain {
+    TrainId train = 0;
+};
+// Take one of your trains out of service for good [D]. Its engine is
+// written off and whatever it carries is lost.
+struct RetireTrain {
+    TrainId train = 0;
+};
+
 // Borrow $500,000 (needs a credit rating of B or better).
 struct IssueBond {};
 // Repay the most expensive bond outstanding at face value.
@@ -154,7 +180,8 @@ struct SetPortMode {
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
-using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, IssueBond, RepayBond,
+using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
+                             CopyTrain, RetireTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
                              UpgradeIndustry, SetPortMode, BuildStationBuilding>;

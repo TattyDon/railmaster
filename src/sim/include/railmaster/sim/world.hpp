@@ -198,6 +198,12 @@ private:
     CommandResult run(const BuildServiceBuilding& cmd);
     CommandResult run(const BuyTrain& cmd);
     CommandResult run(const ReplaceLocomotive& cmd);
+    CommandResult run(const SetConsist& cmd);
+    CommandResult run(const SetSpecialCars& cmd);
+    CommandResult run(const CopyTrain& cmd);
+    CommandResult run(const RetireTrain& cmd);
+    // Why the acting company may not change train `id`, if it may not.
+    std::optional<std::string> own_train_problem(TrainId id) const;
     CommandResult run(const IssueBond& cmd);
     CommandResult run(const RepayBond& cmd);
     CommandResult run(const BuyShares& cmd);

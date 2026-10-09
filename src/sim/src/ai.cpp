@@ -272,7 +272,7 @@ void add_trains(World& w, Rival& r, Company& co) {
     // The company's lines, as its two-stop trains show them, inherited ones included.
     std::vector<RivalRoute> lines;
     for (const Train& t : rw.trains()) {
-        if (t.owner != co.id() || t.state == TrainState::Crashed || t.route.size() != 2) continue;
+        if (t.owner != co.id() || !t.in_service() || t.route.size() != 2) continue;
         const RivalRoute line{std::min(t.route[0], t.route[1]), std::max(t.route[0], t.route[1])};
         if (std::none_of(lines.begin(), lines.end(),
                          [&](const RivalRoute& l) { return l.a == line.a && l.b == line.b; }))
@@ -281,7 +281,7 @@ void add_trains(World& w, Rival& r, Company& co) {
     for (const RivalRoute& route : lines) {
         std::int32_t trains = 0;
         for (const Train& t : rw.trains()) {
-            if (t.owner == co.id() && t.state != TrainState::Crashed && t.route.size() == 2 &&
+            if (t.owner == co.id() && t.in_service() && t.route.size() == 2 &&
                 ((t.route[0] == route.a && t.route[1] == route.b) || (t.route[0] == route.b && t.route[1] == route.a)))
                 ++trains;
         }
@@ -307,7 +307,7 @@ void replace_old_engines(World& w, const Rival& r, const Tycoon& ty, const Compa
     const std::int32_t age_days = w.data().balance.ai.replace_engine_age_years * 365;
     std::optional<TrainId> oldest;
     for (const Train& t : w.railway().trains()) {
-        if (t.owner != co.id() || t.state == TrainState::Crashed || today - t.built_day < age_days) continue;
+        if (t.owner != co.id() || !t.in_service() || today - t.built_day < age_days) continue;
         if (!oldest || t.built_day < w.railway().train(*oldest).built_day) oldest = t.id;
     }
     if (!oldest) return;

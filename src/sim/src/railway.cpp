@@ -95,13 +95,31 @@ std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t ca
     return speed_for(mph_to_mm_per_tick(loco.top_speed_mph, b), loco.grade_rating, cars, grade_bp, b);
 }
 
+const char* cargo_filter_name(CargoFilter f) {
+    switch (f) {
+    case CargoFilter::Any: return "Any Cargo";
+    case CargoFilter::Freight: return "Any Freight";
+    case CargoFilter::Express: return "Any Express";
+    }
+    return "?";
+}
+
+std::size_t Train::loaded_cars() const {
+    return static_cast<std::size_t>(std::count_if(cars.begin(), cars.end(), [](const Car& c) { return c.cargo.has_value(); }));
+}
+
+std::size_t Train::slots_at(std::size_t i) const {
+    const std::size_t room = kMaxCarsPerTrain - std::size_t{caboose} - std::size_t{diner};
+    return i < rules.size() ? std::min(rules[i].capacity(), room) : room;
+}
+
 std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
                                       const Balance& b) {
     std::int64_t top = mph_to_mm_per_tick(loco.top_speed_mph, b);
     if (loco.fuel == Fuel::Steam && train.water == 0) top = top * b.servicing.no_water_speed_permille / 1000;
     std::int64_t rating = loco.grade_rating;
     if (train.sand == 0) rating = std::max<std::int64_t>(1, rating * b.servicing.no_sand_grade_permille / 1000);
-    return speed_for(top, rating, train.cars.size(), grade_bp, b);
+    return speed_for(top, rating, train.hauled_cars(), grade_bp, b);
 }
 
 Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil, const Balance& b) {
@@ -234,6 +252,7 @@ TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<S
     t.cars.resize(car_count);
     t.priority = priority;
     t.route = std::move(route);
+    t.rules.assign(t.route.size(), ConsistRule{.max = static_cast<std::uint8_t>(car_count)});
     t.state = TrainState::Dwelling;
     t.at_node = stations_[t.route.front()].node;
     t.wait_ticks_left = 0; // depart on the first tick
@@ -317,6 +336,7 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
     const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
     const std::int64_t span = std::max(1, balance_.breakdowns.breakdown_age_years);
     ppb = ppb * (span + age_years) / span;
+    if (t.caboose) ppb = ppb * kCabooseBreakdownPercent / 100;
     return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < ppb;
 }
 
@@ -374,6 +394,12 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
             --t.wait_ticks_left;
             return;
         }
+        if (t.holding) {
+            // Short of its minimum load: wait another dwell and try again.
+            t.wait_ticks_left = balance_.trains.station_dwell_ticks;
+            arrivals_.emplace_back(t.id, t.route[t.stop_index]);
+            return;
+        }
         t.stop_index = (t.stop_index + 1) % t.route.size();
         plan_to_current_stop(t);
         return;
@@ -387,6 +413,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         t.speed_mm_per_tick = 0;
         return;
     case TrainState::Crashed:
+    case TrainState::Retired:
         return;
     case TrainState::Moving:
         break;

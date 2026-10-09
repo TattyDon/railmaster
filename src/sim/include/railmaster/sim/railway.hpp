@@ -95,7 +95,29 @@ enum class TrainState : std::uint8_t {
     BrokenDown, // stopped where it failed, part-way along its path
     NoRoute,    // next stop is unreachable; retries every tick
     Crashed,    // destroyed: no longer runs
+    Retired,    // taken out of service by its owner: no longer runs
 };
+
+// What a train takes on at a stop (rt3-clone-spec §9.3 [D]). Auto: the most
+// profitable loads for the stops ahead, of the filtered class, up to `max`
+// cars. Custom: exactly the listed cargo, a car each. Either way the train
+// waits at the stop until it has at least `min` loaded cars ("wait for a
+// full load").
+enum class CargoFilter : std::uint8_t { Any, Freight, Express };
+struct ConsistRule {
+    bool custom = false;
+    CargoFilter filter = CargoFilter::Any;
+    std::uint8_t min = 0;
+    std::uint8_t max = 4;
+    std::vector<CargoId> cars{}; // custom only
+    std::size_t capacity() const { return custom ? cars.size() : max; }
+    bool operator==(const ConsistRule&) const = default;
+};
+const char* cargo_filter_name(CargoFilter f);
+// Caboose: halves the chance of a breakdown. Dining car: passenger fares on
+// the train pay 20% more. Each takes a car slot [D].
+constexpr std::int32_t kCabooseBreakdownPercent = 50;
+constexpr std::int32_t kDinerPassengerPercent = 120;
 
 // One freight car and what it carries.
 struct Car {
@@ -115,6 +137,10 @@ struct Train {
     std::vector<Car> cars;
     std::int32_t priority = 0; // higher wins meets on single track; then more valuable cargo [D]
     std::vector<StationId> route;
+    std::vector<ConsistRule> rules; // one per route stop
+    bool caboose = false;
+    bool diner = false;
+    bool holding = false; // waiting at a stop for its minimum load
     std::size_t stop_index = 0; // the stop being travelled to, or dwelt at
 
     TrainState state = TrainState::Dwelling;
@@ -148,6 +174,15 @@ struct Train {
     Money revenue;                    // lifetime earnings
     Money last_income;                // from the most recent stop
     std::uint64_t last_income_tick = 0;
+
+    // Still running: not wrecked or retired.
+    bool in_service() const { return state != TrainState::Crashed && state != TrainState::Retired; }
+    std::size_t loaded_cars() const;
+    // Cars actually pulled: the loaded ones plus a caboose and dining car.
+    // Empty cars are left behind, so a light train runs faster.
+    std::size_t hauled_cars() const { return loaded_cars() + caboose + diner; }
+    // Cargo cars the rule for route stop `i` may take, after special cars.
+    std::size_t slots_at(std::size_t i) const;
 };
 
 // Game rules that change how trains are operated.
