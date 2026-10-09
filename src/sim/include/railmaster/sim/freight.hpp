@@ -51,7 +51,8 @@ std::int32_t difficulty_revenue_permille(Difficulty d); // 1200, 1000, 900, 800
 std::int32_t station_age_permille(std::int32_t days_since_first_station, bool open_country);
 
 // How strongly the sites in a station's catchment produce (outputs) or
-// attract (inputs) a cargo: the sum of their yearly rate x level.
+// attract (inputs) a cargo: the sum of their yearly rate x level, in
+// thousandths of a carload.
 std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const IndustryRegistry& industries,
                             const Station& s, CargoId c, bool outputs);
 

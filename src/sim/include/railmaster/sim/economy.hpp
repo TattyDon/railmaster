@@ -58,7 +58,9 @@ struct IndustryType {
     InputRule rule = InputRule::Any;
     std::vector<IndustryInput> inputs; // for Raw, these are boosters
     std::vector<CargoId> outputs;
-    std::int32_t rate_per_year = 0; // carloads per year at level 1 (per house for houses)
+    // Thousandths of a carload a year at level 1 (per house for houses); the
+    // data gives carloads a year, fractions allowed ("rate": 2.2).
+    std::int64_t rate_milli = 0;
 };
 
 class IndustryRegistry {

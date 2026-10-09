@@ -70,6 +70,12 @@ Done in the eighth slice: price-responsive industry output (a producer's
 price falls as unsold stock piles up, and it slows), and post offices,
 hotels, restaurants and taverns by stations.
 
+Done in the ninth slice: calibration. Production follows the spec's rates
+(about 2.2 loads a year for raw producers, 3 for processors), with
+saturation, express and town growth rescaled to match, and a tool,
+`railmaster_calibrate`, that scores ten metrics against the spec's targets
+([spec/calibration.md](spec/calibration.md)).
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
 - Warehouse cargo conversion.
@@ -134,4 +140,5 @@ The values most needed from observing the original game, in rough order:
 5. Share-price formula, bond-rate table, economic-state transitions.
 6. Map dimensions and world scale.
 7. Balance: what a typical RT3 passenger run pays, track prices, and
-   starting capital. Current fares and costs make lines far too profitable.
+   starting capital. The calibration tool now keeps returns within the
+   range scenario goals imply; real figures would tighten its targets.

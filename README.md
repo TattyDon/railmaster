@@ -69,6 +69,10 @@ much of your fortune to invest and how much outside money to take (Enter
 founds the company; `--quick` skips it with the usual terms). Three AI
 rivals join by default; `--rivals=N` sets how many (0 to 7).
 
+`./build/tools/calibrate/railmaster_calibrate` plays a few headless games
+and checks the economy against the spec's targets
+([docs/spec/calibration.md](docs/spec/calibration.md)).
+
 ### Playing
 
 | Key or action | Does |
@@ -97,6 +101,7 @@ dark tunnels), with its price next to the cursor.
 | `src/sim/` | Headless, deterministic game simulation |
 | `src/client/` | SDL2/OpenGL front end |
 | `tests/` | Unit tests for the simulation |
+| `tools/calibrate/` | Headless balance check against the spec's targets |
 | `data/` | Game data in original JSON formats; `balance.json` holds every tunable number ([docs/spec/balance.md](docs/spec/balance.md)) |
 | `docs/spec/` | Sourced specification of the original game's rules |
 | `docs/ROADMAP.md` | Milestones and research backlog |

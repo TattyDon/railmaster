@@ -102,7 +102,8 @@ TEST_CASE("waiting passengers give up over time") {
     REQUIRE(before > 0);
     w.rw.train_mut(t).route = {w.st[0]}; // no longer connected: nothing new arrives
     w.gather(10);
-    CHECK(w.waiting(w.st[0], w.pax(), w.st[1]) < before * 7 / 10); // ~4.5% a day for passengers
+    // About 0.9% a day for passengers: half the on-train rate [C].
+    CHECK(w.waiting(w.st[0], w.pax(), w.st[1]) < before * 95 / 100);
 }
 
 TEST_CASE("express loads go only where the train goes, and only off at their destination") {

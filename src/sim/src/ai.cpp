@@ -153,11 +153,11 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
             const CargoType& ct = cargo.get(c);
             if (ct.cargo_class != CargoClass::Freight || year < ct.available_year || !eco.active(c)) continue;
             const std::int64_t here = eco.price(c, p.cx, p.cy);
-            const std::int64_t loads = std::int64_t{pt.rate_per_year} * p.level;
+            const std::int64_t loads_milli = pt.rate_milli * p.level;
             const auto consider = [&](const Place& to) {
                 if (!in_range(from, to) || (covered(from) && covered(to))) return;
                 const std::int64_t gain = eco.price(c, to.cx, to.cy) - here;
-                if (gain > 0) out.push_back({from, to, gain * loads, 0});
+                if (gain > 0) out.push_back({from, to, gain * loads_milli / kMilli, 0});
             };
             for (std::size_t t = 0; t < towns.size(); ++t) {
                 bool wanted = false;

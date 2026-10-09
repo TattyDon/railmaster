@@ -9,6 +9,7 @@ add_library(railmaster_sim
     src/balance.cpp
     src/economic_state.cpp
     src/cargo.cpp
+    src/demo.cpp
     src/commands.cpp
     src/company.cpp
     src/date.cpp

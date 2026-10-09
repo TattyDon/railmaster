@@ -114,7 +114,7 @@ std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const Industr
         const bool has = outputs ? std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end()
                                  : std::any_of(t.inputs.begin(), t.inputs.end(),
                                                [&](const IndustryInput& in) { return in.cargo == c; });
-        if (has) total += std::int64_t{t.rate_per_year} * site.level;
+        if (has) total += t.rate_milli * site.level;
     }
     return total;
 }
@@ -250,12 +250,13 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         for (StationId sid = 0; sid < n_stations; ++sid) {
             const std::int64_t produced = catchment_rate(eco, rw, industries, rw.station(sid), c.id, true);
             if (produced == 0) continue;
-            const std::int64_t daily = produced * c.generation * kMilli / 365;
+            const std::int64_t daily = produced * c.generation / 365; // produced is already in thousandths
             for (StationId dest : partners[sid]) {
                 const std::int64_t a = attraction[dest];
                 if (a == 0) continue;
                 ExpressWaiting& pool = express_pool(rw.station_mut(sid), c.id, dest);
-                const auto add = static_cast<std::int32_t>(daily * a / (a + rw.balance().express.attraction_half));
+                const auto add = static_cast<std::int32_t>(
+                    daily * a / (a + std::int64_t{rw.balance().express.attraction_half} * kMilli));
                 pool.milli = std::min(rw.balance().express.cap_milli, pool.milli + add);
             }
         }
@@ -278,7 +279,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         if (car.destination) {
             if (*car.destination == station_id) {
                 std::int32_t& received = st.received_this_month[c.id];
-                const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) * kMilli / 12 *
+                const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) / 12 *
                                          rw.balance().express.mail_cap_months;
                 if (!c.demand_cap || received < cap) {
                     income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
@@ -307,6 +308,9 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
 
     // Load: the waiting cargo worth most at the train's other stops, a full
     // carload per car, while any remains. Cargo nobody further on wants stays.
+    // Express cars may leave part-full, from the minimum load [C: load
+    // fraction 0.5-1.0], since passengers and mail will not wait for ever.
+    const std::int32_t express_min = rw.balance().express.min_load_milli;
     const Train& t = rw.train(train_id);
     struct Candidate {
         CargoId cargo;
@@ -325,7 +329,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         if (gain > 0) candidates.push_back({c.id, std::nullopt, gain});
     }
     for (const ExpressWaiting& e : st.express) {
-        if (e.milli < kMilli || !on_route(t, e.destination)) continue;
+        if (e.milli < express_min || !on_route(t, e.destination)) continue;
         candidates.push_back({e.cargo, e.destination,
                               express_fare(cargo.get(e.cargo), rw, station_id, e.destination).whole_dollars()});
     }
@@ -336,16 +340,19 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     const auto waiting_milli = [&](const Candidate& c) {
         return c.destination ? express_pool(st, c.cargo, *c.destination).milli : st.waiting[c.cargo].milli;
     };
+    const auto enough = [&](const Candidate& c) { return waiting_milli(c) >= (c.destination ? express_min : kMilli); };
     std::size_t next = 0;
     for (Car& car : train.cars) {
         if (car.cargo) continue;
-        while (next < candidates.size() && waiting_milli(candidates[next]) < kMilli) ++next;
+        while (next < candidates.size() && !enough(candidates[next])) ++next;
         if (next == candidates.size()) break;
         const Candidate& pick = candidates[next];
         if (pick.destination) {
-            express_pool(st, pick.cargo, *pick.destination).milli -= kMilli;
-            if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += kMilli;
-            car = Car{pick.cargo, kMilli, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain)};
+            std::int32_t& pool = express_pool(st, pick.cargo, *pick.destination).milli;
+            const std::int32_t load = std::min(kMilli, pool);
+            pool -= load;
+            if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += load;
+            car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain)};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];
             const std::int32_t price = pool.average_price();

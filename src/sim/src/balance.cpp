@@ -52,7 +52,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, cells_pe
                                                 processors_per_type, sinks_per_type, max_height_m, ports,
                                                 appear_chance_percent, max_count_multiple)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, cap_milli,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,
                                                 wait_loss_per_mille_per_sensitivity, mail_cap_months)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_route_km, build_interval_months_min,
                                                 build_interval_months_max, cash_reserve, candidates_previewed,

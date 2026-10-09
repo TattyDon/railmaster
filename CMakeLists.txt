@@ -18,6 +18,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(RAILMASTER_BUILD_CLIENT "Build the SDL2/OpenGL game client" ON)
 option(RAILMASTER_BUILD_TESTS "Build unit tests" ON)
+option(RAILMASTER_BUILD_TOOLS "Build developer tools (the calibration runner)" ON)
 option(RAILMASTER_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_library(railmaster_warnings INTERFACE)
@@ -35,6 +36,10 @@ else()
 endif()
 
 add_subdirectory(src/sim)
+
+if(RAILMASTER_BUILD_TOOLS)
+    add_subdirectory(tools/calibrate)
+endif()
 
 if(RAILMASTER_BUILD_CLIENT)
     add_subdirectory(src/client)

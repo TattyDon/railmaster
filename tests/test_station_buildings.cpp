@@ -22,7 +22,7 @@ GameData data() {
         {"key": "l", "name": "L", "fuel": "diesel", "available_from": 1800,
          "top_speed_mph": 60, "cost": 1, "maintenance_per_year": 1}]})");
     d.industries = IndustryRegistry::from_json(R"({"industries": [
-        {"key": "house", "name": "Houses", "kind": "house", "rate": 1,
+        {"key": "house", "name": "Houses", "kind": "house", "rate": 10,
          "inputs": [{"cargo": "passengers"}, {"cargo": "mail"}], "outputs": ["passengers", "mail"]}
     ]})",
                                            d.cargo);
@@ -139,10 +139,8 @@ TEST_CASE("a hotel keeps passengers waiting longer, and a post office mail [D]")
     Line plain, served;
     REQUIRE(served.build(StationBuildingType::Hotel, offset(served.station_pos(served.west), 200)).ok);
     REQUIRE(served.build(StationBuildingType::PostOffice, offset(served.station_pos(served.west), -200)).ok);
-    // Watch the loads waiting at the west station build up and dwindle.
-    for (Line* l : {&plain, &served}) {
-        l->run_days(20);
-    }
+    // Watch the loads waiting at the west station build up and dwindle. The
+    // train empties the pools every few days, so add up what waits each day.
     const auto waiting = [](const Line& l, const char* key) {
         const CargoId c = *l.w.data().cargo.find(key);
         std::int64_t n = 0;
@@ -150,6 +148,15 @@ TEST_CASE("a hotel keeps passengers waiting longer, and a post office mail [D]")
             if (e.cargo == c) n += e.milli;
         return n;
     };
-    CHECK(waiting(served, "passengers") > waiting(plain, "passengers"));
-    CHECK(waiting(served, "mail") > waiting(plain, "mail"));
+    std::int64_t pax_plain = 0, pax_served = 0, mail_plain = 0, mail_served = 0;
+    for (int d = 0; d < 20; ++d) {
+        plain.run_days(1);
+        served.run_days(1);
+        pax_plain += waiting(plain, "passengers");
+        pax_served += waiting(served, "passengers");
+        mail_plain += waiting(plain, "mail");
+        mail_served += waiting(served, "mail");
+    }
+    CHECK(pax_served > pax_plain);
+    CHECK(mail_served > mail_plain);
 }

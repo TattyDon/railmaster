@@ -64,6 +64,8 @@ Each key's name carries its unit:
 2. If the shipped default should change too, edit `balance.hpp` to match;
    the "data/balance.json matches the compiled defaults" test checks this.
 3. Say in the matching m1/m2/m3 page what the new value is based on.
+4. Run `railmaster_calibrate` ([calibration.md](calibration.md)) to check
+   the economy still lands within the spec's targets.
 
 The simulation is deterministic for a given balance, seed and command
 list. Changing any number changes every game played with it.

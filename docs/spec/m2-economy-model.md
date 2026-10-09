@@ -165,16 +165,17 @@ Researched [economy-cargo.md §2, §8; trains-track-operations.md §2]:
 How we implement them (code: `freight.hpp`):
 
 1. **Generation (daily).** For each station, *production* is the summed
-   yearly rate of catchment sites that output the cargo (houses: 1 per
+   yearly rate of catchment sites that output the cargo (houses: 0.1 per
    house) × the cargo's `generation` multiplier. For every station sharing a
-   train route with it, add production × A ÷ (A + 20) per year to the
+   train route with it, add production × A ÷ (A + 2) per year to the
    waiting pool for that destination, where A is the destination's
    *attraction*: the summed rate of its catchment sites that take the cargo.
    Each extra destination adds traffic, and a big town draws more than a
    village but not without limit. Only stations a train links are
    destinations; transfers between trains are not modelled.
-2. **Waiting.** Each pool loses 0.5% a day per point of decay sensitivity
-   (passengers 4.5%, mail 5%) and holds at most 20 loads.
+2. **Waiting.** Each pool loses 0.1% a day per point of decay sensitivity
+   (passengers 0.9%, mail 1%), half the on-train rate [C], and holds at most
+   20 loads.
 3. **Loading.** Express loads compete with freight for empty cars, valued
    at their fare. Only loads whose destination is on this train's route
    are taken.
@@ -188,7 +189,8 @@ How we implement them (code: `freight.hpp`):
 |---|---|---|
 | Fares | Passengers $500, mail $700, troops $400 per load per km. | No RT3 data. Distance-based, as in earlier Railroad Tycoon games. |
 | Generation | Passengers ×4, mail ×2, troops ×1 a year per unit of site rate. | |
-| Attraction half-point | 20 (for example 20 houses). | |
+| Attraction half-point | 2 (for example 20 houses). | |
+| Part loads | An express car leaves at half a load or more. | [C] load fraction 0.5–1.0. |
 | Mail cap | Two months of the town's yearly mail demand, per month. | "Each city has a mail demand cap." The size is ours. |
 
 New maps are populated with towns of 10 to 40 houses, about four of each
@@ -207,7 +209,7 @@ unsold output piled up, so it could never turn red. Now supply mirrors
 demand [I]:
 
 - **Supply price:** a producer's price falls as unsold stock builds up in
-  its cell: 50% of base × S / (S + stock), where S is 60 days' output. A
+  its cell: 50% of base × S / (S + stock), where S is 180 days' output. A
   consumer's price already falls the same way with unconsumed stock.
 - **Pace:** producers and processing plants run at full pace while their
   best product sells for at least 35% of base there. Below that they slow
@@ -398,11 +400,9 @@ Our design:
 - **Closure [I]:** an unowned producer or plant with five loss years in a
   row closes with a 20% chance each year after. Owned ones never close;
   their owner carries the losses.
-- **Scale:** a producer here earns $450,000 to $2 million a year, so it
-  costs $4 to $20 million. With the spec's ~2.2 loads a year it would earn
-  about $15,000 and sell at the floor price, as RT3's farms do. Idle
-  processing plants sell at the floor. This is the production-rate
-  question again.
+- **Scale:** at the spec's ~2.2 loads a year a producer earns tens of
+  thousands of dollars a year, so most sell near the floor price, as RT3's
+  farms do (median about $313K; see [calibration.md](calibration.md)).
 - **AI:** tycoons with an industry trait of 40 or more buy profitable
   industries their stations serve, and double plants running near capacity
   that would repay it within a year.
@@ -422,12 +422,12 @@ In the `economy`, `map`, `freight` and `express` sections of
 | Drift | 5% of a cell's stock per day, when the next cell is at least 1% of base dearer; both scaled by terrain. | |
 | Conductance | Water 2.0, coast 1.5, flat 1.0, hills 0.75 (≥ 4% relief), mountains 0.5 (≥ 7%). | Spec §5.3 gives flat 1.0, hills 0.75, mountains 0.5; water's figure and the thresholds are ours. |
 | Economic states | See the table above; checked twice a year. | Section `economic_states`. |
-| Saturation | Stock equal to 30 days of a town's demand halves its price; for industries, 120 days. | "Industries are hard to oversupply." |
+| Saturation | Stock equal to a year of a town's demand halves its price; for industries, two years. | "Industries are hard to oversupply." Scaled with the rates; see [calibration.md](calibration.md). |
 | Spoilage | 0.1% per day × decay sensitivity (1-10). | Sensitivity read as decay rate; unverified. |
 | Cell cap | 50 carloads per cargo per cell. | |
 | Processor stockpile | 30 days of input. | |
 | Booster | +50% output, consuming half a carload per carload made. | |
-| Rates | Raw producers 24 carloads/year; processors 36; consumers 24-48; houses 1 per house per good. | RT2 hint: 1 iron + 1 coal → 2 steel. Ours is 1 + 1 → 1. |
+| Rates | Raw producers 2.2 carloads/year (uranium 1.1); processors 3; consumers 2.2, electric plants 4.4; ports 6; warehouses 3; houses 0.1 per house per good. | Spec §6.1 [C]; calibrated in [calibration.md](calibration.md). RT2 hint: 1 iron + 1 coal → 2 steel. Ours is 1 + 1 → 1. |
 | Input rules | Only the steel mill is "all". The rest are "any", including the auto plant and munitions factory. | Only the steel mill's rule is sourced. |
 | Bakery | A consumer only: no output is listed for RT3. | Data gap. |
 | Rubber | Rubber plantations from 1900 (rt3-clone-spec §6.3); ports, which also supply it, are not modelled yet. | |

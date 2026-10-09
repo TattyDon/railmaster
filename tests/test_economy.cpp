@@ -47,10 +47,20 @@ IndustryRegistry test_industries(const CargoRegistry& cargo) {
                                        cargo);
 }
 
+// The fixture's industries make a carload a day, about 150 times the
+// spec's rates, so stock saturates prices over days rather than months.
+Balance fast_saturation() {
+    Balance b;
+    b.economy.saturation_days = 30;
+    b.economy.industry_saturation_days = 120;
+    b.economy.supply_saturation_days = 60;
+    return b;
+}
+
 struct Fixture {
     CargoRegistry cargo = test_cargo();
     IndustryRegistry ind = test_industries(cargo);
-    Economy eco{20, 20, kKm, cargo};
+    Economy eco{20, 20, kKm, cargo, fast_saturation()};
 
     IndustryTypeId type(const char* key) const { return *ind.find(key); }
     CargoId c(const char* key) const { return *cargo.find(key); }

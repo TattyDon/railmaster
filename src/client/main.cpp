@@ -8,6 +8,7 @@
 #include "render.hpp"
 #include "tools.hpp"
 
+#include "railmaster/sim/demo.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <SDL.h>
@@ -45,62 +46,6 @@ sim::GameData load_game_data(const std::string& dir) {
     d.industries = sim::IndustryRegistry::from_json(read_file(dir + "/industries.json"), d.cargo);
     d.tycoons = sim::TycoonRegistry::from_json(read_file(dir + "/tycoons.json"));
     return d;
-}
-
-sim::CommandResult must(sim::World& world, const sim::Command& cmd) {
-    sim::CommandResult r = world.execute(cmd);
-    if (!r.ok) throw std::runtime_error("demo network: " + r.error);
-    return r;
-}
-
-sim::TrackEnd at_node(const sim::World& world, sim::NodeId n) {
-    return {sim::TrackEnd::Kind::Node, n, 0, world.railway().track().node(n).pos};
-}
-
-sim::TrackEnd on_ground(sim::MapPoint p) { return {sim::TrackEnd::Kind::Free, 0, 0, p}; }
-
-// A starting network, built with the same commands the tools use: a
-// triangle of track joining a town and its two nearest neighbours, with two trains running round it in opposite directions.
-void build_demo_network(sim::World& world) {
-    const auto& towns = world.economy().towns();
-    if (towns.size() < 3) throw std::runtime_error("demo network: fewer than three towns on the map");
-    const auto centre = [&](const sim::Town& t) {
-        const std::int64_t cell = world.terrain().tile_size_m() * std::int64_t{1000};
-        return sim::MapPoint{t.cx * cell + cell / 2, t.cy * cell + cell / 2};
-    };
-    std::vector<std::size_t> order(towns.size());
-    for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
-    std::sort(order.begin() + 1, order.end(), [&](std::size_t a, std::size_t b) {
-        return sim::distance_mm(centre(towns[a]), centre(towns[0])) < sim::distance_mm(centre(towns[b]), centre(towns[0]));
-    });
-    const sim::Town* picked[3] = {&towns[order[0]], &towns[order[1]], &towns[order[2]]};
-    const sim::MapPoint at[3] = {centre(*picked[0]), centre(*picked[1]), centre(*picked[2])};
-    const sim::TrackNetwork& net = world.railway().track();
-
-    sim::NodeId nodes[3];
-    nodes[1] = must(world, sim::BuildTrack{.start = on_ground(at[0]), .end = on_ground(at[1])}).created_id;
-    nodes[0] = *net.nearest_node(at[0], 1);
-    nodes[2] = must(world, sim::BuildTrack{.start = at_node(world, nodes[1]), .end = on_ground(at[2])}).created_id;
-    must(world, sim::BuildTrack{.start = at_node(world, nodes[2]), .end = at_node(world, nodes[0])});
-
-    sim::StationId st[3];
-    for (int i = 0; i < 3; ++i) {
-        st[i] = must(world, sim::BuildStation{.at = at_node(world, nodes[i]), .name = picked[i]->name}).created_id;
-        must(world, sim::BuildServiceBuilding{.at = at_node(world, nodes[i])});
-    }
-    must(world, sim::BuildServiceBuilding{.at = at_node(world, nodes[0]), .type = sim::ServiceType::MaintenanceFacility});
-
-    sim::LocoTypeId loco = 0;
-    for (const auto& l : world.data().locomotives.all()) {
-        if (l.available_in(world.date().year())) {
-            loco = l.id;
-            break;
-        }
-    }
-    must(world, sim::BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[1], st[2]}, .priority = 1});
-    must(world, sim::BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[2], st[1]}});
-    std::printf("Demo network joining %s, %s and %s built for %s\n", picked[0]->name.c_str(),
-                picked[1]->name.c_str(), picked[2]->name.c_str(), client::format_money(world.total_spent()).c_str());
 }
 
 } // namespace
@@ -226,7 +171,7 @@ int main(int argc, char* argv[]) {
         if (demo_pending && world.player_company()) {
             demo_pending = false;
             try {
-                build_demo_network(world);
+                std::printf("%s\n", sim::build_demo_network(world).c_str());
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
             }

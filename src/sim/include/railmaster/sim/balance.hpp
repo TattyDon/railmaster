@@ -99,8 +99,12 @@ struct Balance {
         std::int32_t screening_per_10000 = 25;
         std::int32_t drift_percent_per_day = 5;
         std::int32_t transport_cost_percent = 1;
-        std::int32_t saturation_days = 30;
-        std::int32_t industry_saturation_days = 120;
+        // Unconsumed stock equal to this many days of demand halves a
+        // consumer's price. Calibrated for the spec's low rates (a town of 30
+        // houses wants ~3 loads of a good a year), so one delivery dents the
+        // price rather than crashing it [I; docs/spec/calibration.md].
+        std::int32_t saturation_days = 365;
+        std::int32_t industry_saturation_days = 730;
         std::int32_t spoilage_per_mille_per_sensitivity = 1;
         std::int32_t max_stock_milli = 50'000;
         std::int32_t input_buffer_days = 30;
@@ -110,7 +114,7 @@ struct Balance {
         // equal to this many days of output halves a producer's price, and
         // producers slow as their local price falls below the full-pace
         // share of base, stopping at the stop share [I].
-        std::int32_t supply_saturation_days = 60;
+        std::int32_t supply_saturation_days = 180;
         std::int32_t output_full_percent = 35;
         std::int32_t output_stop_percent = 10;
         // Middlemen and price coupling by terrain (rt3-clone-spec §5.3): how
@@ -148,9 +152,10 @@ struct Balance {
     } freight;
 
     struct Express {
-        std::int32_t attraction_half = 20;
+        std::int32_t attraction_half = 2; // destination pull, in loads a year of house demand
+        std::int32_t min_load_milli = 500; // an express car leaves with at least half a load [C]
         std::int32_t cap_milli = 20'000;
-        std::int32_t wait_loss_per_mille_per_sensitivity = 5;
+        std::int32_t wait_loss_per_mille_per_sensitivity = 1; // ~half the on-train rate [I, spec §8.2]
         std::int32_t mail_cap_months = 2;
     } express;
 
@@ -160,8 +165,8 @@ struct Balance {
     // towns no train serves grow at a fraction of that. Stars by houses.
     struct Towns {
         std::int32_t base_growth_permille = 8;            // 0.5-1% [I]
-        std::int32_t express_permille_per_k_house = 1;
-        std::int32_t freight_permille_per_k_house = 1;
+        std::int32_t express_permille_per_k_house = 3;
+        std::int32_t freight_permille_per_k_house = 3;
         std::int32_t max_growth_permille = 150;
         std::int32_t unconnected_permille = 300;
         std::int32_t max_houses_per_cell = 6;

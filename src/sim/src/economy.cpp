@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <stdexcept>
 
@@ -99,8 +100,10 @@ IndustryRegistry IndustryRegistry::from_json(std::string_view json_text, const C
         for (const auto& out : entry.value("outputs", nlohmann::json::array())) {
             t.outputs.push_back(resolve(cargo, out.get<std::string>(), t.key));
         }
-        t.rate_per_year = entry.at("rate").get<std::int32_t>();
-        if (t.rate_per_year <= 0) throw std::runtime_error("industry data: bad rate for '" + t.key + "'");
+        // Read as a decimal and fixed to thousandths at once, so nothing
+        // downstream sees floating point.
+        t.rate_milli = std::llround(entry.at("rate").get<double>() * kMilli);
+        if (t.rate_milli <= 0) throw std::runtime_error("industry data: bad rate for '" + t.key + "'");
         const bool needs_inputs = t.kind == IndustryKind::Processor || t.kind == IndustryKind::Sink;
         if (needs_inputs && t.inputs.empty()) throw std::runtime_error("industry data: '" + t.key + "' has no inputs");
         if (trades(t.kind) && t.inputs.empty() && t.outputs.empty()) {
@@ -265,8 +268,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         const std::size_t at = cell(s.cx, s.cy);
         // `rate` is what the site makes or wants at full pace; `daily` what it
         // actually makes, slowed when its products sell cheaply here [C].
-        const auto rate = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli *
-                                                    activity_percent_ / (365 * 100));
+        const auto rate = static_cast<std::int32_t>(t.rate_milli * s.level * activity_percent_ / (365 * 100));
         std::int32_t daily = rate;
         if (t.kind == IndustryKind::Raw || t.kind == IndustryKind::Processor) {
             s.pace_permille = output_pace(cargo, t, rate, at, year);
@@ -537,7 +539,7 @@ std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo
             a.costs += a.revenue.scaled(b.labour_percent, 100);
             a.costs += Money::dollars(b.overhead_per_level * s.level).scaled(months, 12);
         }
-        const std::int64_t capacity = std::int64_t{t.rate_per_year} * s.level * kMilli * months / 12;
+        const std::int64_t capacity = t.rate_milli * s.level * months / 12;
         s.utilisation_permille =
             !s.made_milli.empty() && capacity > 0
                 ? static_cast<std::int32_t>(std::min<std::int64_t>(2000, s.made_milli.front() * 1000 / capacity))
@@ -569,7 +571,7 @@ Economy::YearEnd Economy::close_year(const IndustryRegistry& industries, const B
         const IndustryType& t = industries.get(s.type);
         if (s.closed) continue;
         if ((t.kind == IndustryKind::Sink || t.kind == IndustryKind::Port) && !s.owner) {
-            const std::int64_t capacity = std::int64_t{t.rate_per_year} * s.level * kMilli;
+            const std::int64_t capacity = t.rate_milli * s.level;
             if (s.level < b.receiver_max_level && s.received_year_milli * 1000 >= capacity * b.receiver_upgrade_permille) {
                 s.level *= 2;
                 out.upgraded.push_back(s.id);

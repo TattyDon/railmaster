@@ -1,0 +1,193 @@
+// Calibration: plays standard games headless and scores the economy against
+// the targets the spec and research give (docs/spec/calibration.md). Exits
+// 0 when every metric is in range, 1 otherwise, so it can gate changes to
+// data/balance.json and the rates in data/*.json.
+//
+//   railmaster_calibrate [data-dir]
+
+#include "railmaster/sim/demo.hpp"
+#include "railmaster/sim/world.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <fstream>
+#include <functional>
+#include <sstream>
+#include <string>
+#include <vector>
+
+using namespace railmaster::sim;
+
+namespace {
+
+std::string read_file(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+GameData load(const std::string& dir) {
+    GameData d;
+    d.balance = Balance::from_json(read_file(dir + "/balance.json"));
+    d.cargo = CargoRegistry::from_json(read_file(dir + "/cargo.json"), d.balance.economy.cargo_price_unit);
+    d.locomotives = LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"));
+    d.industries = IndustryRegistry::from_json(read_file(dir + "/industries.json"), d.cargo);
+    d.tycoons = TycoonRegistry::from_json(read_file(dir + "/tycoons.json"));
+    return d;
+}
+
+void run_years(World& w, int years) {
+    for (int d = 0; d < years * 365; ++d)
+        for (int i = 0; i < World::kTicksPerDay; ++i) w.tick();
+}
+
+struct Metric {
+    std::string name;
+    double value;
+    double low, high;
+    std::string unit;
+    std::string source;
+};
+
+std::vector<Metric> metrics;
+
+void report(std::string name, double value, double low, double high, std::string unit, std::string source) {
+    metrics.push_back({std::move(name), value, low, high, std::move(unit), std::move(source)});
+}
+
+double dollars(Money m) { return static_cast<double>(m.whole_dollars()); }
+
+const YearAccounts& year_of(const Company& c, std::int32_t year) {
+    for (const YearAccounts& y : c.history())
+        if (y.year == year) return y;
+    return c.history().back();
+}
+
+// A: the economy alone, two years, no railway.
+void economy_alone(const GameData& data) {
+    WorldConfig cfg;
+    cfg.seed = 1;
+    World w(cfg, data);
+    std::vector<std::int64_t> start;
+    for (const Site& s : w.economy().sites()) start.push_back(s.produced_milli);
+    run_years(w, 2);
+    double raw_total = 0;
+    int raw_n = 0;
+    std::vector<double> farm_prices;
+    for (const Site& s : w.economy().sites()) {
+        if (s.kind != IndustryKind::Raw || s.id >= start.size()) continue;
+        raw_total += static_cast<double>(s.produced_milli - start[s.id]) / kMilli / 2 / s.level;
+        ++raw_n;
+        farm_prices.push_back(dollars(industry_price(s, data.balance.industries)));
+    }
+    double proc_rate = 0;
+    int proc_n = 0;
+    for (const IndustryType& t : data.industries.all()) {
+        if (t.kind != IndustryKind::Processor) continue;
+        proc_rate += static_cast<double>(t.rate_milli) / kMilli;
+        ++proc_n;
+    }
+    std::sort(farm_prices.begin(), farm_prices.end());
+    report("raw producer output", raw_n ? raw_total / raw_n : 0, 1.5, 3.5, "loads/yr", "spec §6.1 [C]: ~2.2");
+    report("processor capacity (data)", proc_n ? proc_rate / proc_n : 0, 2.0, 5.0, "loads/yr", "spec §6.1 [C]: ~3");
+    report("producer price, median", farm_prices.empty() ? 0 : farm_prices[farm_prices.size() / 2], 240'000, 1'000'000,
+           "$", "spec §6.2 [C]: farms $240K-$350K");
+}
+
+// B: the demo network, ten years, several maps.
+void demo_network(const GameData& data) {
+    double roi = 0, revenue = 0, growth = 0, price = 0;
+    int n = 0;
+    for (const std::uint64_t seed : {1u, 2u}) {
+        WorldConfig cfg;
+        cfg.seed = seed;
+        World w(cfg, data);
+        try {
+            build_demo_network(w);
+        } catch (const std::exception&) {
+            continue;
+        }
+        const Company& c = w.company();
+        const Money invested = c.track_value() + c.building_value() + c.rolling_stock_value();
+        std::vector<std::pair<std::size_t, std::int64_t>> served;
+        for (const Station& s : w.railway().stations())
+            if (s.town) served.emplace_back(*s.town, w.economy().town_houses(*s.town));
+        const std::int32_t first = w.date().year();
+        run_years(w, 10);
+        // Years 2 to 4, once trains and prices have settled.
+        Money profit, rev;
+        for (std::int32_t y = first + 1; y <= first + 3; ++y) {
+            profit += year_of(c, y).profit();
+            rev += year_of(c, y).revenue();
+        }
+        roi += dollars(profit) / 3 / std::max(1.0, dollars(invested));
+        revenue += dollars(rev) / 3;
+        double g = 0;
+        for (const auto& [t, before] : served)
+            g += static_cast<double>(w.economy().town_houses(t) - before) / static_cast<double>(std::max<std::int64_t>(1, before));
+        growth += served.empty() ? 0 : g / static_cast<double>(served.size());
+        price += dollars(c.share_price());
+        ++n;
+    }
+    if (n == 0) return;
+    report("demo network: return on capital", roi / n * 100, 10, 40, "%/yr",
+           "[I] scenario goals of $10-40M over 25-30 years from $1-3M");
+    report("demo network: revenue, years 2-4", revenue / n, 300'000, 2'000'000, "$/yr", "[I] as above");
+    report("demo network: served towns grow, 10 years", growth / n * 100, 25, 200, "%",
+           "spec §6.4 [C]: visible growth over 10-15 years");
+    report("demo network: share price after 10 years", price / n, 15, 120, "$", "spec §12.3 [C]: typically $50-100");
+}
+
+// C: three AI rivals, five years.
+void rivals(const GameData& data) {
+    WorldConfig cfg;
+    cfg.seed = 3;
+    cfg.rivals = 3;
+    World w(cfg, data);
+    run_years(w, 5);
+    int profitable = 0, n = 0;
+    double revenue = 0, buildings = 0;
+    for (const Rival& r : w.rivals()) {
+        const auto co = w.investors()[r.player].chairs;
+        if (!co) continue;
+        const YearAccounts& y = w.company(*co).history()[w.company(*co).history().size() - 2];
+        profitable += y.profit() > Money{};
+        revenue += dollars(y.revenue());
+        buildings += dollars(y.lines[static_cast<std::size_t>(Ledger::StationBuildingIncome)]);
+        ++n;
+    }
+    const auto count = static_cast<double>(std::max<std::size_t>(1, w.railway().station_buildings().size()));
+    report("rivals profitable in year 5", n ? 100.0 * profitable / n : 0, 60, 100, "%", "spec §13 [I]: competent AI");
+    report("rival revenue, year 5", n ? revenue / n : 0, 200'000, 5'000'000, "$/yr", "[I] as the demo network");
+    report("station building income each", buildings / count, 0, 20'000, "$/yr", "spec §7.2 [C]: ~$1K");
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+    const std::string dir = argc > 1 ? argv[1] : RAILMASTER_DEFAULT_DATA_DIR;
+    GameData data;
+    try {
+        data = load(dir);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "%s\n", e.what());
+        return 2;
+    }
+    economy_alone(data);
+    demo_network(data);
+    rivals(data);
+    int bad = 0;
+    std::printf("%-44s %14s %22s  %s\n", "metric", "value", "target", "source");
+    for (const Metric& m : metrics) {
+        const bool ok = m.value >= m.low && m.value <= m.high;
+        bad += !ok;
+        char range[64];
+        std::snprintf(range, sizeof range, "%.10g-%.10g %s", m.low, m.high, m.unit.c_str());
+        std::printf("%-44s %14.1f %22s  %s %s\n", m.name.c_str(), m.value, range, ok ? "ok  " : (m.value < m.low ? "LOW " : "HIGH"),
+                    m.source.c_str());
+    }
+    std::printf("%d of %zu metrics out of range\n", bad, metrics.size());
+    return bad == 0 ? 0 : 1;
+}
