@@ -18,8 +18,8 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 - New companies start with a marginal rating: higher interest and room for
   only one or two bonds.
 - The interest rate depends on the rating and on the economy: a new bond
-  pays its rating's rate plus how far the prime rate is above its Normal 6%
-  (−2 points in a boom, +2 in a depression). Margin debt moves the same way
+  pays the prime rate (Normal 6%, 4% in a boom, 8% in a depression) plus
+  its grade's spread (rt3-clone-spec §12.4 [C/I]). Margin debt moves the same way
   (10% at Normal, i.e. prime + 4% as the spec suggests). Share price targets
   are scaled by the state, 80% to 125%. See m2-economy-model.md for the
   economic states.
@@ -41,16 +41,28 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
   - Track upkeep: 0.5% of track cost a month, RT2's rate (6% a year).
   - Building upkeep: the same rate on stations and support buildings.
   - Bond interest.
-- **Credit rating.** The grade is set by debt as a share of total assets.
-  A company that has not yet finished a profitable year is held to BB at
-  best, and every bond outstanding costs one more notch. A new company can
-  therefore issue two bonds (BB, then B) and no more until it proves itself.
+- **Credit rating** (rt3-clone-spec §12.4 [I]). Ten grades, A+ to D; B or
+  better may issue bonds. A score in points:
+  - +1,000 per doubling of assets over debt, up to ±5 doublings; no debt
+    counts as the cap (+5,000);
+  - +500 per times operating profit (the trailing 12 months, before
+    interest) covers a year's interest, up to 5 times; nothing before three
+    months of accounts;
+  - +500 for each profitable year of the last three closed, −500 for each
+    loss year;
+  - −100 per bond outstanding;
+  - −2,000 within ten years of a bankruptcy (and D outright for five).
+
+  Grades: A+ from 7,000, A 6,000, A- 5,000, B+ 4,000, B 3,000, B- 2,000,
+  C+ 1,000, C 0, C- −1,000, else D. A new $5M company with no record
+  scores 5,000 (A-); its first bond leaves it at B and its second at B-, so
+  it has room for two until it proves itself. A proven $30M railroad with a
+  $3M profit can carry all 20 bonds at B.
+- **Integer logarithm.** The asset-cover term uses an integer base-2
+  logarithm, so ratings are the same on every machine.
 - **Bonds:** at most 20; interest paid quarterly [D]; repaying early costs
   2% extra [C]; they mature after 30 years [I] and are repaid at face
   value. The interest rate is fixed when issued.
-- **Rating penalty for bonds:** a notch per bond while the company is
-  unproven, a notch per four bonds once it has had a profitable year, so
-  the 20-bond maximum is reachable.
 - **Book value** = cash + assets at cost − bonds.
 - **Negative cash** is allowed: running costs are always charged. A
   company that cannot pay may declare bankruptcy (below).
@@ -76,8 +88,8 @@ In the `finance` and `stock` sections of
 | Founding (default terms) | Fortune $3.5M; you invest $3M; outside investors $3M; shares at $10 |
 | Fuel per km | Steam $20, diesel $15, electric $10, plus $2 per car |
 | Track and building upkeep | 0.5% of cost a month |
-| Rating by debt ÷ assets | AAA < 5%, AA < 15%, A < 25%, BBB < 35%, BB < 45%, B < 55%, C < 70%, else D |
-| Interest by rating | AAA 4%, AA 4.5%, A 5%, BBB 6%, BB 7%, B 8%, C 10%, D 12%, at the Normal prime rate |
+| Rating score | See above: weights and thresholds in `finance.rating_*` |
+| Spread over prime | A+ 0, A 0.5%, A- 1%, B+ 2%, B 3%, B- 4% [spec]; C+ 5%, C 6%, C- 7%, D 8% (ours, for display) |
 
 ## Personal account, shares and the stock market
 
@@ -121,13 +133,28 @@ Our design:
   remove.
 - **Brokerage** [I]: every share trade a player makes, short sales and
   margin calls included, pays 1% of its value to the broker.
-- **Price impact.** Each 1,000-share block moves the price by
-  2 × (block ÷ shares outstanding), so trading 1% of the company moves the
-  price 2%.
-- **Price model.** Each month the price closes a quarter of the gap to a
-  target of 0.6 × book value per share + 8 × earnings per share + 10 ×
-  dividend per share. Earnings are the last 12 months' profit, annualised
-  once three months exist. The economy's effect comes with economic cycles.
+- **Price model** (rt3-clone-spec §12.3 [I]). Each month the price closes
+  1/8 of the gap [C] to a value of
+  - 0.8 × book value per share,
+  - + the EPS trend (if positive) × a P/E of 8, 9, 10, 11 or 12 from
+    Depression to Boom. The trend weights the trailing 12 months' earnings
+    3, last year's 2 and the year before's 1 (our reading of "3-year
+    trend");
+  - + 6 × the dividend per share × years of unbroken dividends ÷ 5 (at
+    most 1). A year counts if all four quarterly dividends were paid;
+    a missed or cut quarter starts the count again;
+  - + 0.1 × revenue per share (trailing 12 months);
+
+  all × the economic state's share index (80% to 125%).
+- **Trade pressure** (§12.3 [C/I]). A trade moves the price by
+  0.2 × √(shares traded ÷ shares outstanding) × price: one 1,000-share lot
+  on a $50 stock with 100,000 shares moves it $1 [C], and ten lots in one
+  trade about $3.16, not $10. Each block pays the price after the trade so
+  far. The move is held as pressure on top of the fundamental price and
+  decays to half in about six months.
+- **Margin calls** unwind the fewest blocks that restore purchasing power,
+  in one trade. Selling a block at a time would move the price by each
+  block's own square root and could spiral.
 - **Buying** must be covered by purchasing power *before* the trade.
   Valuing holdings after it would let a purchase, which lifts the price,
   pay for itself. Tests caught exactly that loop.
@@ -145,14 +172,15 @@ Our design:
 | Margin | Holdings count at 50% |
 | Margin interest | 10% a year on negative cash |
 | Issue or buyback size | 10% of shares outstanding |
-| Price target weights | 0.6 × book value/share, 8 × EPS, 10 × dividend/share |
-| Monthly price adjustment | 25% of the gap |
+| Price value weights | 0.8 × book value/share, EPS trend × P/E 8–12, 6 × dividend/share after 5 unbroken years, 0.1 × revenue/share |
+| Monthly price adjustment | 1/8 of the gap |
+| Trade impact | 0.2 × √(share of company traded) × price; pressure keeps 89.1% a month |
 | Minimum share price | $0.50 |
 
-## Balance: known to be off
+## Balance
 
-With the provisional fares and costs, a 20 km passenger and mail line made
-about $1.5M profit in its first year on roughly $1M invested. That is
-probably far too generous. Balancing needs real numbers: what a 20-mile RT3
-passenger run pays, and RT3's track prices and starting capital. These are
-in the research backlog.
+The early fares and rates made a 20 km line earn about $1.5M in its first
+year on $1M invested. Since the production calibration the demo network
+returns about 17% a year on capital; see [calibration.md](calibration.md).
+Real RT3 fares, track prices and starting capital would still tighten the
+targets; they are in the research backlog.

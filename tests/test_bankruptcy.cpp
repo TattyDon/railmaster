@@ -80,7 +80,9 @@ TEST_CASE("bankruptcy halves the debt, pays bondholders in new shares and ruins 
     run_to_year(w, 1834); // 1830 to 1834: five years at D
     CHECK(c.credit_rating() == CreditRating::D);
     run_to_year(w, 1835);
-    CHECK(c.credit_rating() == CreditRating::AAA);
+    // Out of D, though a bankruptcy within ten years still costs 2,000 points.
+    CHECK(c.credit_rating() != CreditRating::D);
+    CHECK(c.credit_score() < c.finance_balance().rating_thresholds[0] - 2000);
     CHECK(w.execute(DeclareBankruptcy{}).error.find("twice") != std::string::npos);
 }
 

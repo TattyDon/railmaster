@@ -1,7 +1,7 @@
 # Calibration
 
 `railmaster_calibrate` (built from `tools/calibrate/`) runs a few headless
-games and scores what comes out against the spec's targets. It exits 0
+games and scores twelve metrics against the spec's targets. It exits 0
 when every metric is in range and 1 otherwise, so it can gate a balance
 change. A run takes about half a minute.
 
@@ -30,6 +30,8 @@ cmake --build build
 | Demo revenue, years 2–4 | $300K–$2M a year | [I], below |
 | Growth of served towns, ten years | 25–200% | §6.4 [C]: visible growth over 10–15 years |
 | Demo share price after ten years | $15–120 | §12.3 [C]: typically $50–100 |
+| Demo price ÷ book value per share | 0.8–2.5 | §12.3 [C]: book value per share is the main anchor |
+| Demo company's credit grade, worst seed | A+ to B | §12.4 [C]: a profitable railroad can borrow |
 | Rivals in profit in year 5 | 60–100% | §13 [I]: a competent AI |
 | Rival revenue, year 5 | $200K–$5M a year | [I], as the demo network |
 | Station-building income | $0–$20K a year each | §7.2 [C]: about $1K |
@@ -54,6 +56,10 @@ the 10 metrics out of range. Volumes were about eleven times the spec's.
 | Served town growth | — | 48% |
 | Demo share price | — | $26 |
 | Station-building income | — | $441/yr |
+
+With the spec's share-price and credit-rating models (the following
+change), the demo share price rose to $31, at 1.2 × book value, and the
+demo company rated A+. All 12 metrics are in range.
 
 ## What changed
 

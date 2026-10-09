@@ -1,5 +1,7 @@
 #include "railmaster/sim/stock.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
+
 #include <algorithm>
 
 namespace railmaster::sim {
@@ -90,14 +92,23 @@ std::int64_t public_float(const Market& m, CompanyId c) {
 }
 
 Money trade_with_impact(Company& c, std::int64_t shares, bool buying) {
+    // The whole trade moves the price by impact x sqrt(shares / outstanding)
+    // x price [C/I]; each block pays the price after the trade so far, so
+    // the move is sub-linear in size.
     Money total;
+    const Money start = c.share_price();
     const std::int64_t lot = block_size(c);
-    for (std::int64_t done = 0; done < shares; done += lot) {
+    const std::int64_t outstanding = std::max<std::int64_t>(1, c.shares_outstanding());
+    for (std::int64_t done = 0; done < shares;) {
         const std::int64_t block = std::min(lot, shares - done);
-        const Money move = c.share_price().scaled(block * c.stock_balance().impact_per_share_of_company,
-                                                  std::max<std::int64_t>(1, c.shares_outstanding()));
-        c.set_share_price(floor_price(c, buying ? c.share_price() + move : c.share_price() - move));
-        total += c.share_price() * block;
+        done += block;
+        // sqrt of the share traded, in millionths
+        const std::int64_t share_ppm = std::min(done, outstanding) * 1'000'000 / outstanding;
+        const std::int64_t root_ppm = isqrt(share_ppm * 1'000'000);
+        const Money move = start.scaled(std::int64_t{c.stock_balance().impact_permille} * root_ppm, 1'000'000'000);
+        const Money price = floor_price(c, buying ? start + move : start - move);
+        c.move_price_by_trade(price, price - c.share_price());
+        total += price * block;
     }
     return total;
 }
@@ -181,11 +192,15 @@ std::optional<std::string> buy_back_stock(Market& m, CompanyId cid) {
 Money target_share_price(const Company& c) {
     const std::int64_t n = std::max<std::int64_t>(1, c.shares_outstanding());
     const Balance::Stock& b = c.stock_balance();
-    Money target = c.book_value_per_share().scaled(b.book_weight_percent, 100);
-    if (const auto profit = c.trailing_profit()) target += profit->scaled(b.earnings_multiple, n);
-    target += c.dividend_per_share() * b.dividend_multiple;
+    const auto state = static_cast<std::size_t>(index_of(c.economic_state()));
+    Money value = c.book_value_per_share().scaled(b.book_weight_percent, 100);
+    if (const auto eps = c.eps_trend(); eps && *eps > Money{}) value += *eps * b.pe_by_state[state];
+    // A dividend counts in full once it has been paid for some years running [D/I].
+    const std::int64_t years = std::min(c.unbroken_dividend_years(), b.dividend_full_years);
+    value += (c.dividend_per_share() * b.dividend_multiple).scaled(years, std::max(1, b.dividend_full_years));
+    if (const auto revenue = c.trailing_revenue()) value += revenue->scaled(b.revenue_weight_percent, 100 * n);
     // Good times lift every share price and bad times depress it [C].
-    return floor_price(c, target.scaled(c.stock_index_percent(), 100));
+    return floor_price(c, value.scaled(c.stock_index_percent(), 100));
 }
 
 Money chairman_salary(const Company& c) {
@@ -214,9 +229,7 @@ std::vector<std::pair<CompanyId, std::int32_t>> apply_splits(Market& m) {
 std::vector<std::int64_t> monthly_market(Market& m) {
     for (Company& c : m.companies) {
         if (c.defunct()) continue;
-        const Money target = target_share_price(c);
-        const Balance::Stock& b = c.stock_balance();
-        c.set_share_price(floor_price(c, c.share_price() + (target - c.share_price()).scaled(b.price_adjust_percent, 100)));
+        c.settle_price(target_share_price(c), Money::cents(c.stock_balance().min_share_price_cents));
     }
 
     std::vector<std::int64_t> sold(m.investors.size(), 0);
@@ -245,12 +258,32 @@ std::vector<std::int64_t> monthly_market(Market& m) {
                 }
             }
             if (!pick) break;
+            // Unwind the fewest blocks that restore purchasing power, in one
+            // trade: a run of small trades would each move the price by the
+            // square root of its own size and cost far more [I].
             const auto who = static_cast<PlayerId>(i);
-            const std::int64_t lot = block_size(m.companies[*pick]);
-            const std::int64_t h = inv.shares_in(*pick);
-            if (h > 0) sell_shares(m, who, *pick, 1);
-            else cover(m, who, *pick, std::min(lot, -h));
-            sold[i] += h > 0 ? lot : std::min(lot, -h);
+            const CompanyId cid = *pick;
+            const std::int64_t lot = block_size(m.companies[cid]);
+            const std::int64_t h = inv.shares_in(cid);
+            const std::int64_t most = h > 0 ? h / lot : (-h + lot - 1) / lot;
+            const auto unwind = [&](Market& mk, std::int64_t blocks) {
+                if (h > 0) {
+                    sell_shares(mk, who, cid, blocks);
+                    return blocks * lot;
+                }
+                const std::int64_t n = std::min(blocks * lot, -h);
+                cover(mk, who, cid, n);
+                return n;
+            };
+            std::int64_t lo = 1, hi = most;
+            while (lo < hi) {
+                const std::int64_t mid = lo + (hi - lo) / 2;
+                Market trial = m;
+                unwind(trial, mid);
+                if (purchasing_power(trial.investors[i], trial) >= Money{}) hi = mid;
+                else lo = mid + 1;
+            }
+            sold[i] += unwind(m, lo);
         }
     }
     return sold;

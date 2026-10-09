@@ -22,7 +22,8 @@ namespace railmaster::sim {
 enum class Sentiment : std::uint8_t { Happy, Content, Grumbling, Hostile };
 const char* sentiment_name(Sentiment s);
 
-enum class CreditRating : std::uint8_t { AAA, AA, A, BBB, BB, B, C, D };
+// RT2-style grades, best first (rt3-clone-spec §12.4 [I]); B or better may issue bonds.
+enum class CreditRating : std::uint8_t { APlus, A, AMinus, BPlus, B, BMinus, CPlus, C, CMinus, D };
 const char* rating_name(CreditRating r);
 
 struct Bond {
@@ -70,6 +71,7 @@ struct YearAccounts {
     // return they made, in thousandths (price change plus dividends).
     Money start_price{};
     Money dividends_per_share{};
+    std::int32_t dividend_quarters = 0; // quarterly dividends paid in the year
     std::optional<std::int32_t> share_return_permille{};
 
     Money revenue() const;
@@ -131,12 +133,15 @@ public:
     Money debt() const;
     Money book_value() const { return total_assets() - debt(); }
 
-    // Grade from debt over total assets. A company yet to finish a
-    // profitable year is held to BB at best and loses a notch per bond; a
-    // proven one loses a notch per four bonds. Bonds need B or better.
+    // The rating score (Balance::Finance): asset cover, interest cover,
+    // profit record, bonds outstanding and any recent bankruptcy.
+    std::int32_t credit_score() const;
+    // Graded from credit_score(); D for some years after a bankruptcy.
     CreditRating credit_rating() const;
-    // For a new bond: the rating's rate, moved with the prime rate.
+    // For a new bond: the prime rate plus the rating's spread.
     std::int32_t bond_rate_bp() const;
+    // Interest a year on the bonds outstanding.
+    Money annual_interest() const;
     const std::vector<Bond>& bonds() const { return bonds_; }
     bool can_issue_bond() const { return credit_rating() <= CreditRating::B && bonds_.size() < static_cast<std::size_t>(finance_.max_bonds); }
     // Issue one bond: cash in, less the underwriting fee. Caller checks can_issue_bond.
@@ -163,6 +168,16 @@ public:
     std::int64_t shares_outstanding() const { return shares_; }
     Money share_price() const { return price_; }
     void set_share_price(Money p) { price_ = p; }
+    // The part of the price that trading put there, which fades [C].
+    Money trade_pressure() const { return pressure_; }
+    // A trade moved the price by `move`: set it and remember the pressure.
+    void move_price_by_trade(Money price, Money move) {
+        price_ = price;
+        pressure_ += move;
+    }
+    // Monthly: move the price 1/price_smoothing of the way from where
+    // fundamentals had it to `value`, and let trade pressure fade.
+    void settle_price(Money value, Money floor);
     Money market_cap() const { return price_ * shares_; }
     Money book_value_per_share() const { return shares_ > 0 ? book_value().scaled(1, shares_) : Money{}; }
     // Annual dividend per share, paid in quarters.
@@ -180,6 +195,15 @@ public:
 
     // Profit over the last 12 months, annualised from what is available; nullopt if under 3 months of history.
     std::optional<Money> trailing_profit() const;
+    // Revenue likewise.
+    std::optional<Money> trailing_revenue() const;
+    // Earnings per share, weighting the trailing 12 months, last year and
+    // the year before by Balance::Stock::eps_trend_weights; nullopt with no
+    // earnings history yet.
+    std::optional<Money> eps_trend() const;
+    // Closed years in a row, most recent last, in which all four quarterly
+    // dividends were paid; zero if no dividend is set now.
+    std::int32_t unbroken_dividend_years() const;
     // Monthly: remember the running profit total, for trailing_profit().
     void record_month();
 
@@ -225,8 +249,10 @@ private:
     Money price_;
     Money dividend_;
     std::int32_t issues_this_year_ = 0;
-    Money lifetime_profit_;
-    std::vector<Money> month_marks_; // lifetime_profit_ at each month end, newest last
+    Money pressure_;
+    Money lifetime_profit_, lifetime_revenue_;
+    // lifetime_profit_ and lifetime_revenue_ at each month end, newest last
+    std::vector<Money> month_marks_, revenue_marks_;
 };
 
 } // namespace railmaster::sim

@@ -6,7 +6,7 @@
 namespace railmaster::sim {
 
 const char* rating_name(CreditRating r) {
-    static constexpr const char* kNames[] = {"AAA", "AA", "A", "BBB", "BB", "B", "C", "D"};
+    static constexpr const char* kNames[] = {"A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D"};
     return kNames[static_cast<std::size_t>(r)];
 }
 
@@ -123,6 +123,7 @@ std::optional<std::int32_t> Company::check_split() {
 void Company::split(std::int32_t ratio) {
     shares_ *= ratio;
     price_ = price_.scaled(1, ratio);
+    pressure_ = pressure_.scaled(1, ratio);
     dividend_ = dividend_.scaled(1, ratio);
     for (YearAccounts& y : history_) {
         y.start_price = y.start_price.scaled(1, ratio);
@@ -136,6 +137,7 @@ void Company::post(Ledger line, Money amount) {
     if (is_revenue(line)) {
         cash_ += amount;
         lifetime_profit_ += amount;
+        lifetime_revenue_ += amount;
     } else {
         cash_ -= amount;
         lifetime_profit_ -= amount;
@@ -153,7 +155,7 @@ void Company::absorb(Company& target) {
     target.bonds_.clear();
     target.shares_ = 0;
     target.dividend_ = Money{};
-    target.price_ = Money{};
+    target.price_ = target.pressure_ = Money{};
     target.merged_into_ = id_;
 }
 
@@ -183,17 +185,65 @@ Money Company::pay_quarterly_dividend() {
     cash_ -= payout;
     history_.back().dividends_paid += payout;
     history_.back().dividends_per_share += dividend_.scaled(1, 4);
+    ++history_.back().dividend_quarters;
     return payout;
 }
 
-std::optional<Money> Company::trailing_profit() const {
-    const std::size_t months = std::min<std::size_t>(month_marks_.size(), 12);
+namespace {
+
+// The last 12 months of a running total, annualised from what is available.
+std::optional<Money> trailing(const std::vector<Money>& marks, Money now) {
+    const std::size_t months = std::min<std::size_t>(marks.size(), 12);
     if (months < 3) return std::nullopt;
-    const Money then = month_marks_.size() > 12 ? month_marks_[month_marks_.size() - 13] : Money{};
-    return (lifetime_profit_ - then).scaled(12, static_cast<std::int64_t>(months));
+    const Money then = marks.size() > 12 ? marks[marks.size() - 13] : Money{};
+    return (now - then).scaled(12, static_cast<std::int64_t>(months));
 }
 
-void Company::record_month() { month_marks_.push_back(lifetime_profit_); }
+} // namespace
+
+std::optional<Money> Company::trailing_profit() const { return trailing(month_marks_, lifetime_profit_); }
+
+std::optional<Money> Company::trailing_revenue() const { return trailing(revenue_marks_, lifetime_revenue_); }
+
+void Company::record_month() {
+    month_marks_.push_back(lifetime_profit_);
+    revenue_marks_.push_back(lifetime_revenue_);
+}
+
+std::optional<Money> Company::eps_trend() const {
+    // Trailing 12 months, then the closed years, newest first.
+    std::vector<Money> profits;
+    if (const auto t = trailing_profit()) profits.push_back(*t);
+    for (std::size_t i = history_.size(); i-- > 0 && profits.size() < stock_.eps_trend_weights.size();) {
+        if (history_[i].share_return_permille) profits.push_back(history_[i].profit());
+    }
+    if (profits.empty() || shares_ <= 0) return std::nullopt;
+    Money sum;
+    std::int64_t weights = 0;
+    for (std::size_t i = 0; i < profits.size(); ++i) {
+        sum += profits[i] * stock_.eps_trend_weights[i];
+        weights += stock_.eps_trend_weights[i];
+    }
+    return weights > 0 ? sum.scaled(1, weights * shares_) : Money{};
+}
+
+std::int32_t Company::unbroken_dividend_years() const {
+    if (dividend_ <= Money{}) return 0;
+    std::int32_t years = 0;
+    for (std::size_t i = history_.size(); i-- > 0;) {
+        if (!history_[i].share_return_permille) continue; // the year still open
+        if (history_[i].dividend_quarters < 4) break;
+        ++years;
+    }
+    return years;
+}
+
+void Company::settle_price(Money value, Money floor) {
+    const Money base = price_ - pressure_;
+    pressure_ = pressure_.scaled(stock_.pressure_keep_permille, 1000);
+    const Money moved = base + (value - base).scaled(1, std::max(1, stock_.price_smoothing));
+    price_ = std::max(moved + pressure_, floor);
+}
 
 void Company::invest_track(Money cost) {
     cash_ -= cost;
@@ -258,9 +308,93 @@ void Company::declare_bankruptcy() {
     shares_ += new_shares;
     if (shares_ > 0) {
         price_ = std::max(price.scaled(old_shares, shares_), Money::cents(stock_.min_share_price_cents));
+        pressure_ = pressure_.scaled(old_shares, shares_);
     }
     history_.back().debt_forgiven += forgiven;
     bankrupt_year_ = history_.back().year;
+}
+
+namespace {
+
+// log2(num / den) in thousandths, for positive num and den, held within
+// +/- `cap` doublings. Integer-only, so it is the same on every machine.
+std::int64_t log2_permille(std::int64_t num, std::int64_t den, std::int64_t cap) {
+    std::int64_t whole = 0;
+    // Bring the ratio into [1, 2), counting doublings.
+    while (num >= 2 * den && whole < cap) {
+        den *= 2;
+        ++whole;
+    }
+    while (num < den && whole > -cap) {
+        num *= 2;
+        --whole;
+    }
+    if (whole >= cap || whole <= -cap) return whole * 1000;
+    // Fraction by repeated squaring of x = num/den in 2^30 fixed point.
+    constexpr std::int64_t kOne = std::int64_t{1} << 30;
+    while (den >= (std::int64_t{1} << 31)) { // keep num x 2^30 in range; num < 2 den
+        num /= 2;
+        den /= 2;
+    }
+    std::int64_t x = num * kOne / std::max<std::int64_t>(1, den);
+    std::int64_t frac = 0; // in 2^-20
+    for (int i = 19; i >= 0; --i) {
+        x = (x * x) >> 30; // x < 2^31, so this fits
+        if (x >= 2 * kOne) {
+            x /= 2;
+            frac += std::int64_t{1} << i;
+        }
+    }
+    return whole * 1000 + (frac * 1000 >> 20);
+}
+
+} // namespace
+
+Money Company::annual_interest() const {
+    Money interest;
+    for (const Bond& b : bonds_) interest += b.principal.scaled(b.rate_bp, 10000);
+    return interest;
+}
+
+std::int32_t Company::credit_score() const {
+    const Balance::Finance& f = finance_;
+    std::int64_t score = 0;
+
+    // Asset cover: points per doubling of assets over debt; no debt counts
+    // as the cap.
+    const Money assets = total_assets(), owed = debt();
+    const std::int64_t cap = f.rating_asset_cap_doublings;
+    if (owed <= Money{}) score += cap * f.rating_asset_points;
+    else if (assets <= Money{}) score -= cap * f.rating_asset_points;
+    else score += log2_permille(assets.in_cents(), owed.in_cents(), cap) * f.rating_asset_points / 1000;
+
+    // Interest cover: operating profit (before interest) over a year's
+    // interest. Nothing counts before three months of accounts.
+    if (const auto profit = trailing_profit()) {
+        const Money interest = annual_interest();
+        const Money operating = *profit + interest;
+        std::int64_t cover_permille = 0;
+        if (operating > Money{}) {
+            cover_permille = interest > Money{} ? operating.in_cents() * 1000 / interest.in_cents()
+                                                : std::int64_t{f.rating_cover_cap} * 1000;
+        }
+        cover_permille = std::min<std::int64_t>(cover_permille, std::int64_t{f.rating_cover_cap} * 1000);
+        score += cover_permille * f.rating_cover_points / 1000;
+    }
+
+    // Profit record over the last three closed years.
+    std::int32_t counted = 0;
+    for (std::size_t i = history_.size(); i-- > 0 && counted < 3;) {
+        if (!history_[i].share_return_permille) continue;
+        score += history_[i].profit() > Money{} ? f.rating_profit_year_points : -f.rating_profit_year_points;
+        ++counted;
+    }
+
+    score -= static_cast<std::int64_t>(bonds_.size()) * f.rating_bond_points;
+    if (bankrupt_year_ && history_.back().year - *bankrupt_year_ < f.bankruptcy_repeat_years) {
+        score -= f.rating_bankruptcy_points;
+    }
+    return static_cast<std::int32_t>(std::clamp<std::int64_t>(score, -1'000'000, 1'000'000));
 }
 
 CreditRating Company::credit_rating() const {
@@ -268,26 +402,14 @@ CreditRating Company::credit_rating() const {
     if (bankrupt_year_ && history_.back().year - *bankrupt_year_ < finance_.bankruptcy_rating_years) {
         return CreditRating::D;
     }
-    const Money assets = total_assets();
-    const std::int64_t leverage_pct =
-        assets > Money{} ? debt().in_cents() * 100 / assets.in_cents() : (debt() > Money{} ? 100 : 0);
-    int grade = 0;
-    while (grade < 7 && leverage_pct >= finance_.rating_leverage_limits[static_cast<std::size_t>(grade)]) ++grade;
-
-    // A young company, with no completed profitable year, is marginal.
-    const bool proven = std::any_of(history_.begin(), history_.end() - 1,
-                                    [](const YearAccounts& y) { return y.profit() > Money{}; });
-    // Each bond outstanding lowers the rating: a notch per bond while the
-    // company is unproven (room for one or two), a notch per four once it
-    // has a profitable year behind it (so a strong company can reach 20).
-    const int bonds = static_cast<int>(bonds_.size());
-    if (!proven) grade = std::max(grade, static_cast<int>(CreditRating::BB)) + bonds;
-    else grade += bonds / std::max(1, finance_.bonds_per_notch_when_proven);
-    return static_cast<CreditRating>(std::min(grade, static_cast<int>(CreditRating::D)));
+    const std::int32_t score = credit_score();
+    std::size_t grade = 0;
+    while (grade < finance_.rating_thresholds.size() && score < finance_.rating_thresholds[grade]) ++grade;
+    return static_cast<CreditRating>(grade);
 }
 
 std::int32_t Company::bond_rate_bp() const {
-    return std::max(0, finance_.bond_rate_bp[static_cast<std::size_t>(credit_rating())] + prime_offset_bp());
+    return std::max(0, prime_rate_bp() + finance_.bond_spread_bp[static_cast<std::size_t>(credit_rating())]);
 }
 
 void Company::issue_bond(std::int32_t year) {

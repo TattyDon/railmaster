@@ -236,10 +236,23 @@ struct Balance {
         std::int32_t track_upkeep_per_mille_month = 5;
         std::int32_t building_upkeep_per_mille_month = 5;
         std::int32_t easy_cost_percent = 85;
-        std::array<std::int32_t, 7> rating_leverage_limits{5, 15, 25, 35, 45, 55, 70}; // AAA..C, % debt/assets
-        // AAA..D at the Normal prime rate; bonds pay this plus (prime - Normal prime).
-        std::array<std::int32_t, 8> bond_rate_bp{400, 450, 500, 600, 700, 800, 1000, 1200};
-        std::int32_t bonds_per_notch_when_proven = 4;
+        // Credit rating (rt3-clone-spec §12.4 [I]): a score in points,
+        //   + rating_asset_points per doubling of assets over debt (to +/- rating_asset_cap_doublings)
+        //   + rating_cover_points per times operating profit covers interest (to rating_cover_cap)
+        //   + / - rating_profit_year_points per profitable / loss year of the last three
+        //   - rating_bond_points per bond outstanding
+        //   - rating_bankruptcy_points within bankruptcy_repeat_years of a bankruptcy
+        // graded A+..C- by rating_thresholds (the least score for each),
+        // else D. Bonds pay the prime rate plus the grade's spread.
+        std::int32_t rating_asset_points = 1000;
+        std::int32_t rating_asset_cap_doublings = 5;
+        std::int32_t rating_cover_points = 500;
+        std::int32_t rating_cover_cap = 5;
+        std::int32_t rating_profit_year_points = 500;
+        std::int32_t rating_bond_points = 100;
+        std::int32_t rating_bankruptcy_points = 2000;
+        std::array<std::int32_t, 9> rating_thresholds{7000, 6000, 5000, 4000, 3000, 2000, 1000, 0, -1000};
+        std::array<std::int32_t, 10> bond_spread_bp{0, 50, 100, 200, 300, 400, 500, 600, 700, 800}; // A+..D
         std::int64_t bond_face_value = 500'000;
         std::int32_t bond_underwriting_percent = 2;
         std::int32_t bond_early_repayment_percent = 2;
@@ -270,12 +283,29 @@ struct Balance {
         std::int64_t salary_per_year = 50'000;
         std::int32_t margin_percent = 50;
         std::int32_t margin_interest_bp = 1000; // at the Normal prime rate; moves with it
-        std::int32_t impact_per_share_of_company = 2;
         std::int32_t issue_percent = 10;
-        std::int32_t book_weight_percent = 60;
-        std::int32_t earnings_multiple = 8;
-        std::int32_t dividend_multiple = 10;
-        std::int32_t price_adjust_percent = 25;
+        // Share price (rt3-clone-spec §12.3 [I]), monthly:
+        //   value = book/share x book_weight
+        //         + max(0, EPS trend) x P/E for the economic state
+        //         + dividend/share x dividend_multiple x min(1, unbroken years / dividend_full_years)
+        //         + revenue/share x revenue_weight
+        // then x the state's stock_percent. The price closes 1/price_smoothing
+        // of the gap each month. The EPS trend weights the trailing 12 months,
+        // last year and the year before by eps_trend_weights.
+        std::int32_t book_weight_percent = 80;
+        std::array<std::int32_t, 5> pe_by_state{8, 9, 10, 11, 12}; // Depression..Boom
+        std::array<std::int32_t, 3> eps_trend_weights{3, 2, 1};
+        std::int32_t dividend_multiple = 6;
+        std::int32_t dividend_full_years = 5;
+        std::int32_t revenue_weight_percent = 10;
+        std::int32_t price_smoothing = 8; // RT2-style 1/8 [C]
+        // Trade pressure [C/I]: a trade moves the price by impact x
+        // sqrt(shares traded / shares outstanding) x price; the pressure
+        // decays, keeping this share each month (891: halves in 6 months).
+        // 200 makes one 1,000-share lot move a $50 stock with 100,000
+        // shares by $1 [C].
+        std::int32_t impact_permille = 200;
+        std::int32_t pressure_keep_permille = 891;
         std::int64_t min_share_price_cents = 50;
         std::int64_t share_block = 1000;
         // Short selling [D concept]: a short position counts against

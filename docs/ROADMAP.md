@@ -73,7 +73,7 @@ hotels, restaurants and taverns by stations.
 Done in the ninth slice: calibration. Production follows the spec's rates
 (about 2.2 loads a year for raw producers, 3 for processors), with
 saturation, express and town growth rescaled to match, and a tool,
-`railmaster_calibrate`, that scores ten metrics against the spec's targets
+`railmaster_calibrate`, that scores the economy (now twelve metrics) against the spec's targets
 ([spec/calibration.md](spec/calibration.md)).
 
 Still to do:
@@ -111,6 +111,13 @@ Done in the sixth slice: the founding dialog (your investment and outside
 money, shares at $10), founding a new company after losing one, 1%
 brokerage, and voluntary bankruptcy.
 
+Done in the seventh slice: the spec's share-price model (book value,
+earnings trend at a P/E set by the economy, dividends weighted by an
+unbroken record, revenue; 1/8 smoothing; trade pressure that grows with the
+square root of a trade and fades) and its ten-grade credit rating, scored
+from asset cover, interest cover, profit record, bonds and bankruptcy, with
+bonds at prime plus the grade's spread.
+
 Still to do:
 - Depreciation of track, buildings and trains.
 
@@ -137,7 +144,8 @@ The values most needed from observing the original game, in rough order:
 2. The price-field update and diffusion rule; the revenue and decay formula.
 3. Station catchment radii; building and track costs.
 4. Industry conversion ratios and production rates per upgrade level.
-5. Share-price formula, bond-rate table, economic-state transitions.
+5. Share-price and credit-rating weights (the spec's formulas are [I]),
+   economic-state transitions.
 6. Map dimensions and world scale.
 7. Balance: what a typical RT3 passenger run pays, track prices, and
    starting capital. The calibration tool now keeps returns within the

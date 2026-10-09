@@ -98,7 +98,7 @@ void economy_alone(const GameData& data) {
 
 // B: the demo network, ten years, several maps.
 void demo_network(const GameData& data) {
-    double roi = 0, revenue = 0, growth = 0, price = 0;
+    double roi = 0, revenue = 0, growth = 0, price = 0, to_book = 0, grade = 0;
     int n = 0;
     for (const std::uint64_t seed : {1u, 2u}) {
         WorldConfig cfg;
@@ -129,6 +129,8 @@ void demo_network(const GameData& data) {
             g += static_cast<double>(w.economy().town_houses(t) - before) / static_cast<double>(std::max<std::int64_t>(1, before));
         growth += served.empty() ? 0 : g / static_cast<double>(served.size());
         price += dollars(c.share_price());
+        to_book += dollars(c.share_price()) / std::max(0.01, dollars(c.book_value_per_share()));
+        grade = std::max(grade, static_cast<double>(c.credit_rating()));
         ++n;
     }
     if (n == 0) return;
@@ -138,6 +140,10 @@ void demo_network(const GameData& data) {
     report("demo network: served towns grow, 10 years", growth / n * 100, 25, 200, "%",
            "spec §6.4 [C]: visible growth over 10-15 years");
     report("demo network: share price after 10 years", price / n, 15, 120, "$", "spec §12.3 [C]: typically $50-100");
+    report("demo network: price / book value per share", to_book / n, 0.8, 2.5, "x",
+           "spec §12.3 [C]: book value per share is the main anchor");
+    report("demo network: credit grade (0 = A+, 4 = B)", grade, 0, 4, "worst",
+           "spec §12.4 [C]: a profitable railroad can borrow");
 }
 
 // C: three AI rivals, five years.

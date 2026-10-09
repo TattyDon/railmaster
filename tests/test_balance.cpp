@@ -41,9 +41,9 @@ TEST_CASE("balance: round trip, partial files and comments") {
     CHECK(Balance::from_json("{}") == default_balance());
 
     const Balance b = Balance::from_json(R"({"_note": "x", "version": 1,
-        "finance": {"_why": "test", "bond_face_value": 123, "bond_rate_bp": [1, 2, 3, 4, 5, 6, 7, 8]}})");
+        "finance": {"_why": "test", "bond_face_value": 123, "bond_spread_bp": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}})");
     CHECK(b.finance.bond_face_value == 123);
-    CHECK(b.finance.bond_rate_bp[7] == 8);
+    CHECK(b.finance.bond_spread_bp[9] == 10);
     CHECK(b.finance.max_bonds == default_balance().finance.max_bonds); // untouched keys keep defaults
     CHECK(b.stock.salary_per_year == default_balance().stock.salary_per_year);
     CHECK_FALSE(b == default_balance());

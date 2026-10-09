@@ -63,17 +63,22 @@ TEST_CASE("investment turns cash into assets; book value is assets less debt") {
 
 TEST_CASE("a new company has a marginal rating and room for two bonds") {
     Company c("Test", Money::dollars(5'000'000), 1850);
-    CHECK(c.credit_rating() == CreditRating::BB);
+    // No debt (+5,000) but no profit record yet: A-.
+    CHECK(c.credit_score() == 5000);
+    CHECK(c.credit_rating() == CreditRating::AMinus);
+    CHECK(c.bond_rate_bp() == 600 + 100); // Normal prime 6% + A- spread 1%
     REQUIRE(c.can_issue_bond());
     c.issue_bond(1850);
     // $500K in, less the 2% underwriting fee.
     CHECK(c.cash() == Money::dollars(5'490'000));
     CHECK(c.this_year().lines[static_cast<std::size_t>(Ledger::BondFees)] == Money::dollars(10'000));
     CHECK(c.debt() == Money::dollars(500'000));
-    CHECK(c.credit_rating() == CreditRating::B); // each bond lowers the rating
+    // Assets 11x debt (+3,456), less 100 for the bond: B, the lowest that may borrow.
+    CHECK(c.credit_score() == 3456 - 100);
+    CHECK(c.credit_rating() == CreditRating::B);
     REQUIRE(c.can_issue_bond());
     c.issue_bond(1850);
-    CHECK(c.credit_rating() == CreditRating::C);
+    CHECK(c.credit_rating() == CreditRating::BMinus);
     CHECK_FALSE(c.can_issue_bond());
     // Worse rating, dearer money.
     CHECK(c.bonds()[1].rate_bp > c.bonds()[0].rate_bp);
@@ -82,15 +87,22 @@ TEST_CASE("a new company has a marginal rating and room for two bonds") {
 TEST_CASE("a proven, lightly indebted company rates well; heavy debt rates badly") {
     Company c("Test", Money::dollars(10'000'000), 1850);
     c.post(Ledger::FreightRevenue, Money::dollars(1'000'000));
+    for (int m = 0; m < 12; ++m) c.record_month();
+    c.close_year();
     c.start_year(1851);
-    CHECK(c.credit_rating() == CreditRating::AAA); // profitable last year, no debt
+    // No debt +5,000, interest cover at its cap +2,500, a profitable year +500.
+    CHECK(c.credit_score() == 8000);
+    CHECK(c.credit_rating() == CreditRating::APlus);
 
     Company poor("Poor", Money::dollars(600'000), 1850);
     poor.post(Ledger::Fuel, Money::dollars(100'000)); // a losing year
+    poor.close_year();
     poor.start_year(1851);
     poor.issue_bond(1851);
-    // $500K debt on $1M assets: half. Then one notch for the bond.
+    // Assets $990K, about twice the debt (+985), a loss year -500, a bond -100: C.
+    CHECK(poor.credit_score() == 385);
     CHECK(poor.credit_rating() == CreditRating::C);
+    CHECK_FALSE(poor.can_issue_bond());
 }
 
 TEST_CASE("interest accrues monthly and the dearest bond is repaid first") {

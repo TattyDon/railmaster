@@ -46,12 +46,38 @@ TEST_CASE("a new company's shares are priced at its cash per share; the founder 
 TEST_CASE("buying a block raises the price, and the block trades at the raised price") {
     Market m = one_company();
     REQUIRE_FALSE(buy_shares(m, 0, 0, 1).has_value());
-    // 1,000 of 600,000 shares, at 2% per 1%: +1/300 of the price.
-    const Money expected_price = Money::dollars(10) + Money::dollars(10).scaled(2'000, 600'000);
+    // 1,000 of 600,000 shares: 0.2 x sqrt(1/600) = 0.82% of $10, to the cent.
+    const Money expected_price = Money::cents(1'008);
     CHECK(m.companies[0].share_price() == expected_price);
     // Plus 1% to the broker.
     CHECK(m.investors[0].cash == Money::dollars(500'000) - (expected_price * 1000).scaled(101, 100));
     CHECK(m.investors[0].shares_in(0) == 301'000);
+}
+
+TEST_CASE("a lot moves the price as the spec's community figure; the pressure fades [C/I]") {
+    // One 1,000-share lot on a $50 stock with 100,000 shares moves it about $1.
+    Market m;
+    m.companies.push_back(founded(1'000'000)); // 100,000 shares
+    m.companies[0].set_share_price(Money::dollars(50));
+    Investor rich;
+    rich.cash = Money::dollars(10'000'000);
+    m.investors.push_back(rich);
+    REQUIRE_FALSE(buy_shares(m, 0, 0, 1).has_value());
+    CHECK(m.companies[0].share_price() == Money::dollars(51));
+    CHECK(m.companies[0].trade_pressure() == Money::dollars(1));
+    // Sub-linear: ten lots in one trade move it about sqrt(10) times as far.
+    Market ten = m;
+    ten.companies[0].set_share_price(Money::dollars(50));
+    REQUIRE_FALSE(buy_shares(ten, 0, 0, 10).has_value());
+    CHECK(ten.companies[0].share_price() == Money::cents(5'000 + 316));
+    // The pressure halves in about six months.
+    Company& c = m.companies[0];
+    const Money value = c.share_price() - c.trade_pressure(); // hold fundamentals where they were
+    for (int month = 0; month < 6; ++month) c.settle_price(value, Money{});
+    CHECK(c.trade_pressure() >= Money::cents(49));
+    CHECK(c.trade_pressure() <= Money::cents(51));
+    // ...and the price falls back with it, toward the unchanged fundamentals.
+    CHECK(c.share_price() == value + c.trade_pressure());
 }
 
 TEST_CASE("big trades move the price more, block by block") {
@@ -165,13 +191,31 @@ TEST_CASE("the share price follows earnings, dividends and book value") {
         for (Company& c : m.companies) c.record_month();
         monthly_market(m);
     }
-    const Money payer_before = payer.share_price();
-    payer.set_dividend_per_share(Money::dollars(1));
     for (int month = 0; month < 12; ++month) monthly_market(m);
     CHECK(earner.share_price() > Money::dollars(25));
-    CHECK(loser.share_price() < Money::dollars(6));
-    CHECK(payer.share_price() > payer_before);
+    // A loser sinks toward 80% of its book value [I].
+    CHECK(loser.share_price() < loser.book_value_per_share());
+    CHECK(loser.share_price() < Money::dollars(7));
     CHECK(target_share_price(earner) > target_share_price(payer));
+}
+
+TEST_CASE("a dividend counts in full only after five unbroken years [I]") {
+    Company steady = founded(6'000'000, 0), fresh = founded(6'000'000, 1);
+    for (Company* c : {&steady, &fresh}) c->set_dividend_per_share(Money::dollars(1));
+    for (int year = 1850; year < 1856; ++year) {
+        for (int q = 0; q < 4; ++q) steady.pay_quarterly_dividend();
+        steady.close_year();
+        steady.start_year(year + 1);
+    }
+    steady.post(Ledger::FreightRevenue, fresh.cash() - steady.cash()); // the same book value
+    CHECK(steady.unbroken_dividend_years() == 6);
+    CHECK(fresh.unbroken_dividend_years() == 0);
+    // $1 a share x 6 in full.
+    CHECK(target_share_price(steady) - target_share_price(fresh) == Money::dollars(6));
+    // Missing a quarter breaks the record.
+    steady.set_dividend_per_share(Money::dollars(1'000)); // unaffordable: cut to nothing
+    steady.pay_quarterly_dividend();
+    CHECK(steady.unbroken_dividend_years() == 0);
 }
 
 TEST_CASE("a portfolio across companies: net worth, purchasing power and margin calls count every holding") {

@@ -28,7 +28,7 @@ void run_days(World& w, int days) {
 // No price impact and deep pockets, so stakes can be built at a known price.
 GameData corporate_data() {
     GameData d;
-    d.balance.stock.impact_per_share_of_company = 0;
+    d.balance.stock.impact_permille = 0;
     d.balance.stock.founder_fortune = 13'000'000; // $10M left after founding
     d.cargo = CargoRegistry::from_json(R"({"cargo": [{"key": "coal", "name": "Coal", "base_price": 30}]})");
     d.locomotives = LocomotiveRegistry::from_json(R"({"locomotives": [
