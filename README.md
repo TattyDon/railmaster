@@ -41,6 +41,7 @@ Client controls: arrows/WASD pan, mouse wheel zoom, Space pause, 1-3 speed.
 | `tests/` | Unit tests for the simulation |
 | `data/` | Game data in original JSON formats |
 | `docs/spec/` | Sourced specification of the original game's rules |
+| `docs/ROADMAP.md` | Milestones and research backlog |
 
 ## Contributing
 

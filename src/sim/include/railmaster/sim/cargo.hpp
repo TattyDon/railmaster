@@ -12,14 +12,21 @@ namespace railmaster::sim {
 
 using CargoId = std::uint16_t;
 
+// Freight is priced by the regional price field; express cargo (passengers,
+// mail, troops) travels to a specific destination. See docs/spec/economy-cargo.md.
+enum class CargoClass : std::uint8_t { Freight, Express };
+
 // Static definition of a cargo type, loaded from data/cargo.json.
-// Fields beyond these are added as docs/spec/economy.md pins them down.
 struct CargoType {
     CargoId id = 0;
-    std::string key;          // stable identifier used in save files and data, e.g. "coal"
-    std::string name;         // display name
-    Money base_price;         // price per carload before supply/demand and distance
-    std::int32_t decay_days = 0; // 0 = does not spoil
+    std::string key;  // stable identifier used in save files and data, e.g. "coal"
+    std::string name; // display name
+    CargoClass cargo_class = CargoClass::Freight;
+    std::int32_t available_year = 1800;
+    Money base_price; // per carload; zero for express cargo, which has none listed
+    // 1 (insensitive) to 10 (most perishable). Believed to set how fast value
+    // decays in transit; the exact mapping is not yet known.
+    std::int32_t decay_sensitivity = 1;
 };
 
 class CargoRegistry {
