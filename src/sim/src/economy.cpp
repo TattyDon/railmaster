@@ -199,6 +199,8 @@ SiteId Economy::add_site(const IndustryRegistry& industries, IndustryTypeId type
     s.cy = cy;
     s.level = level;
     s.buffer.assign(industries.get(type).inputs.size(), 0);
+    s.made_milli.assign(industries.get(type).outputs.size(), 0);
+    s.used_milli.assign(industries.get(type).inputs.size(), 0);
     sites_.push_back(std::move(s));
     return sites_.back().id;
 }
@@ -225,6 +227,7 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
     };
 
     for (Site& s : sites_) {
+        if (s.closed) continue;
         const IndustryType& t = industries.get(s.type);
         const std::size_t at = cell(s.cx, s.cy);
         const auto daily = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli *
@@ -233,17 +236,22 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         switch (t.kind) {
         case IndustryKind::Raw: {
             bool boosted = false;
-            for (const IndustryInput& in : t.inputs) {
+            for (std::size_t i = 0; i < t.inputs.size(); ++i) {
+                const IndustryInput& in = t.inputs[i];
                 if (!input_active(in, cargo, year)) continue;
                 const std::int32_t want = daily / 2;
-                if (take_stock(in.cargo, s.cx, s.cy, want) >= want && want > 0) boosted = true;
+                const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, want);
+                s.used_milli[i] += took;
+                if (took >= want && want > 0) boosted = true;
                 demand(in.cargo, at, daily, balance_.industry_saturation_days);
             }
             const std::int32_t out = daily * (100 + (boosted ? balance_.boost_percent : 0)) / 100;
-            for (CargoId c : t.outputs) {
+            for (std::size_t o = 0; o < t.outputs.size(); ++o) {
+                const CargoId c = t.outputs[o];
                 if (!cargo_available(c, cargo, year)) continue;
                 add_stock(c, s.cx, s.cy, out);
                 s.produced_milli += out;
+                s.made_milli[o] += out;
                 supply(c, at);
             }
             break;
@@ -268,15 +276,19 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                 if (!input_active(t.inputs[i], cargo, year)) continue;
                 if (t.rule == InputRule::All) {
                     s.buffer[i] -= made;
+                    s.used_milli[i] += made;
                 } else {
                     const std::int32_t use = std::min(owed, s.buffer[i]);
                     s.buffer[i] -= use;
+                    s.used_milli[i] += use;
                     owed -= use;
                 }
             }
-            for (CargoId c : t.outputs) {
+            for (std::size_t o = 0; o < t.outputs.size(); ++o) {
+                const CargoId c = t.outputs[o];
                 if (!cargo_available(c, cargo, year)) continue;
                 add_stock(c, s.cx, s.cy, made);
+                s.made_milli[o] += made;
                 supply(c, at);
             }
             s.produced_milli += made;
@@ -403,6 +415,79 @@ void Economy::step_day(const CargoRegistry& cargo, const IndustryRegistry& indus
 
 void Economy::settle(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year, int days) {
     for (int i = 0; i < days; ++i) step_day(cargo, industries, year);
+}
+
+// --- Industry accounts ---------------------------------------------------------
+
+bool ownable(IndustryKind k) { return k == IndustryKind::Raw || k == IndustryKind::Processor; }
+bool buildable(IndustryKind k) { return k == IndustryKind::Processor; }
+
+std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo, const IndustryRegistry& industries,
+                                                      const Balance::Industries& b, std::int32_t months) {
+    std::vector<IndustryAccounts> out(sites_.size());
+    for (Site& s : sites_) {
+        const IndustryType& t = industries.get(s.type);
+        if (!ownable(t.kind)) continue;
+        IndustryAccounts& a = out[s.id];
+        if (!s.closed) {
+            for (std::size_t o = 0; o < t.outputs.size(); ++o) {
+                a.revenue += cargo.get(t.outputs[o]).base_price.scaled(s.made_milli[o], kMilli);
+            }
+            for (std::size_t i = 0; i < t.inputs.size(); ++i) {
+                a.costs += cargo.get(t.inputs[i].cargo).base_price.scaled(s.used_milli[i], kMilli);
+            }
+            a.costs += a.revenue.scaled(b.labour_percent, 100);
+            a.costs += Money::dollars(b.overhead_per_level * s.level).scaled(months, 12);
+        }
+        const std::int64_t capacity = std::int64_t{t.rate_per_year} * s.level * kMilli * months / 12;
+        s.utilisation_permille =
+            !s.made_milli.empty() && capacity > 0
+                ? static_cast<std::int32_t>(std::min<std::int64_t>(2000, s.made_milli.front() * 1000 / capacity))
+                : 0;
+        std::fill(s.made_milli.begin(), s.made_milli.end(), 0);
+        std::fill(s.used_milli.begin(), s.used_milli.end(), 0);
+        // Spread the period over its months, so the history is always monthly.
+        for (std::int32_t m = 0; m < months; ++m) s.monthly_profit.push_back(a.profit().scaled(1, months));
+        if (s.monthly_profit.size() > 12) {
+            s.monthly_profit.erase(s.monthly_profit.begin(),
+                                   s.monthly_profit.end() - 12);
+        }
+    }
+    return out;
+}
+
+std::vector<SiteId> Economy::close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng) {
+    std::vector<SiteId> closed;
+    for (Site& s : sites_) {
+        if (s.closed || !ownable(industries.get(s.type).kind)) continue;
+        s.loss_years = annual_profit(s) < Money{} ? s.loss_years + 1 : 0;
+        if (!s.owner && s.loss_years >= b.close_after_loss_years &&
+            rng.chance(static_cast<std::uint32_t>(b.close_chance_percent), 100)) {
+            s.closed = true;
+            closed.push_back(s.id);
+        }
+    }
+    return closed;
+}
+
+Money annual_profit(const Site& s) {
+    if (s.monthly_profit.empty()) return Money{};
+    Money sum;
+    for (const Money& m : s.monthly_profit) sum += m;
+    return sum.scaled(12, static_cast<std::int64_t>(s.monthly_profit.size()));
+}
+
+Money industry_price(const Site& s, const Balance::Industries& b) {
+    const Money floor = Money::dollars(b.floor_price * s.level);
+    return std::max(floor, annual_profit(s) * b.profit_multiple);
+}
+
+Money industry_build_cost(const Balance::Industries& b) {
+    return Money::dollars(b.floor_price).scaled(b.build_cost_percent, 100);
+}
+
+Money industry_upgrade_cost(const Site& s, const Balance::Industries& b) {
+    return (industry_build_cost(b) * s.level).scaled(b.upgrade_cost_percent, 100);
 }
 
 // --- Map population ----------------------------------------------------------

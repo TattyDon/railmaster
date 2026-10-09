@@ -24,6 +24,7 @@ struct Tycoon {
     std::int32_t dividend = 30;    // share of profit paid out
     std::int32_t speculation = 30; // trading in rivals' shares, short selling from 70
     std::int32_t takeovers = 30;   // building stakes in rivals, takeovers and mergers from 50
+    std::int32_t industry = 30;    // buying and upgrading industries its lines serve, from 40
 };
 
 class TycoonRegistry {

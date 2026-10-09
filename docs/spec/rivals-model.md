@@ -181,6 +181,7 @@ values from 0 to 100 (§13.2 [I]):
 | leverage | How many bonds it will take on to build (up to leverage ÷ 10), and how flush it must be before repaying |
 | dividend | Share of trailing profit paid out as a dividend |
 | speculation | From 40 up: trades rivals' shares against the price the market is heading for (the monthly target price), buying below 80% of it and selling above 120%. From 70 up it also sells short above 125% and buys back once the price has fallen to it |
+| industry | From 40 up: buys profitable industries its stations serve, at no more than 12 years' profit, and doubles plants running at 90% or more of capacity when a year's profit covers the cost |
 | takeovers | From 50 up: builds a stake in the rival trading furthest below book value, up to a majority. With over 35% of a company trading below book it bids for control: always if it has no company of its own, otherwise only from 80 (when its own company passes to the ousted chairman). From 70 up it merges companies where it holds a majority, offering a 25% premium, if its company can pay |
 
 Each month, after the market, each rival in turn:
@@ -226,6 +227,6 @@ takeovers are rare unless a founder is forced to sell on margin.
 ### Not yet
 
 - Replacing old engines, more than two stops per route, and double track.
-- Buying industries (§6.2), recession caution.
+- Recession caution.
 - Recovering a failing line rather than just borrowing; a rival goes
   bankrupt only when its credit is exhausted.

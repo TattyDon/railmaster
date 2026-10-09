@@ -12,7 +12,7 @@
 
 namespace railmaster::client {
 
-enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market };
+enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry };
 
 // The player's build tools. Every change to the game is sent to the world
 // as a command; the tools only hold in-progress choices (where a run of
@@ -84,6 +84,11 @@ private:
     std::optional<sim::CargoId> overlay_;
 
     sim::CompanyId market_choice_ = 0; // the company selected on the market screen
+    std::size_t build_choice_ = 0;      // the plant to build, among those buildable now
+    std::vector<sim::IndustryTypeId> buildable_types() const;
+    // The industry in the cell under the cursor, if any.
+    std::optional<sim::SiteId> site_under_cursor() const;
+    std::string industry_text() const;
     Uint32 resign_armed_until_ = 0;     // a first Q press arms resigning for a few seconds
     Uint32 bankrupt_armed_until_ = 0;   // likewise K for bankruptcy
     bool founding_ = false;

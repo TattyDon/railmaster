@@ -128,6 +128,20 @@ struct Balance {
         std::int32_t mail_cap_months = 2;
     } express;
 
+    // Owning industries (rt3-clone-spec §6.1-6.2). An industry's accounts:
+    // output at the cargo's base price, less inputs at theirs, labour in
+    // proportion to output and a fixed overhead per level of capacity.
+    struct Industries {
+        std::int32_t labour_percent = 20;          // of output value [I]
+        std::int64_t overhead_per_level = 30'000;  // dollars a year [C: a brewery's $30K]
+        std::int32_t profit_multiple = 10;         // price = this x a year's profit [C]
+        std::int64_t floor_price = 300'000;        // per level, for the unprofitable [C: farms $240K-$350K]
+        std::int32_t build_cost_percent = 150;     // of an existing one's floor price [C, low confidence]
+        std::int32_t upgrade_cost_percent = 50;    // of building another of the same size [I: "much less"]
+        std::int32_t close_after_loss_years = 5;   // unowned industries [I]
+        std::int32_t close_chance_percent = 20;    // each year after that [I]
+    } industries;
+
     // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,
     // Recession, Normal, Prosperity, Boom.
     struct EconomicStates {

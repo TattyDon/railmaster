@@ -1,5 +1,6 @@
 #pragma once
 
+#include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/money.hpp"
 #include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/track.hpp"
@@ -115,13 +116,28 @@ struct FoundCompany {
     Money outside_investment{};
 };
 
+// Industries (rt3-clone-spec §6.2): buy one nobody owns, at a multiple of
+// its yearly profit or a floor price [C]; build a processing plant on open
+// dry land [C/D]; or double a plant's capacity [D].
+struct BuyIndustry {
+    SiteId site = 0;
+};
+struct BuildIndustry {
+    IndustryTypeId type = 0;
+    std::int32_t cx = 0, cy = 0; // economy cell
+};
+struct UpgradeIndustry {
+    SiteId site = 0;
+};
+
 // Declare the company bankrupt [D]: a last resort that halves its bond debt,
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
-                             AttemptMerger, Resign, FoundCompany, DeclareBankruptcy>;
+                             AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
+                             UpgradeIndustry>;
 
 struct CommandResult {
     bool ok = false;

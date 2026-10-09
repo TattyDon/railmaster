@@ -37,10 +37,12 @@ enum class Ledger : std::uint8_t {
     PassengerRevenue,
     MailRevenue,
     TroopRevenue,
+    IndustryIncome, // output of the industries it owns [C]
     TrackageIncome, // rivals' share of income for running on our track [D]
     TrainMaintenance,
     Fuel,
     TrackagePaid,
+    IndustryCosts, // their inputs, labour and overhead
     TrackUpkeep,
     BuildingUpkeep,
     Interest,
@@ -55,11 +57,12 @@ bool is_revenue(Ledger line);
 struct YearAccounts {
     std::int32_t year = 0;
     std::array<Money, kLedgerLines> lines{};
-    Money track_built;
-    Money buildings_built;
-    Money trains_bought;
-    Money dividends_paid; // a distribution to shareholders, not an expense
-    Money acquisitions;   // paid to buy out other companies' shareholders
+    Money track_built{};
+    Money buildings_built{};
+    Money trains_bought{};
+    Money industries_bought{};
+    Money dividends_paid{}; // a distribution to shareholders, not an expense
+    Money acquisitions{}; // paid to buy out other companies' shareholders
     Money debt_forgiven{}; // bond debt written off in a bankruptcy
     // For shareholders' return: the share price when the year opened, the
     // dividends paid per share during it, and, once the year is closed, the
@@ -114,13 +117,16 @@ public:
     void invest_track(Money cost);
     void invest_buildings(Money cost);
     void invest_train(Money cost);
+    // Buying, building or upgrading an industry.
+    void invest_industry(Money cost);
     // A train destroyed in a crash leaves the books.
     void write_off_train(Money cost) { rolling_stock_ -= cost; }
 
     Money track_value() const { return track_; }
     Money building_value() const { return buildings_; }
     Money rolling_stock_value() const { return rolling_stock_; }
-    Money total_assets() const { return cash_ + track_ + buildings_ + rolling_stock_; }
+    Money industry_value() const { return industries_; }
+    Money total_assets() const { return cash_ + track_ + buildings_ + rolling_stock_ + industries_; }
     Money debt() const;
     Money book_value() const { return total_assets() - debt(); }
 
@@ -211,6 +217,7 @@ private:
     EconomicState state_ = EconomicState::Normal;
     Money cash_;
     Money track_, buildings_, rolling_stock_;
+    Money industries_;
     std::vector<Bond> bonds_;
     std::vector<YearAccounts> history_;
     std::int64_t shares_ = 0;

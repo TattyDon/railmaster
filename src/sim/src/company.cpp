@@ -16,10 +16,12 @@ const char* ledger_name(Ledger line) {
     case Ledger::PassengerRevenue: return "Passenger revenue";
     case Ledger::MailRevenue: return "Mail revenue";
     case Ledger::TroopRevenue: return "Troop revenue";
+    case Ledger::IndustryIncome: return "Industry income";
     case Ledger::TrackageIncome: return "Trackage income";
     case Ledger::TrainMaintenance: return "Train maintenance";
     case Ledger::Fuel: return "Fuel";
     case Ledger::TrackagePaid: return "Trackage paid";
+    case Ledger::IndustryCosts: return "Industry costs";
     case Ledger::TrackUpkeep: return "Track upkeep";
     case Ledger::BuildingUpkeep: return "Building upkeep";
     case Ledger::Interest: return "Interest";
@@ -49,7 +51,7 @@ Company::Company(std::string name, Money starting_cash, std::int32_t year, const
     : name_(std::move(name)), id_(id), finance_(balance.finance), stock_(balance.stock),
       states_(balance.economic_states), corporate_(balance.corporate), cash_(starting_cash),
       shares_(starting_cash.in_cents() / std::max<std::int64_t>(1, balance.stock.founding_share_price_cents)) {
-    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
+    history_.push_back(YearAccounts{.year = year});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
     history_.back().start_price = price_;
 }
@@ -144,8 +146,9 @@ void Company::absorb(Company& target) {
     track_ += target.track_;
     buildings_ += target.buildings_;
     rolling_stock_ += target.rolling_stock_;
+    industries_ += target.industries_;
     bonds_.insert(bonds_.end(), target.bonds_.begin(), target.bonds_.end());
-    target.cash_ = target.track_ = target.buildings_ = target.rolling_stock_ = Money{};
+    target.cash_ = target.track_ = target.buildings_ = target.rolling_stock_ = target.industries_ = Money{};
     target.bonds_.clear();
     target.shares_ = 0;
     target.dividend_ = Money{};
@@ -201,6 +204,12 @@ void Company::invest_buildings(Money cost) {
     cash_ -= cost;
     buildings_ += cost;
     history_.back().buildings_built += cost;
+}
+
+void Company::invest_industry(Money cost) {
+    cash_ -= cost;
+    industries_ += cost;
+    history_.back().industries_bought += cost;
 }
 
 void Company::invest_train(Money cost) {
@@ -314,7 +323,7 @@ void Company::charge_interest(std::int32_t months) {
 }
 
 void Company::start_year(std::int32_t year) {
-    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
+    history_.push_back(YearAccounts{.year = year});
     history_.back().start_price = price_;
     issues_this_year_ = 0;
 }

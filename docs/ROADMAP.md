@@ -53,6 +53,11 @@ Done in the fourth slice: terrain-aware middlemen (water and coasts conduct
 prices and freight well, mountains poorly) and the five economic states,
 which move production, costs, the prime rate and share prices.
 
+Done in the fifth slice: industry ownership. Every producer and plant keeps
+accounts; companies buy them at ten years' profit (or a floor), build
+processing plants, and double their capacity; owned industries post their
+profit to the owner; unowned ones that keep losing money close.
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
 - Ports and warehouses; new industries appearing over time; town growth.
@@ -90,7 +95,7 @@ brokerage, and voluntary bankruptcy.
 
 Still to do:
 - Depreciation of track, buildings and trains.
-- Buying, building and upgrading industries; hotels, restaurants and the like.
+- Hotels, restaurants and the like.
 
 ## M4: Real 3D client
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

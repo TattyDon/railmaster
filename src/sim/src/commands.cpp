@@ -376,6 +376,63 @@ CommandResult World::run(const DeclareBankruptcy&) {
     return success(Money{}, c.id());
 }
 
+CommandResult World::run(const BuyIndustry& cmd) {
+    if (cmd.site >= economy_.sites().size()) return fail("no such industry");
+    Site& s = economy_.site_mut(cmd.site);
+    const IndustryType& t = data_.industries.get(s.type);
+    if (!ownable(t.kind)) return fail("only producers and processing plants can be bought");
+    if (s.closed) return fail("that industry has closed");
+    if (s.owner) {
+        return fail(s.owner == acting().id() ? "your company already owns it"
+                                             : "it belongs to " + company(*s.owner).name());
+    }
+    const Money price = industry_price(s, data_.balance.industries);
+    if (auto why = cannot_afford(price)) return fail(*why);
+    acting().invest_industry(price);
+    s.owner = acting().id();
+    s.owner_paid = price;
+    return success(price, s.id);
+}
+
+CommandResult World::run(const BuildIndustry& cmd) {
+    if (cmd.type >= data_.industries.all().size()) return fail("unknown industry");
+    const IndustryType& t = data_.industries.get(cmd.type);
+    if (!buildable(t.kind)) return fail("only processing plants can be built; producers can only be bought");
+    for (CargoId c : t.outputs) {
+        const CargoType& ct = data_.cargo.get(c);
+        if (date_.year() < ct.available_year) return fail(ct.name + " is not made until " + std::to_string(ct.available_year));
+    }
+    if (cmd.cx < 0 || cmd.cy < 0 || cmd.cx >= economy_.width() || cmd.cy >= economy_.height()) {
+        return fail("that is off the map");
+    }
+    if (terrain_.ground(cmd.cx, cmd.cy) == GroundType::Water) return fail("industries need dry land");
+    for (const Site& s : economy_.sites()) {
+        if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) return fail("something is already built there");
+    }
+    const Money cost = construction_cost(industry_build_cost(data_.balance.industries));
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_industry(cost);
+    const SiteId id = economy_.add_site(data_.industries, cmd.type, cmd.cx, cmd.cy);
+    Site& s = economy_.site_mut(id);
+    s.owner = acting().id();
+    s.owner_paid = cost;
+    return success(cost, id);
+}
+
+CommandResult World::run(const UpgradeIndustry& cmd) {
+    if (cmd.site >= economy_.sites().size()) return fail("no such industry");
+    Site& s = economy_.site_mut(cmd.site);
+    if (s.owner != acting().id()) return fail("you can only upgrade your own industries");
+    if (data_.industries.get(s.type).kind != IndustryKind::Processor) return fail("only processing plants can be upgraded");
+    if (s.closed) return fail("that industry has closed");
+    const Money cost = construction_cost(industry_upgrade_cost(s, data_.balance.industries));
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_industry(cost);
+    s.owner_paid += cost;
+    s.level *= 2; // doubles capacity, and with it the overhead [D]
+    return success(cost, s.id);
+}
+
 void World::merge(Company& buyer, CompanyId tid, Money offer) {
     Company& target = company(tid);
     std::int64_t paid_shares = target.shares_outstanding();
@@ -399,6 +456,9 @@ void World::merge(Company& buyer, CompanyId tid, Money offer) {
     buyer.pay_for_acquisition(offer * paid_shares);
     buyer.absorb(target);
     railway_.transfer_owner(tid, buyer.id());
+    for (const Site& s : economy_.sites()) {
+        if (s.owner == tid) economy_.site_mut(s.id).owner = buyer.id(); // industries go too [C]
+    }
 }
 
 } // namespace railmaster::sim

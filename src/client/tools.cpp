@@ -60,7 +60,14 @@ void Tools::draw_finance_panel() const {
 
     constexpr float kRow = 16.0f;
     const float x0 = 40, y0 = 56, w = 760;
-    const float h = kRow * 46;
+    // Ledger lines with nothing on them this year or last are left out, so
+    // the screen fits the window; the rest of the panel is a fixed 37 rows.
+    const auto shown = [&](std::size_t i) {
+        return now.lines[i] != sim::Money{} || (last && last->lines[i] != sim::Money{});
+    };
+    std::size_t ledger_rows = 0;
+    for (std::size_t i = 0; i < sim::kLedgerLines; ++i) ledger_rows += shown(i);
+    const float h = kRow * static_cast<float>(37 + ledger_rows);
     fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
     float y = y0 + 10;
     const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
@@ -76,6 +83,7 @@ void Tools::draw_finance_panel() const {
         0.5f);
     y += 4;
     for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
+        if (!shown(i)) continue;
         const auto line = static_cast<sim::Ledger>(i);
         const bool rev = sim::is_revenue(line);
         const auto cell = [&](const sim::YearAccounts& ya) {
@@ -93,6 +101,8 @@ void Tools::draw_finance_panel() const {
         0.8f, 0.8f, 0.8f);
     row("INVESTED IN TRAINS", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
         0.8f, 0.8f);
+    row("INVESTED IN INDUSTRIES", format_money(now.industries_bought), last ? format_money(last->industries_bought) : "",
+        0.8f, 0.8f, 0.8f);
     row("SPENT ON MERGERS", format_money(now.acquisitions), last ? format_money(last->acquisitions) : "", 0.8f, 0.8f,
         0.8f);
     y += kRow / 2;
@@ -101,6 +111,7 @@ void Tools::draw_finance_panel() const {
     row("TRACK", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
     row("STATIONS AND BUILDINGS", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
     row("TRAINS", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
+    row("INDUSTRIES", format_money(co.industry_value()), "", 0.9f, 0.9f, 0.9f);
     row("BONDS", (co.debt() > sim::Money{} ? "-" : "") + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
     row("BOOK VALUE", format_money(co.book_value()), "", 1, 1, 1);
     y += kRow / 2;
@@ -258,6 +269,33 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     case Tool::Inspect:
     case Tool::Finance:
     case Tool::Market: return;
+    case Tool::Industry: {
+        if (const auto id = site_under_cursor()) {
+            const sim::Site& s = world_.economy().sites()[*id];
+            const std::string name = world_.data().industries.get(s.type).name;
+            if (s.owner && s.owner == world_.player_company()) {
+                const sim::CommandResult r = world_.execute(sim::UpgradeIndustry{.site = *id});
+                if (r.ok) show("UPGRADED THE " + name + " TO LEVEL " + std::to_string(s.level) + " FOR " + format_money(r.cost), true);
+                else show("CANNOT UPGRADE: " + r.error, false);
+            } else {
+                const sim::CommandResult r = world_.execute(sim::BuyIndustry{.site = *id});
+                if (r.ok) show("BOUGHT THE " + name + " FOR " + format_money(r.cost), true);
+                else show("CANNOT BUY: " + r.error, false);
+            }
+            return;
+        }
+        const auto types = buildable_types();
+        if (types.empty()) {
+            show("NO PLANTS CAN BE BUILT YET", false);
+            return;
+        }
+        const sim::IndustryTypeId t = types[build_choice_ % types.size()];
+        const sim::CommandResult r = world_.execute(sim::BuildIndustry{
+            .type = t, .cx = world_.economy().cell_x(hover_), .cy = world_.economy().cell_y(hover_)});
+        if (r.ok) show("BUILT A " + world_.data().industries.get(t).name + " FOR " + format_money(r.cost), true);
+        else show("CANNOT BUILD: " + r.error, false);
+        return;
+    }
     case Tool::Track: {
         if (!track_start_) {
             track_start_ = hover_pick_;
@@ -397,6 +435,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_F6: select(Tool::Train); return true;
     case SDLK_F7: select(Tool::Finance); return true;
     case SDLK_F8: select(Tool::Market); return true;
+    case SDLK_F9: select(Tool::Industry); return true;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -496,6 +535,13 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else show("CANNOT: " + r.error, false);
         return true;
     }
+    case Tool::Industry:
+        if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
+            const std::size_t n = std::max<std::size_t>(1, buildable_types().size());
+            build_choice_ = (build_choice_ + (key == SDLK_RIGHTBRACKET ? 1 : n - 1)) % n;
+            return true;
+        }
+        return false;
     case Tool::Market: {
         const auto n = static_cast<sim::CompanyId>(world_.companies().size());
         if (key == SDLK_UP) {
@@ -736,14 +782,67 @@ void Tools::draw_world_overlay() const {
     case Tool::Inspect:
     case Tool::Finance:
     case Tool::Market: return;
+    case Tool::Industry: {
+        // Owned industries in their owner's colour; the cell under the cursor in white.
+        const std::int64_t cell = std::int64_t{world_.terrain().tile_size_m()} * 1000;
+        for (const sim::Site& s : world_.economy().sites()) {
+            if (!s.owner || s.closed) continue;
+            float r, g, b;
+            owner_rgb(*s.owner, world_.player_company(), r, g, b);
+            draw_marker({s.cx * cell + cell / 2, s.cy * cell + cell / 2}, cam_, 7, r, g, b);
+        }
+        const std::int32_t cx = world_.economy().cell_x(hover_), cy = world_.economy().cell_y(hover_);
+        draw_marker({cx * cell + cell / 2, cy * cell + cell / 2}, cam_, 4, 1, 1, 1);
+        return;
     }
+    }
+}
+
+std::vector<sim::IndustryTypeId> Tools::buildable_types() const {
+    std::vector<sim::IndustryTypeId> out;
+    for (const sim::IndustryType& t : world_.data().industries.all()) {
+        if (!sim::buildable(t.kind)) continue;
+        bool available = true;
+        for (sim::CargoId c : t.outputs) available &= world_.data().cargo.get(c).available_year <= world_.date().year();
+        if (available) out.push_back(t.id);
+    }
+    return out;
+}
+
+std::optional<sim::SiteId> Tools::site_under_cursor() const {
+    const std::int32_t cx = world_.economy().cell_x(hover_), cy = world_.economy().cell_y(hover_);
+    for (const sim::Site& s : world_.economy().sites()) {
+        if (s.closed || s.cx != cx || s.cy != cy) continue;
+        if (sim::ownable(world_.data().industries.get(s.type).kind)) return s.id;
+    }
+    return std::nullopt;
+}
+
+std::string Tools::industry_text() const {
+    const auto id = site_under_cursor();
+    if (!id) return "OPEN LAND";
+    const sim::Site& s = world_.economy().sites()[*id];
+    const sim::Balance::Industries& b = world_.data().balance.industries;
+    std::string text = world_.data().industries.get(s.type).name + " (LEVEL " + std::to_string(s.level) + "): ";
+    if (!s.owner) {
+        text += "FOR SALE AT " + format_money(sim::industry_price(s, b));
+    } else if (s.owner == world_.player_company()) {
+        text += "YOURS";
+        if (world_.data().industries.get(s.type).kind == sim::IndustryKind::Processor) {
+            text += ", UPGRADE " + format_money(world_.construction_cost(sim::industry_upgrade_cost(s, b)));
+        }
+    } else {
+        text += "OWNED BY " + world_.company(*s.owner).name();
+    }
+    return text + ".  PROFIT " + format_money(sim::annual_profit(s)) + " A YEAR, RUNNING AT " +
+           std::to_string(s.utilisation_permille / 10) + "%";
 }
 
 std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
         {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTENANCE"}, {Tool::Train, "F6 TRAIN"},
-        {Tool::Finance, "F7 FINANCES"}, {Tool::Market, "F8 MARKET"},
+        {Tool::Finance, "F7 FINANCES"}, {Tool::Market, "F8 MARKET"}, {Tool::Industry, "F9 INDUSTRY"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -784,6 +883,13 @@ std::string Tools::hint() const {
         }
         return "CLICK STATIONS IN ORDER, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
+    }
+    case Tool::Industry: {
+        const auto types = buildable_types();
+        const std::string plant =
+            types.empty() ? std::string("NONE YET") : world_.data().industries.get(types[build_choice_ % types.size()]).name;
+        return "CLICK AN INDUSTRY TO BUY IT, YOURS TO UPGRADE, OPEN LAND TO BUILD.  [ ] " + plant + " " +
+               format_money(world_.construction_cost(sim::industry_build_cost(world_.data().balance.industries)));
     }
     case Tool::Market:
         return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
@@ -889,6 +995,8 @@ void Tools::draw_ui(const std::string& status) const {
         good = message_good_;
     } else if (tool_ == Tool::Inspect) {
         line2 = inspect_text();
+    } else if (tool_ == Tool::Industry) {
+        line2 = industry_text();
     }
     if (good) glColor3f(0.6f, 0.95f, 0.6f);
     else glColor3f(1.0f, 0.45f, 0.4f);

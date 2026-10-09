@@ -138,6 +138,16 @@
     "decay_ppm_per_sensitivity_day": 2300,
     "expired_permille": 100
   },
+  "industries": {
+    "build_cost_percent": 150,
+    "close_after_loss_years": 5,
+    "close_chance_percent": 20,
+    "floor_price": 300000,
+    "labour_percent": 20,
+    "overhead_per_level": 30000,
+    "profit_multiple": 10,
+    "upgrade_cost_percent": 50
+  },
   "map": {
     "cells_per_town": 2048,
     "max_height_m": 400,

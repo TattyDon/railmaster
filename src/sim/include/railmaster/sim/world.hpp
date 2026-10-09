@@ -187,6 +187,11 @@ private:
     CommandResult run(const Resign& cmd);
     CommandResult run(const FoundCompany& cmd);
     CommandResult run(const DeclareBankruptcy& cmd);
+    CommandResult run(const BuyIndustry& cmd);
+    CommandResult run(const BuildIndustry& cmd);
+    CommandResult run(const UpgradeIndustry& cmd);
+    // Post each owned industry's month to its owner's books.
+    void account_industries(std::int32_t months);
     // Why these founding terms are not allowed for player `who`, if they are not.
     std::optional<std::string> founding_problem(PlayerId who, const FoundCompany& terms) const;
     CompanyId found_for(PlayerId who, const FoundCompany& terms);

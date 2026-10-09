@@ -60,6 +60,8 @@ World::World(const WorldConfig& config, GameData data)
         populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
         // History, so the map starts with prices and cargo in place.
         economy_.settle(data_.cargo, data_.industries, date_.year(), data_.balance.economy.history_days);
+        // Industries start with a year of accounts, so they have a price.
+        economy_.close_accounts(data_.cargo, data_.industries, data_.balance.industries, 12);
     }
     railway_.set_balance(data_.balance);
     railway_.set_rules({.breakdowns = !config.sandbox});
@@ -234,6 +236,7 @@ void World::on_new_day() {
 void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
+    account_industries(1);
     for (Company& c : market_.companies) c.record_month();
     const std::int32_t checks = data_.balance.economic_states.checks_per_year;
     if (business_cycle_ && checks > 0 && (date_.month() - 1) % std::max(1, 12 / checks) == 0) {
@@ -252,6 +255,16 @@ void World::on_new_month() {
         }
     }
     run_rivals();
+}
+
+void World::account_industries(std::int32_t months) {
+    const auto accounts = economy_.close_accounts(data_.cargo, data_.industries, data_.balance.industries, months);
+    for (const Site& s : economy_.sites()) {
+        if (!s.owner || company(*s.owner).defunct()) continue;
+        Company& c = company(*s.owner);
+        c.post(Ledger::IndustryIncome, accounts[s.id].revenue);
+        c.post(Ledger::IndustryCosts, accounts[s.id].costs);
+    }
 }
 
 void World::note_player_company() {
@@ -330,6 +343,9 @@ void World::on_new_year() {
         if (!c.defunct()) c.close_year();
     }
     review_chairmen();
+    for (const SiteId s : economy_.close_year(data_.industries, data_.balance.industries, rng_)) {
+        news_.push_back("The " + data_.industries.get(economy_.sites()[s].type).name + " has closed after years of losses");
+    }
     for (Company& c : market_.companies) {
         c.retire_matured_bonds(date_.year());
         c.start_year(date_.year());

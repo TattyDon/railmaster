@@ -30,7 +30,8 @@ TycoonRegistry TycoonRegistry::from_json(std::string_view json_text) {
             t.dividend = entry.value("dividend", 30);
             t.speculation = entry.value("speculation", 30);
             t.takeovers = entry.value("takeovers", 30);
-            for (const std::int32_t v : {t.expansion, t.leverage, t.dividend, t.speculation, t.takeovers}) {
+            t.industry = entry.value("industry", 30);
+            for (const std::int32_t v : {t.expansion, t.leverage, t.dividend, t.speculation, t.takeovers, t.industry}) {
                 if (v < 0 || v > 100) throw std::runtime_error("tycoon data: personality out of 0..100 for '" + t.key + "'");
             }
             for (const Tycoon& other : reg.tycoons_) {
@@ -443,6 +444,40 @@ void pursue_control(World& w, const Rival& r, const Tycoon& ty) {
 
 } // namespace
 
+// Buy the best-paying industry its stations serve, and double the capacity
+// of a plant running near full that would pay for it within a year
+// (rt3-clone-spec §13.2 industryInvestment [I]).
+void invest_in_industry(World& w, const Rival& r, const Tycoon& ty, Company& co) {
+    if (ty.industry < 40) return;
+    const Balance& b = w.data().balance;
+    const Money reserve = Money::dollars(b.ai.cash_reserve) * 2;
+    std::optional<SiteId> best;
+    Money best_profit;
+    for (const Site& s : w.economy().sites()) {
+        const IndustryType& t = w.data().industries.get(s.type);
+        if (s.closed || !ownable(t.kind)) continue;
+        const Money profit = annual_profit(s);
+        if (s.owner == co.id() && t.kind == IndustryKind::Processor && profit > Money{} &&
+            s.utilisation_permille >= 900) {
+            const Money cost = w.construction_cost(industry_upgrade_cost(s, b.industries));
+            if (profit > cost && co.cash() > cost + reserve) {
+                w.execute(UpgradeIndustry{.site = s.id}, r.player);
+                return;
+            }
+        }
+        if (s.owner || profit <= Money{}) continue;
+        if (!station_near(w, s.cx, s.cy, b.stations.catchment_medium, co.id())) continue;
+        const Money price = industry_price(s, b.industries);
+        // A return of at least one part in (multiple + 2) a year, by temperament.
+        if (profit * (b.industries.profit_multiple + 2) < price || co.cash() < price + reserve) continue;
+        if (!best || profit > best_profit) {
+            best = s.id;
+            best_profit = profit;
+        }
+    }
+    if (best) w.execute(BuyIndustry{.site = *best}, r.player);
+}
+
 void run_rival(World& w, Rival& r, const Tycoon& ty) {
     // A tycoon whose company was merged away still trades.
     if (const auto chairs = w.investors().at(r.player).chairs) {
@@ -450,6 +485,7 @@ void run_rival(World& w, Rival& r, const Tycoon& ty) {
         manage_finance(w, r, ty, co);
         expand(w, r, ty, co);
         add_trains(w, r, co);
+        invest_in_industry(w, r, ty, co);
     }
     speculate(w, r, ty);
     pursue_control(w, r, ty);

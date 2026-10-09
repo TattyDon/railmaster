@@ -32,6 +32,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Economy, cargo_price_un
                                                 water_conductance_permille, coast_conductance_permille,
                                                 hill_conductance_permille, mountain_conductance_permille,
                                                 hill_grade_bp, mountain_grade_bp)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Industries, labour_percent, overhead_per_level,
+                                                profit_multiple, floor_price, build_cost_percent,
+                                                upgrade_cost_percent, close_after_loss_years, close_chance_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::EconomicStates, activity_percent, cost_percent,
                                                 prime_rate_bp, stock_percent, checks_per_year, stay_percent,
                                                 toward_normal_percent)
@@ -85,6 +88,7 @@ nlohmann::json to_tree(const Balance& b) {
     j["map"] = b.map;
     j["freight"] = b.freight;
     j["express"] = b.express;
+    j["industries"] = b.industries;
     j["economic_states"] = b.economic_states;
     j["ai"] = b.ai;
     j["finance"] = b.finance;
@@ -136,6 +140,7 @@ Balance Balance::from_json(std::string_view json_text) {
         read_section(j, "map", b.map);
         read_section(j, "freight", b.freight);
         read_section(j, "express", b.express);
+        read_section(j, "industries", b.industries);
         read_section(j, "economic_states", b.economic_states);
         read_section(j, "ai", b.ai);
         read_section(j, "finance", b.finance);

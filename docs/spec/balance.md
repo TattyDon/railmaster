@@ -50,6 +50,7 @@ Each key's name carries its unit:
 | `map` | towns and industries placed on a new map | m2 |
 | `freight` | timeliness curve, expiry | m2 |
 | `express` | passengers, mail and troops | m2 |
+| `industries` | owning industries: labour, overhead, prices, building, upgrading, closure | m2 |
 | `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |
 | `ai` | rivals' line planning, train buying and share trading | [rivals-model.md](rivals-model.md) |
 | `corporate` | takeover and merger votes, retry wait, investor sentiment | [rivals-model.md](rivals-model.md) |

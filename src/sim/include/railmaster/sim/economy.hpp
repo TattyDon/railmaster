@@ -3,6 +3,8 @@
 #include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/fixed_math.hpp"
+#include "railmaster/sim/money.hpp"
+#include "railmaster/sim/track.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -71,7 +73,29 @@ struct Site {
     std::int32_t level = 1;          // capacity multiplier; number of houses for houses
     std::vector<std::int32_t> buffer; // per input, milli-carloads held by a processor
     std::int64_t produced_milli = 0;  // lifetime output
+
+    // Ownership and accounts (rt3-clone-spec §6.2); houses are never owned.
+    std::optional<CompanyId> owner{};
+    bool closed = false;                    // shut down: produces and consumes nothing
+    std::vector<std::int64_t> made_milli{}; // per output, since the accounts were last closed
+    std::vector<std::int64_t> used_milli{}; // per input, likewise
+    std::vector<Money> monthly_profit{};    // the last 12 months, newest last
+    std::int32_t loss_years = 0;            // closed years in a row with a loss
+    std::int32_t utilisation_permille = 0;  // output against capacity, last period
+    Money owner_paid{};                     // what the owner has spent on it: the book value
 };
+
+// One period of an industry's accounts.
+struct IndustryAccounts {
+    Money revenue; // output at base prices
+    Money costs;   // inputs at base prices, labour and overhead
+    Money profit() const { return revenue - costs; }
+};
+
+// Can a company own this kind of industry (producers and processors), and
+// can one build it (processors only [C/D])?
+bool ownable(IndustryKind k);
+bool buildable(IndustryKind k);
 
 struct Town {
     std::string name;
@@ -117,6 +141,16 @@ public:
     void set_activity_percent(std::int32_t pct) { activity_percent_ = pct; }
     std::int32_t activity_percent() const { return activity_percent_; }
 
+    Site& site_mut(SiteId id) { return sites_.at(id); }
+    // Close the accounts of every industry for a period of `months`: work
+    // out what was made and used, record the profit, and start afresh.
+    // Returns each site's accounts for the period (indexed by SiteId).
+    std::vector<IndustryAccounts> close_accounts(const CargoRegistry& cargo, const IndustryRegistry& industries,
+                                                 const Balance::Industries& b, std::int32_t months);
+    // Year end: count loss years, and close unowned producers and processors
+    // that have lost money too long [I]. Returns the sites closed.
+    std::vector<SiteId> close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng);
+
     void step_day(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);
     // Run the price field to (near) steady state, e.g. when a map is created.
     void settle(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year, int days);
@@ -159,6 +193,16 @@ private:
     std::vector<Town> towns_;
     Balance::Economy balance_;
 };
+
+// A year's profit from the last 12 months (annualised if fewer are known).
+Money annual_profit(const Site& s);
+// What a company pays for an industry: a multiple of its yearly profit, or
+// the floor price if that is more [C].
+Money industry_price(const Site& s, const Balance::Industries& b);
+// Building one costs a share more than an existing one's floor price [C];
+// doubling a plant's capacity costs a share of building another as big [I].
+Money industry_build_cost(const Balance::Industries& b);
+Money industry_upgrade_cost(const Site& s, const Balance::Industries& b);
 
 // Place towns and industries on a new map. A stand-in for authored scenario
 // maps: towns, and a spread of industries of every type whose products

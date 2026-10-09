@@ -197,6 +197,54 @@ map. Only industries whose products exist in the start year are placed.
 Processors and consumers go near towns. The map then runs a year of
 history, so it opens with prices and cargo already in place.
 
+## Owning industries (rt3-clone-spec §6.1-6.2)
+
+Researched: a company can buy existing industries and build processing
+plants anywhere, including any available in the current era. Capacity can
+be upgraded. An owned industry's profit is output value less input cost and
+labour, and goes to the company's revenue and book value
+[overview-finance-scenarios.md §4.4; spec §6.2 [C]].
+
+Our design:
+
+- **Accounts.** Every producer and processing plant keeps monthly accounts,
+  owned or not:
+  - **revenue:** the carloads it made, at the cargo's base price
+  - **costs:** the carloads it used at theirs, plus labour at 20% of output
+    value [I], plus overhead of $30,000 a year per level of capacity [C: a
+    brewery's overhead]
+  - **why base prices [I]:** our price field pins a producer's own cell at
+    the producer price and a consumer's at the consumer price, so valuing at
+    the local price would make every processor lose money. Price-responsive
+    output (slowing when the local price is red) is still to do.
+  - **history:** the last 12 months are kept. A new map's year of history
+    gives every industry a year of accounts from the start.
+- **Buying [C]:** an industry nobody owns costs ten years' profit, or a
+  floor of $300,000 per level of capacity if that is more (the spec's farms
+  sell from $240,000 to $350,000). Producers and processing plants can be
+  bought; consumers and houses cannot.
+- **Building [C/D]:** processing plants only (producers "can only be
+  bought" [C]), on any open dry cell, once their output cargo exists. The
+  cost is 150% of an existing plant's floor price [C, low confidence], i.e.
+  $450,000, moved by the economic state like all construction.
+- **Upgrading [D/I]:** doubles a plant's capacity, and its overhead, for
+  half the cost of building another plant as big. An upgraded plant that
+  is under-supplied loses money [D].
+- **Books:** an owned industry's month posts to its owner as Industry
+  income and Industry costs. What was paid for it is carried as the
+  balance-sheet line Industries. Mergers move industries to the buyer [C].
+- **Closure [I]:** an unowned producer or plant with five loss years in a
+  row closes with a 20% chance each year after. Owned ones never close;
+  their owner carries the losses.
+- **Scale:** a producer here earns $450,000 to $2 million a year, so it
+  costs $4 to $20 million. With the spec's ~2.2 loads a year it would earn
+  about $15,000 and sell at the floor price, as RT3's farms do. Idle
+  processing plants sell at the floor. This is the production-rate
+  question again.
+- **AI:** tycoons with an industry trait of 40 or more buy profitable
+  industries their stations serve, and double plants running near capacity
+  that would repay it within a year.
+
 ## Provisional constants
 
 In the `economy`, `map`, `freight` and `express` sections of
