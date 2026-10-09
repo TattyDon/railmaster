@@ -93,6 +93,47 @@ Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std
     return m;
 }
 
+NodeId Railway::split_edge(EdgeId e, MapPoint at) {
+    EdgeId second = 0;
+    const NodeId mid = track_.split_edge(e, at, &second);
+    const std::int64_t len_first = track_.edge(e).length_mm;       // a -> mid
+    const std::int64_t len_second = track_.edge(second).length_mm; // mid -> b
+
+    for (Train& t : trains_) {
+        if (t.path.empty()) continue;
+        std::vector<PathStep> path;
+        path.reserve(t.path.size() + 1);
+        std::size_t new_step = t.step;
+        std::int64_t new_offset = t.offset_mm;
+        for (std::size_t i = 0; i < t.path.size(); ++i) {
+            const PathStep s = t.path[i];
+            const bool current = i == t.step;
+            if (current) new_step = path.size();
+            if (s.edge != e) {
+                path.push_back(s);
+                continue;
+            }
+            // Travelled forward the halves come a->mid then mid->b; backward, the reverse.
+            const PathStep first_half = s.forward ? PathStep{e, true} : PathStep{second, false};
+            const PathStep second_half = s.forward ? PathStep{second, true} : PathStep{e, false};
+            const std::int64_t first_len = s.forward ? len_first : len_second;
+            path.push_back(first_half);
+            path.push_back(second_half);
+            if (current && t.offset_mm >= first_len) {
+                new_step = path.size() - 1;
+                const std::int64_t second_len = s.forward ? len_second : len_first;
+                new_offset = std::min(t.offset_mm - first_len, second_len - 1);
+            } else if (current) {
+                new_offset = t.offset_mm;
+            }
+        }
+        t.path = std::move(path);
+        t.step = new_step;
+        t.offset_mm = new_offset;
+    }
+    return mid;
+}
+
 StationId Railway::add_station(std::string name, NodeId node, StationSize size) {
     if (node >= track_.nodes().size()) throw std::out_of_range("station node out of range");
     const auto id = static_cast<StationId>(stations_.size());

@@ -47,6 +47,13 @@ struct PathStep {
     bool operator==(const PathStep&) const = default;
 };
 
+// A point on a piece of track, e.g. where the player clicked.
+struct EdgePoint {
+    EdgeId edge = 0;
+    MapPoint pos;
+    std::int64_t along_mm = 0; // distance from edge.a
+};
+
 class TrackNetwork {
 public:
     NodeId add_node(MapPoint pos, std::int64_t z_mm);
@@ -60,6 +67,21 @@ public:
     const std::vector<TrackNode>& nodes() const { return nodes_; }
     const std::vector<TrackEdge>& edges() const { return edges_; }
     const std::vector<EdgeId>& edges_at(NodeId id) const { return adjacency_.at(id); }
+
+    // Rail height at a point along an edge, interpolated between its ends.
+    std::int64_t rail_z_at(EdgeId e, MapPoint at) const;
+
+    // Nearest node within `max_mm` of `p`, ties to the lowest id.
+    std::optional<NodeId> nearest_node(MapPoint p, std::int64_t max_mm) const;
+    // Nearest point on any piece of track within `max_mm` of `p`.
+    std::optional<EdgePoint> nearest_edge_point(MapPoint p, std::int64_t max_mm) const;
+
+    // Insert a node part-way along an edge, so new track can branch there.
+    // Edge `e` keeps its id and becomes a -> new node; a new edge (returned
+    // through `second`) runs new node -> b with the same properties. Throws if
+    // `at` is not strictly between the ends. Callers that hold paths over `e`
+    // must patch them (Railway::split_edge does this for trains).
+    NodeId split_edge(EdgeId e, MapPoint at, EdgeId* second = nullptr);
 
     // Upgrade or downgrade a piece. Throws for a wooden bridge.
     void set_double_track(EdgeId id, bool value);

@@ -15,8 +15,9 @@ grade-limited rail profiles, automatic bridges (wood/stone/steel) and
 tunnels, and cost quotes; stations; locomotive data and loader; train
 movement with grade and acceleration; looping routes; single-track meets by
 priority; service towers and maintenance facilities with water, sand and oil;
-breakdowns with a sandbox switch; age-based maintenance cost; and a client
-demo.
+breakdowns with a sandbox switch; age-based maintenance cost; a command
+layer through which every player action passes; and build tools in the
+client (track with preview, branching, stations, support buildings, trains).
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`.
 
 Still to do:
@@ -25,7 +26,7 @@ Still to do:
 - Crashes (needs research on what happens), and scheduled service stops in routes.
 - Per-stop consists, and automatic consist selection once cargo exists (M2).
 - Track rights: trains on another company's track always yield.
-- Track-building and train-management UI in the client.
+- Train management: edit routes, sell trains, per-stop consists.
 
 ## M2: The economy
 - The economy-node grid and the cargo price field, with off-rail drift of

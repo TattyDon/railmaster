@@ -17,7 +17,9 @@ Early development. Done so far:
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
 - water, sand and oil, service towers, maintenance facilities and breakdowns
-- a placeholder top-down client with a demo line of three towns
+- build tools: lay track (with live route and price preview), branch off
+  existing track, place stations and service buildings, buy trains
+- a placeholder top-down client with a demo network of three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
 
@@ -36,7 +38,25 @@ ctest --test-dir build --output-on-failure
 ./build/src/client/railmaster
 ```
 
-Client controls: arrows/WASD pan, mouse wheel zoom, Space pause, 1-3 speed.
+Run `./build/src/client/railmaster --empty` to start on a blank map instead
+of the demo network.
+
+### Playing
+
+| Key or action | Does |
+|---|---|
+| F1 / F2 / F3 / F4 / F5 / F6, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train |
+| Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
+| Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
+| D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
+| [ ] (Station) | Station size |
+| L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
+| Arrows, mouse wheel | Pan, zoom |
+| Space, 1-3 | Pause, game speed |
+
+The bottom bar always shows what the current tool does and its options. While
+laying track, the planned route is drawn coloured by structure (grey bridges,
+dark tunnels), with its price next to the cursor.
 
 ## Layout
 

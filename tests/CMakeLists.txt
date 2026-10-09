@@ -10,6 +10,7 @@ endif()
 add_executable(railmaster_tests
     main.cpp
     test_cargo.cpp
+    test_commands.cpp
     test_date.cpp
     test_locomotive.cpp
     test_money.cpp

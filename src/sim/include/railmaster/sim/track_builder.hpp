@@ -88,6 +88,14 @@ PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId fr
                       std::vector<MapPoint> points, std::optional<NodeId> end_node,
                       const TrackBuildOptions& options);
 
+// The same, starting from a position and rail height that need not be a
+// node yet, and ending at ground level unless `end_z` is given. Used to
+// preview a run before its end points exist. The plan's from/end_node are
+// left unset; build such a plan only via plan_track.
+PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::int64_t start_z,
+                              std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
+                              const TrackBuildOptions& options);
+
 // Add a plan's nodes and pieces to the network. Returns the end node.
 NodeId build_track(TrackNetwork& net, const TrackPlan& plan);
 

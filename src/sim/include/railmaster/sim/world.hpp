@@ -1,6 +1,7 @@
 #pragma once
 
 #include "railmaster/sim/cargo.hpp"
+#include "railmaster/sim/commands.hpp"
 #include "railmaster/sim/date.hpp"
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/railway.hpp"
@@ -27,8 +28,8 @@ struct GameData {
 };
 
 // Root of all simulation state. Advancing it is a pure function of its
-// current state; the client never mutates it except by submitting commands
-// (to be added), which keeps replays and lockstep multiplayer possible.
+// current state; the client changes it only by submitting commands (see
+// commands.hpp), which keeps replays and lockstep multiplayer possible.
 class World {
 public:
     // Fixed simulation steps per game day. Provisional; the real value
@@ -48,6 +49,14 @@ public:
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
+    // Apply a player command: all of it, or none of it with a reason.
+    CommandResult execute(const Command& cmd);
+    // What a BuildTrack would build and cost, without building it.
+    PlanResult preview(const BuildTrack& cmd) const;
+    // Everything spent through commands so far. A stand-in until companies
+    // and ledgers exist (M3).
+    Money total_spent() const { return spent_; }
+
 private:
     void on_new_day();
     void on_new_month();
@@ -60,6 +69,13 @@ private:
     Terrain terrain_;
     GameData data_;
     Railway railway_;
+    Money spent_;
+
+    CommandResult run(const BuildTrack& cmd);
+    CommandResult run(const BuildStation& cmd);
+    CommandResult run(const BuildServiceBuilding& cmd);
+    CommandResult run(const BuyTrain& cmd);
+    NodeId resolve_on_track(const TrackEnd& at);
 };
 
 } // namespace railmaster::sim

@@ -106,20 +106,33 @@ std::optional<MapPoint> continuing_control_point(const TrackNetwork& net, NodeId
 
 PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId from, std::vector<MapPoint> points,
                       std::optional<NodeId> end_node, const TrackBuildOptions& options) {
+    if (end_node && !points.empty() && net.node(*end_node).pos != points.back()) {
+        return {std::nullopt, "run does not finish at the end node"};
+    }
+    const std::optional<std::int64_t> end_z =
+        end_node ? std::optional<std::int64_t>{net.node(*end_node).z_mm} : std::nullopt;
+    PlanResult r = plan_track_between(terrain, net.node(from).pos, net.node(from).z_mm, std::move(points), end_z,
+                                      options);
+    if (r.plan) {
+        r.plan->from = from;
+        r.plan->end_node = end_node;
+    }
+    return r;
+}
+
+PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::int64_t start_z,
+                              std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
+                              const TrackBuildOptions& options) {
     PlanResult result;
     if (points.empty()) {
         result.error = "no track to lay";
         return result;
     }
-    if (end_node && net.node(*end_node).pos != points.back()) {
-        result.error = "run does not finish at the end node";
-        return result;
-    }
 
-    // Sample i = 0 is the start node; samples 1..n are the run's points.
+    // Sample i = 0 is the start; samples 1..n are the run's points.
     const std::size_t n = points.size();
     std::vector<MapPoint> pos(n + 1);
-    pos[0] = net.node(from).pos;
+    pos[0] = start_pos;
     std::copy(points.begin(), points.end(), pos.begin() + 1);
 
     std::vector<std::int64_t> run(n + 1, 0), ground(n + 1), z(n + 1);
@@ -135,7 +148,11 @@ PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId fr
         ground[i] = terrain.height_at_mm(pos[i]);
         water[i] = terrain.ground_at_mm(pos[i]) == GroundType::Water;
     }
-    if (!end_node && water[n]) {
+    if (water[0] && start_z <= ground[0]) {
+        result.error = "track cannot start in water";
+        return result;
+    }
+    if (!end_z && water[n]) {
         result.error = "track cannot end in water";
         return result;
     }
@@ -168,8 +185,8 @@ PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId fr
 
     // The ends are fixed to the existing node heights; re-clamp inwards from
     // each end so the pieces next to them stay within the limit where possible.
-    z[0] = net.node(from).z_mm;
-    z[n] = end_node ? net.node(*end_node).z_mm : ground[n];
+    z[0] = start_z;
+    z[n] = end_z ? *end_z : ground[n];
     for (std::size_t i = 1; i < n; ++i) z[i] = std::clamp(z[i], z[i - 1] - step(i), z[i - 1] + step(i));
     for (std::size_t i = n - 1; i >= 1; --i) {
         z[i] = std::clamp(z[i], z[i + 1] - step(i + 1), z[i + 1] + step(i + 1));
@@ -177,8 +194,6 @@ PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId fr
     }
 
     TrackPlan plan;
-    plan.from = from;
-    plan.end_node = end_node;
     plan.double_track = options.double_track;
     plan.points = std::move(points);
     plan.rail_z_mm.assign(z.begin() + 1, z.end());

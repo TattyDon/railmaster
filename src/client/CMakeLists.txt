@@ -1,7 +1,12 @@
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
-add_executable(railmaster main.cpp)
+add_executable(railmaster
+    font.cpp
+    main.cpp
+    render.cpp
+    tools.cpp
+)
 
 target_link_libraries(railmaster PRIVATE
     railmaster::sim

@@ -30,6 +30,70 @@ EdgeId TrackNetwork::add_edge(NodeId a, NodeId b, bool double_track, TrackKind k
     return id;
 }
 
+std::optional<NodeId> TrackNetwork::nearest_node(MapPoint p, std::int64_t max_mm) const {
+    std::optional<NodeId> best;
+    std::int64_t best_d = max_mm + 1;
+    for (const TrackNode& n : nodes_) {
+        const std::int64_t d = distance_mm(p, n.pos);
+        if (d < best_d) { // strict, so ties keep the lowest id
+            best = n.id;
+            best_d = d;
+        }
+    }
+    return best;
+}
+
+std::optional<EdgePoint> TrackNetwork::nearest_edge_point(MapPoint p, std::int64_t max_mm) const {
+    std::optional<EdgePoint> best;
+    std::int64_t best_d = max_mm + 1;
+    for (const TrackEdge& e : edges_) {
+        const MapPoint a = node(e.a).pos, b = node(e.b).pos;
+        const std::int64_t dx = b.x_mm - a.x_mm, dy = b.y_mm - a.y_mm;
+        const std::int64_t len = e.length_mm;
+        // Project p onto the segment as a distance along it, clamped to its
+        // ends. Working in distance keeps every product within 64 bits.
+        const std::int64_t dot = (p.x_mm - a.x_mm) * dx + (p.y_mm - a.y_mm) * dy;
+        const std::int64_t along = std::clamp<std::int64_t>(dot / len, 0, len);
+        const MapPoint q{a.x_mm + dx * along / len, a.y_mm + dy * along / len};
+        const std::int64_t d = distance_mm(p, q);
+        if (d < best_d) {
+            best_d = d;
+            best = EdgePoint{e.id, q, along};
+        }
+    }
+    return best;
+}
+
+std::int64_t TrackNetwork::rail_z_at(EdgeId id, MapPoint at) const {
+    const TrackEdge& e = edge(id);
+    const TrackNode& na = node(e.a);
+    const TrackNode& nb = node(e.b);
+    const std::int64_t da = distance_mm(na.pos, at);
+    const std::int64_t db = distance_mm(at, nb.pos);
+    if (da + db == 0) return na.z_mm;
+    return na.z_mm + (nb.z_mm - na.z_mm) * da / (da + db);
+}
+
+NodeId TrackNetwork::split_edge(EdgeId id, MapPoint at, EdgeId* second) {
+    const TrackEdge old = edge(id);
+    const TrackNode& na = node(old.a);
+    const TrackNode& nb = node(old.b);
+    const std::int64_t da = distance_mm(na.pos, at);
+    const std::int64_t db = distance_mm(at, nb.pos);
+    if (da <= 0 || db <= 0) throw std::invalid_argument("split point must lie strictly inside the edge");
+    const NodeId mid = add_node(at, rail_z_at(id, at));
+
+    TrackEdge& first = edges_[id];
+    first.b = mid;
+    first.length_mm = da;
+    const auto new_id = static_cast<EdgeId>(edges_.size());
+    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge});
+    std::replace(adjacency_[old.b].begin(), adjacency_[old.b].end(), id, new_id);
+    adjacency_[mid] = {id, new_id};
+    if (second) *second = new_id;
+    return mid;
+}
+
 void TrackNetwork::set_double_track(EdgeId id, bool value) {
     TrackEdge& e = edges_.at(id);
     if (value && e.bridge == BridgeType::Wood) throw std::invalid_argument("wooden bridges are single track");

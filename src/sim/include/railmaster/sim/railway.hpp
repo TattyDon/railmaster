@@ -141,6 +141,10 @@ public:
     void set_rules(OperatingRules rules) { rules_ = rules; }
     const OperatingRules& rules() const { return rules_; }
 
+    // Split a piece of track (see TrackNetwork::split_edge) and patch the
+    // paths of trains using it, so they carry on undisturbed.
+    NodeId split_edge(EdgeId e, MapPoint at);
+
     StationId add_station(std::string name, NodeId node, StationSize size);
     const Station& station(StationId id) const { return stations_.at(id); }
     const std::vector<Station>& stations() const { return stations_; }
