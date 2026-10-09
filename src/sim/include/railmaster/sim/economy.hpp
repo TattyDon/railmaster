@@ -88,6 +88,9 @@ struct Town {
 //      pin it low, and everywhere else it is a screened average of its
 //      neighbours, so a consumer's pull fades with distance;
 //   4. stock drifts a little toward the highest-priced neighbouring cell.
+// Terrain shapes steps 3 and 4 (set_terrain): each cell has a conductance,
+// high on water and coasts and low in mountains. Price signals reach further,
+// and middlemen move freight faster and more cheaply, where it is high.
 // Prices are whole dollars per carload. Express cargo (passengers, mail,
 // troops) does not use the field; it travels to destinations (later slice).
 class Economy {
@@ -104,6 +107,15 @@ public:
     void add_town(Town t) { towns_.push_back(std::move(t)); }
     Town& town_mut(std::size_t i) { return towns_.at(i); }
     const std::vector<Town>& towns() const { return towns_; }
+
+    // Derive each cell's conductance from the terrain (same grid size).
+    // Until called, every cell is flat land.
+    void set_terrain(const Terrain& terrain);
+    // In thousandths of flat land.
+    std::int32_t conductance(std::int32_t cx, std::int32_t cy) const { return conductance_[cell(cx, cy)]; }
+    // Production and demand everywhere, in percent (the economic state).
+    void set_activity_percent(std::int32_t pct) { activity_percent_ = pct; }
+    std::int32_t activity_percent() const { return activity_percent_; }
 
     void step_day(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);
     // Run the price field to (near) steady state, e.g. when a map is created.
@@ -139,6 +151,10 @@ private:
     std::vector<std::vector<Anchor>> anchors_;     // [cargo], rebuilt daily from sites
     std::vector<bool> active_;
     std::vector<std::int32_t> scratch_;
+    std::vector<std::int32_t> conductance_; // per cell, permille
+    std::vector<std::int32_t> east_w_;      // coupling to the cell to the east, permille; 0 at the edge
+    std::vector<std::int32_t> south_w_;     // coupling to the cell to the south
+    std::int32_t activity_percent_ = 100;
     std::vector<Site> sites_;
     std::vector<Town> towns_;
     Balance::Economy balance_;

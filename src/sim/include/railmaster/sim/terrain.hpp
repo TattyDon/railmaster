@@ -54,6 +54,10 @@ public:
     std::int64_t width_mm() const { return static_cast<std::int64_t>(width_) * tile_size_m_ * 1000; }
     std::int64_t height_mm() const { return static_cast<std::int64_t>(height_) * tile_size_m_ * 1000; }
 
+    // Bumped by every change, so things derived from the terrain know when
+    // to recompute.
+    std::uint64_t revision() const { return revision_; }
+
     // Fill with gently rolling procedural hills. A stand-in until the real
     // map generator and scenario loader exist.
     void generate_rolling_hills(Random& rng, std::int32_t max_height_m);
@@ -67,6 +71,7 @@ private:
     std::int32_t tile_size_m_;
     std::vector<std::int32_t> heights_;
     std::vector<GroundType> ground_;
+    std::uint64_t revision_ = 0;
 };
 
 } // namespace railmaster::sim

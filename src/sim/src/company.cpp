@@ -44,7 +44,8 @@ Money YearAccounts::expenses() const {
 }
 
 Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance)
-    : name_(std::move(name)), finance_(balance.finance), stock_(balance.stock), cash_(starting_cash),
+    : name_(std::move(name)), finance_(balance.finance), stock_(balance.stock),
+      states_(balance.economic_states), cash_(starting_cash),
       shares_(balance.stock.founding_shares) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
@@ -137,7 +138,7 @@ CreditRating Company::credit_rating() const {
 }
 
 std::int32_t Company::bond_rate_bp() const {
-    return finance_.bond_rate_bp[static_cast<std::size_t>(credit_rating())];
+    return std::max(0, finance_.bond_rate_bp[static_cast<std::size_t>(credit_rating())] + prime_offset_bp());
 }
 
 void Company::issue_bond(std::int32_t year) {

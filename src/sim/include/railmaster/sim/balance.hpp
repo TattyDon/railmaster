@@ -93,6 +93,16 @@ struct Balance {
         std::int32_t input_buffer_days = 30;
         std::int32_t boost_percent = 50;
         std::int32_t history_days = 365; // simulated before a new map opens
+        // Middlemen and price coupling by terrain (rt3-clone-spec §5.3): how
+        // easily freight and price signals cross a cell, in thousandths of
+        // flat land. A cell is hilly or mountainous by its steepest corner-
+        // to-corner grade; land next to water counts as coast.
+        std::int32_t water_conductance_permille = 2000;
+        std::int32_t coast_conductance_permille = 1500;
+        std::int32_t hill_conductance_permille = 750;
+        std::int32_t mountain_conductance_permille = 500;
+        std::int32_t hill_grade_bp = 400;      // 40 m of relief across a 1 km cell
+        std::int32_t mountain_grade_bp = 700;
     } economy;
 
     struct MapGeneration {
@@ -118,6 +128,18 @@ struct Balance {
         std::int32_t mail_cap_months = 2;
     } express;
 
+    // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,
+    // Recession, Normal, Prosperity, Boom.
+    struct EconomicStates {
+        std::array<std::int32_t, 5> activity_percent{75, 85, 100, 120, 125}; // production and demand
+        std::array<std::int32_t, 5> cost_percent{85, 92, 100, 108, 115};     // construction, fuel, labour
+        std::array<std::int32_t, 5> prime_rate_bp{800, 700, 600, 500, 400};
+        std::array<std::int32_t, 5> stock_percent{80, 90, 100, 112, 125}; // share price fundamentals
+        std::int32_t checks_per_year = 2;
+        std::int32_t stay_percent = 50;
+        std::int32_t toward_normal_percent = 30; // the rest moves one step away
+    } economic_states;
+
     struct Finance {
         std::int64_t starting_cash = 6'000'000;
         std::int64_t fuel_per_km_steam = 20;
@@ -128,7 +150,8 @@ struct Balance {
         std::int32_t building_upkeep_per_mille_month = 5;
         std::int32_t easy_cost_percent = 85;
         std::array<std::int32_t, 7> rating_leverage_limits{5, 15, 25, 35, 45, 55, 70}; // AAA..C, % debt/assets
-        std::array<std::int32_t, 8> bond_rate_bp{400, 450, 500, 600, 700, 800, 1000, 1200}; // AAA..D
+        // AAA..D at the Normal prime rate; bonds pay this plus (prime - Normal prime).
+        std::array<std::int32_t, 8> bond_rate_bp{400, 450, 500, 600, 700, 800, 1000, 1200};
         std::int32_t bonds_per_notch_when_proven = 4;
         std::int64_t bond_face_value = 500'000;
         std::int32_t bond_underwriting_percent = 2;
@@ -143,7 +166,7 @@ struct Balance {
         std::int64_t starting_personal_cash = 500'000;
         std::int64_t salary_per_year = 50'000;
         std::int32_t margin_percent = 50;
-        std::int32_t margin_interest_bp = 1000;
+        std::int32_t margin_interest_bp = 1000; // at the Normal prime rate; moves with it
         std::int32_t impact_per_share_of_company = 2;
         std::int32_t issue_percent = 10;
         std::int32_t book_weight_percent = 60;

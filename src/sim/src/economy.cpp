@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -131,6 +132,47 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
         price_[c.id].assign(cells, percent_of(base_dollars(c), balance_.neutral_price_percent));
     }
     scratch_.resize(cells);
+    conductance_.assign(cells, 1000);
+    east_w_.assign(cells, 1000);
+    south_w_.assign(cells, 1000);
+    for (std::int32_t y = 0; y < height_; ++y) east_w_[cell(width_ - 1, y)] = 0;
+    for (std::int32_t x = 0; x < width_; ++x) south_w_[cell(x, height_ - 1)] = 0;
+}
+
+void Economy::set_terrain(const Terrain& terrain) {
+    if (terrain.width() != width_ || terrain.height() != height_) {
+        throw std::invalid_argument("terrain and economy grids differ in size");
+    }
+    const auto water = [&](std::int32_t x, std::int32_t y) {
+        return x >= 0 && y >= 0 && x < width_ && y < height_ && terrain.ground(x, y) == GroundType::Water;
+    };
+    for (std::int32_t y = 0; y < height_; ++y) {
+        for (std::int32_t x = 0; x < width_; ++x) {
+            std::int32_t c = 1000;
+            if (water(x, y)) {
+                c = balance_.water_conductance_permille;
+            } else {
+                const std::int32_t hs[] = {terrain.corner_height(x, y), terrain.corner_height(x + 1, y),
+                                           terrain.corner_height(x, y + 1), terrain.corner_height(x + 1, y + 1)};
+                const std::int64_t relief = *std::max_element(std::begin(hs), std::end(hs)) -
+                                            *std::min_element(std::begin(hs), std::end(hs));
+                const std::int64_t grade_bp = relief * 10000 / terrain.tile_size_m();
+                if (grade_bp >= balance_.mountain_grade_bp) c = balance_.mountain_conductance_permille;
+                else if (grade_bp >= balance_.hill_grade_bp) c = balance_.hill_conductance_permille;
+                else if (water(x - 1, y) || water(x + 1, y) || water(x, y - 1) || water(x, y + 1))
+                    c = balance_.coast_conductance_permille;
+            }
+            conductance_[cell(x, y)] = std::max(1, c);
+        }
+    }
+    // An edge conducts as the mean of the cells it joins.
+    for (std::int32_t y = 0; y < height_; ++y) {
+        for (std::int32_t x = 0; x < width_; ++x) {
+            const std::size_t i = cell(x, y);
+            east_w_[i] = x + 1 < width_ ? (conductance_[i] + conductance_[i + 1]) / 2 : 0;
+            south_w_[i] = y + 1 < height_ ? (conductance_[i] + conductance_[cell(x, y + 1)]) / 2 : 0;
+        }
+    }
 }
 
 std::size_t Economy::cell(std::int32_t cx, std::int32_t cy) const {
@@ -185,7 +227,8 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
     for (Site& s : sites_) {
         const IndustryType& t = industries.get(s.type);
         const std::size_t at = cell(s.cx, s.cy);
-        const auto daily = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli / 365);
+        const auto daily = static_cast<std::int32_t>(std::int64_t{t.rate_per_year} * s.level * kMilli *
+                                                     activity_percent_ / (365 * 100));
 
         switch (t.kind) {
         case IndustryKind::Raw: {
@@ -282,12 +325,23 @@ void Economy::relax(const CargoRegistry& cargo) {
         for (std::size_t y = 0; y < h; ++y) {
             for (std::size_t x = 0; x < w; ++x) {
                 const std::size_t i = y * w + x;
+                // Neighbours weighted by how well the edge to them conducts.
                 // Edges reflect: a missing neighbour counts as this cell.
-                const std::int64_t sum = std::int64_t{x > 0 ? p[i - 1] : p[i]} + (x + 1 < w ? p[i + 1] : p[i]) +
-                                         (y > 0 ? p[i - w] : p[i]) + (y + 1 < h ? p[i + w] : p[i]);
-                // (mean of neighbours + lambda * neutral) / (1 + lambda), in integers.
-                const std::int64_t screen = balance_.screening_per_10000;
-                scratch_[i] = static_cast<std::int32_t>((sum * 10000 + 4 * screen * neutral) / (4 * (10000 + screen)));
+                std::int64_t weight = 0, sum = 0;
+                const auto add = [&](std::int64_t wt, std::int32_t price) {
+                    weight += wt;
+                    sum += wt * price;
+                };
+                const std::int64_t self = conductance_[i];
+                if (x > 0) add(east_w_[i - 1], p[i - 1]); else add(self, p[i]);
+                if (x + 1 < w) add(east_w_[i], p[i + 1]); else add(self, p[i]);
+                if (y > 0) add(south_w_[i - w], p[i - w]); else add(self, p[i]);
+                if (y + 1 < h) add(south_w_[i], p[i + w]); else add(self, p[i]);
+                // (weighted mean of neighbours + lambda * neutral) / (1 + lambda),
+                // with lambda scaled to four flat edges; on flat land this is
+                // the plain screened average.
+                const std::int64_t screen = std::int64_t{4000} * balance_.screening_per_10000;
+                scratch_[i] = static_cast<std::int32_t>((sum * 10000 + screen * neutral) / (weight * 10000 + screen));
             }
         }
         for (const Anchor& a : anchors_[c.id]) scratch_[a.cell] = a.price;
@@ -308,21 +362,28 @@ void Economy::drift(const CargoRegistry& cargo) {
             for (std::size_t x = 0; x < w; ++x) {
                 const std::size_t i = y * w + x;
                 if (s[i] <= 0) continue;
-                // The best neighbour, checked in a fixed order so ties are deterministic.
+                // The neighbour that pays best after the middleman's cost,
+                // which is cheaper where the edge conducts better. Checked in
+                // a fixed order so ties are deterministic.
                 std::size_t best = i;
-                std::int32_t best_price = p[i] + threshold;
-                const auto consider = [&](std::size_t j) {
-                    if (p[j] > best_price) {
+                std::int64_t best_net = p[i];
+                std::int64_t best_w = 0;
+                const auto consider = [&](std::size_t j, std::int64_t wt) {
+                    const std::int64_t net = p[j] - std::int64_t{threshold} * 1000 / std::max<std::int64_t>(1, wt);
+                    if (net > best_net) {
                         best = j;
-                        best_price = p[j];
+                        best_net = net;
+                        best_w = wt;
                     }
                 };
-                if (y > 0) consider(i - w);
-                if (y + 1 < h) consider(i + w);
-                if (x > 0) consider(i - 1);
-                if (x + 1 < w) consider(i + 1);
+                if (y > 0) consider(i - w, south_w_[i - w]);
+                if (y + 1 < h) consider(i + w, south_w_[i]);
+                if (x > 0) consider(i - 1, east_w_[i - 1]);
+                if (x + 1 < w) consider(i + 1, east_w_[i]);
                 if (best == i) continue;
-                const std::int32_t move = std::max(1, s[i] * balance_.drift_percent_per_day / 100);
+                // And faster: the share moved scales with conductance.
+                const auto move = static_cast<std::int32_t>(std::clamp<std::int64_t>(
+                    std::int64_t{s[i]} * balance_.drift_percent_per_day * best_w / (100 * 1000), 1, s[i]));
                 scratch_[i] -= move;
                 scratch_[best] += move;
             }

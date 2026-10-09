@@ -28,7 +28,13 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Economy, cargo_price_un
                                                 supply_price_percent, neutral_price_percent, screening_per_10000,
                                                 drift_percent_per_day, transport_cost_percent, saturation_days,
                                                 industry_saturation_days, spoilage_per_mille_per_sensitivity,
-                                                max_stock_milli, input_buffer_days, boost_percent, history_days)
+                                                max_stock_milli, input_buffer_days, boost_percent, history_days,
+                                                water_conductance_permille, coast_conductance_permille,
+                                                hill_conductance_permille, mountain_conductance_permille,
+                                                hill_grade_bp, mountain_grade_bp)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::EconomicStates, activity_percent, cost_percent,
+                                                prime_rate_bp, stock_percent, checks_per_year, stay_percent,
+                                                toward_normal_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, cells_per_town, town_min_houses,
                                                 town_max_houses, town_spacing_cells, raw_per_type,
                                                 processors_per_type, sinks_per_type, max_height_m)
@@ -62,6 +68,7 @@ nlohmann::json to_tree(const Balance& b) {
     j["map"] = b.map;
     j["freight"] = b.freight;
     j["express"] = b.express;
+    j["economic_states"] = b.economic_states;
     j["finance"] = b.finance;
     j["stock"] = b.stock;
     return j;
@@ -110,6 +117,7 @@ Balance Balance::from_json(std::string_view json_text) {
         read_section(j, "map", b.map);
         read_section(j, "freight", b.freight);
         read_section(j, "express", b.express);
+        read_section(j, "economic_states", b.economic_states);
         read_section(j, "finance", b.finance);
         read_section(j, "stock", b.stock);
     } catch (const nlohmann::json::exception& e) {

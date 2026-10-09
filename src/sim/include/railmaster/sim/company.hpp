@@ -1,6 +1,7 @@
 #pragma once
 
 #include "railmaster/sim/balance.hpp"
+#include "railmaster/sim/economic_state.hpp"
 #include "railmaster/sim/money.hpp"
 
 #include <array>
@@ -65,6 +66,16 @@ public:
     const std::string& name() const { return name_; }
     const Balance::Finance& finance_balance() const { return finance_; }
     const Balance::Stock& stock_balance() const { return stock_; }
+
+    // The business cycle, which sets the prime rate and moves share prices.
+    EconomicState economic_state() const { return state_; }
+    void set_economic_state(EconomicState s) { state_ = s; }
+    std::int32_t prime_rate_bp() const { return states_.prime_rate_bp[index_of(state_)]; }
+    // How far the prime rate is above its Normal level (negative in good times).
+    std::int32_t prime_offset_bp() const {
+        return prime_rate_bp() - states_.prime_rate_bp[index_of(EconomicState::Normal)];
+    }
+    std::int32_t stock_index_percent() const { return states_.stock_percent[index_of(state_)]; }
     Money cash() const { return cash_; }
 
     // Record money coming in or going out on a ledger line this year.
@@ -86,6 +97,7 @@ public:
     // profitable year is held to BB at best and loses a notch per bond; a
     // proven one loses a notch per four bonds. Bonds need B or better.
     CreditRating credit_rating() const;
+    // For a new bond: the rating's rate, moved with the prime rate.
     std::int32_t bond_rate_bp() const;
     const std::vector<Bond>& bonds() const { return bonds_; }
     bool can_issue_bond() const { return credit_rating() <= CreditRating::B && bonds_.size() < static_cast<std::size_t>(finance_.max_bonds); }
@@ -132,6 +144,8 @@ private:
     std::string name_;
     Balance::Finance finance_;
     Balance::Stock stock_;
+    Balance::EconomicStates states_;
+    EconomicState state_ = EconomicState::Normal;
     Money cash_;
     Money track_, buildings_, rolling_stock_;
     std::vector<Bond> bonds_;

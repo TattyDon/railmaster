@@ -103,7 +103,8 @@ Money target_share_price(const Company& c) {
     Money target = c.book_value_per_share().scaled(b.book_weight_percent, 100);
     if (const auto profit = c.trailing_profit()) target += profit->scaled(b.earnings_multiple, n);
     target += c.dividend_per_share() * b.dividend_multiple;
-    return floor_price(c, target);
+    // Good times lift every share price and bad times depress it [C].
+    return floor_price(c, target.scaled(c.stock_index_percent(), 100));
 }
 
 std::int64_t monthly_market(Investor& inv, Company& c) {
@@ -112,7 +113,7 @@ std::int64_t monthly_market(Investor& inv, Company& c) {
     c.set_share_price(floor_price(c, c.share_price() + (target - c.share_price()).scaled(b.price_adjust_percent, 100)));
 
     inv.cash += Money::dollars(b.salary_per_year).scaled(1, 12);
-    if (inv.cash < Money{}) inv.cash -= (-inv.cash).scaled(b.margin_interest_bp, 10000 * 12);
+    if (inv.cash < Money{}) inv.cash -= (-inv.cash).scaled(std::max(0, b.margin_interest_bp + c.prime_offset_bp()), 10000 * 12);
 
     std::int64_t sold = 0;
     const std::int64_t lot = block_size(c);

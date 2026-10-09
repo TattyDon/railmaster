@@ -17,8 +17,12 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 - Each extra bond lowers the credit rating.
 - New companies start with a marginal rating: higher interest and room for
   only one or two bonds.
-- The interest rate depends on the rating; the economy's effect comes with
-  economic cycles.
+- The interest rate depends on the rating and on the economy: a new bond
+  pays its rating's rate plus how far the prime rate is above its Normal 6%
+  (−2 points in a boom, +2 in a depression). Margin debt moves the same way
+  (10% at Normal, i.e. prime + 4% as the spec suggests). Share price targets
+  are scaled by the state, 80% to 125%. See m2-economy-model.md for the
+  economic states.
 - Sandbox mode switches financial limits off.
 - Locomotive maintenance rises with age, to about 3× by year 20, and with
   low oil (already modelled in M1).
@@ -62,7 +66,7 @@ In the `finance` and `stock` sections of
 | Fuel per km | Steam $20, diesel $15, electric $10, plus $2 per car |
 | Track and building upkeep | 0.5% of cost a month |
 | Rating by debt ÷ assets | AAA < 5%, AA < 15%, A < 25%, BBB < 35%, BB < 45%, B < 55%, C < 70%, else D |
-| Interest by rating | AAA 4%, AA 4.5%, A 5%, BBB 6%, BB 7%, B 8%, C 10%, D 12% |
+| Interest by rating | AAA 4%, AA 4.5%, A 5%, BBB 6%, BB 7%, B 8%, C 10%, D 12%, at the Normal prime rate |
 
 ## Personal account, shares and the stock market
 

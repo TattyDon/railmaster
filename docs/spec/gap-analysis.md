@@ -27,6 +27,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §6.3 [C] | Refinery: oil → diesel; rubber plantation (1900) | missing (rubber had no source) | added |
 | §6.3 [C] | Houses take milk only until ~1890 | always | until 1890 |
 | §2 [D] | Every game starts paused | started running | starts paused |
+| §5.1, §5.3 [D] | Middlemen cheap along water and coasts, slower over mountains; prices flat along coasts, steep across ranges | uniform | per-cell conductance from terrain weights price coupling and drift cost and speed [I numbers] |
+| §5.5 [C] | Five economic states, checked twice a year; production, costs, prime rate, share prices | none | as the spec's table; transitions as its [I] matrix |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -62,9 +64,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 2. **Price field (§5.3 [I]).** The spec proposes an equilibrium price from
    the demand/supply ratio, relaxing over 6–12 months, with middleman flow
    weighted by terrain conductance. Ours is a screened-Poisson field with
-   uniform drift. The spec's [D] requirement we don't yet meet is
-   **terrain**: middlemen are cheap along rivers and coasts and slow over
-   mountains.
+   drift, now weighted by terrain conductance (which meets the spec's [D]
+   behaviour). The equilibrium-price formulation itself is unchanged.
 3. **Stock price (§12.3 [I]).** The spec weights book value 0.8, a 3-year
    EPS trend × P/E by economy, a dividend term that grows with an unbroken
    record, revenue, ⅛ monthly smoothing, and trade pressure that decays.
@@ -73,7 +74,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 4. **Credit rating (§12.4 [I]).** The spec uses ten grades, A+ to D, and a
    score from assets/debt, interest cover, profit trend and bonds, with
    rate = prime + spread. Ours: eight grades from debt/assets with
-   bond notches and a fixed rate table. Prime rates arrive with economic states.
+   bond notches and a rate table that moves with the prime rate.
 5. **Maintenance and upkeep (§9.4, §11.2 [I]).** The spec proposes
    maintenance × (1 + 4% per year of age) and track upkeep at 2% of cost a
    year. Ours: linear to 3× at 20 years (from a community page) and 6% a
@@ -104,8 +105,8 @@ Grouped by the spec's own build order (§17).
 - Breakdown repair cost and duration (§9.4 [I]).
 
 **Economy**
-- Terrain conductance for middlemen (§5.3 [D behaviour]).
-- Economic states (§5.5 [C]) affecting production, costs, prime rate and stocks.
+- Rivers in the map generator, and closed borders (conductance 0) (§5.3).
+- Automobile demand dropping sharply in recessions; the optional cost index (§5.5).
 - Industry ownership: buying at ~10× profit, building, upgrading to double
   capacity, closures (§6.1–6.2 [D/C]).
 - Town growth and star ratings (§3.2 [D], §6.4 [I]).

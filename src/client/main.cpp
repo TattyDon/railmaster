@@ -14,6 +14,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -218,6 +219,13 @@ int main(int argc, char* argv[]) {
             world.tick();
             tick_accumulator -= 1.0;
         }
+        // News ticker stand-in: tell the player when the economy turns.
+        if (const auto turned = world.take_economy_news()) {
+            std::string name = sim::economic_state_name(*turned);
+            for (char& ch : name) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
+            tools.show("THE ECONOMY IS NOW IN " + name, better);
+        }
 
         cam.apply();
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
@@ -230,7 +238,9 @@ int main(int argc, char* argv[]) {
 
         cam.apply_screen();
         client::draw_town_names(world.economy(), cam);
-        const std::string status = world.date().month_year_label() +
+        std::string economy = sim::economic_state_name(world.economic_state());
+        for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        const std::string status = world.date().month_year_label() + "  " + economy +
                                    (speed == 0 ? "  PAUSED" : "  SPEED " + std::to_string(speed)) +
                                    "  SPACE PAUSE, 1-3 SPEED";
         tools.draw_ui(status);

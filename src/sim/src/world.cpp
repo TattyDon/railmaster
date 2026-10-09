@@ -37,8 +37,10 @@ World::World(const WorldConfig& config, GameData data)
       company_("Railmaster Railroad",
                Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)),
                config.start_date.year(), data_.balance),
-      investor_(Investor::founder(data_.balance)) {
+      investor_(Investor::founder(data_.balance)),
+      business_cycle_(config.business_cycle) {
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
+    refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
         populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
         // History, so the map starts with prices and cargo in place.
@@ -73,6 +75,23 @@ void World::tick() {
     if (after.year != before.year) on_new_year();
 }
 
+void World::refresh_economy_terrain() {
+    economy_.set_terrain(terrain_);
+    economy_terrain_revision_ = terrain_.revision();
+}
+
+std::int32_t World::cost_percent() const {
+    return data_.balance.economic_states.cost_percent[index_of(economic_state())];
+}
+
+void World::set_economic_state(EconomicState s) {
+    if (s != economic_state()) economy_news_ = s;
+    company_.set_economic_state(s);
+    economy_.set_activity_percent(data_.balance.economic_states.activity_percent[index_of(s)]);
+}
+
+std::optional<EconomicState> World::take_economy_news() { return std::exchange(economy_news_, std::nullopt); }
+
 std::int32_t World::revenue_permille(StationId s) const {
     const Station& st = railway_.station(s);
     const std::int32_t today = date_.days_since_epoch();
@@ -99,16 +118,19 @@ void World::charge_running_costs() {
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
     // Easy games cut maintenance, fuel and track costs [D]; by how much is [I].
-    const std::int64_t cost_pct = difficulty_ == Difficulty::Easy ? f.easy_cost_percent : 100;
+    // The economic state moves fuel, labour and upkeep costs [C].
+    const std::int64_t cost_pct = (difficulty_ == Difficulty::Easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
     company_.post(Ledger::TrainMaintenance, maintenance.scaled(cost_pct, 100));
     company_.post(Ledger::Fuel, fuel.scaled(cost_pct, 100));
     company_.post(Ledger::TrackUpkeep,
                   company_.track_value().scaled(f.track_upkeep_per_mille_month * cost_pct, 1000 * 100));
     company_.post(Ledger::BuildingUpkeep,
-                  company_.building_value().scaled(f.building_upkeep_per_mille_month, 1000));
+                  company_.building_value().scaled(f.building_upkeep_per_mille_month * std::int64_t{cost_percent()},
+                                                                   1000 * 100));
 }
 
 void World::on_new_day() {
+    if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
     economy_.step_day(data_.cargo, data_.industries, date_.year());
     gather_at_stations(railway_, economy_, data_.cargo, data_.industries, date_.year());
 }
@@ -119,6 +141,10 @@ void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
     company_.record_month();
+    const std::int32_t checks = data_.balance.economic_states.checks_per_year;
+    if (business_cycle_ && checks > 0 && (date_.month() - 1) % std::max(1, 12 / checks) == 0) {
+        set_economic_state(next_economic_state(economic_state(), rng_, data_.balance.economic_states));
+    }
     last_forced_sale_ = monthly_market(investor_, company_);
     // Bond interest [D] and dividends are paid at the end of each quarter.
     if ((date_.month() - 1) % 3 == 0) {

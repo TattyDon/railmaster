@@ -8,21 +8,60 @@
     "maintenance_low_oil_multiplier": 2,
     "mean_distance_mm": 2000000000
   },
+  "economic_states": {
+    "activity_percent": [
+      75,
+      85,
+      100,
+      120,
+      125
+    ],
+    "checks_per_year": 2,
+    "cost_percent": [
+      85,
+      92,
+      100,
+      108,
+      115
+    ],
+    "prime_rate_bp": [
+      800,
+      700,
+      600,
+      500,
+      400
+    ],
+    "stay_percent": 50,
+    "stock_percent": [
+      80,
+      90,
+      100,
+      112,
+      125
+    ],
+    "toward_normal_percent": 30
+  },
   "economy": {
     "boost_percent": 50,
     "cargo_price_unit": 1000,
+    "coast_conductance_permille": 1500,
     "demand_price_percent": 150,
     "drift_percent_per_day": 5,
+    "hill_conductance_permille": 750,
+    "hill_grade_bp": 400,
     "history_days": 365,
     "industry_saturation_days": 120,
     "input_buffer_days": 30,
     "max_stock_milli": 50000,
+    "mountain_conductance_permille": 500,
+    "mountain_grade_bp": 700,
     "neutral_price_percent": 50,
     "saturation_days": 30,
     "screening_per_10000": 25,
     "spoilage_per_mille_per_sensitivity": 1,
     "supply_price_percent": 50,
-    "transport_cost_percent": 1
+    "transport_cost_percent": 1,
+    "water_conductance_permille": 2000
   },
   "express": {
     "attraction_half": 20,

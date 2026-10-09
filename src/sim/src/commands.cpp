@@ -84,8 +84,19 @@ PlanResult World::preview(const BuildTrack& cmd) const {
     const std::optional<std::int64_t> end_z =
         cmd.end.kind == TrackEnd::Kind::Free ? std::nullopt
                                              : std::optional<std::int64_t>{anchor_z(net, terrain_, cmd.end)};
-    return plan_track_between(terrain_, cmd.start.pos, anchor_z(net, terrain_, cmd.start), run_points(cmd, data_.balance), end_z,
-                              options_for(cmd, date_.year()), data_.balance);
+    return priced(plan_track_between(terrain_, cmd.start.pos, anchor_z(net, terrain_, cmd.start),
+                                     run_points(cmd, data_.balance), end_z, options_for(cmd, date_.year()),
+                                     data_.balance));
+}
+
+PlanResult World::priced(PlanResult r) const {
+    if (!r.plan) return r;
+    r.plan->total_cost = Money{};
+    for (auto& piece : r.plan->pieces) {
+        piece.cost = construction_cost(piece.cost);
+        r.plan->total_cost += piece.cost;
+    }
+    return r;
 }
 
 CommandResult World::execute(const Command& cmd) {
@@ -128,7 +139,8 @@ CommandResult World::run(const BuildTrack& cmd) {
     const NodeId to = resolve_on_track(cmd.end);
     // The end node already exists now (even for open ground), so plan into it.
     std::vector<MapPoint> points = run_points(cmd, data_.balance);
-    PlanResult plan = plan_track(railway_.track(), terrain_, from, std::move(points), to, options_for(cmd, date_.year()), data_.balance);
+    PlanResult plan = priced(plan_track(railway_.track(), terrain_, from, std::move(points), to,
+                                        options_for(cmd, date_.year()), data_.balance));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
     build_track(railway_.track(), *plan.plan);
     company_.invest_track(plan.plan->total_cost);
@@ -142,9 +154,9 @@ CommandResult World::run(const BuildStation& cmd) {
             if (s.node == cmd.at.node) return fail("there is already a station here");
         }
     }
-    if (auto why = cannot_afford(station_cost(cmd.size, data_.balance))) return fail(*why);
+    if (auto why = cannot_afford(construction_cost(station_cost(cmd.size, data_.balance)))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
-    company_.invest_buildings(station_cost(cmd.size, data_.balance));
+    company_.invest_buildings(construction_cost(station_cost(cmd.size, data_.balance)));
     std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
     const StationId id = railway_.add_station(std::move(name), node, cmd.size);
     // Which town it serves, for the station-age modifier: the nearest town
@@ -165,7 +177,7 @@ CommandResult World::run(const BuildStation& cmd) {
     if (st.town && !economy_.towns()[*st.town].first_station_day) {
         economy_.town_mut(*st.town).first_station_day = st.built_day;
     }
-    return success(station_cost(cmd.size, data_.balance), id);
+    return success(construction_cost(station_cost(cmd.size, data_.balance)), id);
 }
 
 CommandResult World::run(const BuildServiceBuilding& cmd) {
@@ -175,11 +187,11 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
             if (b.node == cmd.at.node && b.type == cmd.type) return fail("there is already one here");
         }
     }
-    if (auto why = cannot_afford(service_building_cost(cmd.type, data_.balance))) return fail(*why);
+    if (auto why = cannot_afford(construction_cost(service_building_cost(cmd.type, data_.balance)))) return fail(*why);
     const NodeId node = resolve_on_track(cmd.at);
-    company_.invest_buildings(service_building_cost(cmd.type, data_.balance));
+    company_.invest_buildings(construction_cost(service_building_cost(cmd.type, data_.balance)));
     const ServiceBuildingId id = railway_.add_service_building(cmd.type, node);
-    return success(service_building_cost(cmd.type, data_.balance), id);
+    return success(construction_cost(service_building_cost(cmd.type, data_.balance)), id);
 }
 
 CommandResult World::run(const BuyTrain& cmd) {

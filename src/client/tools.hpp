@@ -34,6 +34,8 @@ public:
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
     void draw_ui(const std::string& status) const;
+    // Flash a message in the top bar for a few seconds.
+    void show(std::string message, bool good);
 
 private:
     struct Button {
@@ -43,7 +45,6 @@ private:
     };
 
     void cancel();
-    void show(std::string message, bool good);
     std::int64_t snap_mm() const { return static_cast<std::int64_t>(cam_.pixels_to_mm(10.0f)); }
     std::optional<sim::BuildTrack> pending_track() const;
     std::optional<sim::StationId> station_near(sim::MapPoint p) const;

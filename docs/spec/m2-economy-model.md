@@ -45,9 +45,63 @@ Each game day:
    pull therefore fades with distance, so far from any buyer a cargo sits
    at the neutral price. This is a screened Poisson equation, solved one
    Jacobi step per day, which is also why the map reshapes slowly.
-4. **Stock drifts** a fixed share per day to the neighbouring cell with the
-   highest price, if that price beats this cell's by more than a transport
-   cost.
+4. **Stock drifts** a share per day to the neighbouring cell that pays
+   best once a transport cost is taken off, if that beats this cell's price.
+
+### Terrain [D behaviour, I numbers]
+
+Middlemen are "slow and costly over land, slower over mountains, cheap
+along rivers and coasts" (rt3-clone-spec §5.1 [D]). Each cell gets a
+**conductance**, in thousandths of flat land: water 2.0, coast (land next
+to water) 1.5, flat 1.0, hills 0.75, mountains 0.5. A cell is hilly when the
+relief across it is at least 4% of its width, mountainous at 7%. Where two
+cells meet, the edge conducts as their mean. Conductance does three things:
+
+- **Price coupling.** In step 3 each neighbour is weighted by the edge's
+  conductance, against a fixed screening term. A consumer's pull therefore
+  reaches further along water and dies off faster across mountains, so
+  prices are flat along coasts and steep over ranges [D].
+- **Middleman cost.** The transport cost in step 4 is divided by the edge's
+  conductance: half as much over water, double over mountains.
+- **Middleman speed.** The share of stock moved per day is multiplied by it.
+
+On flat land with no water every conductance is 1.0 and the model is
+exactly the one above; a test holds it to that.
+
+The stand-in map generator makes gentle hills (at most about 8% relief per
+cell), so mountains are rare; the thresholds will want revisiting with real
+maps. Rivers are not generated yet. Closed territory borders (conductance 0)
+come with territories.
+
+### Economic state [C]
+
+Five states: Depression, Recession, Normal, Prosperity, Boom
+(rt3-clone-spec §5.5). Each game starts Normal. On 1 January and 1 July the
+state may move one step [C: "checked about twice a year"]: it stays with
+50% odds, moves toward Normal 30%, away 20% [I]; from Normal, up or down
+25% each; at either end a move away becomes a stay.
+
+| State | Production and demand | Construction, fuel, labour | Prime rate | Share prices |
+|---|---|---|---|---|
+| Boom | 125% | 115% | 4% | 125% |
+| Prosperity | 120% | 108% | 5% | 112% |
+| Normal | 100% | 100% | 6% | 100% |
+| Recession | 85% | 92% | 7% | 90% |
+| Depression | 75% | 85% | 8% | 80% |
+
+- **Production and demand** scale every site's daily rate, so output,
+  consumption and the saturation of consumer prices all move together.
+- **Costs** apply to track, stations and support buildings when built, and
+  to fuel, train maintenance and upkeep each month. Locomotive prices do not
+  move.
+- The **prime rate** moves the interest on new bonds and on personal margin
+  debt (see m3-finance-model.md). Bonds already issued keep their rate.
+- **Share prices**: the target price is scaled (see m3).
+
+The client shows the state in the top bar and flashes a message when it
+changes, a stand-in for the news ticker. `WorldConfig::business_cycle =
+false` holds the economy at Normal. Not yet modelled: automobile demand
+dropping sharply in recessions [C], and the optional slow cost index [I].
 
 ## Freight by rail
 
@@ -155,7 +209,9 @@ In the `economy`, `map`, `freight` and `express` sections of
 | Producer price | 50% of base. | |
 | Neutral price | 50% of base, far from any consumer. | |
 | Screening λ | 0.0025. A consumer's pull fades over roughly 10 cells (10 km). | |
-| Drift | 5% of a cell's stock per day, when the next cell is at least 1% of base dearer. | |
+| Drift | 5% of a cell's stock per day, when the next cell is at least 1% of base dearer; both scaled by terrain. | |
+| Conductance | Water 2.0, coast 1.5, flat 1.0, hills 0.75 (≥ 4% relief), mountains 0.5 (≥ 7%). | Spec §5.3 gives flat 1.0, hills 0.75, mountains 0.5; water's figure and the thresholds are ours. |
+| Economic states | See the table above; checked twice a year. | Section `economic_states`. |
 | Saturation | Stock equal to 30 days of a town's demand halves its price; for industries, 120 days. | "Industries are hard to oversupply." |
 | Spoilage | 0.1% per day × decay sensitivity (1-10). | Sensitivity read as decay rate; unverified. |
 | Cell cap | 50 carloads per cargo per cell. | |
@@ -164,5 +220,5 @@ In the `economy`, `map`, `freight` and `express` sections of
 | Rates | Raw producers 24 carloads/year; processors 36; consumers 24-48; houses 1 per house per good. | RT2 hint: 1 iron + 1 coal → 2 steel. Ours is 1 + 1 → 1. |
 | Input rules | Only the steel mill is "all". The rest are "any", including the auto plant and munitions factory. | Only the steel mill's rule is sourced. |
 | Bakery | A consumer only: no output is listed for RT3. | Data gap. |
-| Rubber | No producer: the research says ports supply it, and ports are not modelled yet. | Data gap. |
-| Diesel | Neither produced nor consumed. | Data gap. |
+| Rubber | Rubber plantations from 1900 (rt3-clone-spec §6.3); ports, which also supply it, are not modelled yet. | |
+| Diesel | Made by refineries; nothing consumes it yet. | Data gap. |

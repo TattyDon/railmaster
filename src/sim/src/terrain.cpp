@@ -34,11 +34,15 @@ std::int32_t Terrain::corner_height(std::int32_t cx, std::int32_t cy) const {
 
 void Terrain::set_corner_height(std::int32_t cx, std::int32_t cy, std::int32_t metres) {
     heights_[corner_index(cx, cy)] = metres;
+    ++revision_;
 }
 
 GroundType Terrain::ground(std::int32_t tx, std::int32_t ty) const { return ground_[tile_index(tx, ty)]; }
 
-void Terrain::set_ground(std::int32_t tx, std::int32_t ty, GroundType g) { ground_[tile_index(tx, ty)] = g; }
+void Terrain::set_ground(std::int32_t tx, std::int32_t ty, GroundType g) {
+    ground_[tile_index(tx, ty)] = g;
+    ++revision_;
+}
 
 std::int32_t Terrain::grade_bp(std::int32_t ax, std::int32_t ay, std::int32_t bx, std::int32_t by) const {
     const std::int64_t rise = corner_height(bx, by) - corner_height(ax, ay);

@@ -28,6 +28,7 @@ struct WorldConfig {
     std::optional<std::int64_t> starting_cash;
     bool populate = true;            // place towns and industries (when industry data is present)
     Difficulty difficulty = Difficulty::Medium;
+    bool business_cycle = true; // the economic state moves; off holds it at Normal
 };
 
 // Static definitions shared by the whole game, loaded from data/.
@@ -83,6 +84,15 @@ public:
     // Everything trains have earned delivering freight.
     Money total_revenue() const { return earned_; }
 
+    // The business cycle (rt3-clone-spec §5.5): checked a few times a year.
+    EconomicState economic_state() const { return company_.economic_state(); }
+    void set_economic_state(EconomicState s); // for scenarios and tests
+    // Construction, fuel and labour costs, in percent of Normal.
+    std::int32_t cost_percent() const;
+    Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100); }
+    // The state the economy changed to since the last call, if it did: news.
+    std::optional<EconomicState> take_economy_news();
+
 private:
     void on_new_day();
     void on_new_month();
@@ -103,6 +113,13 @@ private:
     Company company_;
     Investor investor_;
     std::int64_t last_forced_sale_ = 0;
+    bool business_cycle_ = true;
+    std::optional<EconomicState> economy_news_;
+    std::uint64_t economy_terrain_revision_ = 0;
+
+    void refresh_economy_terrain();
+    // A track plan with its costs moved by the economic state.
+    PlanResult priced(PlanResult r) const;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);

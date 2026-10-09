@@ -107,6 +107,10 @@ void Tools::draw_finance_panel() const {
         bonds += (bonds.empty() ? "" : ", ") + std::to_string(b.rate_bp / 100) + "." +
                  std::to_string(b.rate_bp % 100 / 10) + "%";
     }
+    row("PRIME RATE " + std::to_string(co.prime_rate_bp() / 100) + "." +
+            std::to_string(co.prime_rate_bp() % 100 / 10) + "%   COSTS " + std::to_string(world_.cost_percent()) +
+            "% OF NORMAL",
+        "", "", 0.9f, 0.9f, 0.9f);
     row(std::string("CREDIT RATING ") + sim::rating_name(co.credit_rating()) + "   NEW BONDS AT " +
             std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
         "", "", 1.0f, 0.9f, 0.5f);

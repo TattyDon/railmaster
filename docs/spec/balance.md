@@ -46,10 +46,11 @@ Each key's name carries its unit:
 | `breakdowns` | breakdown and crash rates, maintenance ageing | m1 |
 | `track` | grade limit, structure clearances, costs per km | m1 |
 | `stations` | costs, catchment, gathering, town reach | m1, [m2-economy-model.md](m2-economy-model.md) |
-| `economy` | price field, drift, saturation, stockpiles | m2 |
+| `economy` | price field, drift, saturation, stockpiles, terrain conductance | m2 |
 | `map` | towns and industries placed on a new map | m2 |
 | `freight` | timeliness curve, expiry | m2 |
 | `express` | passengers, mail and troops | m2 |
+| `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |
 | `finance` | starting cash, running costs, credit rating, bonds | [m3-finance-model.md](m3-finance-model.md) |
 | `stock` | shares, salary, margin, share price model | m3 |
 
