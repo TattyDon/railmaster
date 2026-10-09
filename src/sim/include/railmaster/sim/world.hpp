@@ -44,6 +44,7 @@ struct WorldConfig {
     // Scenarios may lock the chair: no firing and no resigning (Go West!).
     bool chairman_can_be_fired = true;
     bool chairman_can_resign = true;
+    bool town_growth = true; // the editor/sandbox switch for towns growing [D]
     bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
 };
 
@@ -150,6 +151,7 @@ private:
     CompanyId last_player_company_ = 0;
     bool chairman_can_be_fired_ = true;
     bool chairman_can_resign_ = true;
+    bool town_growth_ = true;
     std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
     bool rival_ai_ = true;
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
@@ -192,6 +194,11 @@ private:
     CommandResult run(const UpgradeIndustry& cmd);
     // Post each owned industry's month to its owner's books.
     void account_industries(std::int32_t months);
+    // Monthly: towns grow with the service they get (rt3-clone-spec §6.4).
+    void grow_towns();
+    void add_house(std::size_t town);
+    // Does some train stop at one of the town's stations?
+    bool town_connected(std::size_t town) const;
     // Why these founding terms are not allowed for player `who`, if they are not.
     std::optional<std::string> founding_problem(PlayerId who, const FoundCompany& terms) const;
     CompanyId found_for(PlayerId who, const FoundCompany& terms);

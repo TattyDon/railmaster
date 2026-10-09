@@ -177,6 +177,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         case sim::IndustryKind::Processor: glColor3f(0.55f, 0.25f, 0.65f); break;
         case sim::IndustryKind::Sink: glColor3f(0.45f, 0.45f, 0.5f); break;
         case sim::IndustryKind::House: glColor3f(0.92f, 0.85f, 0.7f); break;
+        case sim::IndustryKind::Port: glColor3f(0.95f, 0.6f, 0.15f); break; // stands out against the water
         }
         const float half = t.kind == sim::IndustryKind::House ? 0.2f + 0.02f * static_cast<float>(std::min(s.level, 10))
                                                                 : 0.3f;
@@ -219,14 +220,16 @@ void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo) {
     glEnd();
 }
 
-void draw_town_names(const sim::Economy& eco, const Camera& cam) {
+void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Balance::Towns& towns) {
     const float cell_mm = cam.mm_per_tile;
-    for (const sim::Town& t : eco.towns()) {
+    for (std::size_t i = 0; i < eco.towns().size(); ++i) {
+        const sim::Town& t = eco.towns()[i];
+        const std::string label = t.name + " " + std::string(static_cast<std::size_t>(sim::town_stars(eco.town_houses(i), towns)), '*');
         float sx = 0, sy = 0;
         cam.to_screen({static_cast<std::int64_t>((static_cast<float>(t.cx) + 0.5f) * cell_mm),
                        static_cast<std::int64_t>((static_cast<float>(t.cy) - 2.5f) * cell_mm)},
                       sx, sy);
-        const auto w = static_cast<float>(text_width(t.name, 2));
+        const auto w = static_cast<float>(text_width(label, 2));
         glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
         glBegin(GL_QUADS);
         glVertex2f(sx - w / 2 - 3, sy - 3);
@@ -235,7 +238,7 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam) {
         glVertex2f(sx - w / 2 - 3, sy + 17);
         glEnd();
         glColor3f(1.0f, 1.0f, 0.95f);
-        draw_text(sx - w / 2, sy, t.name, 2);
+        draw_text(sx - w / 2, sy, label, 2);
     }
 }
 

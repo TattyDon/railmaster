@@ -31,6 +31,7 @@ add_executable(railmaster_tests
     test_stock.cpp
     test_terrain.cpp
     test_track.cpp
+    test_towns_ports.cpp
     test_track_builder.cpp
     test_world.cpp
 )

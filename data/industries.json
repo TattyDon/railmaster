@@ -47,6 +47,11 @@
   {"key": "commercial_building", "name": "Commercial Building", "kind": "sink", "inputs": [{"cargo": "paper"}], "rate": 24},
   {"key": "bakery", "name": "Bakery", "kind": "sink", "inputs": [{"cargo": "grain"}, {"cargo": "sugar"}], "rate": 24},
 
+  {"key": "port", "name": "Port", "kind": "port", "rate": 24,
+   "inputs": [{"cargo": "grain"}, {"cargo": "cotton"}, {"cargo": "wool"}, {"cargo": "lumber"}, {"cargo": "coffee"},
+              {"cargo": "rice"}, {"cargo": "sugar"}, {"cargo": "diesel"}, {"cargo": "uranium"}],
+   "outputs": ["rubber", "goods"]},
+
   {"key": "house", "name": "Houses", "kind": "house", "rate": 1,
    "inputs": [{"cargo": "alcohol"}, {"cargo": "automobiles"}, {"cargo": "cheese"}, {"cargo": "clothing"},
               {"cargo": "coal", "until": 1910}, {"cargo": "coffee"}, {"cargo": "corn"}, {"cargo": "furniture"},

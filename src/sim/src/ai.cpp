@@ -143,7 +143,9 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
     // Freight from a producer to somewhere that pays more for it.
     for (const Site& p : eco.sites()) {
         const IndustryType& pt = ind.get(p.type);
-        if (pt.kind != IndustryKind::Raw && pt.kind != IndustryKind::Processor) continue;
+        const bool supplies = pt.kind == IndustryKind::Raw || pt.kind == IndustryKind::Processor ||
+                              (pt.kind == IndustryKind::Port && p.port_mode != PortMode::Receive);
+        if (!supplies || p.closed) continue;
         // A processor makes nothing without inputs; only count working ones.
         if (pt.kind == IndustryKind::Processor && p.produced_milli == 0) continue;
         const Place from{p.cx, p.cy, pt.name};
@@ -167,7 +169,9 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
             }
             for (const Site& d : eco.sites()) {
                 const IndustryType& dt = ind.get(d.type);
-                if (dt.kind != IndustryKind::Sink && dt.kind != IndustryKind::Processor) continue;
+                const bool receives = dt.kind == IndustryKind::Sink || dt.kind == IndustryKind::Processor ||
+                                      (dt.kind == IndustryKind::Port && d.port_mode != PortMode::Supply);
+                if (!receives || d.closed) continue;
                 bool wanted = false;
                 for (const IndustryInput& in : dt.inputs) wanted |= in.cargo == c && input_wanted(in, year);
                 if (wanted) consider({d.cx, d.cy, dt.name});

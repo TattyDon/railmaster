@@ -256,7 +256,7 @@ int main(int argc, char* argv[]) {
         tools.draw_world_overlay();
 
         cam.apply_screen();
-        client::draw_town_names(world.economy(), cam);
+        client::draw_town_names(world.economy(), cam, world.data().balance.towns);
         std::string economy = sim::economic_state_name(world.economic_state());
         for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         const std::string status = world.date().month_year_label() + "  " + economy +

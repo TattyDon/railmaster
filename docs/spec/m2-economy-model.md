@@ -197,6 +197,62 @@ map. Only industries whose products exist in the start year are placed.
 Processors and consumers go near towns. The map then runs a year of
 history, so it opens with prices and cargo already in place.
 
+## Town growth (rt3-clone-spec §3.2, §6.4)
+
+Researched: towns grow on their own, rail-connected hubs faster, and
+unconnected towns stagnate [D/C]. Growth is driven by cargo moving in and
+out and by connections [C]. No formula is published.
+
+Our design follows the spec's proposal [I]:
+
+- **Each town** keeps the house cells that make it up and the income earned
+  at its stations: passenger and mail fares, and freight sold there.
+  Months with no data yet are annualised.
+- **Monthly growth rate:** a yearly rate in thousandths, made of
+  - 0.8% a year as a base
+  - +0.1% for each $1,000 a house of passenger and mail income in the last
+    12 months
+  - +0.1% for each $1,000 a house of freight income
+  The total is capped at 15% a year. A town no train stops at grows at 30%
+  of that, which is next to nothing.
+- **Houses** accumulate in thousandths. Each whole house goes where the town
+  is busiest: an existing house cell with room (up to 6 houses a cell), or a
+  free dry cell next to one, whichever is nearest one of the town's
+  stations (else its centre). Towns never reach beyond 8 cells from their
+  centre. More houses mean more passengers, mail and demand.
+- **Stars:** 1 to 5 by houses: under 20, 20, 50, 120 and 300 [I, the
+  spec's thresholds]. The client shows them by each town's name.
+- `WorldConfig::town_growth = false` stops growth (the editor/sandbox
+  switch [D]).
+- **Measured:** on the default map with four rivals, served towns grow from
+  about 30 houses to 55-100 in ten years (2 to 3 stars). The spec asks for
+  visible growth over 10-15 years [C].
+
+## Ports (rt3-clone-spec §6.3)
+
+Researched: ports import and export at the coast or map edge [C]. Each can
+be set to receive, supply or exchange cargo [C, research §8]. Unowned ports,
+warehouses and power plants upgrade on demand [C].
+
+- **A port** is an industry of a new kind. It takes the cargo in its input
+  list (exports) and supplies its output list (imports), each at its rate,
+  according to its mode:
+  - **Receive:** exports only.
+  - **Supply:** imports only.
+  - **Exchange:** both.
+  Receiving ports pull prices up like any consumer; supplying ones push
+  them down like any producer.
+- **The shipped port** exports grain, cotton, wool, lumber, coffee, rice,
+  sugar, diesel and uranium, and imports rubber and goods. Diesel and
+  plantation crops at last have a buyer, and rubber another source.
+- **New maps** get 3 ports per 128 × 128, on coastal land (land next to
+  water), or on the map edge if there is no coast. Each gets a random mode.
+- **Upgrade on demand [C/I]:** at each year end, an unowned port or
+  consumer (power plant and the like) that received 90% of its capacity
+  doubles it, up to 8 times the original.
+- **Not yet:** owning ports; warehouses, the inland ports the player builds
+  [D/C].
+
 ## Owning industries (rt3-clone-spec §6.1-6.2)
 
 Researched: a company can buy existing industries and build processing

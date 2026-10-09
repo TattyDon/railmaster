@@ -58,9 +58,13 @@ accounts; companies buy them at ten years' profit (or a floor), build
 processing plants, and double their capacity; owned industries post their
 profit to the owner; unowned ones that keep losing money close.
 
+Done in the sixth slice: towns that grow with the service they get, with
+star ratings; ports on the coast that receive, supply or exchange cargo;
+and unowned ports and consumers that expand when demand fills them.
+
 Still to do:
 - Manual per-stop consists; transfers of express loads between trains.
-- Ports and warehouses; new industries appearing over time; town growth.
+- Warehouses; new industries appearing over time; price-responsive output.
 
 ## M3: Company and finance (in progress)
 Done in the first slice: company cash that pays for everything (refusing

@@ -18,6 +18,7 @@ IndustryKind parse_kind(const std::string& s, const std::string& key) {
     if (s == "processor") return IndustryKind::Processor;
     if (s == "sink") return IndustryKind::Sink;
     if (s == "house") return IndustryKind::House;
+    if (s == "port") return IndustryKind::Port;
     throw std::runtime_error("industry data: unknown kind '" + s + "' for '" + key + "'");
 }
 
@@ -101,6 +102,9 @@ IndustryRegistry IndustryRegistry::from_json(std::string_view json_text, const C
         if (t.rate_per_year <= 0) throw std::runtime_error("industry data: bad rate for '" + t.key + "'");
         const bool needs_inputs = t.kind == IndustryKind::Processor || t.kind == IndustryKind::Sink;
         if (needs_inputs && t.inputs.empty()) throw std::runtime_error("industry data: '" + t.key + "' has no inputs");
+        if (t.kind == IndustryKind::Port && t.inputs.empty() && t.outputs.empty()) {
+            throw std::runtime_error("industry data: port '" + t.key + "' trades nothing");
+        }
         if (t.kind == IndustryKind::Raw && t.outputs.empty()) {
             throw std::runtime_error("industry data: '" + t.key + "' produces nothing");
         }
@@ -294,13 +298,33 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
             s.produced_milli += made;
             break;
         }
+        case IndustryKind::Port: {
+            // Exports leave the map; imports arrive, both up to capacity.
+            if (s.port_mode != PortMode::Supply) {
+                for (const IndustryInput& in : t.inputs) {
+                    if (!input_active(in, cargo, year)) continue;
+                    s.received_year_milli += take_stock(in.cargo, s.cx, s.cy, daily);
+                    demand(in.cargo, at, daily, balance_.industry_saturation_days);
+                }
+            }
+            if (s.port_mode != PortMode::Receive) {
+                for (CargoId c : t.outputs) {
+                    if (!cargo_available(c, cargo, year)) continue;
+                    add_stock(c, s.cx, s.cy, daily);
+                    s.produced_milli += daily;
+                    supply(c, at);
+                }
+            }
+            break;
+        }
         case IndustryKind::Sink:
         case IndustryKind::House: {
             const std::int32_t days = t.kind == IndustryKind::House ? balance_.saturation_days
                                                                     : balance_.industry_saturation_days;
             for (const IndustryInput& in : t.inputs) {
                 if (!input_active(in, cargo, year)) continue;
-                take_stock(in.cargo, s.cx, s.cy, daily);
+                const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
+                if (t.kind == IndustryKind::Sink) s.received_year_milli += took;
                 demand(in.cargo, at, daily, days);
             }
             for (CargoId c : t.outputs) {
@@ -456,18 +480,49 @@ std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo
     return out;
 }
 
-std::vector<SiteId> Economy::close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng) {
-    std::vector<SiteId> closed;
+const char* port_mode_name(PortMode m) {
+    switch (m) {
+    case PortMode::Exchange: return "imports and exports";
+    case PortMode::Receive: return "exports";
+    case PortMode::Supply: return "imports";
+    }
+    return "?";
+}
+
+Economy::YearEnd Economy::close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng) {
+    YearEnd out;
     for (Site& s : sites_) {
-        if (s.closed || !ownable(industries.get(s.type).kind)) continue;
+        const IndustryType& t = industries.get(s.type);
+        if (s.closed) continue;
+        if ((t.kind == IndustryKind::Sink || t.kind == IndustryKind::Port) && !s.owner) {
+            const std::int64_t capacity = std::int64_t{t.rate_per_year} * s.level * kMilli;
+            if (s.level < b.receiver_max_level && s.received_year_milli * 1000 >= capacity * b.receiver_upgrade_permille) {
+                s.level *= 2;
+                out.upgraded.push_back(s.id);
+            }
+        }
+        s.received_year_milli = 0;
+        if (!ownable(t.kind)) continue;
         s.loss_years = annual_profit(s) < Money{} ? s.loss_years + 1 : 0;
         if (!s.owner && s.loss_years >= b.close_after_loss_years &&
             rng.chance(static_cast<std::uint32_t>(b.close_chance_percent), 100)) {
             s.closed = true;
-            closed.push_back(s.id);
+            out.closed.push_back(s.id);
         }
     }
-    return closed;
+    return out;
+}
+
+std::int32_t town_stars(std::int64_t houses, const Balance::Towns& b) {
+    std::int32_t stars = 1;
+    for (const std::int32_t threshold : b.star_houses) stars += houses >= threshold;
+    return stars;
+}
+
+std::int64_t Economy::town_houses(std::size_t t) const {
+    std::int64_t n = 0;
+    for (const SiteId s : towns_.at(t).houses) n += sites_[s].level;
+    return n;
 }
 
 Money annual_profit(const Site& s) {
@@ -533,7 +588,8 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
                     for (std::int32_t dx = -2; dx <= 2; ++dx) {
                         const std::int32_t n = houses[static_cast<std::size_t>((dy + 2) * 5 + dx + 2)];
                         if (n == 0) continue;
-                        economy.add_site(industries, *house, cx + dx, cy + dy, n);
+                        const SiteId site = economy.add_site(industries, *house, cx + dx, cy + dy, n);
+                        economy.town_mut(economy.towns().size() - 1).houses.push_back(site);
                         taken[idx(cx + dx, cy + dy)] = true;
                     }
                 }
@@ -580,10 +636,36 @@ void populate_economy(Economy& economy, const Terrain& terrain, const CargoRegis
             eligible = std::any_of(t.inputs.begin(), t.inputs.end(), in_avail);
             count = mg.sinks_per_type;
             break;
-        case IndustryKind::House: break;
+        case IndustryKind::House:
+        case IndustryKind::Port: break; // placed on the coast, below
         }
         if (!eligible) continue;
         for (std::int32_t i = 0; i < count * area_scale; ++i) place(t.id, t.kind != IndustryKind::Raw);
+    }
+
+    // Ports, on the coast; failing that, at the map edge [C].
+    const std::optional<IndustryTypeId> port = industries.find("port");
+    if (!port) return;
+    std::vector<std::pair<std::int32_t, std::int32_t>> coast, edge;
+    for (std::int32_t y = 0; y < h; ++y) {
+        for (std::int32_t x = 0; x < w; ++x) {
+            if (!land(x, y) || taken[idx(x, y)]) continue;
+            const bool wet = (x > 0 && !land(x - 1, y)) || (x + 1 < w && !land(x + 1, y)) || (y > 0 && !land(x, y - 1)) ||
+                             (y + 1 < h && !land(x, y + 1));
+            if (wet) coast.emplace_back(x, y);
+            else if (x == 0 || y == 0 || x == w - 1 || y == h - 1) edge.emplace_back(x, y);
+        }
+    }
+    for (std::int32_t i = 0; i < mg.ports * area_scale; ++i) {
+        auto& pool = !coast.empty() ? coast : edge;
+        if (pool.empty()) return;
+        const std::size_t pick = rng.below(static_cast<std::uint32_t>(pool.size()));
+        const auto [x, y] = pool[pick];
+        pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(pick));
+        if (taken[idx(x, y)]) continue;
+        const SiteId id = economy.add_site(industries, *port, x, y);
+        economy.site_mut(id).port_mode = static_cast<PortMode>(rng.below(3));
+        taken[idx(x, y)] = true;
     }
 }
 

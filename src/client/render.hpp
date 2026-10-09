@@ -44,7 +44,8 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
 // RT3-style cargo map: red where the cargo is cheap, green where it is dear.
 void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo);
 // Town names, in screen space.
-void draw_town_names(const sim::Economy& eco, const Camera& cam);
+// Town names with their star rating ("NORTHWICK **").
+void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Balance::Towns& towns);
 
 // A planned run of track, coloured by structure; red if it cannot be built.
 void draw_plan(sim::MapPoint start, const sim::TrackPlan& plan, const Camera& cam);

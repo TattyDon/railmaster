@@ -114,6 +114,7 @@ struct Balance {
         std::int32_t processors_per_type = 2;
         std::int32_t sinks_per_type = 2;
         std::int32_t max_height_m = 400;
+        std::int32_t ports = 3; // per 128 x 128 map, on the coast or else the map edge
     } map;
 
     struct Freight {
@@ -128,6 +129,21 @@ struct Balance {
         std::int32_t mail_cap_months = 2;
     } express;
 
+    // Town growth (rt3-clone-spec §6.4 [I]), per year: a base rate, plus a
+    // share for each $1,000 per house of passenger and mail income, and of
+    // freight income, earned at the town's stations in the last 12 months;
+    // towns no train serves grow at a fraction of that. Stars by houses.
+    struct Towns {
+        std::int32_t base_growth_permille = 8;            // 0.5-1% [I]
+        std::int32_t express_permille_per_k_house = 1;
+        std::int32_t freight_permille_per_k_house = 1;
+        std::int32_t max_growth_permille = 150;
+        std::int32_t unconnected_permille = 300;
+        std::int32_t max_houses_per_cell = 6;
+        std::int32_t max_radius_cells = 8;
+        std::array<std::int32_t, 4> star_houses{20, 50, 120, 300}; // 2 to 5 stars from these
+    } towns;
+
     // Owning industries (rt3-clone-spec §6.1-6.2). An industry's accounts:
     // output at the cargo's base price, less inputs at theirs, labour in
     // proportion to output and a fixed overhead per level of capacity.
@@ -140,6 +156,10 @@ struct Balance {
         std::int32_t upgrade_cost_percent = 50;    // of building another of the same size [I: "much less"]
         std::int32_t close_after_loss_years = 5;   // unowned industries [I]
         std::int32_t close_chance_percent = 20;    // each year after that [I]
+        // Unowned ports and consumers double their capacity when a year's
+        // deliveries reach this share of it [C: "upgrade on demand"; I numbers].
+        std::int32_t receiver_upgrade_permille = 900;
+        std::int32_t receiver_max_level = 8;
     } industries;
 
     // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,

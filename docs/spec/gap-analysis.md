@@ -39,6 +39,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §12.4 [D/C/I] | Voluntary bankruptcy: debt halved, bondholders paid in shares, rating ruined; after 2 loss years or unpaid bills; no repeat in 10 years | none | as the spec |
 | §12.2, §12.5 [I] | Founding dialog: player and outside investment, shares at $10; brokerage ~1% | fixed opening; no fees | as the spec |
 | §6.1–6.2 [D/C/I] | Industry ownership: buy at ~10× profit or a floor, build processors at ~150%, upgrade to double capacity, closures | none | as the spec; accounts at base prices [I] (see m2-economy-model.md) |
+| §3.2, §6.4 [D/C/I] | Towns grow with service, rail hubs faster; new houses near houses and stations; 1–5 stars | fixed towns | the spec's proposed formula, monthly; see m2-economy-model.md |
+| §6.3 [C] | Ports import/export at the coast or edge; receive, supply or exchange; unowned receivers upgrade on demand | none | as described |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -118,8 +120,7 @@ Grouped by the spec's own build order (§17).
 - Rivers in the map generator, and closed borders (conductance 0) (§5.3).
 - Automobile demand dropping sharply in recessions; the optional cost index (§5.5).
 - Price-responsive industry output (slowing when the local price is red) (§6.1 [C]).
-- Town growth and star ratings (§3.2 [D], §6.4 [I]).
-- Warehouses and ports (§6.3 [D/C]).
+- Warehouses, and owning ports (§6.3 [D/C]).
 - Hotels, restaurants, taverns and post offices (§7.2 [D/C]).
 
 **Express**

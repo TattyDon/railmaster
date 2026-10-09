@@ -28,7 +28,13 @@ enum class IndustryKind : std::uint8_t {
     Processor, // turns inputs into outputs, up to its capacity
     Sink,      // consumes only
     House,     // a town's houses: consume goods, produce waste
+    Port,      // trade beyond the map: takes its inputs (exports), supplies its outputs (imports) [C]
 };
+
+// What a port does with its cargo lists: each port can be set to receive,
+// supply or exchange [C, research §8].
+enum class PortMode : std::uint8_t { Exchange, Receive, Supply };
+const char* port_mode_name(PortMode m);
 
 enum class InputRule : std::uint8_t {
     Any, // any one input is enough
@@ -74,6 +80,9 @@ struct Site {
     std::vector<std::int32_t> buffer; // per input, milli-carloads held by a processor
     std::int64_t produced_milli = 0;  // lifetime output
 
+    PortMode port_mode = PortMode::Exchange; // ports only
+    std::int64_t received_year_milli = 0;    // consumers and ports: deliveries this year
+
     // Ownership and accounts (rt3-clone-spec §6.2); houses are never owned.
     std::optional<CompanyId> owner{};
     bool closed = false;                    // shut down: produces and consumes nothing
@@ -101,7 +110,17 @@ struct Town {
     std::string name;
     std::int32_t cx = 0, cy = 0;
     std::optional<std::int32_t> first_station_day{}; // for the station-age revenue modifier
+    std::vector<SiteId> houses{};                    // its house cells
+    // Income earned at its stations, for growth: this month, and the last 12.
+    Money express_this_month{};
+    Money freight_this_month{};
+    std::vector<Money> express_months{};
+    std::vector<Money> freight_months{};
+    std::int32_t growth_milli = 0; // thousandths of the next house
 };
+
+// 1 to 5 stars by number of houses (rt3-clone-spec §3.2 [D], §6.4 [I]).
+std::int32_t town_stars(std::int64_t houses, const Balance::Towns& b);
 
 // The map's cargo economy: a grid of economy nodes (one per terrain tile),
 // each holding a price and a stock for every cargo, plus the industries and
@@ -131,6 +150,8 @@ public:
     void add_town(Town t) { towns_.push_back(std::move(t)); }
     Town& town_mut(std::size_t i) { return towns_.at(i); }
     const std::vector<Town>& towns() const { return towns_; }
+    // Houses in a town: the levels of its house cells.
+    std::int64_t town_houses(std::size_t t) const;
 
     // Derive each cell's conductance from the terrain (same grid size).
     // Until called, every cell is flat land.
@@ -147,9 +168,14 @@ public:
     // Returns each site's accounts for the period (indexed by SiteId).
     std::vector<IndustryAccounts> close_accounts(const CargoRegistry& cargo, const IndustryRegistry& industries,
                                                  const Balance::Industries& b, std::int32_t months);
-    // Year end: count loss years, and close unowned producers and processors
-    // that have lost money too long [I]. Returns the sites closed.
-    std::vector<SiteId> close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng);
+    // Year end: count loss years, close unowned producers and processors that
+    // have lost money too long [I], and enlarge unowned ports and consumers
+    // that ran near capacity [C].
+    struct YearEnd {
+        std::vector<SiteId> closed;
+        std::vector<SiteId> upgraded;
+    };
+    YearEnd close_year(const IndustryRegistry& industries, const Balance::Industries& b, Random& rng);
 
     void step_day(const CargoRegistry& cargo, const IndustryRegistry& industries, std::int32_t year);
     // Run the price field to (near) steady state, e.g. when a map is created.

@@ -146,11 +146,14 @@
     "labour_percent": 20,
     "overhead_per_level": 30000,
     "profit_multiple": 10,
+    "receiver_max_level": 8,
+    "receiver_upgrade_permille": 900,
     "upgrade_cost_percent": 50
   },
   "map": {
     "cells_per_town": 2048,
     "max_height_m": 400,
+    "ports": 3,
     "processors_per_type": 2,
     "raw_per_type": 4,
     "sinks_per_type": 2,
@@ -207,6 +210,21 @@
     "split_months": 3,
     "split_price_cents": 12000,
     "starting_personal_cash": 500000
+  },
+  "towns": {
+    "base_growth_permille": 8,
+    "express_permille_per_k_house": 1,
+    "freight_permille_per_k_house": 1,
+    "max_growth_permille": 150,
+    "max_houses_per_cell": 6,
+    "max_radius_cells": 8,
+    "star_houses": [
+      20,
+      50,
+      120,
+      300
+    ],
+    "unconnected_permille": 300
   },
   "track": {
     "default_max_grade_bp": 300,

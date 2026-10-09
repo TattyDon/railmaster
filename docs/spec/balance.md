@@ -47,9 +47,10 @@ Each key's name carries its unit:
 | `track` | grade limit, structure clearances, costs per km | m1 |
 | `stations` | costs, catchment, gathering, town reach | m1, [m2-economy-model.md](m2-economy-model.md) |
 | `economy` | price field, drift, saturation, stockpiles, terrain conductance | m2 |
-| `map` | towns and industries placed on a new map | m2 |
+| `map` | towns, industries and ports placed on a new map | m2 |
 | `freight` | timeliness curve, expiry | m2 |
 | `express` | passengers, mail and troops | m2 |
+| `towns` | town growth and star ratings | m2 |
 | `industries` | owning industries: labour, overhead, prices, building, upgrading, closure | m2 |
 | `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |
 | `ai` | rivals' line planning, train buying and share trading | [rivals-model.md](rivals-model.md) |

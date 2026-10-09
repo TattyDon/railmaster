@@ -54,6 +54,7 @@ World::World(const WorldConfig& config, GameData data)
     rival_ai_ = config.rival_ai;
     chairman_can_be_fired_ = config.chairman_can_be_fired;
     chairman_can_resign_ = config.chairman_can_resign;
+    town_growth_ = config.town_growth;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
@@ -135,6 +136,14 @@ void World::tick() {
         Company& runner = company(t.owner);
         if (t.owner == company().id()) earned_ += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
+        // Service to a town makes it grow.
+        if (const auto town = railway_.station(station).town) {
+            Town& tw = economy_.town_mut(*town);
+            for (const auto& [cargo, amount] : e.by_cargo) {
+                (data_.cargo.get(cargo).cargo_class == CargoClass::Express ? tw.express_this_month : tw.freight_this_month) +=
+                    amount;
+            }
+        }
         pay_trackage(t, e.total);
     }
     if (++tick_of_day_ < kTicksPerDay) return;
@@ -237,6 +246,7 @@ void World::on_new_month() {
     start_new_month(railway_);
     charge_running_costs();
     account_industries(1);
+    grow_towns();
     for (Company& c : market_.companies) c.record_month();
     const std::int32_t checks = data_.balance.economic_states.checks_per_year;
     if (business_cycle_ && checks > 0 && (date_.month() - 1) % std::max(1, 12 / checks) == 0) {
@@ -264,6 +274,108 @@ void World::account_industries(std::int32_t months) {
         Company& c = company(*s.owner);
         c.post(Ledger::IndustryIncome, accounts[s.id].revenue);
         c.post(Ledger::IndustryCosts, accounts[s.id].costs);
+    }
+}
+
+bool World::town_connected(std::size_t t) const {
+    for (const Train& tr : railway_.trains()) {
+        if (tr.state == TrainState::Crashed) continue;
+        for (const StationId s : tr.route)
+            if (railway_.station(s).town == t) return true;
+    }
+    return false;
+}
+
+void World::grow_towns() {
+    const Balance::Towns& b = data_.balance.towns;
+    for (std::size_t t = 0; t < economy_.towns().size(); ++t) {
+        Town& tw = economy_.town_mut(t);
+        const auto keep = [](std::vector<Money>& months, Money& now) {
+            months.push_back(std::exchange(now, Money{}));
+            if (months.size() > 12) months.erase(months.begin());
+        };
+        keep(tw.express_months, tw.express_this_month);
+        keep(tw.freight_months, tw.freight_this_month);
+        if (!town_growth_) continue;
+        const std::int64_t houses = economy_.town_houses(t);
+        if (houses <= 0) continue;
+        // A year's income, annualised from the months known so far.
+        Money express, freight;
+        for (const Money& m : tw.express_months) express += m;
+        for (const Money& m : tw.freight_months) freight += m;
+        const auto months = static_cast<std::int64_t>(tw.express_months.size());
+        express = express.scaled(12, months);
+        freight = freight.scaled(12, months);
+        std::int64_t rate = b.base_growth_permille +
+                            express.whole_dollars() * b.express_permille_per_k_house / (1000 * houses) +
+                            freight.whole_dollars() * b.freight_permille_per_k_house / (1000 * houses);
+        rate = std::min<std::int64_t>(rate, b.max_growth_permille);
+        if (!town_connected(t)) rate = rate * b.unconnected_permille / 1000;
+        // Houses a year = houses x rate / 1000; a twelfth of that each month, in thousandths.
+        tw.growth_milli += static_cast<std::int32_t>(houses * rate / 12);
+        while (economy_.town_mut(t).growth_milli >= 1000) {
+            economy_.town_mut(t).growth_milli -= 1000;
+            add_house(t);
+        }
+    }
+}
+
+// A new house goes where the town is busiest: as near its stations as
+// possible (else its centre), in an existing house cell with room or a
+// free cell next to one [I: "near existing houses and stations"].
+void World::add_house(std::size_t t) {
+    const Balance::Towns& b = data_.balance.towns;
+    const auto house_type = data_.industries.find("house");
+    if (!house_type) return;
+    const Town& tw = economy_.towns()[t];
+    std::vector<std::pair<std::int32_t, std::int32_t>> focus;
+    for (const Station& s : railway_.stations()) {
+        if (s.town != t) continue;
+        const MapPoint p = railway_.track().node(s.node).pos;
+        focus.emplace_back(economy_.cell_x(p), economy_.cell_y(p));
+    }
+    if (focus.empty()) focus.emplace_back(tw.cx, tw.cy);
+    const auto score = [&](std::int32_t x, std::int32_t y) {
+        std::int32_t best = 1 << 20;
+        for (const auto& [fx, fy] : focus) best = std::min(best, std::max(std::abs(fx - x), std::abs(fy - y)));
+        return best * 64 + std::max(std::abs(tw.cx - x), std::abs(tw.cy - y));
+    };
+    std::vector<bool> occupied(static_cast<std::size_t>(economy_.width() * economy_.height()), false);
+    for (const Site& s : economy_.sites()) {
+        if (!s.closed) occupied[static_cast<std::size_t>(s.cy * economy_.width() + s.cx)] = true;
+    }
+    struct Option {
+        std::int32_t score;
+        std::int32_t x, y;
+        std::optional<SiteId> existing;
+    };
+    std::vector<Option> options;
+    for (const SiteId id : tw.houses) {
+        const Site& h = economy_.sites()[id];
+        if (h.level < b.max_houses_per_cell) options.push_back({score(h.cx, h.cy), h.cx, h.cy, id});
+        for (std::int32_t dy = -1; dy <= 1; ++dy) {
+            for (std::int32_t dx = -1; dx <= 1; ++dx) {
+                const std::int32_t x = h.cx + dx, y = h.cy + dy;
+                if (x < 0 || y < 0 || x >= economy_.width() || y >= economy_.height()) continue;
+                if (occupied[static_cast<std::size_t>(y * economy_.width() + x)]) continue;
+                if (terrain_.ground(x, y) == GroundType::Water) continue;
+                if (std::max(std::abs(tw.cx - x), std::abs(tw.cy - y)) > b.max_radius_cells) continue;
+                options.push_back({score(x, y), x, y, std::nullopt});
+            }
+        }
+    }
+    if (options.empty()) return;
+    std::int32_t best = options.front().score;
+    for (const Option& o : options) best = std::min(best, o.score);
+    std::vector<const Option*> top;
+    for (const Option& o : options)
+        if (o.score == best) top.push_back(&o);
+    const Option& pick = *top[rng_.below(static_cast<std::uint32_t>(top.size()))];
+    if (pick.existing) {
+        ++economy_.site_mut(*pick.existing).level;
+    } else {
+        const SiteId id = economy_.add_site(data_.industries, *house_type, pick.x, pick.y);
+        economy_.town_mut(t).houses.push_back(id);
     }
 }
 
@@ -343,8 +455,12 @@ void World::on_new_year() {
         if (!c.defunct()) c.close_year();
     }
     review_chairmen();
-    for (const SiteId s : economy_.close_year(data_.industries, data_.balance.industries, rng_)) {
+    const Economy::YearEnd sites = economy_.close_year(data_.industries, data_.balance.industries, rng_);
+    for (const SiteId s : sites.closed) {
         news_.push_back("The " + data_.industries.get(economy_.sites()[s].type).name + " has closed after years of losses");
+    }
+    for (const SiteId s : sites.upgraded) {
+        news_.push_back("The " + data_.industries.get(economy_.sites()[s].type).name + " has expanded to meet demand");
     }
     for (Company& c : market_.companies) {
         c.retire_matured_bonds(date_.year());

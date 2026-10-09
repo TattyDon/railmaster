@@ -29,6 +29,8 @@ Early development. Done so far:
 - short selling, takeovers and mergers by shareholder vote
 - owning industries: buy producers and plants, build and upgrade plants,
   and collect their profit
+- towns that grow with good service (star ratings by each name), and ports
+  on the coast that import and export
 - investor sentiment: bad years make shareholders grumble and then vote
   the chairman out (you included, unless you hold a majority); stock splits
 - terrain-aware middlemen and a business cycle of five economic states

@@ -813,7 +813,7 @@ std::optional<sim::SiteId> Tools::site_under_cursor() const {
     const std::int32_t cx = world_.economy().cell_x(hover_), cy = world_.economy().cell_y(hover_);
     for (const sim::Site& s : world_.economy().sites()) {
         if (s.closed || s.cx != cx || s.cy != cy) continue;
-        if (sim::ownable(world_.data().industries.get(s.type).kind)) return s.id;
+        if (world_.data().industries.get(s.type).kind != sim::IndustryKind::House) return s.id;
     }
     return std::nullopt;
 }
@@ -823,7 +823,10 @@ std::string Tools::industry_text() const {
     if (!id) return "OPEN LAND";
     const sim::Site& s = world_.economy().sites()[*id];
     const sim::Balance::Industries& b = world_.data().balance.industries;
-    std::string text = world_.data().industries.get(s.type).name + " (LEVEL " + std::to_string(s.level) + "): ";
+    const sim::IndustryType& type = world_.data().industries.get(s.type);
+    std::string text = type.name + " (LEVEL " + std::to_string(s.level) + "): ";
+    if (type.kind == sim::IndustryKind::Port) return text + sim::port_mode_name(s.port_mode) + ". NOT FOR SALE";
+    if (type.kind == sim::IndustryKind::Sink) return text + "A CONSUMER. NOT FOR SALE";
     if (!s.owner) {
         text += "FOR SALE AT " + format_money(sim::industry_price(s, b));
     } else if (s.owner == world_.player_company()) {
