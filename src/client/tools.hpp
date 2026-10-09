@@ -22,6 +22,8 @@ public:
     Tools(sim::World& world, const Camera& camera) : world_(world), cam_(camera) {}
 
     Tool tool() const { return tool_; }
+    // The cargo whose price map is shown, if any (O / P cycle through them).
+    std::optional<sim::CargoId> overlay() const { return overlay_; }
     void select(Tool t);
 
     void on_mouse_move(float sx, float sy);
@@ -49,6 +51,8 @@ private:
     std::string hint() const;
     std::string inspect_text() const;
     std::vector<Button> layout_buttons() const;
+    void cycle_overlay(int direction);
+    std::string cell_text() const;
 
     sim::World& world_;
     const Camera& cam_;
@@ -68,6 +72,8 @@ private:
     std::vector<sim::StationId> route_;
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
+
+    std::optional<sim::CargoId> overlay_;
 
     std::string message_;
     bool message_good_ = true;

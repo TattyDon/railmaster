@@ -9,6 +9,7 @@ written in our own words (see [../CLEAN_ROOM.md](../CLEAN_ROOM.md)).
 | [trains-track-operations.md](trains-track-operations.md) | Locomotive roster, consists, grades, track, servicing, routing |
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |
 | [m1-provisional-models.md](m1-provisional-models.md) | Stand-in rules used until real values are measured |
+| [m2-economy-model.md](m2-economy-model.md) | How the cargo economy works: researched facts vs our design, and its constants |
 
 ## Status of the research
 

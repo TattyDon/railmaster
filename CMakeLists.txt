@@ -5,6 +5,12 @@ project(railmaster
     DESCRIPTION "Open-source reimplementation of a classic 3D railroad tycoon game"
     LANGUAGES CXX)
 
+# Default to an optimised build with debug info: the economy simulates a
+# year of history when a map is created, which is slow unoptimised.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

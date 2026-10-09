@@ -8,6 +8,7 @@ add_library(railmaster_sim
     src/cargo.cpp
     src/commands.cpp
     src/date.cpp
+    src/economy.cpp
     src/locomotive.cpp
     src/railway.cpp
     src/terrain.cpp

@@ -188,6 +188,8 @@ bool Tools::on_key(SDL_Keycode key) {
     case SDLK_F4: select(Tool::ServiceTower); return true;
     case SDLK_F5: select(Tool::Maintenance); return true;
     case SDLK_F6: select(Tool::Train); return true;
+    case SDLK_o: cycle_overlay(+1); return true;
+    case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
         if (track_start_ || !route_.empty()) cancel();
         else select(Tool::Inspect);
@@ -237,6 +239,51 @@ bool Tools::on_key(SDL_Keycode key) {
     }
     default: return false;
     }
+}
+
+void Tools::cycle_overlay(int direction) {
+    // Off, then each cargo the economy is trading this year, then off again.
+    std::vector<sim::CargoId> choices;
+    for (const auto& c : world_.data().cargo.all()) {
+        if (world_.economy().active(c.id)) choices.push_back(c.id);
+    }
+    if (choices.empty()) {
+        overlay_.reset();
+        return;
+    }
+    const auto n = static_cast<int>(choices.size());
+    int at = n; // "off" sits between the last and the first
+    if (overlay_) {
+        const auto it = std::find(choices.begin(), choices.end(), *overlay_);
+        if (it != choices.end()) at = static_cast<int>(it - choices.begin());
+    }
+    at = ((at + direction) % (n + 1) + (n + 1)) % (n + 1);
+    if (at == n) overlay_.reset();
+    else overlay_ = choices[static_cast<std::size_t>(at)];
+}
+
+std::string Tools::cell_text() const {
+    const sim::Economy& eco = world_.economy();
+    const std::int32_t cx = eco.cell_x(hover_), cy = eco.cell_y(hover_);
+    std::string s;
+    for (const sim::Site& site : eco.sites()) {
+        if (site.cx != cx || site.cy != cy) continue;
+        const sim::IndustryType& t = world_.data().industries.get(site.type);
+        if (!s.empty()) s += ", ";
+        s += t.kind == sim::IndustryKind::House ? std::to_string(site.level) + " HOUSES" : t.name;
+        if (!t.outputs.empty() && t.kind != sim::IndustryKind::House) {
+            s += " (MAKES";
+            for (sim::CargoId o : t.outputs) s += " " + world_.data().cargo.get(o).name;
+            s += ")";
+        }
+    }
+    if (overlay_) {
+        const sim::CargoType& c = world_.data().cargo.get(*overlay_);
+        if (!s.empty()) s += ".  ";
+        s += c.name + " " + format_money(sim::Money::dollars(eco.price(c.id, cx, cy))) + " A LOAD, " +
+             std::to_string(eco.stock_milli(c.id, cx, cy) / sim::kMilli) + " WAITING";
+    }
+    return s;
 }
 
 void Tools::draw_world_overlay() const {
@@ -293,7 +340,11 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
 
 std::string Tools::hint() const {
     switch (tool_) {
-    case Tool::Inspect: return "HOVER OVER TRAINS AND STATIONS FOR DETAILS. ARROWS PAN, WHEEL ZOOMS.";
+    case Tool::Inspect: {
+        std::string cargo_map = "O/P CARGO MAP: ";
+        cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name + " (RED CHEAP, GREEN DEAR)" : "OFF";
+        return "HOVER FOR DETAILS.  " + cargo_map;
+    }
     case Tool::Track:
         return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP." : "CLICK TO START A LINE.") +
                "  D DOUBLE: " + (double_track_ ? "ON" : "OFF") + "  C CURVES: " + (curves_ ? "ON" : "OFF") +
@@ -337,7 +388,7 @@ std::string Tools::inspect_text() const {
         const sim::Station& s = rw.station(*st);
         return "STATION: " + s.name + " (" + size_name(s.size) + ")";
     }
-    return {};
+    return cell_text();
 }
 
 void Tools::draw_ui(const std::string& status) const {

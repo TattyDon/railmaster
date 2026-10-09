@@ -28,12 +28,18 @@ Still to do:
 - Track rights: trains on another company's track always yield.
 - Train management: edit routes, sell trains, per-stop consists.
 
-## M2: The economy
-- The economy-node grid and the cargo price field, with off-rail drift of
-  cargo along price gradients (`docs/spec/economy-cargo.md` §1).
-- Industries and production chains; houses as producers and consumers.
-- Delivery revenue from price difference, with time-based decay.
+## M2: The economy (in progress)
+Done in the first slice: the economy-node grid and cargo price field, with
+off-rail drift of cargo along price gradients; industries and production
+chains; houses; map population with towns and industries; a year of
+history on new maps; and the RT3-style cargo price overlay in the client.
+See `docs/spec/m2-economy-model.md`.
+
+Still to do:
+- Stations collect cargo from a catchment area; trains load it and deliver
+  it, earning the price difference, with value lost in transit.
 - Express cargo (passengers, mail, troops) with destinations.
+- Ports and warehouses; new industries appearing over time; town growth.
 
 ## M3: Company and finance
 - Company and personal ledgers, income statement, balance sheet.

@@ -30,7 +30,7 @@ CargoRegistry CargoRegistry::from_json(std::string_view json_text) {
             throw std::runtime_error("cargo data: unknown class '" + cls + "' for '" + t.key + "'");
         }
         t.available_year = entry.value("available_year", 1800);
-        t.base_price = Money::dollars(entry.value("base_price", std::int64_t{0}));
+        t.base_price = Money::dollars(entry.value("base_price", std::int64_t{0}) * provisional::kCargoPriceUnitDollars);
         t.decay_sensitivity = entry.value("decay_sensitivity", 1);
         if (t.decay_sensitivity < 1 || t.decay_sensitivity > 10) {
             throw std::runtime_error("cargo data: decay_sensitivity out of 1..10 for '" + t.key + "'");

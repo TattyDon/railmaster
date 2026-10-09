@@ -3,6 +3,7 @@
 #include "railmaster/sim/cargo.hpp"
 #include "railmaster/sim/commands.hpp"
 #include "railmaster/sim/date.hpp"
+#include "railmaster/sim/economy.hpp"
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/random.hpp"
@@ -19,12 +20,14 @@ struct WorldConfig {
     std::int32_t height_tiles = 128;
     std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
     bool sandbox = false;            // sandbox games have breakdowns off by default
+    bool populate = true;            // place towns and industries (when industry data is present)
 };
 
 // Static definitions shared by the whole game, loaded from data/.
 struct GameData {
-    CargoRegistry cargo;
-    LocomotiveRegistry locomotives;
+    CargoRegistry cargo{};
+    LocomotiveRegistry locomotives{};
+    IndustryRegistry industries{};
 };
 
 // Root of all simulation state. Advancing it is a pure function of its
@@ -46,6 +49,8 @@ public:
     const Terrain& terrain() const { return terrain_; }
     Terrain& terrain() { return terrain_; }
     const GameData& data() const { return data_; }
+    Economy& economy() { return economy_; }
+    const Economy& economy() const { return economy_; }
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
@@ -68,6 +73,7 @@ private:
     std::uint64_t total_ticks_ = 0;
     Terrain terrain_;
     GameData data_;
+    Economy economy_;
     Railway railway_;
     Money spent_;
 

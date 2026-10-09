@@ -13,6 +13,7 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -23,8 +24,6 @@ namespace {
 
 namespace sim = railmaster::sim;
 namespace client = railmaster::client;
-
-constexpr std::int64_t kKm = 1'000'000;
 
 // Game days advanced per real second at each speed setting.
 constexpr int kSpeedDaysPerSecond[] = {0, 2, 8, 32};
@@ -38,8 +37,11 @@ std::string read_file(const std::string& path) {
 }
 
 sim::GameData load_game_data(const std::string& dir) {
-    return {sim::CargoRegistry::from_json(read_file(dir + "/cargo.json")),
-            sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"))};
+    sim::GameData d;
+    d.cargo = sim::CargoRegistry::from_json(read_file(dir + "/cargo.json"));
+    d.locomotives = sim::LocomotiveRegistry::from_json(read_file(dir + "/locomotives.json"));
+    d.industries = sim::IndustryRegistry::from_json(read_file(dir + "/industries.json"), d.cargo);
+    return d;
 }
 
 sim::CommandResult must(sim::World& world, const sim::Command& cmd) {
@@ -54,34 +56,36 @@ sim::TrackEnd at_node(const sim::World& world, sim::NodeId n) {
 
 sim::TrackEnd on_ground(sim::MapPoint p) { return {sim::TrackEnd::Kind::Free, 0, 0, p}; }
 
-// A starting network, built with the same commands the tools use: three
-// towns in a loop of straight and curved track, with two trains running
-// round it in opposite directions.
+// A starting network, built with the same commands the tools use: a
+// triangle of track joining a town and its two nearest neighbours, with two trains running round it in opposite directions.
 void build_demo_network(sim::World& world) {
-    const sim::MapPoint towns[] = {{20 * kKm, 20 * kKm}, {105 * kKm, 35 * kKm}, {60 * kKm, 105 * kKm}};
-    const char* names[] = {"Ashford", "Brookvale", "Carrow"};
+    const auto& towns = world.economy().towns();
+    if (towns.size() < 3) throw std::runtime_error("demo network: fewer than three towns on the map");
+    const auto centre = [&](const sim::Town& t) {
+        const std::int64_t cell = world.terrain().tile_size_m() * std::int64_t{1000};
+        return sim::MapPoint{t.cx * cell + cell / 2, t.cy * cell + cell / 2};
+    };
+    std::vector<std::size_t> order(towns.size());
+    for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin() + 1, order.end(), [&](std::size_t a, std::size_t b) {
+        return sim::distance_mm(centre(towns[a]), centre(towns[0])) < sim::distance_mm(centre(towns[b]), centre(towns[0]));
+    });
+    const sim::Town* picked[3] = {&towns[order[0]], &towns[order[1]], &towns[order[2]]};
+    const sim::MapPoint at[3] = {centre(*picked[0]), centre(*picked[1]), centre(*picked[2])};
     const sim::TrackNetwork& net = world.railway().track();
 
     sim::NodeId nodes[3];
-    nodes[1] = must(world, sim::BuildTrack{.start = on_ground(towns[0]), .end = on_ground(towns[1])}).created_id;
-    nodes[0] = *net.nearest_node(towns[0], 1);
-    // Curves that carry on in the direction the track was already heading.
-    nodes[2] = must(world, sim::BuildTrack{.start = at_node(world, nodes[1]),
-                                           .end = on_ground(towns[2]),
-                                           .curve_control = sim::continuing_control_point(net, nodes[1], towns[2])})
-                   .created_id;
-    must(world, sim::BuildTrack{.start = at_node(world, nodes[2]),
-                                .end = at_node(world, nodes[0]),
-                                .curve_control = sim::continuing_control_point(net, nodes[2], towns[0])});
+    nodes[1] = must(world, sim::BuildTrack{.start = on_ground(at[0]), .end = on_ground(at[1])}).created_id;
+    nodes[0] = *net.nearest_node(at[0], 1);
+    nodes[2] = must(world, sim::BuildTrack{.start = at_node(world, nodes[1]), .end = on_ground(at[2])}).created_id;
+    must(world, sim::BuildTrack{.start = at_node(world, nodes[2]), .end = at_node(world, nodes[0])});
 
     sim::StationId st[3];
     for (int i = 0; i < 3; ++i) {
-        st[i] = must(world, sim::BuildStation{.at = at_node(world, nodes[i]), .name = names[i]}).created_id;
+        st[i] = must(world, sim::BuildStation{.at = at_node(world, nodes[i]), .name = picked[i]->name}).created_id;
         must(world, sim::BuildServiceBuilding{.at = at_node(world, nodes[i])});
     }
     must(world, sim::BuildServiceBuilding{.at = at_node(world, nodes[0]), .type = sim::ServiceType::MaintenanceFacility});
-    // Steam tenders run dry in about 150 km, so add towers along the line too.
-    for (sim::NodeId n = 120; n < net.nodes().size(); n += 120) must(world, sim::BuildServiceBuilding{.at = at_node(world, n)});
 
     sim::LocoTypeId loco = 0;
     for (const auto& l : world.data().locomotives.all()) {
@@ -92,7 +96,8 @@ void build_demo_network(sim::World& world) {
     }
     must(world, sim::BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[1], st[2]}, .priority = 1});
     must(world, sim::BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[2], st[1]}});
-    std::printf("Demo network built for %s\n", client::format_money(world.total_spent()).c_str());
+    std::printf("Demo network joining %s, %s and %s built for %s\n", picked[0]->name.c_str(),
+                picked[1]->name.c_str(), picked[2]->name.c_str(), client::format_money(world.total_spent()).c_str());
 }
 
 } // namespace
@@ -119,8 +124,7 @@ int main(int argc, char* argv[]) {
         try {
             build_demo_network(world);
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "%s\n", e.what());
-            return 1;
+            std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
         }
     }
 
@@ -218,10 +222,13 @@ int main(int argc, char* argv[]) {
         glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         client::draw_terrain(world.terrain());
+        if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()));
+        client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
         client::draw_railway(world.railway(), cam);
         tools.draw_world_overlay();
 
         cam.apply_screen();
+        client::draw_town_names(world.economy(), cam);
         const std::string status = world.date().month_year_label() +
                                    (speed == 0 ? "  PAUSED" : "  SPEED " + std::to_string(speed)) +
                                    "  SPACE PAUSE, 1-3 SPEED";

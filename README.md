@@ -12,7 +12,9 @@ may and may not contain.
 
 Early development. Done so far:
 - a deterministic simulation core: calendar, money, RNG, heightfield terrain
-- data for 41 cargo types and 35 locomotives
+- data for 41 cargo types, 35 locomotives, and 41 industry types plus houses
+- a cargo economy: towns and industries, production chains, and a map-wide
+  price field along which cargo drifts, shown as a cargo price overlay
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
   single track
@@ -51,6 +53,7 @@ of the demo network.
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
+| O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |
 

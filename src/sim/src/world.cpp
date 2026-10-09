@@ -9,8 +9,14 @@ World::World(const WorldConfig& config, GameData data)
       date_(config.start_date),
       terrain_(config.width_tiles, config.height_tiles, config.tile_size_m),
       data_(std::move(data)),
+      economy_(config.width_tiles, config.height_tiles, std::int64_t{config.tile_size_m} * 1000, data_.cargo),
       railway_(config.seed) {
     terrain_.generate_rolling_hills(rng_, 400);
+    if (config.populate && !data_.industries.all().empty()) {
+        populate_economy(economy_, terrain_, data_.cargo, data_.industries, rng_, date_.year());
+        // A year of history, so the map starts with prices and cargo in place.
+        economy_.settle(data_.cargo, data_.industries, date_.year(), 365);
+    }
     railway_.set_rules({.breakdowns = !config.sandbox});
 }
 
@@ -29,9 +35,9 @@ void World::tick() {
     if (after.year != before.year) on_new_year();
 }
 
-// Periodic hooks. Economy, maintenance and finance processing get wired in
-// here as those systems are implemented from docs/spec.
-void World::on_new_day() {}
+// Periodic hooks. Maintenance and finance processing get wired in here as
+// those systems are implemented from docs/spec.
+void World::on_new_day() { economy_.step_day(data_.cargo, data_.industries, date_.year()); }
 void World::on_new_month() {}
 void World::on_new_year() {}
 
