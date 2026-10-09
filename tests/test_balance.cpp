@@ -41,8 +41,8 @@ TEST_CASE("balance: round trip, partial files and comments") {
     CHECK(Balance::from_json("{}") == default_balance());
 
     const Balance b = Balance::from_json(R"({"_note": "x", "version": 1,
-        "finance": {"_why": "test", "starting_cash": 123, "bond_rate_bp": [1, 2, 3, 4, 5, 6, 7, 8]}})");
-    CHECK(b.finance.starting_cash == 123);
+        "finance": {"_why": "test", "bond_face_value": 123, "bond_rate_bp": [1, 2, 3, 4, 5, 6, 7, 8]}})");
+    CHECK(b.finance.bond_face_value == 123);
     CHECK(b.finance.bond_rate_bp[7] == 8);
     CHECK(b.finance.max_bonds == default_balance().finance.max_bonds); // untouched keys keep defaults
     CHECK(b.stock.salary_per_year == default_balance().stock.salary_per_year);
@@ -50,10 +50,10 @@ TEST_CASE("balance: round trip, partial files and comments") {
 }
 
 TEST_CASE("balance: typos and wrong versions are errors") {
-    CHECK_THROWS_AS(Balance::from_json(R"({"finance": {"startng_cash": 1}})"), std::runtime_error);
+    CHECK_THROWS_AS(Balance::from_json(R"({"finance": {"bond_face_valu": 1}})"), std::runtime_error);
     CHECK_THROWS_AS(Balance::from_json(R"({"finanse": {}})"), std::runtime_error);
     CHECK_THROWS_AS(Balance::from_json(R"({"version": 2})"), std::runtime_error);
-    CHECK_THROWS_AS(Balance::from_json(R"({"finance": {"starting_cash": "lots"}})"), std::runtime_error);
+    CHECK_THROWS_AS(Balance::from_json(R"({"finance": {"bond_face_value": "lots"}})"), std::runtime_error);
     CHECK_THROWS_AS(Balance::from_json("[1, 2]"), std::runtime_error);
     CHECK_THROWS_AS(Balance::from_json("{"), std::runtime_error);
 }
@@ -67,17 +67,18 @@ TEST_CASE("balance: the timeliness step is exp(-0.0023) in Q30") {
 
 TEST_CASE("a world takes its numbers from its balance") {
     Balance b;
-    b.finance.starting_cash = 1'234'000;
-    b.stock.starting_personal_cash = 77'000;
-    b.stock.founding_shares = 200'000;
-    b.stock.founding_player_shares = 50'000;
+    b.stock.founder_fortune = 1'000'000;
+    b.stock.founder_investment = 600'000;
+    b.stock.outside_investment = 1'400'000;
+    b.stock.founding_share_price_cents = 2'000; // $20 a share
     b.finance.bond_face_value = 100'000;
     b.finance.max_bonds = 1;
     World w = small_world(b);
-    CHECK(w.company().cash() == Money::dollars(1'234'000));
-    CHECK(w.company().shares_outstanding() == 200'000);
-    CHECK(w.investor().cash == Money::dollars(77'000));
-    CHECK(w.investor().shares_in(0) == 50'000);
+    CHECK(w.company().cash() == Money::dollars(2'000'000));
+    CHECK(w.company().shares_outstanding() == 100'000);
+    CHECK(w.company().share_price() == Money::dollars(20));
+    CHECK(w.investor().cash == Money::dollars(400'000));
+    CHECK(w.investor().shares_in(0) == 30'000);
 
     REQUIRE(w.execute(IssueBond{}).ok);
     CHECK(w.company().debt() == Money::dollars(100'000));

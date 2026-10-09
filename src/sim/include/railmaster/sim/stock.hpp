@@ -34,8 +34,11 @@ struct Investor {
     std::int64_t shares_in(CompanyId c) const { return c < holdings.size() ? holdings[c] : 0; }
     void add_shares(CompanyId c, std::int64_t n);
 
-    // The founder of `company`: starting personal cash and the founder's shares.
-    static Investor founder(std::string name, CompanyId company, const Balance& b = default_balance());
+    // The founder of `company`, who put `investment` (by default the usual
+    // founder's investment) of their fortune into it for shares at the
+    // founding price.
+    static Investor founder(std::string name, CompanyId company, const Balance& b = default_balance(),
+                            std::optional<Money> investment = std::nullopt);
 };
 
 // Every company and every player.
@@ -56,7 +59,8 @@ std::int64_t public_float(const Market& m, CompanyId c);
 // total paid or received, each block at the price after its own impact.
 Money trade_with_impact(Company& c, std::int64_t shares, bool buying);
 
-// Each returns an error message, or nullopt on success. Selling more than
+// Each returns an error message, or nullopt on success. Every trade pays the
+// broker a commission (Balance::Stock::brokerage_permille). Selling more than
 // you hold sells short (not your own company; within a cap on net worth);
 // buying while short covers first.
 std::optional<std::string> buy_shares(Market& m, PlayerId who, CompanyId c, std::int64_t blocks);

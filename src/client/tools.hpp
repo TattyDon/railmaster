@@ -36,6 +36,11 @@ public:
     void draw_ui(const std::string& status) const;
     // Flash a message in the top bar for a few seconds.
     void show(std::string message, bool good);
+    // The founding dialog: how much to invest and how much outside money to
+    // take. While open it takes all input; Enter founds the company.
+    // `cancellable`: Esc closes it (when founding a further company).
+    void open_founding(bool cancellable);
+    bool founding_open() const { return founding_; }
 
 private:
     struct Button {
@@ -80,6 +85,13 @@ private:
 
     sim::CompanyId market_choice_ = 0; // the company selected on the market screen
     Uint32 resign_armed_until_ = 0;     // a first Q press arms resigning for a few seconds
+    Uint32 bankrupt_armed_until_ = 0;   // likewise K for bankruptcy
+    bool founding_ = false;
+    bool founding_cancellable_ = false;
+    std::int64_t found_personal_ = 0;   // dollars, as chosen in the dialog
+    std::int64_t found_outside_ = 0;
+    bool founding_key(SDL_Keycode key, Uint16 mod);
+    void draw_founding_dialog() const;
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;

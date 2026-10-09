@@ -48,7 +48,7 @@ Money YearAccounts::expenses() const {
 Company::Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance, CompanyId id)
     : name_(std::move(name)), id_(id), finance_(balance.finance), stock_(balance.stock),
       states_(balance.economic_states), corporate_(balance.corporate), cash_(starting_cash),
-      shares_(balance.stock.founding_shares) {
+      shares_(starting_cash.in_cents() / std::max<std::int64_t>(1, balance.stock.founding_share_price_cents)) {
     history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
     history_.back().start_price = price_;
@@ -215,7 +215,49 @@ Money Company::debt() const {
     return d;
 }
 
+std::optional<std::string> Company::bankruptcy_problem() const {
+    const std::int32_t year = history_.back().year;
+    if (bankrupt_year_ && year - *bankrupt_year_ < finance_.bankruptcy_repeat_years) {
+        return "a company cannot go bankrupt twice within " + std::to_string(finance_.bankruptcy_repeat_years) + " years";
+    }
+    if (bonds_.empty()) return std::string("there is no bond debt to clear");
+    std::int32_t losses = 0;
+    for (std::size_t i = history_.size() - 1; i-- > 0;) {
+        if (history_[i].profit() >= Money{}) break;
+        ++losses;
+    }
+    if (losses < finance_.bankruptcy_loss_years && cash_ >= Money{}) {
+        return "bankruptcy needs " + std::to_string(finance_.bankruptcy_loss_years) +
+               " loss years in a row, or bills the company cannot pay";
+    }
+    return std::nullopt;
+}
+
+void Company::declare_bankruptcy() {
+    Money forgiven;
+    for (Bond& b : bonds_) {
+        const Money kept = b.principal.scaled(finance_.bankruptcy_debt_kept_percent, 100);
+        forgiven += b.principal - kept;
+        b.principal = kept;
+    }
+    // The bondholders are paid in new shares at today's price, which falls
+    // in proportion to the dilution.
+    const Money price = std::max(price_, Money::cents(stock_.min_share_price_cents));
+    const std::int64_t old_shares = shares_;
+    const std::int64_t new_shares = forgiven.in_cents() / std::max<std::int64_t>(1, price.in_cents());
+    shares_ += new_shares;
+    if (shares_ > 0) {
+        price_ = std::max(price.scaled(old_shares, shares_), Money::cents(stock_.min_share_price_cents));
+    }
+    history_.back().debt_forgiven += forgiven;
+    bankrupt_year_ = history_.back().year;
+}
+
 CreditRating Company::credit_rating() const {
+    // Ruined for some years after a bankruptcy [D/I].
+    if (bankrupt_year_ && history_.back().year - *bankrupt_year_ < finance_.bankruptcy_rating_years) {
+        return CreditRating::D;
+    }
     const Money assets = total_assets();
     const std::int64_t leverage_pct =
         assets > Money{} ? debt().in_cents() * 100 / assets.in_cents() : (debt() > Money{} ? 100 : 0);

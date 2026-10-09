@@ -160,7 +160,6 @@ struct Balance {
     } ai;
 
     struct Finance {
-        std::int64_t starting_cash = 6'000'000;
         std::int64_t fuel_per_km_steam = 20;
         std::int64_t fuel_per_km_diesel = 15;
         std::int64_t fuel_per_km_electric = 10;
@@ -177,12 +176,28 @@ struct Balance {
         std::int32_t bond_early_repayment_percent = 2;
         std::int32_t max_bonds = 20;
         std::int32_t bond_maturity_years = 30;
+        // Bankruptcy (rt3-clone-spec §12.4): allowed after this many loss
+        // years in a row, or when the company cannot pay [C/I]; keeps this
+        // share of each bond [D: halved]; rating held at D for some years
+        // and no second bankruptcy within more [I].
+        std::int32_t bankruptcy_loss_years = 2;
+        std::int32_t bankruptcy_debt_kept_percent = 50;
+        std::int32_t bankruptcy_rating_years = 5;
+        std::int32_t bankruptcy_repeat_years = 10;
     } finance;
 
     struct Stock {
-        std::int64_t founding_shares = 600'000;
-        std::int64_t founding_player_shares = 300'000;
-        std::int64_t starting_personal_cash = 500'000;
+        // Founding a company (rt3-clone-spec §12.2 [C/I]): the founder's
+        // personal fortune, what they put in unless they choose otherwise,
+        // the most outside investors will put in, and the least a founder
+        // may. Shares are issued at the founding price [I, RT2: $10].
+        std::int64_t founder_fortune = 3'500'000;
+        std::int64_t founder_investment = 3'000'000;
+        std::int64_t outside_investment = 3'000'000;
+        std::int64_t min_founder_investment = 100'000;
+        std::int64_t founding_share_price_cents = 1'000;
+        std::int64_t starting_personal_cash = 500'000; // a tycoon who arrives later to run a company
+        std::int32_t brokerage_permille = 10;          // on every trade a player makes [I: ~1%]
         std::int64_t salary_per_year = 50'000;
         std::int32_t margin_percent = 50;
         std::int32_t margin_interest_bp = 1000; // at the Normal prime rate; moves with it

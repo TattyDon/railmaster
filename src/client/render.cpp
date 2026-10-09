@@ -88,28 +88,29 @@ void draw_terrain(const sim::Terrain& t) {
     glEnd();
 }
 
-void owner_rgb(sim::CompanyId owner, float& r, float& g, float& b) {
+void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float& r, float& g, float& b) {
     static constexpr float kPalette[][3] = {
         {0.95f, 0.95f, 0.90f}, {0.90f, 0.35f, 0.20f}, {0.20f, 0.75f, 0.85f}, {0.80f, 0.30f, 0.75f},
         {0.90f, 0.80f, 0.20f}, {0.35f, 0.80f, 0.35f}, {0.40f, 0.50f, 0.95f}, {0.65f, 0.45f, 0.25f},
     };
-    const auto& c = kPalette[owner % (sizeof(kPalette) / sizeof(kPalette[0]))];
+    constexpr std::size_t kHues = sizeof(kPalette) / sizeof(kPalette[0]) - 1;
+    const auto& c = owner == player ? kPalette[0] : kPalette[1 + owner % kHues];
     r = c[0];
     g = c[1];
     b = c[2];
 }
 
-void draw_railway(const sim::Railway& rw, const Camera& cam) {
+void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
     const sim::TrackNetwork& net = rw.track();
     for (const sim::TrackEdge& e : net.edges()) {
         glLineWidth(e.double_track ? 4.0f : 2.0f);
         glBegin(GL_LINES);
-        if (e.owner == 0) {
+        if (e.owner == player) {
             track_colour(e.kind, 1.0f);
         } else {
             // Rivals' track in their colour, darker in tunnels.
             float r, g, b;
-            owner_rgb(e.owner, r, g, b);
+            owner_rgb(e.owner, player, r, g, b);
             const float k = e.kind == sim::TrackKind::Tunnel ? 0.4f : 0.8f;
             glColor3f(r * k, g * k, b * k);
         }
@@ -123,7 +124,7 @@ void draw_railway(const sim::Railway& rw, const Camera& cam) {
     glBegin(GL_QUADS);
     for (const sim::Station& s : rw.stations()) {
         float r, g, b;
-        owner_rgb(s.owner, r, g, b);
+        owner_rgb(s.owner, player, r, g, b);
         glColor3f(r, g, b);
         square(net.node(s.node).pos, cam, 6 * px);
     }
@@ -137,10 +138,10 @@ void draw_railway(const sim::Railway& rw, const Camera& cam) {
         if (t.state == sim::TrainState::BrokenDown) glColor3f(1.0f, 0.55f, 0.0f);
         else if (t.state == sim::TrainState::Servicing) glColor3f(0.2f, 0.4f, 1.0f);
         else if (t.yielding) glColor3f(0.9f, 0.15f, 0.1f);
-        else if (t.owner == 0) glColor3f(0.1f, 0.1f, 0.1f);
+        else if (t.owner == player) glColor3f(0.1f, 0.1f, 0.1f);
         else {
             float r, g, b;
-            owner_rgb(t.owner, r, g, b);
+            owner_rgb(t.owner, player, r, g, b);
             glColor3f(r * 0.5f, g * 0.5f, b * 0.5f);
         }
         square(rw.train_position(t.id), cam, 4 * px);

@@ -52,8 +52,19 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
   unproven, a notch per four bonds once it has had a profitable year, so
   the 20-bond maximum is reachable.
 - **Book value** = cash + assets at cost − bonds.
-- **Negative cash** is currently allowed: running costs are always charged.
-  Bankruptcy comes later.
+- **Negative cash** is allowed: running costs are always charged. A
+  company that cannot pay may declare bankruptcy (below).
+- **Bankruptcy** (rt3-clone-spec §12.4 [D]): a voluntary last resort.
+  - **Allowed** when the company has bonds and either its last two closed
+    years were losses or its cash is below zero (bills it cannot pay)
+    [C/I]. Not again within 10 years [I].
+  - **Effect:** every bond's principal is halved [D]. The bondholders take
+    new shares, at today's price, for what they lost, and the price falls
+    in proportion to the dilution [D].
+  - **Afterwards:** the credit rating is held at D for 5 years [I], so no
+    new bonds. The amount written off shows as "debt forgiven" in that
+    year's accounts. There is no personal bankruptcy [C].
+  - AI companies declare it when out of cash with no bond left to issue.
 
 ## Provisional constants
 
@@ -62,7 +73,7 @@ In the `finance` and `stock` sections of
 
 | Item | Value |
 |---|---|
-| Starting cash | $6,000,000 |
+| Founding (default terms) | Fortune $3.5M; you invest $3M; outside investors $3M; shares at $10 |
 | Fuel per km | Steam $20, diesel $15, electric $10, plus $2 per car |
 | Track and building upkeep | 0.5% of cost a month |
 | Rating by debt ÷ assets | AAA < 5%, AA < 15%, A < 25%, BBB < 35%, BB < 45%, B < 55%, C < 70%, else D |
@@ -99,9 +110,17 @@ Researched [overview-finance-scenarios.md §4.1, §4.3]:
 
 Our design:
 
-- **Founding.** The company starts with 600,000 shares priced at its
-  starting cash per share ($10). The player holds half and has $500,000 in
-  personal cash.
+- **Founding** (rt3-clone-spec §12.2, the founding dialog [I, RT2]): the
+  founder chooses how much of their fortune to invest, from $100,000 up to
+  all of it, and how much outside money to take, up to the investors'
+  offer. Capital is issued as shares at $10. The founder gets the shares
+  their money bought and the outside investors hold the rest. The default
+  terms (fortune $3.5M, invest $3M, outside $3M) give the old opening:
+  600,000 shares, half the founder's, $500,000 left in hand. Investing more
+  than the outside money gives a majority, which no shareholder vote can
+  remove.
+- **Brokerage** [I]: every share trade a player makes, short sales and
+  margin calls included, pays 1% of its value to the broker.
 - **Price impact.** Each 1,000-share block moves the price by
   2 × (block ÷ shares outstanding), so trading 1% of the company moves the
   price 2%.
@@ -120,7 +139,8 @@ Our design:
 
 | Item | Value |
 |---|---|
-| Personal starting cash | $500,000 |
+| Personal cash | Fortune less investment ($500,000 by default); $500,000 for a tycoon who arrives later |
+| Brokerage | 1% a trade |
 | Salary | $50,000 a year [C] |
 | Margin | Holdings count at 50% |
 | Margin interest | 10% a year on negative cash |

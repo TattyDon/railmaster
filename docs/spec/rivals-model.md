@@ -10,8 +10,11 @@ Tags: [D] documented, [C] community, [M] from the manual, [I] ours.
 - Each **player** (the human, always player 0, or an AI tycoon) has a
   private account and a portfolio of shares in any company (§12.1 [D]).
 - Each player may chair one **company**. The human's company is company 0.
-  A rival tycoon founds a company with the same starting cash and the same
-  founding share split as the player.
+  A rival tycoon founds a company on the default founding terms (see
+  m3-finance-model.md), as the player does unless they choose otherwise
+  in the founding dialog.
+- A player with no company may found a new one (`FoundCompany`; market
+  screen, N) with whatever money they have.
 - Every command is made by a player (`World::execute(command, player)`).
   Building, buying trains, bonds, stock issues and dividends act for the
   company that player chairs. Share trades are personal. The AI uses
@@ -224,4 +227,5 @@ takeovers are rare unless a founder is forced to sell on margin.
 
 - Replacing old engines, more than two stops per route, and double track.
 - Buying industries (§6.2), recession caution.
-- Bankruptcy for anyone: a rival that keeps losing money just borrows.
+- Recovering a failing line rather than just borrowing; a rival goes
+  bankrupt only when its credit is exhausted.

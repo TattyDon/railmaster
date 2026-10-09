@@ -105,9 +105,23 @@ struct AttemptMerger {
 // successor.
 struct Resign {};
 
+// Found a company (rt3-clone-spec §12.2, the founding dialog [I, RT2]): put
+// some of your own money in, and take up to the outside investors' offer.
+// The capital is issued as shares at the founding price; you get the shares
+// your money bought. Only a player who runs no company may.
+struct FoundCompany {
+    std::string name{};
+    Money personal_investment{};
+    Money outside_investment{};
+};
+
+// Declare the company bankrupt [D]: a last resort that halves its bond debt,
+// gives the bondholders new shares for the rest, and ruins its credit.
+struct DeclareBankruptcy {};
+
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
-                             AttemptMerger, Resign>;
+                             AttemptMerger, Resign, FoundCompany, DeclareBankruptcy>;
 
 struct CommandResult {
     bool ok = false;

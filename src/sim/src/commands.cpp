@@ -109,7 +109,8 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
             // Trading shares and bidding for control are personal; everything
             // else acts for a company.
             if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares> &&
-                          !std::is_same_v<T, AttemptTakeover> && !std::is_same_v<T, Resign>) {
+                          !std::is_same_v<T, AttemptTakeover> && !std::is_same_v<T, Resign> &&
+                          !std::is_same_v<T, FoundCompany>) {
                 if (!market_.investors[actor_].chairs) return fail("you do not run a company");
             }
             return run(c);
@@ -358,6 +359,21 @@ CommandResult World::run(const Resign&) {
     news_.push_back(me.name + " has resigned as chairman of " + company(c).name());
     appoint_chairman(c, actor_);
     return success(Money{}, c);
+}
+
+CommandResult World::run(const FoundCompany& cmd) {
+    if (auto why = founding_problem(actor_, cmd)) return fail(*why);
+    const CompanyId id = found_for(actor_, cmd);
+    news_.push_back(market_.investors[actor_].name + " has founded " + company(id).name());
+    return success(Money{}, id);
+}
+
+CommandResult World::run(const DeclareBankruptcy&) {
+    Company& c = acting();
+    if (auto why = c.bankruptcy_problem()) return fail(*why);
+    c.declare_bankruptcy();
+    news_.push_back(c.name() + " has declared bankruptcy");
+    return success(Money{}, c.id());
 }
 
 void World::merge(Company& buyer, CompanyId tid, Money offer) {

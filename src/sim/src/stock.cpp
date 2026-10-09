@@ -27,10 +27,14 @@ std::int64_t issue_size(const Company& c) {
 
 bool valid(const Market& m, PlayerId who, CompanyId c) { return who < m.investors.size() && c < m.companies.size(); }
 
+// The broker's commission on a trade worth `value` [I].
+Money brokerage(const Company& c, Money value) { return value.scaled(c.stock_balance().brokerage_permille, 1000); }
+
 // Buy back borrowed shares, with no checks: covering a short.
 void cover(Market& m, PlayerId who, CompanyId cid, std::int64_t shares) {
     Investor& inv = m.investors[who];
-    inv.cash -= trade_with_impact(m.companies[cid], shares, true);
+    const Money cost = trade_with_impact(m.companies[cid], shares, true);
+    inv.cash -= cost + brokerage(m.companies[cid], cost);
     inv.add_shares(cid, shares);
 }
 
@@ -49,11 +53,12 @@ void Investor::add_shares(CompanyId c, std::int64_t n) {
     holdings[c] += n;
 }
 
-Investor Investor::founder(std::string name, CompanyId company, const Balance& b) {
+Investor Investor::founder(std::string name, CompanyId company, const Balance& b, std::optional<Money> investment) {
+    const Money put_in = investment.value_or(Money::dollars(b.stock.founder_investment));
     Investor inv;
     inv.name = std::move(name);
-    inv.cash = Money::dollars(b.stock.starting_personal_cash);
-    inv.add_shares(company, b.stock.founding_player_shares);
+    inv.cash = Money::dollars(b.stock.founder_fortune) - put_in;
+    inv.add_shares(company, put_in.in_cents() / std::max<std::int64_t>(1, b.stock.founding_share_price_cents));
     inv.chairs = company;
     return inv;
 }
@@ -115,12 +120,14 @@ std::optional<std::string> buy_shares(Market& m, PlayerId who, CompanyId cid, st
     // buying, which lifts the price, pay for itself.
     Company trial = c;
     const Money cost = trade_with_impact(trial, shares, true);
+    const Money total = cost + brokerage(c, cost);
     const Money power = purchasing_power(inv, m);
-    if (cost > power) {
-        return "not enough purchasing power: costs " + dollars(cost) + ", you can raise " + dollars(power);
+    if (total > power) {
+        return "not enough purchasing power: costs " + dollars(total) + " with brokerage, you can raise " +
+               dollars(power);
     }
     c = trial;
-    inv.cash -= cost;
+    inv.cash -= total;
     inv.add_shares(cid, shares);
     return std::nullopt;
 }
@@ -145,7 +152,8 @@ std::optional<std::string> sell_shares(Market& m, PlayerId who, CompanyId cid, s
                    dollars(cap) + ")";
         }
     }
-    inv.cash += trade_with_impact(c, shares, false);
+    const Money proceeds = trade_with_impact(c, shares, false);
+    inv.cash += proceeds - brokerage(c, proceeds);
     inv.add_shares(cid, -shares);
     return std::nullopt;
 }

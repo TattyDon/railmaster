@@ -16,7 +16,10 @@ Company founded(std::int64_t cash = 6'000'000, CompanyId id = 0) {
 Market one_company(std::int64_t cash = 6'000'000) {
     Market m;
     m.companies.push_back(founded(cash));
-    m.investors.push_back(Investor::founder("Founder", 0));
+    // The founder put in half the capital, from the usual fortune.
+    Investor founder = Investor::founder("Founder", 0, default_balance(), Money::dollars(cash / 2));
+    founder.cash = Money::dollars(500'000);
+    m.investors.push_back(founder);
     Investor outsider;
     outsider.name = "Outsider";
     outsider.cash = Money::dollars(500'000);
@@ -46,7 +49,8 @@ TEST_CASE("buying a block raises the price, and the block trades at the raised p
     // 1,000 of 600,000 shares, at 2% per 1%: +1/300 of the price.
     const Money expected_price = Money::dollars(10) + Money::dollars(10).scaled(2'000, 600'000);
     CHECK(m.companies[0].share_price() == expected_price);
-    CHECK(m.investors[0].cash == Money::dollars(500'000) - expected_price * 1000);
+    // Plus 1% to the broker.
+    CHECK(m.investors[0].cash == Money::dollars(500'000) - (expected_price * 1000).scaled(101, 100));
     CHECK(m.investors[0].shares_in(0) == 301'000);
 }
 
@@ -142,8 +146,8 @@ TEST_CASE("dividends are paid quarterly to every shareholder, or cut if unafford
     CHECK(m.investors[1].cash == outsider_cash + Money::dollars(15'000));
     CHECK(m.companies[0].this_year().dividends_paid == Money::dollars(300'000));
 
-    Market broke = one_company(100'000);
-    broke.companies[0].set_dividend_per_share(Money::dollars(2));
+    Market broke = one_company(100'000); // 10,000 shares: $50 a year each is $125,000 a quarter
+    broke.companies[0].set_dividend_per_share(Money::dollars(50));
     pay_dividends(broke, 0);
     CHECK(broke.companies[0].dividend_per_share() == Money{});
     CHECK(broke.investors[0].cash == Money::dollars(500'000));
@@ -173,12 +177,13 @@ TEST_CASE("the share price follows earnings, dividends and book value") {
 TEST_CASE("a portfolio across companies: net worth, purchasing power and margin calls count every holding") {
     Market m;
     m.companies = {founded(6'000'000, 0), founded(3'000'000, 1)};
-    m.investors = {Investor::founder("A", 0), Investor::founder("B", 1)};
-    CHECK(m.companies[1].share_price() == Money::dollars(5));
+    m.investors = {Investor::founder("A", 0), Investor::founder("B", 1, default_balance(), Money::dollars(1'500'000))};
+    CHECK(m.companies[1].share_price() == Money::dollars(10));
+    CHECK(m.companies[1].shares_outstanding() == 300'000);
     REQUIRE_FALSE(buy_shares(m, 0, 1, 20).has_value()); // A buys 20,000 of B's company
     const Investor& a = m.investors[0];
     CHECK(a.shares_in(1) == 20'000);
-    CHECK(public_float(m, 1) == 300'000 - 20'000);
+    CHECK(public_float(m, 1) == 150'000 - 20'000); // B holds half
     CHECK(holdings_value(a, m) ==
           m.companies[0].share_price() * 300'000 + m.companies[1].share_price() * 20'000);
     CHECK(net_worth(a, m) == a.cash + holdings_value(a, m));
@@ -228,8 +233,10 @@ TEST_CASE("selling short: borrowed shares sold now, bought back later [D]") {
     // purchasing power holds 150% of its value against it.
     const Money owed = m.companies[0].share_price() * 2'000;
     CHECK(net_worth(m.investors[1], m) == m.investors[1].cash - owed);
-    // Each block sold above the final price, which is what the debt is marked at.
-    CHECK(net_worth(m.investors[1], m) >= worth);
+    // Each block sold above the final price the debt is marked at, which
+    // nearly offsets the 1% brokerage.
+    CHECK(net_worth(m.investors[1], m) >= worth - owed.scaled(1, 100));
+    CHECK(net_worth(m.investors[1], m) < worth);
     CHECK(purchasing_power(m.investors[1], m) == m.investors[1].cash - owed.scaled(150, 100));
     CHECK(public_float(m, 0) == 302'000); // borrowed shares are in public hands
 
@@ -266,4 +273,25 @@ TEST_CASE("short sellers pay the dividend, and a rising price forces them to buy
     CHECK(covered > 0);
     CHECK(m.investors[1].shares_in(0) > -20'000);
     CHECK((purchasing_power(m.investors[1], m) >= Money{} || m.investors[1].shares_in(0) == 0));
+}
+
+TEST_CASE("every trade pays the broker about 1% [I]") {
+    Market m = one_company();
+    const Money before = m.investors[1].cash;
+    REQUIRE_FALSE(buy_shares(m, 1, 0, 10).has_value());
+    const Money paid = before - m.investors[1].cash;
+    REQUIRE_FALSE(sell_shares(m, 1, 0, 10).has_value());
+    const Money back = m.investors[1].cash - (before - paid);
+    // A round trip loses the price impact both ways plus two commissions.
+    CHECK(paid - back > paid.scaled(2, 100) - Money::dollars(1));
+
+    Balance free = default_balance();
+    free.stock.brokerage_permille = 0;
+    Market n;
+    n.companies.push_back(Company("Free", Money::dollars(6'000'000), 1850, free, 0));
+    Investor buyer;
+    buyer.cash = Money::dollars(500'000);
+    n.investors.push_back(buyer);
+    REQUIRE_FALSE(buy_shares(n, 0, 0, 1).has_value());
+    CHECK(n.investors[0].cash == Money::dollars(500'000) - n.companies[0].share_price() * 1000);
 }

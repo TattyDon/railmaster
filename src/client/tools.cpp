@@ -240,6 +240,7 @@ std::vector<sim::LocoTypeId> Tools::available_locos() const {
 }
 
 void Tools::on_click(float sx, float sy, bool right_button) {
+    if (founding_) return;
     if (right_button) {
         cancel();
         return;
@@ -301,7 +302,92 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     }
 }
 
+void Tools::open_founding(bool cancellable) {
+    const sim::Balance::Stock& b = world_.data().balance.stock;
+    founding_ = true;
+    founding_cancellable_ = cancellable;
+    found_personal_ = std::min(b.founder_investment, world_.investor().cash.whole_dollars());
+    found_outside_ = b.outside_investment;
+}
+
+bool Tools::founding_key(SDL_Keycode key, Uint16 mod) {
+    const sim::Balance::Stock& b = world_.data().balance.stock;
+    const std::int64_t step = (mod & KMOD_SHIFT) != 0 ? 1'000'000 : 100'000;
+    const std::int64_t fortune = std::max<std::int64_t>(0, world_.investor().cash.whole_dollars());
+    switch (key) {
+    case SDLK_LEFT: found_personal_ = std::max<std::int64_t>(b.min_founder_investment, found_personal_ - step); break;
+    case SDLK_RIGHT: found_personal_ = std::min(fortune, found_personal_ + step); break;
+    case SDLK_DOWN: found_outside_ = std::max<std::int64_t>(0, found_outside_ - step); break;
+    case SDLK_UP: found_outside_ = std::min(b.outside_investment, found_outside_ + step); break;
+    case SDLK_ESCAPE:
+        if (founding_cancellable_) founding_ = false;
+        break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER: {
+        bool taken = false;
+        for (const sim::Company& c : world_.companies()) taken |= c.name() == "Railmaster Railroad";
+        const std::string name = taken ? "Railmaster Railroad " + std::to_string(world_.companies().size() + 1)
+                                       : "Railmaster Railroad";
+        const sim::CommandResult r = world_.execute(sim::FoundCompany{.name = name,
+                                                                      .personal_investment = sim::Money::dollars(found_personal_),
+                                                                      .outside_investment = sim::Money::dollars(found_outside_)});
+        if (r.ok) {
+            founding_ = false;
+            show("YOU HAVE FOUNDED " + name, true);
+        } else {
+            show("CANNOT FOUND IT: " + r.error, false);
+        }
+        break;
+    }
+    default: break;
+    }
+    return true;
+}
+
+void Tools::draw_founding_dialog() const {
+    const sim::Balance::Stock& b = world_.data().balance.stock;
+    constexpr float kRow = 20.0f;
+    const auto w = static_cast<float>(cam_.width_px);
+    const float x0 = std::max(20.0f, w / 2 - 470), y0 = 90;
+    fill_rect(x0, y0, x0 + 940, y0 + kRow * 15, 0.06f, 0.06f, 0.09f, 0.96f);
+    float y = y0 + 14;
+    const auto line = [&](const std::string& s, float r, float g, float bl) {
+        glColor3f(r, g, bl);
+        draw_text(x0 + 20, y, s, kScale);
+        y += kRow;
+    };
+    const sim::Money mine = sim::Money::dollars(found_personal_);
+    const sim::Money outside = sim::Money::dollars(found_outside_);
+    const std::int64_t price = std::max<std::int64_t>(1, b.founding_share_price_cents);
+    const std::int64_t shares = (mine + outside).in_cents() / price;
+    const std::int64_t stake = mine.in_cents() / price;
+    line("FOUND YOUR RAILROAD", 1.0f, 0.9f, 0.5f);
+    y += kRow / 2;
+    line("YOUR FORTUNE " + format_money(world_.investor().cash), 0.9f, 0.9f, 0.9f);
+    line("YOU INVEST " + format_money(mine) + "   (LEFT/RIGHT, SHIFT FOR $1,000,000)", 1, 1, 1);
+    line("OUTSIDE INVESTORS PUT IN " + format_money(outside) + " OF " +
+             format_money(sim::Money::dollars(b.outside_investment)) + " OFFERED   (UP/DOWN)",
+         1, 1, 1);
+    y += kRow / 2;
+    line("CAPITAL " + format_money(mine + outside) + "   " + format_count(shares) + " SHARES AT " +
+             format_cents(sim::Money::cents(price)),
+         0.9f, 0.9f, 0.9f);
+    line("YOUR STAKE " + format_count(stake) + " SHARES (" + std::to_string(shares > 0 ? stake * 100 / shares : 0) +
+             "%)   YOUR CASH LEFT " + format_money(world_.investor().cash - mine),
+         0.9f, 0.9f, 0.9f);
+    if (stake * 2 <= shares) {
+        line("AT HALF THE SHARES OR LESS, INVESTORS CAN VOTE YOU OUT AFTER BAD YEARS", 0.95f, 0.65f, 0.6f);
+    } else {
+        line("WITH OVER HALF THE SHARES, NOBODY CAN VOTE YOU OUT", 0.6f, 0.95f, 0.6f);
+    }
+    line("MORE OUTSIDE MONEY BUILDS MORE RAILROAD, BUT DILUTES YOUR CONTROL", 0.8f, 0.8f, 0.8f);
+    y += kRow / 2;
+    line(founding_cancellable_ ? "ENTER TO FOUND THE COMPANY, ESC TO CANCEL" : "ENTER TO FOUND THE COMPANY", 1.0f, 0.9f,
+         0.5f);
+}
+
 bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
+    if (founding_) return founding_key(key, mod);
     switch (key) {
     case SDLK_F1: select(Tool::Inspect); return true;
     case SDLK_F2: select(Tool::Track); return true;
@@ -361,6 +447,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     case Tool::Finance: {
+        if (key == SDLK_k) {
+            // A last resort: ask for a second press.
+            if (SDL_GetTicks() > bankrupt_armed_until_) {
+                bankrupt_armed_until_ = SDL_GetTicks() + 3000;
+                show("PRESS K AGAIN TO DECLARE BANKRUPTCY", false);
+                return true;
+            }
+            bankrupt_armed_until_ = 0;
+            const sim::CommandResult r = world_.execute(sim::DeclareBankruptcy{});
+            if (r.ok) show("BANKRUPT: HALF THE BOND DEBT IS GONE, AND SO IS YOUR CREDIT", false);
+            else show("CANNOT DECLARE BANKRUPTCY: " + r.error, false);
+            return true;
+        }
         const bool big = (mod & KMOD_SHIFT) != 0; // 5,000 shares at a time
         const std::int64_t blocks = big ? 5 : 1;
         const sim::Money step = sim::Money::cents(25);
@@ -408,6 +507,14 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             return true;
         }
         const sim::Company& target = world_.company(market_choice_ % n);
+        if (key == SDLK_n) {
+            if (world_.player_company()) {
+                show("YOU ALREADY RUN A COMPANY", false);
+            } else {
+                open_founding(/*cancellable=*/true);
+            }
+            return true;
+        }
         if (key == SDLK_q) {
             // Resigning cannot be undone: ask for a second press.
             if (SDL_GetTicks() > resign_armed_until_) {
@@ -481,7 +588,7 @@ void Tools::draw_market_panel() const {
         const sim::Money last = hist.size() > 1 ? hist[hist.size() - 2].profit() : hist.back().profit();
         const bool sel = c.id() == chosen;
         float r, g, b;
-        owner_rgb(c.id(), r, g, b);
+        owner_rgb(c.id(), world_.player_company(), r, g, b);
         const float swatch = cols[0] + static_cast<float>(text_width("> ", kScale));
         fill_rect(swatch, y + 2, swatch + 8, y + 10, r, g, b, 1.0f);
         if (c.defunct()) {
@@ -593,6 +700,7 @@ std::string Tools::cell_text() const {
 }
 
 void Tools::draw_world_overlay() const {
+    if (founding_) return;
     const sim::TrackNetwork& net = world_.railway().track();
     switch (tool_) {
     case Tool::Track:
@@ -678,10 +786,11 @@ std::string Tools::hint() const {
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
     case Tool::Market:
-        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN";
+        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
+               "COMPANY";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
-               "DIVIDEND";
+               "DIVIDEND   KK BANKRUPTCY";
     }
     return {};
 }
@@ -739,6 +848,18 @@ std::string Tools::inspect_text() const {
 void Tools::draw_ui(const std::string& status) const {
     const auto w = static_cast<float>(cam_.width_px);
     const auto h = static_cast<float>(cam_.height_px);
+    if (founding_) {
+        fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
+        glColor3f(0.95f, 0.95f, 0.9f);
+        draw_text(8, 4, status, kScale);
+        draw_founding_dialog();
+        if (SDL_GetTicks() < message_until_) {
+            if (message_good_) glColor3f(0.6f, 0.95f, 0.6f);
+            else glColor3f(0.95f, 0.5f, 0.45f);
+            draw_text(8, h - 22, message_, kScale);
+        }
+        return;
+    }
 
     // Top bar: status on the left, money spent on the right.
     fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);

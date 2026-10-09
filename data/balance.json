@@ -97,6 +97,10 @@
     "wait_loss_per_mille_per_sensitivity": 5
   },
   "finance": {
+    "bankruptcy_debt_kept_percent": 50,
+    "bankruptcy_loss_years": 2,
+    "bankruptcy_rating_years": 5,
+    "bankruptcy_repeat_years": 10,
     "bond_early_repayment_percent": 2,
     "bond_face_value": 500000,
     "bond_maturity_years": 30,
@@ -128,7 +132,6 @@
       55,
       70
     ],
-    "starting_cash": 6000000,
     "track_upkeep_per_mille_month": 5
   },
   "freight": {
@@ -170,15 +173,19 @@
   "stock": {
     "big_split_price_cents": 20000,
     "book_weight_percent": 60,
+    "brokerage_permille": 10,
     "dividend_multiple": 10,
     "earnings_multiple": 8,
-    "founding_player_shares": 300000,
-    "founding_shares": 600000,
+    "founder_fortune": 3500000,
+    "founder_investment": 3000000,
+    "founding_share_price_cents": 1000,
     "impact_per_share_of_company": 2,
     "issue_percent": 10,
     "margin_interest_bp": 1000,
     "margin_percent": 50,
+    "min_founder_investment": 100000,
     "min_share_price_cents": 50,
+    "outside_investment": 3000000,
     "price_adjust_percent": 25,
     "salary_max_percent": 200,
     "salary_min_percent": 50,

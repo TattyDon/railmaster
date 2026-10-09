@@ -36,6 +36,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §12.6 [D/C/I] | Takeovers and mergers by shareholder vote; >50% forces it; retry after a year; everything incl. bonds transfers | none | as documented; vote models [I] in [rivals-model.md](rivals-model.md) |
 | §12.2 [D/C/I] | Investor sentiment; warning after 2 bad years, ouster vote after 3; >50% cannot be removed; resign keeps shares; salary from 5-year weighted return | none | as the spec's defaults; successor rules ours |
 | §12.3 [C/I] | Splits: > $120 for 3 months → 2:1, > $200 → 3:1 | none | as the spec |
+| §12.4 [D/C/I] | Voluntary bankruptcy: debt halved, bondholders paid in shares, rating ruined; after 2 loss years or unpaid bills; no repeat in 10 years | none | as the spec |
+| §12.2, §12.5 [I] | Founding dialog: player and outside investment, shares at $10; brokerage ~1% | fixed opening; no fees | as the spec |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -127,8 +129,6 @@ Grouped by the spec's own build order (§17).
 - Fare speed factor, locomotive appeal and dining car (§8.3 [D]).
 
 **Company and market**
-- Bankruptcy (§12.4 [D]).
-- Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]).
 - AI: replacing engines, buying industries, recession caution, AI
   difficulty multipliers (§13.2, §8.4).
 

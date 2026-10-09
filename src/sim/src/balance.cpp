@@ -46,15 +46,19 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_r
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
                                                 cover_cells, buy_below_value_percent, sell_above_value_percent,
                                                 short_above_value_percent)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, starting_cash, fuel_per_km_steam, fuel_per_km_diesel,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, fuel_per_km_steam, fuel_per_km_diesel,
                                                 fuel_per_km_electric, fuel_per_km_per_car,
                                                 track_upkeep_per_mille_month, building_upkeep_per_mille_month,
                                                 easy_cost_percent, rating_leverage_limits, bond_rate_bp,
                                                 bonds_per_notch_when_proven, bond_face_value,
                                                 bond_underwriting_percent, bond_early_repayment_percent, max_bonds,
-                                                bond_maturity_years)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stock, founding_shares, founding_player_shares,
-                                                starting_personal_cash, salary_per_year, margin_percent,
+                                                bond_maturity_years, bankruptcy_loss_years,
+                                                bankruptcy_debt_kept_percent, bankruptcy_rating_years,
+                                                bankruptcy_repeat_years)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stock, founder_fortune, founder_investment,
+                                                outside_investment, min_founder_investment,
+                                                founding_share_price_cents, starting_personal_cash,
+                                                brokerage_permille, salary_per_year, margin_percent,
                                                 margin_interest_bp, impact_per_share_of_company, issue_percent,
                                                 book_weight_percent, earnings_multiple, dividend_multiple,
                                                 price_adjust_percent, min_share_price_cents, share_block,

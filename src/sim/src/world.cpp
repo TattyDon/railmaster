@@ -3,6 +3,7 @@
 #include "railmaster/sim/freight.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 namespace railmaster::sim {
@@ -36,8 +37,20 @@ World::World(const WorldConfig& config, GameData data)
       sandbox_(config.sandbox),
       difficulty_(config.difficulty),
       business_cycle_(config.business_cycle) {
-    found_company("Railmaster Railroad", "You",
-                  Money::dollars(config.starting_cash.value_or(data_.balance.finance.starting_cash)));
+    Investor you;
+    you.name = "You";
+    you.cash = Money::dollars(data_.balance.stock.founder_fortune);
+    market_.investors.push_back(std::move(you));
+    if (config.starting_cash) {
+        const Money capital = Money::dollars(*config.starting_cash);
+        found_for(kHumanPlayer, {"Railmaster Railroad", capital.scaled(1, 2), capital - capital.scaled(1, 2)});
+    } else if (config.found_player_company) {
+        const FoundCompany terms = config.founding.value_or(
+            FoundCompany{"Railmaster Railroad", Money::dollars(data_.balance.stock.founder_investment),
+                         Money::dollars(data_.balance.stock.outside_investment)});
+        if (const auto why = founding_problem(kHumanPlayer, terms)) throw std::invalid_argument("founding: " + *why);
+        found_for(kHumanPlayer, terms);
+    }
     rival_ai_ = config.rival_ai;
     chairman_can_be_fired_ = config.chairman_can_be_fired;
     chairman_can_resign_ = config.chairman_can_resign;
@@ -65,8 +78,44 @@ World::World(const WorldConfig& config, GameData data)
 
 PlayerId World::add_player_company(std::string company_name, std::string chairman) {
     const auto who = static_cast<PlayerId>(market_.investors.size());
-    found_company(std::move(company_name), std::move(chairman), Money::dollars(data_.balance.finance.starting_cash));
+    Investor inv;
+    inv.name = std::move(chairman);
+    inv.cash = Money::dollars(data_.balance.stock.founder_fortune);
+    market_.investors.push_back(std::move(inv));
+    found_for(who, {std::move(company_name), Money::dollars(data_.balance.stock.founder_investment),
+                    Money::dollars(data_.balance.stock.outside_investment)});
     return who;
+}
+
+std::optional<std::string> World::founding_problem(PlayerId who, const FoundCompany& t) const {
+    const Balance::Stock& b = data_.balance.stock;
+    const Investor& inv = market_.investors.at(who);
+    if (inv.chairs) return std::string("you already run a company");
+    if (t.personal_investment < Money::dollars(b.min_founder_investment)) {
+        return "you must put in at least " + std::to_string(b.min_founder_investment) + " dollars";
+    }
+    if (t.personal_investment > inv.cash) return std::string("you do not have that much money");
+    if (t.outside_investment < Money{}) return std::string("outside investment cannot be negative");
+    if (t.outside_investment > Money::dollars(b.outside_investment)) {
+        return "outside investors offer at most " + std::to_string(b.outside_investment) + " dollars";
+    }
+    return std::nullopt;
+}
+
+CompanyId World::found_for(PlayerId who, const FoundCompany& t) {
+    const auto id = static_cast<CompanyId>(market_.companies.size());
+    Investor& inv = market_.investors.at(who);
+    std::string name = t.name.empty() ? inv.name + " Railroad" : t.name;
+    market_.companies.emplace_back(std::move(name), t.personal_investment + t.outside_investment, date_.year(),
+                                   data_.balance, id);
+    market_.companies.back().set_economic_state(economic_state_);
+    // The founder's money buys shares at the founding price; the rest are the outside investors'.
+    inv.cash -= t.personal_investment;
+    inv.add_shares(id, t.personal_investment.in_cents() /
+                           std::max<std::int64_t>(1, data_.balance.stock.founding_share_price_cents));
+    inv.chairs = id;
+    if (who == kHumanPlayer) note_player_company();
+    return id;
 }
 
 void World::tick() {
@@ -98,13 +147,6 @@ void World::tick() {
     if (after.year != before.year) on_new_year();
 }
 
-CompanyId World::found_company(std::string name, std::string chairman, Money cash) {
-    const auto id = static_cast<CompanyId>(market_.companies.size());
-    market_.companies.emplace_back(std::move(name), cash, date_.year(), data_.balance, id);
-    market_.companies.back().set_economic_state(economic_state());
-    market_.investors.push_back(Investor::founder(std::move(chairman), id, data_.balance));
-    return id;
-}
 
 // The track's owners get the share of a stop's income matching the share of
 // the leg run on their track; the runner still pays all its fuel [D].

@@ -27,7 +27,15 @@ struct WorldConfig {
     std::int32_t height_tiles = 128;
     std::int32_t tile_size_m = 1000; // provisional map scale, see docs/spec/m1-provisional-models.md
     bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
-    // Company's opening cash in dollars; by default Balance::Finance::starting_cash.
+    // The player founds their company when the world is made, on these
+    // terms (default: Balance::Stock's founder investment and the full
+    // outside offer). With found_player_company off, the player starts with
+    // no company and founds one with a FoundCompany command (the client's
+    // founding dialog).
+    bool found_player_company = true;
+    std::optional<FoundCompany> founding;
+    // For tests: the player's company capital in dollars, half of it the
+    // player's own (bypasses the founding limits).
     std::optional<std::int64_t> starting_cash;
     bool populate = true;            // place towns and industries (when industry data is present)
     Difficulty difficulty = Difficulty::Medium;
@@ -152,7 +160,7 @@ private:
     std::uint64_t economy_terrain_revision_ = 0;
 
     void refresh_economy_terrain();
-    CompanyId found_company(std::string name, std::string chairman, Money cash);
+
     void pay_trackage(Train& t, Money income);
     void run_rivals();
     // The company of the player whose command is being run.
@@ -177,6 +185,11 @@ private:
     CommandResult run(const AttemptTakeover& cmd);
     CommandResult run(const AttemptMerger& cmd);
     CommandResult run(const Resign& cmd);
+    CommandResult run(const FoundCompany& cmd);
+    CommandResult run(const DeclareBankruptcy& cmd);
+    // Why these founding terms are not allowed for player `who`, if they are not.
+    std::optional<std::string> founding_problem(PlayerId who, const FoundCompany& terms) const;
+    CompanyId found_for(PlayerId who, const FoundCompany& terms);
     // Year end: grumbling, and the vote to fire a chairman after too many bad years.
     void review_chairmen();
     // Give a company with no chairman one: its biggest shareholder who runs

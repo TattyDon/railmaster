@@ -193,8 +193,11 @@ std::optional<LocoTypeId> pick_loco(const World& w, Money budget) {
 
 void manage_finance(World& w, const Rival& r, const Tycoon& ty, Company& co) {
     const Balance& b = w.data().balance;
-    // Borrow to stay solvent.
+    // Borrow to stay solvent; failing that, go bankrupt as a last resort [C].
     if (co.cash() < Money{} && co.can_issue_bond()) w.execute(IssueBond{}, r.player);
+    if (co.cash() < Money{} && !co.can_issue_bond() && !co.bankruptcy_problem()) {
+        w.execute(DeclareBankruptcy{}, r.player);
+    }
     // Pay out a share of profit, by temperament.
     const auto profit = co.trailing_profit();
     const Money dividend = profit && *profit > Money{} && co.shares_outstanding() > 0

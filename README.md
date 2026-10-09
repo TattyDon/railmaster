@@ -56,8 +56,10 @@ ctest --test-dir build --output-on-failure
 ```
 
 Run `./build/src/client/railmaster --empty` to start on a blank map instead
-of the demo network. Three AI rivals join by default; `--rivals=N` sets how
-many (0 to 7).
+of the demo network. A new game opens with the founding dialog: choose how
+much of your fortune to invest and how much outside money to take (Enter
+founds the company; `--quick` skips it with the usual terms). Three AI
+rivals join by default; `--rivals=N` sets how many (0 to 7).
 
 ### Playing
 
@@ -69,8 +71,8 @@ many (0 to 7).
 | D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
-| F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend |
-| F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman |
+| F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
+| F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |

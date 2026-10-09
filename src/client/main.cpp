@@ -108,10 +108,12 @@ void build_demo_network(sim::World& world) {
 int main(int argc, char* argv[]) {
     std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
     bool empty = false;
+    bool quick = false; // skip the founding dialog: found on the usual terms
     int rivals = 3;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
+        else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
         else data_dir = arg;
     }
@@ -126,14 +128,10 @@ int main(int argc, char* argv[]) {
 
     sim::WorldConfig config;
     config.rivals = rivals;
+    config.found_player_company = quick;
     sim::World world(config, std::move(data));
-    if (!empty) {
-        try {
-            build_demo_network(world);
-        } catch (const std::exception& e) {
-            std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
-        }
-    }
+    // The demo network is built once the player has a company to pay for it.
+    bool demo_pending = !empty;
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
@@ -164,6 +162,7 @@ int main(int argc, char* argv[]) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     client::Tools tools(world, cam);
+    if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
     int speed = 0; // every game starts paused [D]
     double tick_accumulator = 0.0;
     Uint64 last = SDL_GetPerformanceCounter();
@@ -224,6 +223,14 @@ int main(int argc, char* argv[]) {
             world.tick();
             tick_accumulator -= 1.0;
         }
+        if (demo_pending && world.player_company()) {
+            demo_pending = false;
+            try {
+                build_demo_network(world);
+            } catch (const std::exception& e) {
+                std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
+            }
+        }
         // News ticker stand-in: tell the player when the economy turns.
         if (const auto turned = world.take_economy_news()) {
             std::string name = sim::economic_state_name(*turned);
@@ -245,7 +252,7 @@ int main(int argc, char* argv[]) {
         client::draw_terrain(world.terrain());
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()));
         client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
-        client::draw_railway(world.railway(), cam);
+        client::draw_railway(world.railway(), cam, world.player_company());
         tools.draw_world_overlay();
 
         cam.apply_screen();

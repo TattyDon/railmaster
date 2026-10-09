@@ -29,7 +29,7 @@ void run_days(World& w, int days) {
 GameData corporate_data() {
     GameData d;
     d.balance.stock.impact_per_share_of_company = 0;
-    d.balance.stock.starting_personal_cash = 10'000'000;
+    d.balance.stock.founder_fortune = 13'000'000; // $10M left after founding
     d.cargo = CargoRegistry::from_json(R"({"cargo": [{"key": "coal", "name": "Coal", "base_price": 30}]})");
     d.locomotives = LocomotiveRegistry::from_json(R"({"locomotives": [
         {"key": "l", "name": "L", "fuel": "diesel", "available_from": 1800,

@@ -60,6 +60,7 @@ struct YearAccounts {
     Money trains_bought;
     Money dividends_paid; // a distribution to shareholders, not an expense
     Money acquisitions;   // paid to buy out other companies' shareholders
+    Money debt_forgiven{}; // bond debt written off in a bankruptcy
     // For shareholders' return: the share price when the year opened, the
     // dividends paid per share during it, and, once the year is closed, the
     // return they made, in thousandths (price change plus dividends).
@@ -75,6 +76,8 @@ struct YearAccounts {
 // The player's railroad company. Assets are carried at what they cost.
 class Company {
 public:
+    // A new company with `starting_cash` of capital, issued as shares at the
+    // founding price ($10 by default).
     Company(std::string name, Money starting_cash, std::int32_t year, const Balance& balance = default_balance(),
             CompanyId id = 0);
 
@@ -137,6 +140,15 @@ public:
     // Repay at face value any bond that has reached maturity in `year`.
     void retire_matured_bonds(std::int32_t year);
 
+    // Bankruptcy [D]: why it is not allowed now, if it is not. It needs bonds,
+    // and either loss years in a row or no cash to pay with, and none in the
+    // last few years.
+    std::optional<std::string> bankruptcy_problem() const;
+    // Halve every bond; the bondholders take new shares for what they lose,
+    // diluting the price. The rating stays at D for some years.
+    void declare_bankruptcy();
+    std::optional<std::int32_t> bankrupt_year() const { return bankrupt_year_; }
+
     // Quarterly: `months` of interest on bonds outstanding.
     void charge_interest(std::int32_t months = 3);
 
@@ -195,6 +207,7 @@ private:
     Balance::EconomicStates states_;
     Balance::Corporate corporate_;
     std::int32_t months_above_split_ = 0;
+    std::optional<std::int32_t> bankrupt_year_;
     EconomicState state_ = EconomicState::Normal;
     Money cash_;
     Money track_, buildings_, rolling_stock_;

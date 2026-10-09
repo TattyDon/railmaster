@@ -84,9 +84,12 @@ Done in the fifth slice: investor sentiment from yearly shareholder
 returns, grumbling and votes to fire a chairman, resigning, successors,
 salary set by the five-year return, and stock splits.
 
+Done in the sixth slice: the founding dialog (your investment and outside
+money, shares at $10), founding a new company after losing one, 1%
+brokerage, and voluntary bankruptcy.
+
 Still to do:
-- Brokerage fees; the founding dialog.
-- Bankruptcy, depreciation, bond maturity.
+- Depreciation of track, buildings and trains.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 
 ## M4: Real 3D client
