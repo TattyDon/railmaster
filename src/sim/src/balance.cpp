@@ -14,8 +14,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_
                                                 no_sand_grade_permille, service_tower_cost,
                                                 maintenance_facility_cost)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Breakdowns, mean_distance_mm, empty_oil_multiplier,
-                                                breakdown_ticks, crash_ppb_per_tick, maintenance_age_cap_years,
-                                                maintenance_low_oil_multiplier)
+                                                breakdown_ticks, crash_ppb_per_tick, breakdown_age_years, crash_age_years,
+                                                maintenance_age_percent_per_year,
+                                                maintenance_no_oil_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Track, default_max_grade_bp, tunnel_cover_mm,
                                                 viaduct_clearance_mm, piece_mm, ground_per_km, wood_bridge_multiple,
                                                 steel_bridge_multiple, stone_bridge_multiple,
@@ -61,7 +62,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_r
                                                 short_above_value_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, fuel_per_km_steam, fuel_per_km_diesel,
                                                 fuel_per_km_electric, fuel_per_km_per_car,
-                                                track_upkeep_per_mille_month, building_upkeep_per_mille_month,
+                                                track_upkeep_bp_per_year, building_upkeep_bp_per_year,
                                                 easy_cost_percent, rating_asset_points, rating_asset_cap_doublings,
                                                 rating_cover_points, rating_cover_cap, rating_profit_year_points,
                                                 rating_bond_points, rating_bankruptcy_points, rating_thresholds,

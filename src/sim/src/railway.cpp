@@ -105,10 +105,9 @@ std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& t
 }
 
 Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil, const Balance& b) {
-    const std::int32_t cap = b.breakdowns.maintenance_age_cap_years;
-    const std::int64_t age = std::clamp(age_years, 0, cap);
-    Money m = loco.maintenance_per_year.scaled(cap + 2 * age, cap);
-    if (oil < b.servicing.service_threshold_permille) m = m * b.breakdowns.maintenance_low_oil_multiplier;
+    const std::int64_t age = std::max(0, age_years);
+    Money m = loco.maintenance_per_year.scaled(100 + b.breakdowns.maintenance_age_percent_per_year * age, 100);
+    if (oil <= 0) m = m.scaled(b.breakdowns.maintenance_no_oil_percent, 100);
     return m;
 }
 
@@ -314,6 +313,10 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
     std::int64_t ppb = distance_mm * kBillion / balance_.breakdowns.mean_distance_mm;
     ppb = ppb * oil_factor_permille / 1000;
     ppb = ppb * 100 / loco.reliability;
+    // Older engines fail more: x (1 + age / breakdown_age_years) [I].
+    const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
+    const std::int64_t span = std::max(1, balance_.breakdowns.breakdown_age_years);
+    ppb = ppb * (span + age_years) / span;
     return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < ppb;
 }
 
@@ -350,7 +353,8 @@ bool Railway::roll_crash(const Train& t, const LocomotiveType& loco) {
     if (!rules_.breakdowns) return false;
     const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
     std::int64_t ppb = balance_.breakdowns.crash_ppb_per_tick * 100 / loco.reliability;
-    ppb = ppb * (20 + age_years) / 20;
+    const std::int64_t span = std::max(1, balance_.breakdowns.crash_age_years);
+    ppb = ppb * (span + age_years) / span;
     if (t.oil == 0) ppb *= 3;
     return static_cast<std::int64_t>(rng_.below(1'000'000'000u)) < ppb;
 }

@@ -212,6 +212,25 @@ TEST_CASE("low reliability and low oil mean more breakdowns") {
     CHECK(count(100, false) > count(100, true));
 }
 
+TEST_CASE("old engines break down more: x (1 + age / 15 years) [I]") {
+    auto count = [](std::int32_t age_years) {
+        const auto reg = locos(50);
+        Line l = make_line(300);
+        l.rw.set_rules({.breakdowns = true});
+        l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[100]);
+        l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[200]);
+        l.rw.add_service_building(ServiceType::MaintenanceFacility, l.nodes[150]);
+        l.rw.set_today(age_years * 365);
+        const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
+        l.rw.train_mut(t).built_day = 0;
+        run_until(l.rw, reg, t, 30);
+        return l.rw.train(t).breakdowns;
+    };
+    const auto fresh = count(0), old = count(30); // three times the chance at 30
+    MESSAGE("breakdowns new " << fresh << ", at 30 years " << old);
+    CHECK(old > fresh * 2);
+}
+
 TEST_CASE("simulation with breakdowns is deterministic for a given seed") {
     auto run = [] {
         const auto reg = locos(30);
@@ -231,14 +250,16 @@ TEST_CASE("simulation with breakdowns is deterministic for a given seed") {
     CHECK(run() == run());
 }
 
-TEST_CASE("maintenance grows with age to 3x at 20 years and doubles on low oil") {
+TEST_CASE("maintenance grows 4% a year with age, without limit, and by half when out of oil [I]") {
     const auto reg = locos();
     const auto& loco = reg.get(kSteam); // $10,000 a year new
     CHECK(annual_maintenance(loco, 0, kGaugeFull) == Money::dollars(10'000));
-    CHECK(annual_maintenance(loco, 10, kGaugeFull) == Money::dollars(20'000));
-    CHECK(annual_maintenance(loco, 20, kGaugeFull) == Money::dollars(30'000));
-    CHECK(annual_maintenance(loco, 35, kGaugeFull) == Money::dollars(30'000)); // capped
-    CHECK(annual_maintenance(loco, 0, 100) == Money::dollars(20'000));
+    CHECK(annual_maintenance(loco, 10, kGaugeFull) == Money::dollars(14'000));
+    CHECK(annual_maintenance(loco, 25, kGaugeFull) == Money::dollars(20'000)); // twice the new cost at 25
+    CHECK(annual_maintenance(loco, 50, kGaugeFull) == Money::dollars(30'000)); // no cap
+    CHECK(annual_maintenance(loco, 0, 100) == Money::dollars(10'000)); // low oil, not yet out
+    CHECK(annual_maintenance(loco, 0, 0) == Money::dollars(15'000));
+    CHECK(annual_maintenance(loco, 10, 0) == Money::dollars(21'000));
 }
 
 TEST_CASE("support building prices") {

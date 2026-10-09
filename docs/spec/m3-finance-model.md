@@ -24,8 +24,9 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
   are scaled by the state, 80% to 125%. See m2-economy-model.md for the
   economic states.
 - Sandbox mode switches financial limits off.
-- Locomotive maintenance rises with age, to about 3× by year 20, and with
-  low oil (already modelled in M1).
+- Locomotive maintenance rises with age and when out of oil: 4% of the new
+  cost per year of age, and half again with no oil (rt3-clone-spec §9.4
+  [I]; see m1-provisional-models.md).
 
 ## Our design
 
@@ -38,8 +39,10 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 - **Running costs, charged on the 1st of each month for the month before.**
   - Train maintenance: the M1 yearly figure ÷ 12.
   - Fuel: per km run.
-  - Track upkeep: 0.5% of track cost a month, RT2's rate (6% a year).
-  - Building upkeep: the same rate on stations and support buildings.
+  - Track upkeep: 2% of track cost a year, charged monthly
+    (rt3-clone-spec §11.2 [I]).
+  - Building upkeep: 6% a year on stations and support buildings, RT2's
+    rate; the spec gives no figure.
   - Bond interest.
 - **Credit rating** (rt3-clone-spec §12.4 [I]). Ten grades, A+ to D; B or
   better may issue bonds. A score in points:
@@ -87,7 +90,8 @@ In the `finance` and `stock` sections of
 |---|---|
 | Founding (default terms) | Fortune $3.5M; you invest $3M; outside investors $3M; shares at $10 |
 | Fuel per km | Steam $20, diesel $15, electric $10, plus $2 per car |
-| Track and building upkeep | 0.5% of cost a month |
+| Track upkeep | 2% of cost a year |
+| Building upkeep | 6% of cost a year |
 | Rating score | See above: weights and thresholds in `finance.rating_*` |
 | Spread over prime | A+ 0, A 0.5%, A- 1%, B+ 2%, B 3%, B- 4% [spec]; C+ 5%, C 6%, C- 7%, D 8% (ours, for display) |
 

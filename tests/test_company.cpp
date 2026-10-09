@@ -193,8 +193,8 @@ TEST_CASE("running costs are charged monthly, and interest quarterly") {
     const auto& y = w.company().this_year();
     const auto line = [&](Ledger l) { return y.lines[static_cast<std::size_t>(l)]; };
     CHECK(line(Ledger::TrainMaintenance) == Money::dollars(1'000)); // $12K a year, new
-    CHECK(line(Ledger::TrackUpkeep) == w.company().track_value().scaled(5, 1000));
-    CHECK(line(Ledger::BuildingUpkeep) == Money::dollars(100'000).scaled(5, 1000));
+    CHECK(line(Ledger::TrackUpkeep) == w.company().track_value().scaled(200, 10000 * 12)); // 2% a year [I]
+    CHECK(line(Ledger::BuildingUpkeep) == Money::dollars(100'000).scaled(600, 10000 * 12)); // 6% a year
     CHECK(line(Ledger::Interest) == Money{}); // not until the quarter ends
     run_days(w, 59); // to 1 April
     CHECK(w.company().this_year().lines[static_cast<std::size_t>(Ledger::Interest)] ==

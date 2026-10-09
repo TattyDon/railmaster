@@ -169,8 +169,9 @@ std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t ca
 std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
                                       const Balance& b = default_balance());
 
-// Yearly maintenance for one locomotive: rises with age to 3x by year 20,
-// and doubles while oil is below the service threshold.
+// Yearly maintenance for one locomotive: rises 4% of the new figure for
+// each year of age, without limit, and by half again while out of oil
+// (rt3-clone-spec §9.4 [I]).
 Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil,
                          const Balance& b = default_balance());
 

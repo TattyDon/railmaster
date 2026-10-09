@@ -118,6 +118,10 @@ square root of a trade and fades) and its ten-grade credit rating, scored
 from asset cover, interest cover, profit record, bonds and bankruptcy, with
 bonds at prime plus the grade's spread.
 
+Done in the eighth slice: the spec's ageing (maintenance +4% of the new
+cost a year, half again with no oil; breakdowns rising with age like
+crashes) and track upkeep at 2% of cost a year.
+
 Still to do:
 - Depreciation of track, buildings and trains.
 

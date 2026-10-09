@@ -16,11 +16,13 @@
     "waiting_carloads_for_train": 6
   },
   "breakdowns": {
+    "breakdown_age_years": 15,
     "breakdown_ticks": 32,
+    "crash_age_years": 20,
     "crash_ppb_per_tick": 342,
     "empty_oil_multiplier": 4,
-    "maintenance_age_cap_years": 20,
-    "maintenance_low_oil_multiplier": 2,
+    "maintenance_age_percent_per_year": 4,
+    "maintenance_no_oil_percent": 150,
     "mean_distance_mm": 2000000000
   },
   "corporate": {
@@ -121,7 +123,7 @@
       800
     ],
     "bond_underwriting_percent": 2,
-    "building_upkeep_per_mille_month": 5,
+    "building_upkeep_bp_per_year": 600,
     "easy_cost_percent": 85,
     "fuel_per_km_diesel": 15,
     "fuel_per_km_electric": 10,
@@ -146,7 +148,7 @@
       0,
       -1000
     ],
-    "track_upkeep_per_mille_month": 5
+    "track_upkeep_bp_per_year": 200
   },
   "freight": {
     "decay_ppm_per_sensitivity_day": 2300,

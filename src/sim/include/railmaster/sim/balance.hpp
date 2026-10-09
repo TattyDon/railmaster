@@ -46,8 +46,14 @@ struct Balance {
         std::int32_t empty_oil_multiplier = 4;
         std::int32_t breakdown_ticks = 32;
         std::int64_t crash_ppb_per_tick = 342; // 0.2% a year at reliability 100
-        std::int32_t maintenance_age_cap_years = 20; // maintenance rises linearly to 3x by this age
-        std::int32_t maintenance_low_oil_multiplier = 2;
+        // Ageing (rt3-clone-spec §9.4 [I]): breakdowns x (1 + age / 15 years),
+        // crashes x (1 + age / 20 years).
+        std::int32_t breakdown_age_years = 15;
+        std::int32_t crash_age_years = 20;
+        // Maintenance = base x (1 + this% x age in years), with no cap, and
+        // x maintenance_no_oil_percent when out of oil (rt3-clone-spec §9.4 [I]).
+        std::int32_t maintenance_age_percent_per_year = 4;
+        std::int32_t maintenance_no_oil_percent = 150;
     } breakdowns;
 
     struct Track {
@@ -233,8 +239,11 @@ struct Balance {
         std::int64_t fuel_per_km_diesel = 15;
         std::int64_t fuel_per_km_electric = 10;
         std::int64_t fuel_per_km_per_car = 2;
-        std::int32_t track_upkeep_per_mille_month = 5;
-        std::int32_t building_upkeep_per_mille_month = 5;
+        // A year's upkeep as a share of build cost, charged monthly. Track:
+        // rt3-clone-spec §11.2 [I] 2%. Buildings: no figure in the spec;
+        // ours, RT2's 6%.
+        std::int32_t track_upkeep_bp_per_year = 200;
+        std::int32_t building_upkeep_bp_per_year = 600;
         std::int32_t easy_cost_percent = 85;
         // Credit rating (rt3-clone-spec §12.4 [I]): a score in points,
         //   + rating_asset_points per doubling of assets over debt (to +/- rating_asset_cap_doublings)

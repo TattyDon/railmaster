@@ -229,9 +229,9 @@ void World::charge_running_costs() {
         const std::int64_t cost_pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
         c.post(Ledger::TrainMaintenance, maintenance[c.id()].scaled(cost_pct, 100));
         c.post(Ledger::Fuel, fuel[c.id()].scaled(cost_pct, 100));
-        c.post(Ledger::TrackUpkeep, c.track_value().scaled(f.track_upkeep_per_mille_month * cost_pct, 1000 * 100));
-        c.post(Ledger::BuildingUpkeep,
-               c.building_value().scaled(f.building_upkeep_per_mille_month * std::int64_t{cost_percent()}, 1000 * 100));
+        c.post(Ledger::TrackUpkeep, c.track_value().scaled(f.track_upkeep_bp_per_year * cost_pct, 10000 * 12 * 100));
+        c.post(Ledger::BuildingUpkeep, c.building_value().scaled(
+                                           f.building_upkeep_bp_per_year * std::int64_t{cost_percent()}, 10000 * 12 * 100));
     }
 }
 

@@ -35,8 +35,9 @@ The numbers live in [`data/balance.json`](../../data/balance.json)
 - Reliability is a locomotive's relative chance of breaking down [M].
   Sandbox games have a breakdown switch, off by default [M]; ours is
   `WorldConfig::sandbox` / `OperatingRules::breakdowns`.
-- Maintenance is a fixed yearly cost that rises with age to about 3× by
-  year 20, and rises sharply when oil is low [EM, possibly RT2].
+- Maintenance is a yearly cost that rises with age and when oil is low
+  [EM, possibly RT2]. An earlier community page gave about 3× by year 20;
+  we now use the spec's proposal (rt3-clone-spec §9.4 [I]), below.
 
 Crashes destroy the train [D, rt3-clone-spec §9.4]. Scheduled service stops
 in a route are still to do.
@@ -87,9 +88,9 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Service stop | A quarter of a day; at a station it happens during the station stop. | Observation. |
 | Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
 | Out of sand | Climbing ability drops to 40%. | "Much of its grade performance" [M]. |
-| Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability. Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
+| Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability; × (1 + age/15 years) (rt3-clone-spec §9.4 [I]). Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
 | Breakdown | The train stops where it is for two days. | Observation; the spec suggests 3–10 days and a repair cost [I]. |
 | Crash | 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20), and ×3 with no oil (rt3-clone-spec §9.4 [I]). The train is destroyed and written off. | Observation. |
-| Maintenance growth | Linear to 3× at 20 years, then flat; 2× while oil is below half. | [EM] gives only the 3× figure. |
+| Maintenance growth | +4% of the new cost per year of age, without limit (2× at 25 years, 3× at 50); 1.5× while out of oil (rt3-clone-spec §9.4 [I]). | [EM] gives about 3× at 20 years, which this undershoots. |
 | Support building prices | Service tower $30K; maintenance facility $100K ("relatively expensive" [M]). | In-game prices. |
 | Piece length | Curves are sampled every 0.5 km or less. This is a modelling choice, not a game rule. | — |

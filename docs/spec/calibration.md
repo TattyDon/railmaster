@@ -61,6 +61,9 @@ With the spec's share-price and credit-rating models (the following
 change), the demo share price rose to $31, at 1.2 × book value, and the
 demo company rated A+. All 12 metrics are in range.
 
+With the spec's maintenance ageing and 2% track upkeep (was 6%), the demo
+network's return rose to 20.6% a year and its share price to $42.50.
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2
