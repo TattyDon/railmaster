@@ -70,7 +70,7 @@ TEST_CASE("trading limits: the public float, your holding, and purchasing power"
     CHECK(sell_shares(m, 0, 0, 301).has_value());
     CHECK(buy_shares(m, 0, 0, 0).has_value());
     CHECK(buy_shares(m, 0, 1, 1).has_value()); // no such company
-    CHECK(sell_shares(m, 1, 0, 1).has_value()); // the outsider holds none
+    CHECK(sell_shares(m, 0, 0, 301).has_value()); // the founder may not sell their own company short
 
     // Margin: cash may go negative, but purchasing power may not.
     m.investors[0].cash = Money::dollars(100'000);
@@ -214,4 +214,56 @@ TEST_CASE("in the world, dividends land at quarter ends and commands trade share
     CHECK(w.company().this_year().dividends_paid > Money{});
     CHECK(w.investor().cash ==
           cash_before + dividend + Money::dollars(default_balance().stock.salary_per_year).scaled(1, 12) * 3); // three salaries
+}
+
+TEST_CASE("selling short: borrowed shares sold now, bought back later [D]") {
+    Market m = one_company();
+    Investor& outsider = m.investors[1];
+    const Money worth = net_worth(outsider, m);
+    REQUIRE_FALSE(sell_shares(m, 1, 0, 2).has_value()); // the outsider holds none: sells 2,000 short
+    CHECK(m.investors[1].shares_in(0) == -2'000);
+    CHECK(m.investors[1].cash > Money::dollars(500'000));
+    CHECK(m.companies[0].share_price() < Money::dollars(10)); // selling pushes the price down
+    // A short is a debt in shares: net worth counts it at today's price, and
+    // purchasing power holds 150% of its value against it.
+    const Money owed = m.companies[0].share_price() * 2'000;
+    CHECK(net_worth(m.investors[1], m) == m.investors[1].cash - owed);
+    // Each block sold above the final price, which is what the debt is marked at.
+    CHECK(net_worth(m.investors[1], m) >= worth);
+    CHECK(purchasing_power(m.investors[1], m) == m.investors[1].cash - owed.scaled(150, 100));
+    CHECK(public_float(m, 0) == 302'000); // borrowed shares are in public hands
+
+    // Buying covers the short first.
+    REQUIRE_FALSE(buy_shares(m, 1, 0, 2).has_value());
+    CHECK(m.investors[1].shares_in(0) == 0);
+    (void)outsider;
+}
+
+TEST_CASE("short selling is limited to half your net worth, and never your own company [C]") {
+    Market m = one_company();
+    // $500K net worth: at about $10 a share, roughly 25,000 shares may be shorted.
+    CHECK_FALSE(sell_shares(m, 1, 0, 20).has_value());
+    const auto refused = sell_shares(m, 1, 0, 10);
+    REQUIRE(refused.has_value());
+    CHECK(refused->find("net worth") != std::string::npos);
+    const auto own = sell_shares(m, 0, 0, 301);
+    REQUIRE(own.has_value());
+    CHECK(own->find("own company") != std::string::npos);
+}
+
+TEST_CASE("short sellers pay the dividend, and a rising price forces them to buy back") {
+    Market m = one_company();
+    REQUIRE_FALSE(sell_shares(m, 1, 0, 20).has_value());
+    const Money before = m.investors[1].cash;
+    m.companies[0].set_dividend_per_share(Money::dollars(2));
+    pay_dividends(m, 0);
+    CHECK(m.investors[1].cash == before - Money::dollars(2).scaled(20'000, 4)); // $0.50 a share for the quarter
+
+    // The price triples: the short is now underwater, so it is bought back.
+    m.companies[0].set_share_price(m.companies[0].share_price() * 3);
+    CHECK(purchasing_power(m.investors[1], m) < Money{});
+    const std::int64_t covered = monthly_market(m)[1];
+    CHECK(covered > 0);
+    CHECK(m.investors[1].shares_in(0) > -20'000);
+    CHECK((purchasing_power(m.investors[1], m) >= Money{} || m.investors[1].shares_in(0) == 0));
 }

@@ -3,7 +3,7 @@
   "ai": {
     "build_interval_months_max": 24,
     "build_interval_months_min": 3,
-    "buy_below_book_percent": 80,
+    "buy_below_value_percent": 80,
     "candidates_previewed": 8,
     "cars_per_train": 4,
     "cash_reserve": 250000,
@@ -11,7 +11,8 @@
     "max_route_km": 40,
     "max_trains_per_route": 3,
     "min_route_km": 8,
-    "sell_above_book_percent": 150,
+    "sell_above_value_percent": 120,
+    "short_above_value_percent": 125,
     "waiting_carloads_for_train": 6
   },
   "breakdowns": {
@@ -21,6 +22,15 @@
     "maintenance_age_cap_years": 20,
     "maintenance_low_oil_multiplier": 2,
     "mean_distance_mm": 2000000000
+  },
+  "corporate": {
+    "merger_chairman_premium_percent": 125,
+    "merger_neutral_premium_percent": 110,
+    "merger_support_slope": 3,
+    "retry_days": 365,
+    "takeover_base_support_permille": 250,
+    "takeover_below_book_permille": 250,
+    "takeover_loss_year_permille": 250
   },
   "economic_states": {
     "activity_percent": [
@@ -168,6 +178,8 @@
     "price_adjust_percent": 25,
     "salary_per_year": 50000,
     "share_block": 1000,
+    "short_cap_percent_of_net_worth": 50,
+    "short_margin_percent": 150,
     "starting_personal_cash": 500000
   },
   "track": {

@@ -165,6 +165,7 @@ void World::charge_running_costs() {
         railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
     }
     for (Company& c : market_.companies) {
+        if (c.defunct()) continue;
         // Easy games cut the player's maintenance, fuel and track costs [D];
         // by how much is [I]. The economic state moves fuel, labour and upkeep [C].
         const bool easy = difficulty_ == Difficulty::Easy && c.id() == company().id();
@@ -197,6 +198,7 @@ void World::on_new_month() {
     // Bond interest [D] and dividends are paid at the end of each quarter.
     if ((date_.month() - 1) % 3 == 0) {
         for (Company& c : market_.companies) {
+            if (c.defunct()) continue;
             c.charge_interest(3);
             pay_dividends(market_, c.id());
         }

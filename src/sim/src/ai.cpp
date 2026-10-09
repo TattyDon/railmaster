@@ -29,7 +29,8 @@ TycoonRegistry TycoonRegistry::from_json(std::string_view json_text) {
             t.leverage = entry.value("leverage", 50);
             t.dividend = entry.value("dividend", 30);
             t.speculation = entry.value("speculation", 30);
-            for (const std::int32_t v : {t.expansion, t.leverage, t.dividend, t.speculation}) {
+            t.takeovers = entry.value("takeovers", 30);
+            for (const std::int32_t v : {t.expansion, t.leverage, t.dividend, t.speculation, t.takeovers}) {
                 if (v < 0 || v > 100) throw std::runtime_error("tycoon data: personality out of 0..100 for '" + t.key + "'");
             }
             for (const Tycoon& other : reg.tycoons_) {
@@ -210,7 +211,16 @@ void manage_finance(World& w, const Rival& r, const Tycoon& ty, Company& co) {
 void add_trains(World& w, Rival& r, Company& co) {
     const Balance& b = w.data().balance;
     const Railway& rw = w.railway();
-    for (const RivalRoute& route : r.routes) {
+    // The company's lines, as its two-stop trains show them, inherited ones included.
+    std::vector<RivalRoute> lines;
+    for (const Train& t : rw.trains()) {
+        if (t.owner != co.id() || t.state == TrainState::Crashed || t.route.size() != 2) continue;
+        const RivalRoute line{std::min(t.route[0], t.route[1]), std::max(t.route[0], t.route[1])};
+        if (std::none_of(lines.begin(), lines.end(),
+                         [&](const RivalRoute& l) { return l.a == line.a && l.b == line.b; }))
+            lines.push_back(line);
+    }
+    for (const RivalRoute& route : lines) {
         std::int32_t trains = 0;
         for (const Train& t : rw.trains()) {
             if (t.owner == co.id() && t.state != TrainState::Crashed && t.route.size() == 2 &&
@@ -338,38 +348,108 @@ void expand(World& w, Rival& r, const Tycoon& ty, Company& co) {
     }
 }
 
-void speculate(World& w, const Rival& r, const Tycoon& ty, const Company& co) {
+std::optional<CompanyId> own_company(const World& w, const Rival& r) { return w.investors().at(r.player).chairs; }
+
+// Trade rivals' shares against where their prices are heading (the target
+// price the market moves towards each month): buy below it, sell above it,
+// and for the boldest, sell short well above it and buy back once the price
+// has come down to it [I].
+void speculate(World& w, const Rival& r, const Tycoon& ty) {
     const Balance& b = w.data().balance;
     if (ty.speculation < 40) return;
-    const Investor& me = w.investors().at(r.player);
+    const auto mine = own_company(w, r);
     for (const Company& other : w.companies()) {
-        if (other.id() == co.id()) continue;
-        const Money book = other.book_value_per_share();
-        if (book <= Money{}) continue;
+        if (other.defunct() || other.id() == mine) continue;
+        const Investor& me = w.investors().at(r.player);
+        const Money value = target_share_price(other);
         const std::int64_t block = std::max<std::int64_t>(1, other.stock_balance().share_block);
-        const std::int64_t held_blocks = me.shares_in(other.id()) / block;
-        if (held_blocks > 0 && other.share_price() > book.scaled(b.ai.sell_above_book_percent, 100)) {
-            w.execute(SellShares{.blocks = held_blocks, .company = other.id()}, r.player);
-        } else if (other.share_price() < book.scaled(b.ai.buy_below_book_percent, 100)) {
+        const std::int64_t held = me.shares_in(other.id());
+        const Money price = other.share_price();
+        const bool dear = price > value.scaled(b.ai.sell_above_value_percent, 100);
+        const bool very_dear = price > value.scaled(b.ai.short_above_value_percent, 100);
+        const bool cheap = price < value.scaled(b.ai.buy_below_value_percent, 100);
+        if (held < 0 && price <= value) {
+            w.execute(BuyShares{.blocks = (-held + block - 1) / block, .company = other.id()}, r.player);
+        } else if (held >= block && dear && ty.takeovers < 50) {
+            w.execute(SellShares{.blocks = held / block, .company = other.id()}, r.player);
+        } else if (held <= 0 && very_dear && ty.speculation >= 70) {
+            const std::int64_t blocks = 1 + ty.speculation / 40;
+            if (purchasing_power(me, w.market()) > other.share_price() * (blocks * block) * 2) {
+                w.execute(SellShares{.blocks = blocks, .company = other.id()}, r.player);
+            }
+        } else if (cheap && held >= 0) {
             const std::int64_t blocks = 1 + ty.speculation / 25;
-            const Money cost = other.share_price() * (blocks * block);
-            if (purchasing_power(me, w.market()) > cost * 3) {
+            if (purchasing_power(me, w.market()) > other.share_price() * (blocks * block) * 3) {
                 w.execute(BuyShares{.blocks = blocks, .company = other.id()}, r.player);
             }
         }
     }
 }
 
+// Build a stake in the weakest rival, take it over once it is big enough,
+// and merge companies already controlled (rt3-clone-spec §13.2 step 4).
+void pursue_control(World& w, const Rival& r, const Tycoon& ty) {
+    const Balance& b = w.data().balance;
+    if (ty.takeovers < 50) return;
+    const auto mine = own_company(w, r);
+
+    // The rival trading furthest below book value.
+    std::optional<CompanyId> target;
+    std::int64_t best_ratio = 0;
+    for (const Company& c : w.companies()) {
+        if (c.defunct() || c.id() == mine || c.book_value_per_share() <= Money{}) continue;
+        const std::int64_t ratio = c.share_price().in_cents() * 1000 / c.book_value_per_share().in_cents();
+        if (ratio < 1000 && (!target || ratio < best_ratio)) {
+            target = c.id();
+            best_ratio = ratio;
+        }
+    }
+
+    for (const Company& c : w.companies()) {
+        if (c.defunct() || c.id() == mine || c.shares_outstanding() <= 0) continue;
+        const Investor& me = w.investors().at(r.player);
+        const std::int64_t stake_permille = std::max<std::int64_t>(0, me.shares_in(c.id())) * 1000 / c.shares_outstanding();
+        // Merge what it controls, if its company can pay the others out.
+        if (mine && stake_permille > 500 && ty.takeovers >= 70 && c.id() != w.company().id()) {
+            const Money offer = c.share_price().scaled(b.corporate.merger_neutral_premium_percent + 15, 100);
+            const Money cost = offer * (c.shares_outstanding() - me.shares_in(c.id()));
+            if (w.company(*mine).cash() > cost + Money::dollars(b.ai.cash_reserve)) {
+                w.execute(AttemptMerger{.target = c.id(), .offer_per_share = offer}, r.player);
+                continue;
+            }
+        }
+        // Take over a cheap company once it holds over 35% [C/I]: always when
+        // it has no company of its own, and for the boldest raiders even
+        // though its own company then passes to the ousted chairman.
+        if (stake_permille > 350 && c.share_price() < c.book_value_per_share() && (!mine || ty.takeovers >= 80)) {
+            w.execute(AttemptTakeover{.target = c.id()}, r.player);
+        }
+    }
+
+    // Keep buying into the target up to a majority.
+    if (!target) return;
+    const Company& c = w.company(*target);
+    const Investor& me = w.investors().at(r.player);
+    const std::int64_t block = std::max<std::int64_t>(1, c.stock_balance().share_block);
+    if (me.shares_in(c.id()) * 2 > c.shares_outstanding()) return;
+    const std::int64_t blocks = std::max(1, ty.takeovers / 20);
+    if (purchasing_power(me, w.market()) > c.share_price() * (blocks * block) * 2) {
+        w.execute(BuyShares{.blocks = blocks, .company = c.id()}, r.player);
+    }
+}
+
 } // namespace
 
 void run_rival(World& w, Rival& r, const Tycoon& ty) {
-    const auto chairs = w.investors().at(r.player).chairs;
-    if (!chairs) return;
-    Company& co = w.company(*chairs);
-    manage_finance(w, r, ty, co);
-    expand(w, r, ty, co);
-    add_trains(w, r, co);
-    speculate(w, r, ty, co);
+    // A tycoon whose company was merged away still trades.
+    if (const auto chairs = w.investors().at(r.player).chairs) {
+        Company& co = w.company(*chairs);
+        manage_finance(w, r, ty, co);
+        expand(w, r, ty, co);
+        add_trains(w, r, co);
+    }
+    speculate(w, r, ty);
+    pursue_control(w, r, ty);
 }
 
 } // namespace railmaster::sim

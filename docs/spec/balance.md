@@ -52,6 +52,7 @@ Each key's name carries its unit:
 | `express` | passengers, mail and troops | m2 |
 | `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |
 | `ai` | rivals' line planning, train buying and share trading | [rivals-model.md](rivals-model.md) |
+| `corporate` | takeover and merger votes, retry wait | [rivals-model.md](rivals-model.md) |
 | `finance` | starting cash, running costs, credit rating, bonds | [m3-finance-model.md](m3-finance-model.md) |
 | `stock` | shares, salary, margin, share price model | m3 |
 

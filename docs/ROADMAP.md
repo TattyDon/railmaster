@@ -75,8 +75,13 @@ their stations, paying trackage; the market covers every company; and AI
 tycoons with personalities build and run their own lines through the same
 commands as the player. See `docs/spec/rivals-model.md`.
 
+Done in the fourth slice: short selling, takeovers (a shareholder vote
+for the chair) and mergers (buying out a rival's shareholders and absorbing
+everything it owns), used by the player from the market screen and by the
+AI according to personality.
+
 Still to do:
-- Short selling, takeovers and mergers.
+- Investor sentiment, ousting the chairman and resigning; stock splits.
 - Bankruptcy, depreciation, bond maturity.
 - Buying, building and upgrading industries; hotels, restaurants and the like.
 

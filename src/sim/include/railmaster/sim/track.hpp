@@ -73,6 +73,9 @@ public:
     const std::vector<TrackEdge>& edges() const { return edges_; }
     const std::vector<EdgeId>& edges_at(NodeId id) const { return adjacency_.at(id); }
 
+    // Hand every edge `from` owns to `to` (a merger).
+    void transfer_owner(CompanyId from, CompanyId to);
+
     // Rail height at a point along an edge, interpolated between its ends.
     std::int64_t rail_z_at(EdgeId e, MapPoint at) const;
 

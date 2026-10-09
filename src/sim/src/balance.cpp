@@ -44,7 +44,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_hal
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_route_km, build_interval_months_min,
                                                 build_interval_months_max, cash_reserve, candidates_previewed,
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
-                                                cover_cells, buy_below_book_percent, sell_above_book_percent)
+                                                cover_cells, buy_below_value_percent, sell_above_value_percent,
+                                                short_above_value_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, starting_cash, fuel_per_km_steam, fuel_per_km_diesel,
                                                 fuel_per_km_electric, fuel_per_km_per_car,
                                                 track_upkeep_per_mille_month, building_upkeep_per_mille_month,
@@ -56,7 +57,12 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stock, founding_shares,
                                                 starting_personal_cash, salary_per_year, margin_percent,
                                                 margin_interest_bp, impact_per_share_of_company, issue_percent,
                                                 book_weight_percent, earnings_multiple, dividend_multiple,
-                                                price_adjust_percent, min_share_price_cents, share_block)
+                                                price_adjust_percent, min_share_price_cents, share_block,
+                                                short_margin_percent, short_cap_percent_of_net_worth)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Corporate, takeover_base_support_permille,
+                                                takeover_below_book_permille, takeover_loss_year_permille,
+                                                merger_neutral_premium_percent, merger_support_slope,
+                                                merger_chairman_premium_percent, retry_days)
 
 namespace {
 
@@ -76,6 +82,7 @@ nlohmann::json to_tree(const Balance& b) {
     j["ai"] = b.ai;
     j["finance"] = b.finance;
     j["stock"] = b.stock;
+    j["corporate"] = b.corporate;
     return j;
 }
 
@@ -126,6 +133,7 @@ Balance Balance::from_json(std::string_view json_text) {
         read_section(j, "ai", b.ai);
         read_section(j, "finance", b.finance);
         read_section(j, "stock", b.stock);
+        read_section(j, "corporate", b.corporate);
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error(std::string("balance: ") + e.what());
     }

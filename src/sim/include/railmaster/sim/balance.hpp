@@ -152,8 +152,11 @@ struct Balance {
         std::int32_t max_trains_per_route = 3;
         std::int32_t waiting_carloads_for_train = 6;
         std::int32_t cover_cells = 2;             // a station this near already serves a place
-        std::int32_t buy_below_book_percent = 80;
-        std::int32_t sell_above_book_percent = 150;
+        // Share trading, against the price the market is heading for
+        // (target_share_price): buy below, sell and short above.
+        std::int32_t buy_below_value_percent = 80;
+        std::int32_t sell_above_value_percent = 120;
+        std::int32_t short_above_value_percent = 125;
     } ai;
 
     struct Finance {
@@ -191,7 +194,27 @@ struct Balance {
         std::int32_t price_adjust_percent = 25;
         std::int64_t min_share_price_cents = 50;
         std::int64_t share_block = 1000;
+        // Short selling [D concept]: a short position counts against
+        // purchasing power at this share of its value [I], and all shorts
+        // together may not exceed this share of net worth [C].
+        std::int32_t short_margin_percent = 150;
+        std::int32_t short_cap_percent_of_net_worth = 50;
     } stock;
+
+    // Takeovers and mergers (rt3-clone-spec §12.6, the vote models [I]).
+    struct Corporate {
+        // Takeover: share of the public float voting for the bidder, in
+        // thousandths, built up from these parts.
+        std::int32_t takeover_base_support_permille = 250;
+        std::int32_t takeover_below_book_permille = 250; // the price is below book value per share
+        std::int32_t takeover_loss_year_permille = 250;  // the last full year was a loss
+        // Merger: holders accept from offer / price of this percent, the
+        // public in proportion around it ([I] linearised sigmoid).
+        std::int32_t merger_neutral_premium_percent = 110;
+        std::int32_t merger_support_slope = 3; // permille of the float per permille of premium
+        std::int32_t merger_chairman_premium_percent = 125;
+        std::int32_t retry_days = 365; // after a failed attempt [C]
+    } corporate;
 
     // Parse a balance file. Missing keys keep their defaults; unknown keys
     // and a wrong version are errors (std::runtime_error), so a typo in a

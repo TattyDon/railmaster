@@ -22,7 +22,8 @@ struct Tycoon {
     std::int32_t expansion = 50;   // how often and how far they build
     std::int32_t leverage = 50;    // willingness to borrow
     std::int32_t dividend = 30;    // share of profit paid out
-    std::int32_t speculation = 30; // trading in rivals' shares
+    std::int32_t speculation = 30; // trading in rivals' shares, short selling from 70
+    std::int32_t takeovers = 30;   // building stakes in rivals, takeovers and mergers from 50
 };
 
 class TycoonRegistry {

@@ -55,6 +55,7 @@ struct YearAccounts {
     Money buildings_built;
     Money trains_bought;
     Money dividends_paid; // a distribution to shareholders, not an expense
+    Money acquisitions;   // paid to buy out other companies' shareholders
 
     Money revenue() const;
     Money expenses() const;
@@ -68,6 +69,18 @@ public:
             CompanyId id = 0);
 
     CompanyId id() const { return id_; }
+    // A company merged into another no longer trades or runs; its id stays
+    // reserved so nothing else is renumbered.
+    bool defunct() const { return merged_into_.has_value(); }
+    std::optional<CompanyId> merged_into() const { return merged_into_; }
+    // Take over everything `target` has: cash, track, buildings, trains and
+    // bonds [C]. `target` is left an empty shell, merged into this one.
+    void absorb(Company& target);
+    // New shares for existing holders of something else, with no cash raised
+    // (a merger's share exchange).
+    void grant_shares(std::int64_t shares) { shares_ += shares; }
+    // Pay another company's shareholders in a merger.
+    void pay_for_acquisition(Money cost);
     const std::string& name() const { return name_; }
     const Balance::Finance& finance_balance() const { return finance_; }
     const Balance::Stock& stock_balance() const { return stock_; }
@@ -148,6 +161,7 @@ public:
 private:
     std::string name_;
     CompanyId id_ = 0;
+    std::optional<CompanyId> merged_into_;
     Balance::Finance finance_;
     Balance::Stock stock_;
     Balance::EconomicStates states_;

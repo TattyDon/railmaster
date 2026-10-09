@@ -185,6 +185,9 @@ public:
     Train& train_mut(TrainId id) { return trains_.at(id); }
     Station& station_mut(StationId id) { return stations_.at(id); }
 
+    // Hand everything `from` owns (track, stations, buildings, trains) to `to`.
+    void transfer_owner(CompanyId from, CompanyId to);
+
     // Trains that reached a station since the last call, in arrival order,
     // with the station. The world handles cargo for each.
     std::vector<std::pair<TrainId, StationId>> take_arrivals();

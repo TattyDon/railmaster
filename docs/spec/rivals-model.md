@@ -58,7 +58,65 @@ Example (tested): a rival's coal train runs 25 km on the player's track and
   holding is sold a block at a time until it is not [D: forced sales; which
   holding goes first is ours].
 - Dividends are paid to every holder in proportion.
-- Not yet: short selling (§12.5), takeovers and mergers (§12.6), brokerage.
+- Not yet: brokerage (§12.5 [I]).
+
+## Short selling (§12.5 [D concept, C limits])
+
+- Selling more shares than you hold sells the rest short: borrowed shares
+  sold into the market, leaving a negative holding. Buying covers a short
+  first, and is always allowed while it only covers.
+- You cannot short the company you chair [D]. All your shorts together may
+  not exceed 50% of your net worth when you open one [C].
+- Net worth counts a short at today's price. Purchasing power holds 150% of
+  its value against it [I], so a rising price can trigger a margin call.
+  A margin call unwinds the biggest position first, long or short, a
+  block at a time.
+- Short sellers pay the dividend on the shares they borrowed.
+- Borrowed shares sold are in public hands, so the public float grows.
+
+## Takeovers (§12.6)
+
+`AttemptTakeover{target}` is personal: any player can ask a company's
+shareholders to make them its chairman [D].
+
+- **Vote [I]:** the bidder's shares vote yes and the chairman's no. A share
+  of the public float backs the bidder: 25%, plus 25% if the company trades
+  below book value per share, plus 25% if its last full year was a loss.
+  Other players vote with that majority (yes if it is 50% or more). The bid
+  passes on more than half the shares. More than 50% always wins, and a
+  chairman who holds more than 50% cannot be removed [C].
+- **Result [I]:** the bidder takes the chair. If they ran another company,
+  the ousted chairman takes that one, so the two swap seats. Someone with
+  no company to offer cannot take the player's company, so the player
+  always runs one.
+- A failed attempt cannot be repeated on the same company for a year [C].
+
+## Mergers (§12.6)
+
+`AttemptMerger{target, offer_per_share}` is made by a chairman for their
+company [D].
+
+- **Cost:** the offer × every share the bidder does not hold [I, the
+  spec's formula]. The company must have the cash (unless the player is in
+  sandbox).
+- **Vote [I]:** the bidder's shares vote yes. Other players accept from a
+  premium of 10% over the market price, the target's chairman from 25%.
+  The public's support is 50% at a 10% premium and moves 3 points per point
+  of premium either way (a linearised version of the spec's sigmoid): none
+  at 7% below market, all at 27% above. Over 50% of the shares always wins
+  [C].
+- **Result:**
+  - Every other holder is paid the offer in cash, and short sellers are
+    closed out at the offer price.
+  - The bidder's own stake becomes new shares of their company, at market
+    value [I].
+  - All of the target's track, stations, buildings, trains, cash and bonds
+    move to the buyer [C]. The target remains as an empty, defunct record
+    so ids never change.
+  - Its chairman is left without a company but can still trade.
+  - The cost appears as "spent on mergers" in the buyer's accounts.
+- A failed attempt waits a year [C]. A rival cannot merge the player's own
+  company away [I, for now].
 
 ## The AI [I]
 
@@ -72,7 +130,8 @@ values from 0 to 100 (§13.2 [I]):
 | expansion | How often it builds a new line (every 24 months at 0, every 3 at 100) and how far it will reach (up to 50% further) |
 | leverage | How many bonds it will take on to build (up to leverage ÷ 10), and how flush it must be before repaying |
 | dividend | Share of trailing profit paid out as a dividend |
-| speculation | From 40 up: buys rivals' shares below 80% of book value, sells above 150% |
+| speculation | From 40 up: trades rivals' shares against the price the market is heading for (the monthly target price), buying below 80% of it and selling above 120%. From 70 up it also sells short above 125% and buys back once the price has fallen to it |
+| takeovers | From 50 up: builds a stake in the rival trading furthest below book value, up to a majority. With over 35% of a company trading below book it bids for control: always if it has no company of its own, otherwise only from 80 (when its own company passes to the ousted chairman). From 70 up it merges companies where it holds a majority, offering a 25% premium, if its company can pay |
 
 Each month, after the market, each rival in turn:
 
@@ -95,7 +154,9 @@ Each month, after the market, each rival in turn:
      cars.
 3. **More trains:** adds a train to a line whose stations have more cargo
    waiting than its trains can carry, up to three a line.
-4. **Speculation**, as above.
+4. **Speculation**, as above. A tycoon whose company was merged away
+   still trades and can bid for control of another.
+5. **Control:** stake building, takeover bids and mergers, as above.
 
 The AI makes no use of randomness: its choices follow from the map and its
 personality. Which tycoons appear is chosen at random from the world seed.
@@ -105,9 +166,15 @@ Measured on the default map with three rivals: every rival is profitable by
 its second year and carries both freight and passengers. Two often build
 into the same station.
 
+With six rivals over eight years: AI companies trade well above book value
+(their earnings are high), so the cheap company is usually the player's.
+Takeover-minded tycoons buy up its whole public float. They cannot win a
+vote while the player keeps their founding 50%, but selling any of it
+invites a takeover. Founders hold half of every AI company, so AI-on-AI
+takeovers are rare unless a founder is forced to sell on margin.
+
 ### Not yet
 
 - Replacing old engines, more than two stops per route, and double track.
-- Buying industries (§6.2), short selling, takeovers (§12.6), recession
-  caution.
+- Buying industries (§6.2), recession caution.
 - Bankruptcy for anyone: a rival that keeps losing money just borrows.

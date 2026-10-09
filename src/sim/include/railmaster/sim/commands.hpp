@@ -88,8 +88,22 @@ struct SetDividend {
     Money per_share{};
 };
 
+// Ask the shareholders of `target` to make you its chairman [D]. If you
+// chair another company, its chairman and yours swap places [I].
+struct AttemptTakeover {
+    CompanyId target = 0;
+};
+// Your company offers to buy out every other shareholder of `target` at
+// `offer_per_share` [D]; if they vote yes, it absorbs everything the target
+// owns, debts included [C].
+struct AttemptMerger {
+    CompanyId target = 0;
+    Money offer_per_share{};
+};
+
 using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, IssueBond, RepayBond,
-                             BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend>;
+                             BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
+                             AttemptMerger>;
 
 struct CommandResult {
     bool ok = false;

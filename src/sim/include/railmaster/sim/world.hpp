@@ -14,7 +14,9 @@
 #include "railmaster/sim/terrain.hpp"
 
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <utility>
 
 namespace railmaster::sim {
 
@@ -64,9 +66,10 @@ public:
     const GameData& data() const { return data_; }
     Economy& economy() { return economy_; }
     const Economy& economy() const { return economy_; }
-    // The human player's company and account.
-    Company& company() { return market_.companies.front(); }
-    const Company& company() const { return market_.companies.front(); }
+    // The company the human player chairs (company 0 unless a takeover
+    // changed hands), and their account.
+    Company& company() { return market_.companies.at(*market_.investors.front().chairs); }
+    const Company& company() const { return market_.companies.at(*market_.investors.front().chairs); }
     Company& company(CompanyId id) { return market_.companies.at(id); }
     const Company& company(CompanyId id) const { return market_.companies.at(id); }
     const std::vector<Company>& companies() const { return market_.companies; }
@@ -127,6 +130,7 @@ private:
     Difficulty difficulty_ = Difficulty::Medium;
     Market market_;
     std::vector<Rival> rivals_;
+    std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
     bool rival_ai_ = true;
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
     std::int64_t last_forced_sale_ = 0;
@@ -158,6 +162,12 @@ private:
     CommandResult run(const IssueStock& cmd);
     CommandResult run(const BuyBackStock& cmd);
     CommandResult run(const SetDividend& cmd);
+    CommandResult run(const AttemptTakeover& cmd);
+    CommandResult run(const AttemptMerger& cmd);
+    // Refuse a second attempt on the same company within a year of a failed one [C].
+    std::optional<std::string> too_soon(CompanyId target) const;
+    void record_failure(CompanyId target);
+    void merge(Company& buyer, CompanyId target, Money offer_per_share);
     // Sandbox games ignore cash; otherwise the company must be able to pay.
     std::optional<std::string> cannot_afford(Money cost) const;
     void charge_running_costs();

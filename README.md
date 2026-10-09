@@ -23,8 +23,10 @@ Early development. Done so far:
 - a personal account and a stock market: trade shares on margin, issue or
   buy back stock, set dividends, grow your net worth
 - rival companies run by AI tycoons with their own personalities: each
-  builds and runs its own lines, may run over yours (paying trackage) and
-  trades shares; the market screen lists every company
+  builds and runs its own lines, may run over yours (paying trackage),
+  trades and shorts shares, and bids for control; the market screen lists
+  every company
+- short selling, takeovers and mergers by shareholder vote
 - terrain-aware middlemen and a business cycle of five economic states
 - free-angle straight and curved track with automatic bridges and tunnels
 - stations, and trains that run looping routes, slow on grades and meet on
@@ -66,7 +68,7 @@ many (0 to 7).
 | [ ] (Station) | Station size |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
 | F7 | Finance screen. Then: B / R issue or repay a bond; + / - buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend |
-| F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks) |
+| F8 | Market screen: every company and player. Up / Down choose a company; + / - buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%) |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | Space, 1-3 | Pause, game speed |

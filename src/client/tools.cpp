@@ -60,7 +60,7 @@ void Tools::draw_finance_panel() const {
 
     constexpr float kRow = 16.0f;
     const float x0 = 40, y0 = 56, w = 760;
-    const float h = kRow * 42;
+    const float h = kRow * 46;
     fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
     float y = y0 + 10;
     const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
@@ -93,6 +93,8 @@ void Tools::draw_finance_panel() const {
         0.8f, 0.8f, 0.8f);
     row("INVESTED IN TRAINS", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
         0.8f, 0.8f);
+    row("SPENT ON MERGERS", format_money(now.acquisitions), last ? format_money(last->acquisitions) : "", 0.8f, 0.8f,
+        0.8f);
     y += kRow / 2;
     row("BALANCE SHEET", "", "", 1.0f, 0.9f, 0.5f);
     row("CASH", format_money(co.cash()), "", 0.9f, 0.9f, 0.9f);
@@ -392,16 +394,34 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             market_choice_ = static_cast<sim::CompanyId>((market_choice_ + 1) % n);
             return true;
         }
+        const sim::Company& target = world_.company(market_choice_ % n);
+        if (key == SDLK_t) {
+            const sim::CommandResult r = world_.execute(sim::AttemptTakeover{.target = target.id()});
+            if (r.ok) show("THE SHAREHOLDERS MADE YOU CHAIRMAN OF " + target.name(), true);
+            else show("TAKEOVER FAILED: " + r.error, false);
+            return true;
+        }
+        if (key == SDLK_m) {
+            // Offer a premium over the market price: 20%, or 50% with Shift.
+            const std::int32_t premium = (mod & KMOD_SHIFT) != 0 ? 150 : 120;
+            const sim::Money offer = target.share_price().scaled(premium, 100);
+            const std::string name = target.name();
+            const sim::CommandResult r =
+                world_.execute(sim::AttemptMerger{.target = target.id(), .offer_per_share = offer});
+            if (r.ok) show("MERGED " + name + " FOR " + format_money(r.cost), true);
+            else show("MERGER FAILED: " + r.error, false);
+            return true;
+        }
         const bool buy = key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS;
         const bool sell = key == SDLK_MINUS || key == SDLK_KP_MINUS;
         if (!buy && !sell) return false;
-        const sim::Company& target = world_.company(market_choice_ % n);
         const std::int64_t blocks = (mod & KMOD_SHIFT) != 0 ? 5 : 1;
         const std::string shares = format_count(blocks * target.stock_balance().share_block);
         const sim::CommandResult r =
             buy ? world_.execute(sim::BuyShares{.blocks = blocks, .company = target.id()})
                 : world_.execute(sim::SellShares{.blocks = blocks, .company = target.id()});
-        if (r.ok) show((buy ? "BOUGHT " : "SOLD ") + shares + " " + target.name() + " SHARES", true);
+        const bool now_short = world_.investor().shares_in(target.id()) < 0;
+        if (r.ok) show((buy ? "BOUGHT " : now_short ? "SOLD SHORT " : "SOLD ") + shares + " " + target.name() + " SHARES", true);
         else show("CANNOT: " + r.error, false);
         return true;
     }
@@ -413,7 +433,7 @@ void Tools::draw_market_panel() const {
     constexpr float kRow = 16.0f;
     const auto& companies = world_.companies();
     const float x0 = 40, y0 = 56, w = 1100;
-    const float h = kRow * static_cast<float>(companies.size() + 16);
+    const float h = kRow * static_cast<float>(companies.size() + world_.investors().size() + 12);
     fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
     float y = y0 + 10;
     // Name, then right-aligned columns ending at each later position.
@@ -438,8 +458,17 @@ void Tools::draw_market_panel() const {
         owner_rgb(c.id(), r, g, b);
         const float swatch = cols[0] + static_cast<float>(text_width("> ", kScale));
         fill_rect(swatch, y + 2, swatch + 8, y + 10, r, g, b, 1.0f);
+        if (c.defunct()) {
+            cells({std::string(sel ? ">" : " ") + "    " + c.name() + " (MERGED INTO " +
+                       world_.company(*c.merged_into()).name() + ")",
+                   "", "", "", ""},
+                  0.5f, 0.5f, 0.5f);
+            continue;
+        }
+        const std::int64_t held = me.shares_in(c.id());
         cells({std::string(sel ? ">" : " ") + "    " + c.name(), format_cents(c.share_price()),
-               format_cents(c.book_value_per_share()), format_money(last), format_count(me.shares_in(c.id()))},
+               format_cents(c.book_value_per_share()), format_money(last),
+               format_count(held)}, // negative: sold short
               sel ? 1.0f : 0.85f, sel ? 1.0f : 0.85f, sel ? 0.7f : 0.85f);
     }
     y += kRow / 2;
@@ -485,7 +514,8 @@ void Tools::draw_market_panel() const {
     for (const sim::Investor& inv : world_.investors()) {
         glColor3f(0.85f, 0.85f, 0.85f);
         line(inv.name + "   NET WORTH " + format_money(sim::net_worth(inv, world_.market())) + "   CASH " +
-             format_money(inv.cash));
+             format_money(inv.cash) + "   " +
+             (inv.chairs ? "RUNS " + world_.company(*inv.chairs).name() : std::string("NO COMPANY")));
     }
 }
 
@@ -620,7 +650,7 @@ std::string Tools::hint() const {
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
     case Tool::Market:
-        return "UP/DOWN CHOOSE A COMPANY   +/- BUY/SELL ITS SHARES (SHIFT FOR 5 BLOCKS)";
+        return "UP/DOWN CHOOSE  +/- BUY/SELL, BELOW 0 IS SHORT (SHIFT X5)  T TAKEOVER  M MERGE AT +20% (SHIFT +50%)";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   +/- BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND";

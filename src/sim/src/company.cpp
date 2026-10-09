@@ -49,7 +49,7 @@ Company::Company(std::string name, Money starting_cash, std::int32_t year, const
     : name_(std::move(name)), id_(id), finance_(balance.finance), stock_(balance.stock),
       states_(balance.economic_states), cash_(starting_cash),
       shares_(balance.stock.founding_shares) {
-    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
+    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
     price_ = shares_ > 0 ? std::max(Money::cents(100), starting_cash.scaled(1, shares_)) : Money::dollars(1);
 }
 
@@ -62,6 +62,25 @@ void Company::post(Ledger line, Money amount) {
         cash_ -= amount;
         lifetime_profit_ -= amount;
     }
+}
+
+void Company::absorb(Company& target) {
+    cash_ += target.cash_;
+    track_ += target.track_;
+    buildings_ += target.buildings_;
+    rolling_stock_ += target.rolling_stock_;
+    bonds_.insert(bonds_.end(), target.bonds_.begin(), target.bonds_.end());
+    target.cash_ = target.track_ = target.buildings_ = target.rolling_stock_ = Money{};
+    target.bonds_.clear();
+    target.shares_ = 0;
+    target.dividend_ = Money{};
+    target.price_ = Money{};
+    target.merged_into_ = id_;
+}
+
+void Company::pay_for_acquisition(Money cost) {
+    cash_ -= cost;
+    history_.back().acquisitions += cost;
 }
 
 void Company::issue_shares(std::int64_t shares, Money proceeds) {
@@ -177,7 +196,7 @@ void Company::charge_interest(std::int32_t months) {
 }
 
 void Company::start_year(std::int32_t year) {
-    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}});
+    history_.push_back(YearAccounts{year, {}, {}, {}, {}, {}, {}});
     issues_this_year_ = 0;
 }
 

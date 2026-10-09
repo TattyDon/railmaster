@@ -27,6 +27,21 @@ std::int64_t issue_size(const Company& c) {
 
 bool valid(const Market& m, PlayerId who, CompanyId c) { return who < m.investors.size() && c < m.companies.size(); }
 
+// Buy back borrowed shares, with no checks: covering a short.
+void cover(Market& m, PlayerId who, CompanyId cid, std::int64_t shares) {
+    Investor& inv = m.investors[who];
+    inv.cash -= trade_with_impact(m.companies[cid], shares, true);
+    inv.add_shares(cid, shares);
+}
+
+Money short_value(const Investor& inv, const Market& m) {
+    Money total;
+    for (const Company& c : m.companies) {
+        if (const std::int64_t h = inv.shares_in(c.id()); h < 0) total += c.share_price() * -h;
+    }
+    return total;
+}
+
 } // namespace
 
 void Investor::add_shares(CompanyId c, std::int64_t n) {
@@ -52,11 +67,15 @@ Money holdings_value(const Investor& inv, const Market& m) {
 Money net_worth(const Investor& inv, const Market& m) { return inv.cash + holdings_value(inv, m); }
 
 Money purchasing_power(const Investor& inv, const Market& m) {
-    Money borrowable;
+    // Longs can be borrowed against at the margin rate; shorts are a debt
+    // in shares, held against at more than their value.
+    Money power = inv.cash;
     for (const Company& c : m.companies) {
-        borrowable += (c.share_price() * inv.shares_in(c.id())).scaled(c.stock_balance().margin_percent, 100);
+        const std::int64_t h = inv.shares_in(c.id());
+        if (h > 0) power += (c.share_price() * h).scaled(c.stock_balance().margin_percent, 100);
+        if (h < 0) power -= (c.share_price() * -h).scaled(c.stock_balance().short_margin_percent, 100);
     }
-    return inv.cash + borrowable;
+    return power;
 }
 
 std::int64_t public_float(const Market& m, CompanyId c) {
@@ -82,9 +101,15 @@ std::optional<std::string> buy_shares(Market& m, PlayerId who, CompanyId cid, st
     if (!valid(m, who, cid)) return "no such company";
     Company& c = m.companies[cid];
     Investor& inv = m.investors[who];
+    if (c.defunct()) return "that company no longer exists";
     const std::int64_t shares = blocks * block_size(c);
     if (blocks <= 0) return "nothing to buy";
     if (shares > public_float(m, cid)) return "not enough shares on the market";
+    // Buying back shares sold short is always allowed: it can only reduce risk.
+    if (inv.shares_in(cid) < 0 && shares <= -inv.shares_in(cid)) {
+        cover(m, who, cid, shares);
+        return std::nullopt;
+    }
     // Price the trade without committing to it, and check it against what
     // could be raised *before* it. Valuing holdings after the trade would let
     // buying, which lifts the price, pay for itself.
@@ -104,9 +129,22 @@ std::optional<std::string> sell_shares(Market& m, PlayerId who, CompanyId cid, s
     if (!valid(m, who, cid)) return "no such company";
     Company& c = m.companies[cid];
     Investor& inv = m.investors[who];
+    if (c.defunct()) return "that company no longer exists";
     const std::int64_t shares = blocks * block_size(c);
     if (blocks <= 0) return "nothing to sell";
-    if (shares > inv.shares_in(cid)) return "you do not hold that many shares";
+    // Selling more than you hold is selling short: borrowing shares to sell.
+    const std::int64_t shorted = shares - std::max<std::int64_t>(0, inv.shares_in(cid));
+    if (shorted > 0) {
+        if (inv.chairs == cid) return "you cannot sell your own company short";
+        const Money worth = net_worth(inv, m);
+        const Money cap = worth.scaled(c.stock_balance().short_cap_percent_of_net_worth, 100);
+        const Money after = short_value(inv, m) + c.share_price() * shorted;
+        if (worth <= Money{} || after > cap) {
+            return "short positions may not exceed " +
+                   std::to_string(c.stock_balance().short_cap_percent_of_net_worth) + "% of your net worth (" +
+                   dollars(cap) + ")";
+        }
+    }
     inv.cash += trade_with_impact(c, shares, false);
     inv.add_shares(cid, -shares);
     return std::nullopt;
@@ -144,6 +182,7 @@ Money target_share_price(const Company& c) {
 
 std::vector<std::int64_t> monthly_market(Market& m) {
     for (Company& c : m.companies) {
+        if (c.defunct()) continue;
         const Money target = target_share_price(c);
         const Balance::Stock& b = c.stock_balance();
         c.set_share_price(floor_price(c, c.share_price() + (target - c.share_price()).scaled(b.price_adjust_percent, 100)));
@@ -160,24 +199,79 @@ std::vector<std::int64_t> monthly_market(Market& m) {
         if (inv.cash < Money{}) {
             inv.cash -= (-inv.cash).scaled(std::max(0, b.margin_interest_bp + ref.prime_offset_bp()), 10000 * 12);
         }
-        // Margin call: sell a block of the most valuable holding until purchasing power is back.
+        // Margin call: unwind the biggest position, long or short, a block at
+        // a time until purchasing power is back.
         while (purchasing_power(inv, m) < Money{}) {
             std::optional<CompanyId> pick;
             Money best;
             for (const Company& c : m.companies) {
-                if (inv.shares_in(c.id()) < block_size(c)) continue;
-                const Money value = c.share_price() * inv.shares_in(c.id());
+                const std::int64_t h = inv.shares_in(c.id());
+                if (c.defunct() || (h > 0 && h < block_size(c)) || h == 0) continue;
+                const Money value = c.share_price() * (h < 0 ? -h : h);
                 if (!pick || value > best) {
                     pick = c.id();
                     best = value;
                 }
             }
             if (!pick) break;
-            sell_shares(m, static_cast<PlayerId>(i), *pick, 1);
-            sold[i] += block_size(m.companies[*pick]);
+            const auto who = static_cast<PlayerId>(i);
+            const std::int64_t lot = block_size(m.companies[*pick]);
+            const std::int64_t h = inv.shares_in(*pick);
+            if (h > 0) sell_shares(m, who, *pick, 1);
+            else cover(m, who, *pick, std::min(lot, -h));
+            sold[i] += h > 0 ? lot : std::min(lot, -h);
         }
     }
     return sold;
+}
+
+namespace {
+
+// Shares in public hands: all those no player holds (shorted shares are among them).
+std::int64_t public_shares(const Market& m, CompanyId cid) {
+    std::int64_t held = 0;
+    for (const Investor& inv : m.investors) held += std::max<std::int64_t>(0, inv.shares_in(cid));
+    return std::max<std::int64_t>(0, m.companies.at(cid).shares_outstanding() - held);
+}
+
+bool is_chairman(const Investor& inv, CompanyId cid) { return inv.chairs && *inv.chairs == cid; }
+
+} // namespace
+
+Vote takeover_vote(const Market& m, PlayerId bidder, CompanyId cid, const Balance::Corporate& b) {
+    const Company& c = m.companies.at(cid);
+    const auto& years = c.history();
+    std::int32_t support = b.takeover_base_support_permille;
+    if (c.share_price() < c.book_value_per_share()) support += b.takeover_below_book_permille;
+    if (years.size() > 1 && years[years.size() - 2].profit() < Money{}) support += b.takeover_loss_year_permille;
+    support = std::clamp(support, 0, 1000);
+
+    Vote v{0, c.shares_outstanding()};
+    for (std::size_t i = 0; i < m.investors.size(); ++i) {
+        const Investor& inv = m.investors[i];
+        const std::int64_t h = std::max<std::int64_t>(0, inv.shares_in(cid));
+        if (i == bidder) v.yes += h;
+        else if (!is_chairman(inv, cid) && support >= 500) v.yes += h;
+    }
+    v.yes += public_shares(m, cid) * support / 1000;
+    return v;
+}
+
+Vote merger_vote(const Market& m, PlayerId bidder, CompanyId cid, Money offer, const Balance::Corporate& b) {
+    const Company& c = m.companies.at(cid);
+    const std::int64_t ratio = c.share_price() > Money{} ? offer.in_cents() * 1000 / c.share_price().in_cents() : 0;
+    const std::int64_t neutral = std::int64_t{b.merger_neutral_premium_percent} * 10;
+    const std::int64_t support = std::clamp<std::int64_t>(500 + (ratio - neutral) * b.merger_support_slope, 0, 1000);
+
+    Vote v{0, c.shares_outstanding()};
+    for (std::size_t i = 0; i < m.investors.size(); ++i) {
+        const Investor& inv = m.investors[i];
+        const std::int64_t h = std::max<std::int64_t>(0, inv.shares_in(cid));
+        const std::int64_t needs = is_chairman(inv, cid) ? std::int64_t{b.merger_chairman_premium_percent} * 10 : neutral;
+        if (i == bidder || ratio >= needs) v.yes += h;
+    }
+    v.yes += public_shares(m, cid) * support / 1000;
+    return v;
 }
 
 void pay_dividends(Market& m, CompanyId cid) {
@@ -186,7 +280,10 @@ void pay_dividends(Market& m, CompanyId cid) {
     const Money paid = c.pay_quarterly_dividend();
     if (paid <= Money{} || outstanding <= 0) return;
     for (Investor& inv : m.investors) {
-        if (const std::int64_t held = inv.shares_in(cid); held > 0) inv.cash += paid.scaled(held, outstanding);
+        const std::int64_t held = inv.shares_in(cid);
+        if (held > 0) inv.cash += paid.scaled(held, outstanding);
+        // A short seller owes the dividend on the shares borrowed.
+        if (held < 0) inv.cash -= paid.scaled(-held, outstanding);
     }
 }
 

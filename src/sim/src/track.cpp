@@ -95,6 +95,11 @@ NodeId TrackNetwork::split_edge(EdgeId id, MapPoint at, EdgeId* second) {
     return mid;
 }
 
+void TrackNetwork::transfer_owner(CompanyId from, CompanyId to) {
+    for (TrackEdge& e : edges_)
+        if (e.owner == from) e.owner = to;
+}
+
 void TrackNetwork::set_double_track(EdgeId id, bool value) {
     TrackEdge& e = edges_.at(id);
     if (value && e.bridge == BridgeType::Wood) throw std::invalid_argument("wooden bridges are single track");

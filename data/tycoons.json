@@ -1,26 +1,26 @@
 {
-  "_about": "Rival tycoons (rt3-clone-spec section 13). Names are historical figures named as RT3 opponents [D/C] or famous railroad builders; bios are our own. Personality numbers run 0-100 and are [I].",
+  "_about": "Rival tycoons (rt3-clone-spec section 13). Names are historical figures named as RT3 opponents [D/C] or famous railroad builders; bios are our own. Personality numbers run 0-100 and are [I]; speculation from 70 sells short, takeovers from 50 builds stakes and bids for control.",
   "tycoons": [
     {"key": "rhodes", "name": "Cecil Rhodes", "company": "Rhodes Consolidated",
      "bio": "Wants a line across every map he sees, and rarely stops to count the cost.",
-     "expansion": 90, "leverage": 70, "dividend": 20, "speculation": 30},
+     "expansion": 90, "leverage": 70, "dividend": 20, "speculation": 30, "takeovers": 60},
     {"key": "gould", "name": "Jay Gould", "company": "Gould Western",
      "bio": "Builds what he must, but his real railroad is the stock exchange.",
-     "expansion": 40, "leverage": 60, "dividend": 10, "speculation": 95},
+     "expansion": 40, "leverage": 60, "dividend": 10, "speculation": 95, "takeovers": 90},
     {"key": "morgan", "name": "J. P. Morgan", "company": "Morgan Trunk Lines",
      "bio": "Prefers sound money, steady dividends and buying up whoever overreaches.",
-     "expansion": 50, "leverage": 20, "dividend": 60, "speculation": 55},
+     "expansion": 50, "leverage": 20, "dividend": 60, "speculation": 55, "takeovers": 85},
     {"key": "wheelwright", "name": "William Wheelwright", "company": "Wheelwright Pacific",
      "bio": "A patient builder of long lines through hard country.",
-     "expansion": 65, "leverage": 40, "dividend": 30, "speculation": 10},
+     "expansion": 65, "leverage": 40, "dividend": 30, "speculation": 10, "takeovers": 20},
     {"key": "kodama", "name": "Kodama Gentaro", "company": "Kodama Railway",
      "bio": "Methodical and cautious; expands only when the books allow.",
-     "expansion": 55, "leverage": 30, "dividend": 40, "speculation": 20},
+     "expansion": 55, "leverage": 30, "dividend": 40, "speculation": 20, "takeovers": 30},
     {"key": "hill", "name": "James J. Hill", "company": "Hill Northern",
      "bio": "Builds cheaply, runs efficiently, and lets profits pay for the next line.",
-     "expansion": 70, "leverage": 25, "dividend": 35, "speculation": 15},
+     "expansion": 70, "leverage": 25, "dividend": 35, "speculation": 15, "takeovers": 40},
     {"key": "stanford", "name": "Leland Stanford", "company": "Stanford Central",
      "bio": "Borrows freely to build fast, trusting traffic to follow the rails.",
-     "expansion": 80, "leverage": 80, "dividend": 15, "speculation": 35}
+     "expansion": 80, "leverage": 80, "dividend": 15, "speculation": 35, "takeovers": 55}
   ]
 }

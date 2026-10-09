@@ -32,6 +32,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §8.5 [D] | Any company may run over a rival's track and use its stations; the owner gets the share of revenue matching the distance on its track; the runner pays all fuel | one company | as documented, measured per leg [I] ([rivals-model.md](rivals-model.md)) |
 | §12.1, §12.5 [D] | Net worth and purchasing power across every company; trading any company | one company | portfolios across companies; margin call sells the most valuable holding first [I] |
 | §13 [D/C/I] | Historical tycoons as AI rivals with personalities, building and running lines | none | seven tycoons; monthly route planner, train manager, finance and speculation |
+| §12.5 [D/C] | Short selling: not your own company, capped at ~50% of net worth | none | as documented; shorts held at 150% against purchasing power, pay dividends, can be margin-called [I] |
+| §12.6 [D/C/I] | Takeovers and mergers by shareholder vote; >50% forces it; retry after a year; everything incl. bonds transfers | none | as documented; vote models [I] in [rivals-model.md](rivals-model.md) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -126,7 +128,6 @@ Grouped by the spec's own build order (§17).
 - Bankruptcy (§12.4 [D]).
 - Investor sentiment and ousting the chairman; resigning (§12.2 [D]).
 - Founding dialog (§12.2 [I]); brokerage 1% (§12.5 [I]); stock splits (§12.3 [C]).
-- Short selling (§12.5), takeovers and mergers (§12.6).
 - AI: replacing engines, buying industries, recession caution, AI
   difficulty multipliers (§13.2, §8.4).
 

@@ -106,8 +106,10 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
     CommandResult r = std::visit(
         [this](const auto& c) {
             using T = std::decay_t<decltype(c)>;
-            // Trading shares is personal; everything else acts for a company.
-            if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares>) {
+            // Trading shares and bidding for control are personal; everything
+            // else acts for a company.
+            if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares> &&
+                          !std::is_same_v<T, AttemptTakeover>) {
                 if (!market_.investors[actor_].chairs) return fail("you do not run a company");
             }
             return run(c);
@@ -281,6 +283,94 @@ CommandResult World::run(const RepayBond&) {
     if (!money_no_object() && acting().cash() < due) return fail("not enough cash to repay a bond (" + dollars(due) + ")");
     acting().repay_bond();
     return success(Money{}, 0);
+}
+
+std::optional<std::string> World::too_soon(CompanyId target) const {
+    const auto it = failed_attempts_.find({actor_, target});
+    if (it != failed_attempts_.end() &&
+        date_.days_since_epoch() - it->second < data_.balance.corporate.retry_days) {
+        return "after a failed attempt you must wait a year before trying again";
+    }
+    return std::nullopt;
+}
+
+void World::record_failure(CompanyId target) { failed_attempts_[{actor_, target}] = date_.days_since_epoch(); }
+
+CommandResult World::run(const AttemptTakeover& cmd) {
+    if (cmd.target >= market_.companies.size()) return fail("no such company");
+    if (company(cmd.target).defunct()) return fail("that company no longer exists");
+    Investor& bidder = market_.investors[actor_];
+    if (bidder.chairs == cmd.target) return fail("you already run that company");
+    std::optional<PlayerId> incumbent;
+    for (std::size_t i = 0; i < market_.investors.size(); ++i) {
+        if (market_.investors[i].chairs == cmd.target) incumbent = static_cast<PlayerId>(i);
+    }
+    // The human always runs a company: one with nothing to swap cannot take theirs [I].
+    if (incumbent == kHumanPlayer && !bidder.chairs) return fail("you have no company to offer in exchange");
+    if (auto why = too_soon(cmd.target)) return fail(*why);
+
+    const Vote v = takeover_vote(market_, actor_, cmd.target, data_.balance.corporate);
+    if (!v.passed()) {
+        record_failure(cmd.target);
+        return fail("the shareholders voted no (" + std::to_string(v.percent_yes()) + "% in favour)");
+    }
+    // The winner takes the chair; the ousted chairman takes the winner's old seat, if any [I].
+    const std::optional<CompanyId> old = bidder.chairs;
+    bidder.chairs = cmd.target;
+    if (incumbent) market_.investors[*incumbent].chairs = old;
+    return success(Money{}, cmd.target);
+}
+
+CommandResult World::run(const AttemptMerger& cmd) {
+    Company& buyer = acting();
+    if (cmd.target >= market_.companies.size()) return fail("no such company");
+    const Company& target = company(cmd.target);
+    if (target.defunct()) return fail("that company no longer exists");
+    if (target.id() == buyer.id()) return fail("a company cannot merge with itself");
+    if (actor_ != kHumanPlayer && target.id() == company().id()) {
+        return fail("the player's own company cannot be merged away"); // [I] for now
+    }
+    if (cmd.offer_per_share <= Money{}) return fail("the offer must be above nothing");
+    if (auto why = too_soon(cmd.target)) return fail(*why);
+    const std::int64_t own = std::max<std::int64_t>(0, market_.investors[actor_].shares_in(cmd.target));
+    const Money cost = cmd.offer_per_share * (target.shares_outstanding() - own);
+    if (!money_no_object() && cost > buyer.cash()) {
+        return fail("buying out the other shareholders costs " + dollars(cost) + "; the company has " +
+                    dollars(buyer.cash()));
+    }
+
+    const Vote v = merger_vote(market_, actor_, cmd.target, cmd.offer_per_share, data_.balance.corporate);
+    if (!v.passed()) {
+        record_failure(cmd.target);
+        return fail("the shareholders voted no (" + std::to_string(v.percent_yes()) + "% in favour)");
+    }
+    merge(buyer, cmd.target, cmd.offer_per_share);
+    return success(cost, cmd.target);
+}
+
+void World::merge(Company& buyer, CompanyId tid, Money offer) {
+    Company& target = company(tid);
+    std::int64_t paid_shares = target.shares_outstanding();
+    for (std::size_t i = 0; i < market_.investors.size(); ++i) {
+        Investor& inv = market_.investors[i];
+        const std::int64_t h = inv.shares_in(tid);
+        if (h > 0 && i == actor_) {
+            // The bidder's own stake is exchanged for new shares of the buyer, at market value [I].
+            const std::int64_t granted = (offer * h).in_cents() / std::max<std::int64_t>(1, buyer.share_price().in_cents());
+            buyer.grant_shares(granted);
+            inv.add_shares(buyer.id(), granted);
+            paid_shares -= h;
+        } else if (h > 0) {
+            inv.cash += offer * h;
+        } else if (h < 0) {
+            inv.cash -= offer * -h; // shorts are closed at the offer price
+        }
+        inv.add_shares(tid, -h);
+        if (inv.chairs == tid) inv.chairs.reset();
+    }
+    buyer.pay_for_acquisition(offer * paid_shares);
+    buyer.absorb(target);
+    railway_.transfer_owner(tid, buyer.id());
 }
 
 } // namespace railmaster::sim

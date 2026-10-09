@@ -153,6 +153,24 @@ NodeId Railway::split_edge(EdgeId e, MapPoint at) {
     return mid;
 }
 
+void Railway::transfer_owner(CompanyId from, CompanyId to) {
+    track_.transfer_owner(from, to);
+    for (Station& s : stations_)
+        if (s.owner == from) s.owner = to;
+    for (ServiceBuilding& b : service_buildings_)
+        if (b.owner == from) b.owner = to;
+    for (Train& t : trains_) {
+        if (t.owner == from) t.owner = to;
+        // Distance run so far on the old company's track now counts as the new one's.
+        if (t.leg_mm_by_owner.size() > from) {
+            const std::int64_t mm = t.leg_mm_by_owner[from];
+            t.leg_mm_by_owner[from] = 0;
+            if (t.leg_mm_by_owner.size() <= to) t.leg_mm_by_owner.resize(std::size_t{to} + 1, 0);
+            t.leg_mm_by_owner[to] += mm;
+        }
+    }
+}
+
 StationId Railway::add_station(std::string name, NodeId node, StationSize size, CompanyId owner) {
     if (node >= track_.nodes().size()) throw std::out_of_range("station node out of range");
     const auto id = static_cast<StationId>(stations_.size());
