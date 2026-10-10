@@ -12,14 +12,18 @@ TEST_CASE("locomotive registry parses fields and availability") {
         {"key": "a", "name": "A", "fuel": "steam", "available_from": 1830, "available_until": 1850,
          "top_speed_mph": 30, "cost": 10000, "maintenance_per_year": 5000},
         {"key": "b", "name": "B", "fuel": "electric", "available_from": 2000,
-         "top_speed_mph": 200, "cost": 1, "maintenance_per_year": 1, "grade_rating": 150},
+         "top_speed_mph": 200, "cost": 1, "maintenance_per_year": 1, "accel_days": 0.25,
+         "grade_drop": 0.08, "free_weight_tons": 300, "fuel_economy": 60, "weight_tons": 110},
         {"key": "c", "name": "C", "fuel": "diesel", "available_from": 1900,
          "top_speed_mph": 80, "cost": 1, "maintenance_per_year": 1, "scenario_only": true}
     ]})");
     const auto& a = reg.get(*reg.find("a"));
     CHECK(a.fuel == Fuel::Steam);
     CHECK(a.cost == Money::dollars(10000));
-    CHECK(a.grade_rating == 100);
+    // Unset performance figures take the provisional defaults.
+    CHECK(a.accel_milli_days == 500);
+    CHECK(a.grade_drop_permille == 180);
+    CHECK(a.free_weight_tons == 50);
     CHECK_FALSE(a.available_in(1829));
     CHECK(a.available_in(1830));
     CHECK(a.available_in(1850));
@@ -27,7 +31,11 @@ TEST_CASE("locomotive registry parses fields and availability") {
 
     const auto& b = reg.get(*reg.find("b"));
     CHECK(b.available_in(2999)); // no end year
-    CHECK(b.grade_rating == 150);
+    CHECK(b.accel_milli_days == 250);
+    CHECK(b.grade_drop_permille == 80);
+    CHECK(b.free_weight_tons == 300);
+    CHECK(b.fuel_economy_percent == 60);
+    CHECK(b.weight_tons == 110);
 
     CHECK_FALSE(reg.get(*reg.find("c")).available_in(1950)); // scenario-only
 }

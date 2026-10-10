@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cmath>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -38,11 +39,22 @@ LocomotiveRegistry LocomotiveRegistry::from_json(std::string_view json_text) {
         t.top_speed_mph = entry.at("top_speed_mph").get<std::int32_t>();
         t.cost = Money::dollars(entry.at("cost").get<std::int64_t>());
         t.maintenance_per_year = Money::dollars(entry.at("maintenance_per_year").get<std::int64_t>());
-        t.grade_rating = entry.value("grade_rating", 100);
+        // Fractional values in the file ("accel_days": 0.5) are held in thousandths.
+        const auto milli = [&](const char* k, std::int32_t fallback) {
+            return entry.contains(k) ? static_cast<std::int32_t>(std::llround(entry[k].get<double>() * 1000.0)) : fallback;
+        };
+        t.accel_milli_days = milli("accel_days", t.accel_milli_days);
+        t.grade_drop_permille = milli("grade_drop", t.grade_drop_permille);
+        t.free_weight_tons = entry.value("free_weight_tons", t.free_weight_tons);
+        t.fuel_economy_percent = entry.value("fuel_economy", t.fuel_economy_percent);
+        t.weight_tons = entry.value("weight_tons", t.weight_tons);
         t.reliability = entry.value("reliability", 100);
         t.scenario_only = entry.value("scenario_only", false);
         if (t.top_speed_mph <= 0) throw std::runtime_error("locomotive data: bad top speed for '" + t.key + "'");
-        if (t.grade_rating <= 0) throw std::runtime_error("locomotive data: bad grade_rating for '" + t.key + "'");
+        if (t.accel_milli_days <= 0 || t.grade_drop_permille < 0 || t.free_weight_tons < 0 || t.fuel_economy_percent <= 0 ||
+            t.weight_tons <= 0) {
+            throw std::runtime_error("locomotive data: bad performance figures for '" + t.key + "'");
+        }
         if (t.reliability <= 0) throw std::runtime_error("locomotive data: bad reliability for '" + t.key + "'");
         if (t.available_until && *t.available_until < t.available_from) {
             throw std::runtime_error("locomotive data: availability ends before it starts for '" + t.key + "'");

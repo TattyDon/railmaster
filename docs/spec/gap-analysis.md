@@ -57,6 +57,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §10.2, §11.2 [D/I] | Electrification drawn over existing track or "Electrify all track", +75% of single-track cost; electric engines need every leg between consecutive stops electrified | none: electric engines ran anywhere | as the spec (75% of the open-ground rate per km, × the double-track share on double track); electric trains route only over electrified track; rivals do not electrify, so they buy no electric engines |
 | §3.3 [D/C], §5.3 [C] | Territories with access rights needed to build; access prices; credit, station-cost and overhead modifiers; closed borders block middlemen | none | as described in [m2-economy-model.md](m2-economy-model.md) (Territories); a generator splits new maps on request or for a scenario; rivals buy access for the lines they plan |
 | §14.3 [D/C/I] | Medal tiers of nested goals with deadlines, checked at month end; status screen; score by medal, difficulty and years early | none | as the spec, from JSON scenario files ([scenarios.md](scenarios.md)); goals: connect towns, territories, book value, cash, revenue, net worth, industry profit, deliveries, only railroad, highest value |
+| §4.2 [D], §9.1, §10.2 [I] | Era car weights (10/20/40/80 t, express 2/3); speed = top × load × grade × curve × bridge × water; first-order acceleration with the engine's time constant; fuel by weight × economy | one grade formula by car count, 8-tick linear acceleration, no curves, fuel per car | as the spec; per-engine figures ours from its role guidance; the reference train's fuel cost is held across eras ([m1-provisional-models.md](m1-provisional-models.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -91,12 +92,11 @@ say why (for example the price field's site nodes, m2-economy-model.md).
 Grouped by the spec's own build order (§17).
 
 **Trains and track**
-- Era car weights (§4.2 [D]) and the speed model with free weight,
-  acceleration and appeal (§9.1 [D], §10.2 [I]). Needs per-locomotive
-  numbers (§17 item 1).
+- Passenger appeal (§9.1 [D]); measured per-locomotive numbers to replace
+  ours (§17 items 1 and 4).
 - Free undo while laying track; removing track (10% refund); overpasses
   (§11.1–11.2 [D]).
-- Curve slowdown; following trains on single track (§10 [C/I]).
+- Following trains on single track (§10 [C/I]).
 - Breakdown repair cost and duration (§9.4 [I]).
 
 **Economy**

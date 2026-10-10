@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace railmaster::sim {
 
@@ -27,12 +28,36 @@ struct Balance {
         std::int32_t speed_step_percent = 200;
     } time;
 
+    // A loaded freight car's weight from a year on (rt3-clone-spec §4.2 [D]):
+    // the weight steps up at each listed year.
+    struct CarWeight {
+        std::int32_t from_year = 1830;
+        std::int32_t freight_tons = 10;
+    };
+
+    // Train movement (rt3-clone-spec §10.2 [I]). Target speed = top speed x
+    // load x grade x curve x bridge x water factors; speed approaches it
+    // with the engine's own time constant.
     struct Trains {
         std::int64_t seconds_per_tick = 40; // how much travel a simulation tick represents
-        std::int32_t accel_ticks_to_top_speed = 8;
         std::int32_t station_dwell_ticks = 8;
-        std::int32_t min_speed_permille = 100;   // the slowest a grade can make a train
-        std::int32_t grade_penalty = 25;         // speed lost per (grade bp x (cars + 2)) / grade rating
+        // Load: 1 - load_slowdown x (weight over the engine's free weight)
+        // / reference weight, at least min_load_speed.
+        std::int32_t load_slowdown_permille = 500;
+        std::int32_t min_load_speed_permille = 200;
+        // Grade: 1 - grade% x the engine's drop per 1% x weight / reference
+        // weight, at least min_grade_speed.
+        std::int32_t min_grade_speed_permille = 50;
+        // The reference weight is this many freight cars of the era (the
+        // speed chart's default of 4 cars).
+        std::int32_t reference_cars = 4;
+        // Express cars, cabooses and dining cars weigh 2/3 of a freight car [D].
+        std::int32_t express_permille_of_freight = 667;
+        std::vector<CarWeight> car_weights{{1830, 10}, {1850, 20}, {1900, 40}, {1950, 80}};
+        // Curves: radius / curve_comfort_radius, at least min_curve_speed.
+        // The radius is read from the turn between pieces of track.
+        std::int64_t curve_comfort_radius_mm = 4'000'000;
+        std::int32_t min_curve_speed_permille = 250;
         std::int32_t wood_bridge_speed_permille = 500;
         std::int32_t other_bridge_speed_permille = 900;
     } trains;
@@ -44,7 +69,7 @@ struct Balance {
         std::int32_t service_threshold_permille = 500;
         std::int32_t service_ticks = 4;
         std::int32_t no_water_speed_permille = 250;
-        std::int32_t no_sand_grade_permille = 400;
+        std::int32_t no_sand_grade_drop_percent = 300; // an engine with no sand loses 3x the speed on grades
         std::int64_t service_tower_cost = 30'000;
         std::int64_t maintenance_facility_cost = 100'000;
     } servicing;
@@ -291,10 +316,17 @@ struct Balance {
     } ai;
 
     struct Finance {
-        std::int64_t fuel_per_km_steam = 20;
-        std::int64_t fuel_per_km_diesel = 15;
-        std::int64_t fuel_per_km_electric = 10;
-        std::int64_t fuel_per_km_per_car = 2;
+        // Fuel per km for a train of the reference weight behind an engine
+        // of reference_engine_tons and fuel economy 100; others pay in
+        // proportion to their weight and economy (rt3-clone-spec §10.2).
+        // Fuel prices fall as cars grow heavier, so the reference train
+        // costs the same in every era [I].
+        std::int64_t fuel_per_km_steam = 28;
+        std::int64_t fuel_per_km_diesel = 23;
+        std::int64_t fuel_per_km_electric = 18;
+        std::int32_t reference_engine_tons = 60;
+        // Steep grades raise fuel use [D]: this much more per 1% of climb [I].
+        std::int32_t fuel_uphill_percent_per_1pct = 25;
         // A year's upkeep as a share of build cost, charged monthly. Track:
         // rt3-clone-spec §11.2 [I] 2%. Buildings: no figure in the spec;
         // ours, RT2's 6%.

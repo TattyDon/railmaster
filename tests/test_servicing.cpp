@@ -79,19 +79,23 @@ TEST_CASE("a steam engine with no water crawls") {
     const auto& steam = reg.get(kSteam);
     Train full, dry;
     dry.water = 0;
-    const std::int64_t normal = target_speed_mm_per_tick(steam, full, 0);
-    CHECK(target_speed_mm_per_tick(steam, dry, 0) == normal * default_balance().servicing.no_water_speed_permille / 1000);
+    const std::int64_t normal = target_speed_mm_per_tick(steam, full, 1850, 0);
+    CHECK(target_speed_mm_per_tick(steam, dry, 1850, 0) ==
+          normal * default_balance().servicing.no_water_speed_permille / 1000);
     // Diesels do not care about water.
-    CHECK(target_speed_mm_per_tick(reg.get(kDiesel), dry, 0) == normal);
+    CHECK(target_speed_mm_per_tick(reg.get(kDiesel), dry, 1850, 0) == normal);
 }
 
 TEST_CASE("without sand an engine loses climbing ability but not speed on the flat") {
     const auto reg = locos();
     const auto& diesel = reg.get(kDiesel);
     Train sanded, unsanded;
+    sanded.cars.resize(2);
+    for (Car& c : sanded.cars) c.cargo = 0;
+    unsanded.cars = sanded.cars;
     unsanded.sand = 0;
-    CHECK(target_speed_mm_per_tick(diesel, unsanded, 0) == target_speed_mm_per_tick(diesel, sanded, 0));
-    CHECK(target_speed_mm_per_tick(diesel, unsanded, 150) < target_speed_mm_per_tick(diesel, sanded, 150));
+    CHECK(target_speed_mm_per_tick(diesel, unsanded, 1850, 0) == target_speed_mm_per_tick(diesel, sanded, 1850, 0));
+    CHECK(target_speed_mm_per_tick(diesel, unsanded, 1850, 150) < target_speed_mm_per_tick(diesel, sanded, 1850, 150));
 }
 
 TEST_CASE("a train passing a service tower stops to refill only when low") {

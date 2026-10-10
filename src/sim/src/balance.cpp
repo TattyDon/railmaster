@@ -6,12 +6,15 @@
 
 namespace railmaster::sim {
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Trains, seconds_per_tick, accel_ticks_to_top_speed,
-                                                station_dwell_ticks, min_speed_permille, grade_penalty,
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::CarWeight, from_year, freight_tons)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Trains, seconds_per_tick, station_dwell_ticks,
+                                                load_slowdown_permille, min_load_speed_permille,
+                                                min_grade_speed_permille, reference_cars, express_permille_of_freight,
+                                                car_weights, curve_comfort_radius_mm, min_curve_speed_permille,
                                                 wood_bridge_speed_permille, other_bridge_speed_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_mm, sand_range_climb_mm, oil_range_mm,
                                                 service_threshold_permille, service_ticks, no_water_speed_permille,
-                                                no_sand_grade_permille, service_tower_cost,
+                                                no_sand_grade_drop_percent, service_tower_cost,
                                                 maintenance_facility_cost)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Time, normal_seconds_per_year, speed_step_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Breakdowns, mean_distance_mm, empty_oil_multiplier,
@@ -70,7 +73,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_r
                                                 recession_stop_building, recession_reserve_percent,
                                                 recession_cut_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, fuel_per_km_steam, fuel_per_km_diesel,
-                                                fuel_per_km_electric, fuel_per_km_per_car,
+                                                fuel_per_km_electric, reference_engine_tons, fuel_uphill_percent_per_1pct,
                                                 track_upkeep_bp_per_year, building_upkeep_bp_per_year,
                                                 easy_cost_percent, rating_asset_points, rating_asset_cap_doublings,
                                                 rating_cover_points, rating_cover_cap, rating_profit_year_points,
@@ -176,6 +179,13 @@ Balance Balance::from_json(std::string_view json_text) {
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error(std::string("balance: ") + e.what());
     }
+    const auto& w = b.trains.car_weights;
+    if (w.empty()) throw std::runtime_error("balance: trains.car_weights needs at least one era");
+    for (std::size_t i = 0; i < w.size(); ++i) {
+        if (w[i].freight_tons <= 0) throw std::runtime_error("balance: car weights must be positive");
+        if (i > 0 && w[i].from_year <= w[i - 1].from_year) throw std::runtime_error("balance: car_weights years must rise");
+    }
+    if (b.trains.reference_cars <= 0) throw std::runtime_error("balance: trains.reference_cars must be positive");
     return b;
 }
 

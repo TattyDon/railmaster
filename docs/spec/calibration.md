@@ -101,6 +101,12 @@ rate, so they built no freight lines. With the express code's own rates in
 the estimate, 27% of rival revenue in year 5 is freight; total rival revenue
 is about the same ($947K a year).
 
+With the spec's speed model (era car weights, free weight, grade × load,
+curves, first-order acceleration, fuel by weight), the demo's return rose
+from 8.6% to 10.1% a year and its revenue stayed about the same ($501K). Its
+1830s trains are light, so they burn less fuel than the old flat
+per-car rate. Rival freight share went from 18.5% to 22%.
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2

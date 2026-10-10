@@ -210,18 +210,23 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
     return out;
 }
 
-// The fastest steam or diesel locomotive the company can afford now, if any.
+// The steam or diesel locomotive the company can afford now that runs
+// fastest with a usual train (the AI's cars per train) up a 1% grade, read
+// off the speed chart as a player would [I]; the cheaper on a tie.
 std::optional<LocoTypeId> pick_loco(const World& w, Money budget) {
     std::optional<LocoTypeId> best;
+    std::int64_t best_speed = 0;
+    const std::int32_t year = w.date().year();
+    const auto cars = static_cast<std::size_t>(std::max(1, w.data().balance.ai.cars_per_train));
     for (const LocomotiveType& l : w.data().locomotives.all()) {
-        if (!l.available_in(w.date().year()) || l.cost > budget) continue;
+        if (!l.available_in(year) || l.cost > budget) continue;
         if (l.fuel == Fuel::Electric) continue; // rivals do not electrify their lines (yet)
-        if (!best) {
-            best = l.id;
+        const std::int64_t speed = chart_speed_mm_per_tick(l, cars, false, year, 100, w.data().balance);
+        if (best && (speed < best_speed || (speed == best_speed && l.cost >= w.data().locomotives.get(*best).cost))) {
             continue;
         }
-        const LocomotiveType& cur = w.data().locomotives.get(*best);
-        if (l.top_speed_mph > cur.top_speed_mph || (l.top_speed_mph == cur.top_speed_mph && l.cost < cur.cost)) best = l.id;
+        best = l.id;
+        best_speed = speed;
     }
     return best;
 }

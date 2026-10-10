@@ -59,6 +59,7 @@ private:
     std::vector<Button> layout_buttons() const;
     void cycle_overlay(int direction);
     std::string cell_text() const;
+    std::string speed_chart_text() const;
     void draw_finance_panel() const;
     void draw_market_panel() const;
     void draw_status_panel() const;

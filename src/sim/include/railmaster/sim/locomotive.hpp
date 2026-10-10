@@ -25,9 +25,18 @@ struct LocomotiveType {
     std::int32_t top_speed_mph = 0;
     Money cost;
     Money maintenance_per_year;
-    // Hill-climbing ability. 100 is the provisional default; higher climbs
-    // better. RT3 shows this as a word scale whose numbers are not yet known.
-    std::int32_t grade_rating = 100;
+    // Performance (rt3-clone-spec §9.1, §10.2 [I]; RT3 shows only the
+    // speed-vs-grade chart, so the numbers are ours until measured):
+    // - time constant of the approach to target speed, in thousandths of a day;
+    std::int32_t accel_milli_days = 500;
+    // - speed lost per 1% grade at the reference load, in thousandths;
+    std::int32_t grade_drop_permille = 180;
+    // - the load it hauls without slowing, in tons;
+    std::int32_t free_weight_tons = 50;
+    // - fuel used per ton-km, in percent of average;
+    std::int32_t fuel_economy_percent = 100;
+    // - its own weight, which it also burns fuel to move.
+    std::int32_t weight_tons = 60;
     // Relative chance of breaking down: 100 is average, 200 fails half as
     // often. RT3 shows a word rating; per-engine values are not yet known.
     std::int32_t reliability = 100;

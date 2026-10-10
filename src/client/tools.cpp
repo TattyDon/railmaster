@@ -1053,6 +1053,28 @@ std::string Tools::industry_text() const {
            std::to_string(s.utilisation_permille / 10) + "%";
 }
 
+// The speed-vs-grade chart of the Add Train window [D], as text: the
+// chosen engine's speed with the chosen number of freight and of express
+// cars, on the flat and up 1%, 2% and 3%.
+std::string Tools::speed_chart_text() const {
+    const auto locos = available_locos();
+    if (locos.empty()) return "";
+    const sim::LocomotiveType& l = world_.data().locomotives.get(locos[loco_choice_ % locos.size()]);
+    const sim::Balance& b = world_.data().balance;
+    const std::int32_t year = world_.date().year();
+    const std::int64_t mph = std::max<std::int64_t>(1, sim::mph_to_mm_per_tick(1, b));
+    const auto row = [&](bool express) {
+        std::string out;
+        for (std::int32_t grade = 0; grade <= 300; grade += 100) {
+            out += (grade == 0 ? "" : "/") +
+                   std::to_string(sim::chart_speed_mm_per_tick(l, cars_, express, year, grade, b) / mph);
+        }
+        return out;
+    };
+    return "SPEED WITH " + std::to_string(cars_) + " CARS, FLAT/1%/2%/3%: FREIGHT " + row(false) + " MPH, EXPRESS " +
+           row(true) + " MPH";
+}
+
 std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
@@ -1231,6 +1253,8 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = inspect_text();
     } else if (tool_ == Tool::Industry) {
         line2 = industry_text();
+    } else if (tool_ == Tool::Train) {
+        line2 = speed_chart_text();
     }
     if (good) glColor3f(0.6f, 0.95f, 0.6f);
     else glColor3f(1.0f, 0.45f, 0.4f);

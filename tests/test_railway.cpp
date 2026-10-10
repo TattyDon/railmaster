@@ -2,6 +2,11 @@
 
 #include <doctest/doctest.h>
 
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
 using namespace railmaster::sim;
 
 namespace {
@@ -57,15 +62,80 @@ TEST_CASE("trains are limited to eight cars and need a route") {
     CHECK_THROWS(l.rw.add_train(0, 0, {}));
 }
 
-TEST_CASE("grade slows trains in proportion to load") {
-    const auto locos = test_locos();
+TEST_CASE("car weights step up by era; express cars, cabooses and diners weigh 2/3 (§4.2 [D])") {
+    CHECK(car_weight_kg(false, 1800) == 10'000); // before the first era: its weight
+    CHECK(car_weight_kg(false, 1849) == 10'000);
+    CHECK(car_weight_kg(true, 1849) == 6'670);
+    CHECK(car_weight_kg(false, 1850) == 20'000);
+    CHECK(car_weight_kg(false, 1899) == 20'000);
+    CHECK(car_weight_kg(false, 1900) == 40'000); // the step a consist feels overnight
+    CHECK(car_weight_kg(false, 2030) == 80'000);
+    CHECK(reference_weight_kg(1930) == 160'000); // four freight cars
+
+    Train t;
+    t.cars.resize(3);
+    t.cars[0].cargo = 0;
+    t.cars[0].milli = 1000;
+    t.cars[1].cargo = 1;
+    t.cars[1].milli = 500;
+    t.cars[1].destination = 3;
+    t.caboose = true;
+    t.diner = true;
+    // A freight car, then an express car, caboose and diner at 2/3; the empty car stays behind.
+    CHECK(train_weight_kg(t, 1930) == 40'000 + 3 * 26'680);
+}
+
+TEST_CASE("speed falls with load over the engine's free weight and with grade x load (§10.2 [I])") {
+    const auto locos = test_locos(); // defaults: free weight 50 t, 18% a 1% grade at the reference load
     const auto& loco = locos.get(0);
     const std::int64_t top = mph_to_mm_per_tick(60);
-    CHECK(target_speed_mm_per_tick(loco, 8, 0) == top);
-    CHECK(target_speed_mm_per_tick(loco, 8, -300) == top);     // downhill: no penalty
-    CHECK(target_speed_mm_per_tick(loco, 8, 200) == top / 2);  // 2% with 8 cars halves speed
-    CHECK(target_speed_mm_per_tick(loco, 0, 200) > target_speed_mm_per_tick(loco, 8, 200));
-    CHECK(target_speed_mm_per_tick(loco, 8, 5000) == top / 10); // floor at 10%
+    const std::int64_t ref = reference_weight_kg(1830); // 40 t
+    CHECK(speed_for_weight_mm_per_tick(loco, 0, ref, 0) == top);
+    CHECK(speed_for_weight_mm_per_tick(loco, 50'000, ref, 0) == top); // within the free weight
+    // 30 t over: 1 - 0.5 x 30 / 40 = 0.625.
+    CHECK(speed_for_weight_mm_per_tick(loco, 80'000, ref, 0) == top * 625 / 1000);
+    CHECK(speed_for_weight_mm_per_tick(loco, 500'000, ref, 0) == top * 200 / 1000); // floor 20%
+    // Grade at the reference load: 2% x 18% = 36% slower; downhill counts as flat.
+    CHECK(speed_for_weight_mm_per_tick(loco, 40'000, ref, 200) == top * 640 / 1000);
+    CHECK(speed_for_weight_mm_per_tick(loco, 40'000, ref, -300) == top);
+    // Twice the load, twice the grade loss; an empty engine climbs freely.
+    CHECK(speed_for_weight_mm_per_tick(loco, 80'000, ref, 200) < speed_for_weight_mm_per_tick(loco, 40'000, ref, 200));
+    CHECK(speed_for_weight_mm_per_tick(loco, 0, ref, 300) == top);
+    CHECK(speed_for_weight_mm_per_tick(loco, 40'000, ref, 5000) == top * 50 / 1000); // floor 5%
+    // Without sand, three times the grade loss.
+    CHECK(speed_for_weight_mm_per_tick(loco, 40'000, ref, 100, default_balance(), false) == top * 460 / 1000);
+    // The Add Train chart: four freight cars of the era are the reference load.
+    CHECK(chart_speed_mm_per_tick(loco, 4, false, 1830, 200) == top * 640 / 1000);
+}
+
+TEST_CASE("curves slow trains below the comfort radius (§10.2 [I])") {
+    const MapPoint a{0, 0}, j{500'000, 0};
+    CHECK(curve_speed_permille(a, j, {1'000'000, 0}) == 1000);            // straight on
+    CHECK(curve_speed_permille(a, j, {1'000'000, 50'000}) == 1000);       // radius ~5 km
+    const std::int32_t gentle = curve_speed_permille(a, j, {1'000'000, 125'000}); // ~2 km
+    CHECK(gentle > 400);
+    CHECK(gentle < 600);
+    CHECK(curve_speed_permille(a, j, {500'000, 500'000}) == 250); // a right angle: the floor
+    CHECK(curve_speed_permille(a, j, {0, 10}) == 250);             // doubling back
+}
+
+TEST_CASE("trains gather speed along a first-order lag, quick at first (§10.2 [I])") {
+    const auto locos = test_locos(); // time constant half a day: 8 ticks
+    Line l = make_line(200, 0);
+    const TrainId t = l.rw.add_train(0, 2, {l.west, l.east});
+    l.rw.tick(locos); // departs
+    const std::int64_t top = mph_to_mm_per_tick(60);
+    std::vector<std::int64_t> v;
+    for (int i = 0; i < 40; ++i) {
+        l.rw.tick(locos);
+        v.push_back(l.rw.train(t).speed_mm_per_tick);
+    }
+    CHECK(v[0] == (top + 7) / 8);                 // an eighth of the gap at once
+    CHECK(v[7] > top * 60 / 100);                 // about 63% after one time constant
+    CHECK(v[7] < top * 70 / 100);
+    CHECK(v[1] - v[0] > v[8] - v[7]);             // levelling off
+    CHECK(v[39] >= top * 99 / 100);
+    CHECK(v[39] <= top);
 }
 
 TEST_CASE("a train shuttles between two stations and dwells at each") {
@@ -241,4 +311,22 @@ TEST_CASE("no crashes when the rules turn breakdowns and crashes off") {
     l.rw.add_train(0, 2, {l.west, l.east});
     for (int i = 0; i < 200'000; ++i) l.rw.tick(locos);
     CHECK(l.rw.take_crashes().empty());
+}
+
+TEST_CASE("the shipped roster plays its roles: freight engines haul uphill, single-drivers run light [I]") {
+    std::ifstream in(std::string(RAILMASTER_DATA_DIR) + "/locomotives.json");
+    std::stringstream ss;
+    ss << in.rdbuf();
+    const auto reg = LocomotiveRegistry::from_json(ss.str());
+    const auto& american = reg.get(*reg.find("american_440"));
+    const auto& consolidation = reg.get(*reg.find("consolidation_280"));
+    const auto& shay = reg.get(*reg.find("shay_2truck"));
+    // Eight freight cars up 2% in 1870: the Consolidation keeps going, the American crawls.
+    CHECK(chart_speed_mm_per_tick(consolidation, 8, false, 1870, 200) >
+          3 * chart_speed_mm_per_tick(american, 8, false, 1870, 200));
+    // Six cars up 3% in 1885: the Shay, slow on the flat, out-climbs the American.
+    CHECK(chart_speed_mm_per_tick(american, 6, false, 1885, 0) > chart_speed_mm_per_tick(shay, 6, false, 1885, 0));
+    CHECK(chart_speed_mm_per_tick(shay, 6, false, 1885, 300) > chart_speed_mm_per_tick(american, 6, false, 1885, 300));
+    // Every engine reaches its top speed light on the flat.
+    for (const LocomotiveType& l : reg.all()) CHECK(chart_speed_mm_per_tick(l, 0, false, 1900, 0) == mph_to_mm_per_tick(l.top_speed_mph));
 }

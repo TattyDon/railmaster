@@ -133,10 +133,10 @@
     "bond_underwriting_percent": 2,
     "building_upkeep_bp_per_year": 600,
     "easy_cost_percent": 85,
-    "fuel_per_km_diesel": 15,
-    "fuel_per_km_electric": 10,
-    "fuel_per_km_per_car": 2,
-    "fuel_per_km_steam": 20,
+    "fuel_per_km_diesel": 23,
+    "fuel_per_km_electric": 18,
+    "fuel_per_km_steam": 28,
+    "fuel_uphill_percent_per_1pct": 25,
     "max_bonds": 20,
     "rating_asset_cap_doublings": 5,
     "rating_asset_points": 1000,
@@ -156,6 +156,7 @@
       0,
       -1000
     ],
+    "reference_engine_tons": 60,
     "track_upkeep_bp_per_year": 200
   },
   "freight": {
@@ -201,7 +202,7 @@
   },
   "servicing": {
     "maintenance_facility_cost": 100000,
-    "no_sand_grade_permille": 400,
+    "no_sand_grade_drop_percent": 300,
     "no_water_speed_permille": 250,
     "oil_range_mm": 1500000000,
     "sand_range_climb_mm": 600000,
@@ -307,10 +308,32 @@
     "wood_bridge_multiple": 3
   },
   "trains": {
-    "accel_ticks_to_top_speed": 8,
-    "grade_penalty": 25,
-    "min_speed_permille": 100,
+    "car_weights": [
+      {
+        "freight_tons": 10,
+        "from_year": 1830
+      },
+      {
+        "freight_tons": 20,
+        "from_year": 1850
+      },
+      {
+        "freight_tons": 40,
+        "from_year": 1900
+      },
+      {
+        "freight_tons": 80,
+        "from_year": 1950
+      }
+    ],
+    "curve_comfort_radius_mm": 4000000,
+    "express_permille_of_freight": 667,
+    "load_slowdown_permille": 500,
+    "min_curve_speed_permille": 250,
+    "min_grade_speed_permille": 50,
+    "min_load_speed_permille": 200,
     "other_bridge_speed_permille": 900,
+    "reference_cars": 4,
     "seconds_per_tick": 40,
     "station_dwell_ticks": 8,
     "wood_bridge_speed_permille": 500

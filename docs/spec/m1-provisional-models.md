@@ -64,17 +64,66 @@ The bridge eras (1865, 1895) are documented rules and stay in
 
 This procedure is our design. RT3's own routing algorithm is unknown.
 
+## Train speed (rt3-clone-spec §10.2)
+
+A train's target speed is its engine's top speed times five factors, each
+in thousandths:
+
+- **Load:** 1 − 0.5 × (weight over the engine's free weight) ÷ the
+  reference weight, at least 20%.
+- **Grade**, uphill only: 1 − grade % × the engine's drop per 1% × weight
+  ÷ the reference weight, at least 5%. With no sand, the drop is tripled.
+  An engine with no cars climbs at full speed, as the engine's own weight
+  is built into its figures.
+- **Curve:** the turn's radius ÷ 4 km, at least 25%.
+- **Bridge:** wood 50%, other bridges 90%.
+- **Water:** 25% for a steam engine with an empty tender.
+
+How the factors are worked out:
+- **Curve radius.** Curves are chains of short straight pieces, so the
+  radius is read from the turn where two pieces meet: about piece length ÷
+  turn angle. A turn of 90° or more gets the floor.
+- **Weight.** Weight counts only what is pulled: loaded cars, caboose and
+  dining car. Empty cars stay behind.
+- **Car weights** follow the era, as documented [D]: a loaded freight car
+  is 10 t to 1849, 20 t to 1899, 40 t to 1949 and 80 t from 1950. Express
+  cars, cabooses and dining cars weigh 2/3 as much. The weight goes by
+  today's date, so a train that ran well in 1899 slows in 1900.
+- **Reference weight.** It is four freight cars of the era, the speed
+  chart's default load [I].
+
+Speed approaches the target as a first-order lag, in both directions. Each
+tick closes 1/T of the gap, where T is the engine's time constant. It rises
+quickly at first and then levels off [C], reaching about 63% of the gap
+after one time constant.
+
+Each engine has five performance figures, all ours [I], in
+`data/locomotives.json`. They were set from the spec's role guidance
+(§9.2): the Consolidation as the early freight workhorse, the Shay for
+hills, Big Boy and Challenger for heavy freight, and fast single-drivers
+that falter with load.
+- Time constant, `accel_days`: steam 0.4–0.8 days, diesel about 0.3,
+  electric 0.12–0.3.
+- Drop per 1% grade, `grade_drop`: 0.04 for the Shay up to 0.35 for the
+  Planet.
+- Free weight, `free_weight_tons`: 15 t up to 480 t.
+- Fuel economy, `fuel_economy`.
+- Own weight, `weight_tons`, used for fuel.
+
+The Train tool shows the chosen engine's chart: its speed with the chosen
+number of freight or express cars on the flat and up 1%, 2% and 3%.
+
+Rivals pick the engine that is fastest with their usual train up 1%,
+rather than the one with the highest top speed.
+
 ## Provisional
 
 | Item | Stand-in | What would replace it |
 |---|---|---|
 | Time scale | A train moves as if 40 real seconds pass per simulation tick (16 ticks per game day, so about 10.7 minutes of travel per day). A 60 mph train covers about 17 km a day. | Time a train between two measured points in-game. |
 | Map scale | A map cell is 0.5 mile (805 m); maps are Small 256 × 256 cells (the default), Medium 384 × 512 or Large 768 × 1024 (rt3-clone-spec §3.1 [I]). Distances in `balance.json` with `_cells` are in these cells. | Map dimensions from the original maps. |
-| Grade penalty | Uphill: speed factor = 1 − (grade in hundredths of a percent × (2 + cars) × 25 ÷ grade_rating) ÷ 1000, floored at 10% of top speed. Downhill and flat: top speed. For example, a 2% grade with 8 cars halves speed at rating 100. | The RT3 grade-performance tiers and the speed-versus-grade curve. |
-| Grade rating | Every engine is 100, because no per-engine data exists yet. | Per-engine values from the in-game "grade performance" display. |
-| Acceleration | Reaches top speed in 8 ticks (half a day); braking is instant. | Observation. |
+| Speed model | rt3-clone-spec §10.2 [I], below. | The Add Train speed-vs-grade chart for 5–6 engines (§17 item 4). |
 | Station stop | 8 ticks (half a day). | Observation. |
-| Curves | No speed penalty. | Unknown whether RT3 has one. |
 | Grade limit for building | 3%. Steeper ground is cut, tunnelled or bridged. | RT3's actual limit, if it has one. |
 | Tunnel and bridge thresholds | Rail more than 12 m below the ground is a tunnel; more than 10 m above it is a bridge. | Observation. |
 | Default tunnel preference | 50 (halfway between climbing over and cutting through). | The default of RT3's "Tunnels" setting. |
@@ -88,7 +137,7 @@ This procedure is our design. RT3's own routing algorithm is unknown.
 | Service threshold | A train stops at a support building when the relevant gauge is below half. | Observation. |
 | Service stop | A quarter of a day; at a station it happens during the station stop. | Observation. |
 | Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
-| Out of sand | Climbing ability drops to 40%. | "Much of its grade performance" [M]. |
+| Out of sand | Three times the speed lost on grades (rt3-clone-spec §9.4 [I]). | "Much of its grade performance" [M]. |
 | Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability; × (1 + age/15 years) (rt3-clone-spec §9.4 [I]). Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
 | Breakdown | The train stops where it is for two days. | Observation; the spec suggests 3–10 days and a repair cost [I]. |
 | Crash | 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20), and ×3 with no oil (rt3-clone-spec §9.4 [I]). The train is destroyed and written off. | Observation. |

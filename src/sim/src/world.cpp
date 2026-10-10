@@ -17,11 +17,10 @@ Ledger revenue_line(const CargoType& c) {
     return Ledger::FreightRevenue;
 }
 
-std::int64_t fuel_per_km(const Balance::Finance& f, const LocomotiveType& loco, std::size_t cars) {
-    std::int64_t base = f.fuel_per_km_steam;
-    if (loco.fuel == Fuel::Diesel) base = f.fuel_per_km_diesel;
-    if (loco.fuel == Fuel::Electric) base = f.fuel_per_km_electric;
-    return base + f.fuel_per_km_per_car * static_cast<std::int64_t>(cars);
+std::int64_t fuel_per_km(const Balance::Finance& f, const LocomotiveType& loco) {
+    if (loco.fuel == Fuel::Diesel) return f.fuel_per_km_diesel;
+    if (loco.fuel == Fuel::Electric) return f.fuel_per_km_electric;
+    return f.fuel_per_km_steam;
 }
 
 } // namespace
@@ -347,13 +346,15 @@ void World::charge_running_costs() {
     const Balance::Finance& f = data_.balance.finance;
     const std::size_t n = market_.companies.size();
     std::vector<Money> maintenance(n), fuel(n);
+    const std::int64_t reference_kg = reference_weight_kg(date_.year(), data_.balance) + std::int64_t{f.reference_engine_tons} * 1000;
     for (const Train& t : railway_.trains()) {
         if (!t.in_service()) continue;
         const LocomotiveType& loco = data_.locomotives.get(t.loco);
         maintenance[t.owner] += annual_maintenance(loco, (today - t.built_day) / 365, t.oil, data_.balance).scaled(1, 12);
-        const std::int64_t run_mm = t.distance_mm - t.fuel_billed_mm;
-        fuel[t.owner] += Money::dollars(fuel_per_km(f, loco, t.hauled_cars())).scaled(run_mm, 1'000'000);
-        railway_.train_mut(t.id).fuel_billed_mm = t.distance_mm;
+        // The fuel per km is for the reference train: its cars and an
+        // engine of the reference weight.
+        fuel[t.owner] += Money::dollars(fuel_per_km(f, loco)).scaled(t.fuel_kg_km, reference_kg);
+        railway_.train_mut(t.id).fuel_kg_km = 0;
     }
     for (Company& c : market_.companies) {
         if (c.defunct()) continue;

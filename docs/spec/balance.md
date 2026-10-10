@@ -42,7 +42,7 @@ Each key's name carries its unit:
 
 | Section | Covers | Described in |
 |---|---|---|
-| `trains` | movement, dwell, grades, bridge speeds | [m1-provisional-models.md](m1-provisional-models.md) |
+| `trains` | movement: car weights by era, load, grade and curve factors, bridge speeds, dwell | [m1-provisional-models.md](m1-provisional-models.md) |
 | `servicing` | water, sand and oil ranges; service buildings | m1 |
 | `breakdowns` | breakdown and crash rates, maintenance ageing | m1 |
 | `track` | grade limit, structure clearances, costs per km | m1 |

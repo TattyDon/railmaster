@@ -39,8 +39,9 @@ Early development. Done so far:
   the chairman out (you included, unless you hold a majority); stock splits
 - terrain-aware middlemen and a business cycle of five economic states
 - free-angle straight and curved track with automatic bridges and tunnels
-- stations, and trains that run looping routes, slow on grades and meet on
-  single track
+- stations, and trains that run looping routes and meet on single track,
+  slowed by weight, grades, curves and bridges as each engine's figures
+  allow, with cars that grow heavier by era
 - water, sand and oil, service towers, maintenance facilities and breakdowns
 - build tools: lay track (with live route and price preview), branch off
   existing track, place stations and service buildings, buy trains
@@ -95,7 +96,7 @@ and checks the economy against the spec's targets
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
-| L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy |
+| L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy. The second line shows the engine's speed chart: speed with that many freight or express cars on the flat and up 1%, 2% and 3% |
 | F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |

@@ -38,7 +38,7 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
   troop revenue as it is earned.
 - **Running costs, charged on the 1st of each month for the month before.**
   - Train maintenance: the M1 yearly figure ÷ 12.
-  - Fuel: per km run.
+  - Fuel: per km run, by weight moved, fuel economy and grade.
   - Track upkeep: 2% of track cost a year, charged monthly
     (rt3-clone-spec §11.2 [I]).
   - Building upkeep: 6% a year on stations and support buildings, RT2's
@@ -89,7 +89,7 @@ In the `finance` and `stock` sections of
 | Item | Value |
 |---|---|
 | Founding (default terms) | Fortune $3.5M; you invest $3M; outside investors $3M; shares at $10 |
-| Fuel per km | Steam $20, diesel $15, electric $10, plus $2 per car |
+| Fuel per km | Steam $28, diesel $23, electric $18 for the reference train (four freight cars of the era and a 60 t engine). Other trains pay in proportion to the weight moved (cars and engine) × the engine's fuel economy, and +25% per 1% of uphill grade (rt3-clone-spec §9.1, §10.2 [D/I]). Fuel prices fall as cars grow heavier, so the reference train costs the same in every era [I] |
 | Track upkeep | 2% of cost a year |
 | Building upkeep | 6% of cost a year |
 | Rating score | See above: weights and thresholds in `finance.rating_*` |

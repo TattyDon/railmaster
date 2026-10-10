@@ -1,6 +1,9 @@
 #include "railmaster/sim/railway.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
+
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -33,15 +36,6 @@ std::int32_t bridge_speed_permille(const TrackEdge& e, const Balance& b) {
 // A train is physically on the track (rather than at a station node) in these states.
 bool on_path(TrainState s) {
     return s == TrainState::Moving || s == TrainState::Servicing || s == TrainState::BrokenDown;
-}
-
-std::int64_t speed_for(std::int64_t top, std::int64_t grade_rating, std::size_t cars, std::int32_t grade_bp,
-                       const Balance& b) {
-    if (grade_bp <= 0) return top;
-    const std::int64_t load = 2 + static_cast<std::int64_t>(cars);
-    const std::int64_t penalty = static_cast<std::int64_t>(grade_bp) * load * b.trains.grade_penalty / grade_rating;
-    const std::int64_t permille = std::max<std::int64_t>(b.trains.min_speed_permille, 1000 - penalty);
-    return top * permille / 1000;
 }
 
 std::int32_t gauge_after(std::int64_t used, std::int64_t range) {
@@ -90,9 +84,69 @@ std::int64_t mph_to_mm_per_tick(std::int64_t mph, const Balance& b) {
     return mph * kMmPerMile * b.trains.seconds_per_tick / 3600;
 }
 
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp,
-                                      const Balance& b) {
-    return speed_for(mph_to_mm_per_tick(loco.top_speed_mph, b), loco.grade_rating, cars, grade_bp, b);
+std::int64_t car_weight_kg(bool express, std::int32_t year, const Balance& b) {
+    const auto& w = b.trains.car_weights;
+    std::int64_t tons = w.front().freight_tons;
+    for (const Balance::CarWeight& era : w)
+        if (year >= era.from_year) tons = era.freight_tons;
+    const std::int64_t kg = tons * 1000;
+    return express ? kg * b.trains.express_permille_of_freight / 1000 : kg;
+}
+
+std::int64_t reference_weight_kg(std::int32_t year, const Balance& b) {
+    return std::int64_t{b.trains.reference_cars} * car_weight_kg(false, year, b);
+}
+
+std::int64_t train_weight_kg(const Train& t, std::int32_t year, const Balance& b) {
+    const std::int64_t freight = car_weight_kg(false, year, b), light = car_weight_kg(true, year, b);
+    std::int64_t w = 0;
+    for (const Car& c : t.cars)
+        if (c.cargo) w += c.destination ? light : freight;
+    if (t.caboose) w += light;
+    if (t.diner) w += light;
+    return w;
+}
+
+std::int64_t speed_for_weight_mm_per_tick(const LocomotiveType& loco, std::int64_t weight_kg, std::int64_t reference_kg,
+                                          std::int32_t grade_bp, const Balance& b, bool sand) {
+    const Balance::Trains& tr = b.trains;
+    const std::int64_t ref = std::max<std::int64_t>(1, reference_kg);
+    const std::int64_t over = std::max<std::int64_t>(0, weight_kg - std::int64_t{loco.free_weight_tons} * 1000);
+    const std::int64_t load = std::clamp<std::int64_t>(1000 - tr.load_slowdown_permille * over / ref,
+                                                       tr.min_load_speed_permille, 1000);
+    std::int64_t grade = 1000;
+    if (grade_bp > 0) {
+        // grade% x drop per 1% x weight / reference, in thousandths.
+        const std::int64_t mult = sand ? 100 : b.servicing.no_sand_grade_drop_percent;
+        const std::int64_t drop = std::int64_t{grade_bp} * loco.grade_drop_permille * mult / 100 * weight_kg / (100 * ref);
+        grade = std::clamp<std::int64_t>(1000 - drop, tr.min_grade_speed_permille, 1000);
+    }
+    return mph_to_mm_per_tick(loco.top_speed_mph, b) * load / 1000 * grade / 1000;
+}
+
+std::int64_t chart_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, bool express, std::int32_t year,
+                                     std::int32_t grade_bp, const Balance& b) {
+    const std::int64_t w = static_cast<std::int64_t>(cars) * car_weight_kg(express, year, b);
+    return speed_for_weight_mm_per_tick(loco, w, reference_weight_kg(year, b), grade_bp, b);
+}
+
+std::int32_t curve_speed_permille(MapPoint a, MapPoint joint, MapPoint c, const Balance& b) {
+    const std::int64_t x1 = joint.x_mm - a.x_mm, y1 = joint.y_mm - a.y_mm;
+    const std::int64_t x2 = c.x_mm - joint.x_mm, y2 = c.y_mm - joint.y_mm;
+    const std::int64_t l1 = isqrt(x1 * x1 + y1 * y1), l2 = isqrt(x2 * x2 + y2 * y2);
+    const std::int32_t floor = b.trains.min_curve_speed_permille;
+    if (l1 == 0 || l2 == 0) return 1000;
+    // Work in metres so the products stay well inside 64 bits.
+    const std::int64_t mx1 = x1 / 1000, my1 = y1 / 1000, mx2 = x2 / 1000, my2 = y2 / 1000;
+    const std::int64_t m1 = std::max<std::int64_t>(1, l1 / 1000), m2 = std::max<std::int64_t>(1, l2 / 1000);
+    if (mx1 * mx2 + my1 * my2 <= 0) return floor; // a turn of 90 degrees or more
+    const std::int64_t cross = std::abs(mx1 * my2 - my1 * mx2);
+    // sin(turn) in millionths; the turn's radius is about piece / turn.
+    const std::int64_t sin_ppm = cross * 1'000'000 / (m1 * m2);
+    if (sin_ppm == 0) return 1000;
+    const std::int64_t radius_mm = std::min(l1, l2) / 1000 * 1'000'000 / sin_ppm * 1000;
+    const std::int64_t f = radius_mm * 1000 / std::max<std::int64_t>(1, b.trains.curve_comfort_radius_mm);
+    return static_cast<std::int32_t>(std::clamp<std::int64_t>(f, floor, 1000));
 }
 
 const char* cargo_filter_name(CargoFilter f) {
@@ -113,13 +167,12 @@ std::size_t Train::slots_at(std::size_t i) const {
     return i < rules.size() ? std::min(rules[i].capacity(), room) : room;
 }
 
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
-                                      const Balance& b) {
-    std::int64_t top = mph_to_mm_per_tick(loco.top_speed_mph, b);
-    if (loco.fuel == Fuel::Steam && train.water == 0) top = top * b.servicing.no_water_speed_permille / 1000;
-    std::int64_t rating = loco.grade_rating;
-    if (train.sand == 0) rating = std::max<std::int64_t>(1, rating * b.servicing.no_sand_grade_permille / 1000);
-    return speed_for(top, rating, train.hauled_cars(), grade_bp, b);
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t year,
+                                      std::int32_t grade_bp, const Balance& b) {
+    std::int64_t v = speed_for_weight_mm_per_tick(loco, train_weight_kg(train, year, b), reference_weight_kg(year, b),
+                                                  grade_bp, b, train.sand > 0);
+    if (loco.fuel == Fuel::Steam && train.water == 0) v = v * b.servicing.no_water_speed_permille / 1000;
+    return v;
 }
 
 Money annual_maintenance(const LocomotiveType& loco, std::int32_t age_years, std::int32_t oil, const Balance& b) {
@@ -331,6 +384,11 @@ void Railway::use_supplies(Train& t, const LocomotiveType& loco, std::int64_t di
     }
     t.oil_used_mm += distance_mm;
     t.oil = gauge_after(t.oil_used_mm, balance_.servicing.oil_range_mm);
+    // Fuel: distance x everything moved x economy, more uphill [D/I].
+    const std::int64_t kg = train_weight_kg(t, year_, balance_) + std::int64_t{loco.weight_tons} * 1000;
+    const std::int64_t uphill = 10000 + std::max(0, grade_bp) * balance_.finance.fuel_uphill_percent_per_1pct;
+    // kg x mm / 1e6 = kg-km; kept per tick, so round to the nearest.
+    t.fuel_kg_km += (distance_mm * kg / 1000 * loco.fuel_economy_percent / 100 * uphill / 10000 + 500) / 1000;
 }
 
 bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) {
@@ -436,12 +494,22 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         return;
     }
 
-    const std::int64_t accel = std::max<std::int64_t>(
-        1, mph_to_mm_per_tick(loco.top_speed_mph, balance_) / balance_.trains.accel_ticks_to_top_speed);
     const PathStep here = t.path[t.step];
-    const std::int64_t target = target_speed_mm_per_tick(loco, t, track_.grade_bp(here), balance_) *
-                                bridge_speed_permille(track_.edge(here.edge), balance_) / 1000;
-    t.speed_mm_per_tick = std::min(target, t.speed_mm_per_tick + accel);
+    std::int64_t target = target_speed_mm_per_tick(loco, t, year_, track_.grade_bp(here), balance_) *
+                          bridge_speed_permille(track_.edge(here.edge), balance_) / 1000;
+    if (t.step > 0) {
+        const PathStep before = t.path[t.step - 1];
+        target = target *
+                 curve_speed_permille(track_.node(track_.step_start(before)).pos, track_.node(track_.step_start(here)).pos,
+                                      track_.node(track_.step_end(here)).pos, balance_) /
+                 1000;
+    }
+    // A first-order lag: each tick closes 1/T of the gap to the target, T
+    // being the engine's time constant (rt3-clone-spec §10.2 [I]).
+    const std::int64_t lag_ticks =
+        std::max<std::int64_t>(1, std::int64_t{loco.accel_milli_days} * kTrainTicksPerDay / 1000);
+    const std::int64_t gap = target - t.speed_mm_per_tick;
+    t.speed_mm_per_tick += gap >= 0 ? (gap + lag_ticks - 1) / lag_ticks : -((-gap + lag_ticks - 1) / lag_ticks);
 
     std::int64_t remaining = t.speed_mm_per_tick;
     std::int64_t travelled = 0;

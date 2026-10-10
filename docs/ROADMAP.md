@@ -171,7 +171,8 @@ Still to do:
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:
-1. The grade-to-speed formula and locomotive power and weight.
+1. Per-engine speed figures (time constant, grade drop, free weight, fuel
+   economy): the speed model is the spec's, the numbers are ours.
 2. The price-field update and diffusion rule; the revenue and decay formula.
 3. Station catchment radii; building and track costs.
 4. Industry conversion ratios and production rates per upgrade level.

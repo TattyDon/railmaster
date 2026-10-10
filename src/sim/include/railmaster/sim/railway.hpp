@@ -2,6 +2,7 @@
 
 #include "railmaster/sim/balance.hpp"
 #include "railmaster/sim/cargo.hpp"
+#include "railmaster/sim/date.hpp"
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/money.hpp"
 #include "railmaster/sim/random.hpp"
@@ -166,7 +167,9 @@ struct Train {
 
     std::int32_t built_day = 0;       // Date::days_since_epoch() when bought
     std::int64_t distance_mm = 0;     // lifetime distance run
-    std::int64_t fuel_billed_mm = 0;  // distance already charged for fuel
+    // Fuel burnt since the last bill: distance x weight moved (train and
+    // engine) x fuel economy x the uphill surcharge, in kg-km.
+    std::int64_t fuel_kg_km = 0;
     // Distance run on each company's track (indexed by CompanyId) since the
     // last stop, to share that stop's income with the track's owners.
     std::vector<std::int64_t> leg_mm_by_owner{};
@@ -195,14 +198,36 @@ struct OperatingRules {
 // Convert a speed in miles per hour into distance per simulation tick.
 std::int64_t mph_to_mm_per_tick(std::int64_t mph, const Balance& b = default_balance());
 
-// Speed a locomotive can hold on a given grade with a given number of cars,
-// before servicing effects.
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, std::int32_t grade_bp,
-                                      const Balance& b = default_balance());
+// Ticks of train movement per game day (World::kTicksPerDay).
+inline constexpr std::int32_t kTrainTicksPerDay = 16;
 
-// As above, including the effect of the train's water and sand gauges.
-std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t grade_bp,
-                                      const Balance& b = default_balance());
+// Weight of one loaded car in `year`, in kg: the era's freight car, or 2/3
+// of it for an express car, caboose or dining car (rt3-clone-spec §4.2 [D]).
+// Weight goes by today's date, not the train's age [D].
+std::int64_t car_weight_kg(bool express, std::int32_t year, const Balance& b = default_balance());
+// The weight the speed chart assumes: reference_cars freight cars of the era.
+std::int64_t reference_weight_kg(std::int32_t year, const Balance& b = default_balance());
+// What a train pulls: its loaded cars, caboose and dining car (the engine's
+// own weight is part of its figures).
+std::int64_t train_weight_kg(const Train& t, std::int32_t year, const Balance& b = default_balance());
+
+// Speed an engine can hold pulling `weight_kg` up a grade (downhill counts
+// as flat), before curves, bridges and water: top speed x load factor x
+// grade factor (rt3-clone-spec §10.2 [I]). Without sand it loses
+// no_sand_grade_drop_percent as much on grades.
+std::int64_t speed_for_weight_mm_per_tick(const LocomotiveType& loco, std::int64_t weight_kg,
+                                          std::int64_t reference_kg, std::int32_t grade_bp,
+                                          const Balance& b = default_balance(), bool sand = true);
+// The Add Train speed-vs-grade chart [D]: `cars` loaded freight or express
+// cars of `year`.
+std::int64_t chart_speed_mm_per_tick(const LocomotiveType& loco, std::size_t cars, bool express, std::int32_t year,
+                                     std::int32_t grade_bp, const Balance& b = default_balance());
+// A train's own target speed on a grade: its weight, sand and water.
+std::int64_t target_speed_mm_per_tick(const LocomotiveType& loco, const Train& train, std::int32_t year,
+                                      std::int32_t grade_bp, const Balance& b = default_balance());
+// Curve factor, in thousandths, for the turn from one piece of track to the
+// next: the radius the turn implies over the comfort radius.
+std::int32_t curve_speed_permille(MapPoint a, MapPoint joint, MapPoint b, const Balance& b_ = default_balance());
 
 // Yearly maintenance for one locomotive: rises 4% of the new figure for
 // each year of age, without limit, and by half again while out of oil
@@ -259,7 +284,10 @@ public:
     // Trains destroyed in crashes since the last call.
     std::vector<TrainId> take_crashes();
     // The current date, for train ages (crash risk).
-    void set_today(std::int32_t day) { today_ = day; }
+    void set_today(std::int32_t day) {
+        today_ = day;
+        year_ = Date::from_days(day).year();
+    }
     const Train& train(TrainId id) const { return trains_.at(id); }
     const std::vector<Train>& trains() const { return trains_; }
 
@@ -289,6 +317,7 @@ private:
     std::vector<std::pair<TrainId, StationId>> arrivals_;
     std::vector<TrainId> crashes_;
     std::int32_t today_ = 0;
+    std::int32_t year_ = Date::kEpochYear;
     OperatingRules rules_;
     Balance balance_ = default_balance();
     Random rng_;
