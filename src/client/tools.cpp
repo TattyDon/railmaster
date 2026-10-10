@@ -5,7 +5,9 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <sstream>
 
 namespace railmaster::client {
 
@@ -268,6 +270,7 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     on_mouse_move(sx, sy);
     switch (tool_) {
     case Tool::Inspect:
+    case Tool::Status:
     case Tool::Finance:
     case Tool::Market: return;
     case Tool::Industry: {
@@ -443,6 +446,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_F7: select(Tool::Finance); return true;
     case SDLK_F8: select(Tool::Market); return true;
     case SDLK_F9: select(Tool::Industry); return true;
+    case SDLK_F10: select(Tool::Status); return true;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -735,6 +739,71 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     }
 }
 
+// Game status (rt3-clone-spec §14.3 [D]): the scenario's briefing, each
+// medal's deadline and goals with progress, and the medal won.
+void Tools::draw_status_panel() const {
+    constexpr float kRow = 16.0f;
+    const float x0 = 40, y0 = 56, w = 1100;
+    std::vector<std::pair<std::string, int>> rows; // text, colour: 0 title, 1 plain, 2 met, 3 not met, 4 dim
+    const auto& sc = world_.scenario();
+    if (!sc) {
+        rows.push_back({"GAME STATUS", 0});
+        rows.push_back({"A FREE GAME: NO GOALS AND NO DEADLINE. START ONE WITH --SCENARIO=FILE.", 1});
+    } else {
+        const sim::ScenarioResult& res = world_.scenario_result();
+        rows.push_back({sc->name, 0});
+        // The briefing, wrapped to the panel.
+        std::string line;
+        std::istringstream words(sc->briefing);
+        for (std::string word; words >> word;) {
+            if (!line.empty() && text_width(line + " " + word, kScale) > static_cast<int>(w - 40)) {
+                rows.push_back({line, 1});
+                line.clear();
+            }
+            line += (line.empty() ? "" : " ") + word;
+        }
+        if (!line.empty()) rows.push_back({line, 1});
+        rows.push_back({"", 1});
+        for (int m = 0; m < 3; ++m) {
+            const auto medal = static_cast<sim::Medal>(m);
+            const bool won = res.medal && static_cast<int>(*res.medal) >= m;
+            std::string head = std::string(sim::medal_name(medal)) + " BY " +
+                               sc->medals[static_cast<std::size_t>(m)].deadline.month_year_label();
+            if (m > 0) head += "  (AND THE GOALS ABOVE)";
+            if (won) head += "  - WON";
+            rows.push_back({head, 0});
+            for (const sim::Goal& g : sc->medals[static_cast<std::size_t>(m)].goals) {
+                const sim::GoalProgress p = sim::check_goal(world_, g);
+                rows.push_back({std::string(p.met ? "  [X] " : "  [ ] ") + p.text, won ? 4 : p.met ? 2 : 3});
+            }
+        }
+        rows.push_back({"", 1});
+        if (res.medal) {
+            rows.push_back({std::string(sim::medal_name(*res.medal)) + " MEDAL WON " + res.won_on->month_year_label() +
+                                "  SCORE " + format_count(world_.scenario_score_milli() / 1000) + "." +
+                                std::to_string(world_.scenario_score_milli() % 1000 / 100),
+                            2});
+        }
+        if (res.finished) rows.push_back({res.medal ? "THE SCENARIO IS OVER." : "THE SCENARIO IS OVER: NO MEDAL.", 0});
+    }
+    const float h = kRow * static_cast<float>(rows.size()) + 20;
+    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    float y = y0 + 10;
+    for (const auto& [text, colour] : rows) {
+        switch (colour) {
+        case 0: glColor3f(1.0f, 0.9f, 0.5f); break;
+        case 2: glColor3f(0.6f, 0.95f, 0.6f); break;
+        case 3: glColor3f(1.0f, 0.6f, 0.5f); break;
+        case 4: glColor3f(0.55f, 0.55f, 0.55f); break;
+        default: glColor3f(0.85f, 0.85f, 0.85f); break;
+        }
+        std::string upper = text;
+        for (char& ch : upper) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        draw_text(x0 + 14, y, upper, kScale);
+        y += kRow;
+    }
+}
+
 void Tools::draw_market_panel() const {
     constexpr float kRow = 16.0f;
     const auto& companies = world_.companies();
@@ -920,6 +989,7 @@ void Tools::draw_world_overlay() const {
         return;
     }
     case Tool::Inspect:
+    case Tool::Status:
     case Tool::Finance:
     case Tool::Market: return;
     case Tool::Industry: {
@@ -986,15 +1056,16 @@ std::string Tools::industry_text() const {
 std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
-        {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTENANCE"}, {Tool::Train, "F6 TRAIN"},
+        {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTAIN"}, {Tool::Train, "F6 TRAIN"},
         {Tool::Finance, "F7 FINANCES"}, {Tool::Market, "F8 MARKET"}, {Tool::Industry, "F9 INDUSTRY"},
+        {Tool::Status, "F10 STATUS"},
     };
     std::vector<Button> out;
     float x = 6.0f;
     for (const auto& [t, label] : kButtons) {
-        const float w = static_cast<float>(text_width(label, kScale)) + 12.0f;
+        const float w = static_cast<float>(text_width(label, kScale)) + 8.0f;
         out.push_back({t, label, x, kToolbarY, x + w, kToolbarY + kButtonH});
-        x += w + 4.0f;
+        x += w + 3.0f;
     }
     return out;
 }
@@ -1044,6 +1115,8 @@ std::string Tools::hint() const {
     case Tool::Market:
         return "UP/DOWN CHOOSE  A/S BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
                "COMPANY";
+    case Tool::Status:
+        return world_.scenario() ? "SCENARIO GOALS, CHECKED AT EACH MONTH END" : "NO SCENARIO: A FREE GAME";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   A/S BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND   KK BANKRUPTCY";
@@ -1142,7 +1215,7 @@ void Tools::draw_ui(const std::string& status) const {
         fill_rect(b.x0, b.y0, b.x1, b.y1, on ? 0.85f : 0.15f, on ? 0.7f : 0.15f, on ? 0.25f : 0.18f, 0.9f);
         if (on) glColor3f(0.05f, 0.05f, 0.05f);
         else glColor3f(0.9f, 0.9f, 0.9f);
-        draw_text(b.x0 + 6, b.y0 + 4, b.label, kScale);
+        draw_text(b.x0 + 4, b.y0 + 4, b.label, kScale);
     }
 
     // Bottom bar: what the tool does, and the last result or what is under the cursor.
@@ -1180,6 +1253,7 @@ void Tools::draw_ui(const std::string& status) const {
 
     if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
     if (tool_ == Tool::Market) draw_market_panel();
+    if (tool_ == Tool::Status) draw_status_panel();
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

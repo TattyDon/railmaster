@@ -44,6 +44,9 @@ Early development. Done so far:
 - water, sand and oil, service towers, maintenance facilities and breakdowns
 - build tools: lay track (with live route and price preview), branch off
   existing track, place stations and service buildings, buy trains
+- scenarios: JSON files that set the map, towns and rivals, with Bronze,
+  Silver and Gold goals and deadlines (three original ones in
+  `data/scenarios/`)
 - a placeholder top-down client with a demo network of three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
@@ -72,6 +75,9 @@ rivals join by default; `--rivals=N` sets how many (0 to 7). `--map=small`,
 cells of half a mile; Small by default). `--territories=N` splits the map
 into N territories: the first town's is free, the others need access rights
 before you can build there (T in Inspect buys them).
+`--scenario=data/scenarios/lowland_junction.json` plays a scenario: it sets
+the map, rivals and goals itself, and F10 shows the briefing and the medal
+goals ([docs/spec/scenarios.md](docs/spec/scenarios.md)).
 
 `./build/tools/calibrate/railmaster_calibrate` plays a few headless games
 and checks the economy against the spec's targets
@@ -81,7 +87,7 @@ and checks the economy against the spec's targets
 
 | Key or action | Does |
 |---|---|
-| F1 to F9, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train |
+| F1 to F10, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train, Finance, Market, Industry, Status |
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Over a train (Inspect) | F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). Each applies to every stop |
@@ -93,6 +99,7 @@ and checks the economy against the spec's targets
 | F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
+| F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |

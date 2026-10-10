@@ -4,6 +4,9 @@
 // replaces it later.
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
+//                   [--scenario=FILE]
+// A scenario sets the map, rivals and territories itself, and starts with
+// no demo network.
 
 #include "render.hpp"
 #include "tools.hpp"
@@ -56,12 +59,14 @@ int main(int argc, char* argv[]) {
     int rivals = 3;
     sim::MapSize map_size = sim::MapSize::Small;
     int territories = 0;
+    std::string scenario_path;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
         else if (arg.rfind("--territories=", 0) == 0) territories = std::stoi(arg.substr(14));
+        else if (arg.rfind("--scenario=", 0) == 0) scenario_path = arg.substr(11);
         else if (arg == "--map=small") map_size = sim::MapSize::Small;
         else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
         else if (arg == "--map=large") map_size = sim::MapSize::Large;
@@ -80,6 +85,15 @@ int main(int argc, char* argv[]) {
     config.rivals = rivals;
     config.set_map_size(map_size);
     config.territories = territories;
+    if (!scenario_path.empty()) {
+        try {
+            config = sim::scenario_config(sim::Scenario::from_json(read_file(scenario_path)));
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "Failed to load scenario %s: %s\n", scenario_path.c_str(), e.what());
+            return 1;
+        }
+        empty = true;
+    }
     config.found_player_company = quick;
     sim::World world(config, std::move(data));
     // The demo network is built once the player has a company to pay for it.
@@ -114,6 +128,16 @@ int main(int argc, char* argv[]) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     client::Tools tools(world, cam);
+    if (world.scenario()) {
+        // Open on the briefing, looking at the scenario's first town.
+        tools.select(client::Tool::Status);
+        if (!world.economy().towns().empty()) {
+            const sim::Town& t = world.economy().towns().front();
+            const sim::MapPoint p = world.economy().node_centre(t.cx, t.cy);
+            cam.pan_x = static_cast<float>(p.x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
+            cam.pan_y = static_cast<float>(p.y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
+        }
+    }
     if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
     double tick_accumulator = 0.0;

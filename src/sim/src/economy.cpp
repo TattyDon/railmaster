@@ -801,7 +801,8 @@ std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& carg
 
 
 void populate_economy(Economy& economy, const CargoRegistry& cargo,
-                      const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b) {
+                      const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b,
+                      const std::vector<PlacedTown>& fixed_towns) {
     const Balance::MapGeneration& mg = b.map;
     const std::int32_t w = economy.width(), h = economy.height();
     const auto land = [&](std::int32_t x, std::int32_t y) {
@@ -824,7 +825,34 @@ void populate_economy(Economy& economy, const CargoRegistry& cargo,
     const std::optional<IndustryTypeId> house = industries.find("house");
     const std::int32_t town_count = scaled(mg.towns_per_map);
     std::vector<std::string> used_names;
-    for (std::int32_t t = 0; t < town_count; ++t) {
+    const auto add_town = [&](std::string name, std::int32_t cx, std::int32_t cy, std::int32_t count) {
+        used_names.push_back(name);
+        economy.add_town({std::move(name), cx, cy});
+        if (!house) return;
+        // Houses scattered over the nodes around the centre.
+        std::vector<std::int32_t> houses(static_cast<std::size_t>(side * side), 0);
+        const auto slot = [&](std::int32_t dx, std::int32_t dy) {
+            return static_cast<std::size_t>((dy + spread) * side + dx + spread);
+        };
+        for (std::int32_t i = 0; i < count; ++i) {
+            const std::int32_t dx = rng.between(-spread, spread), dy = rng.between(-spread, spread);
+            if (land(cx + dx, cy + dy)) ++houses[slot(dx, dy)];
+        }
+        for (std::int32_t dy = -spread; dy <= spread; ++dy) {
+            for (std::int32_t dx = -spread; dx <= spread; ++dx) {
+                const std::int32_t n = houses[slot(dx, dy)];
+                if (n == 0) continue;
+                const SiteId site = economy.add_site(industries, *house, cx + dx, cy + dy, n);
+                economy.town_mut(economy.towns().size() - 1).houses.push_back(site);
+                taken[idx(cx + dx, cy + dy)] = true;
+            }
+        }
+    };
+    for (const PlacedTown& t : fixed_towns) {
+        const std::int32_t cx = std::clamp(t.cx, 0, w - 1), cy = std::clamp(t.cy, 0, h - 1);
+        add_town(t.name, cx, cy, std::max(1, t.houses));
+    }
+    for (auto t = static_cast<std::int32_t>(fixed_towns.size()); t < town_count; ++t) {
         for (int attempt = 0; attempt < 200; ++attempt) {
             const std::int32_t cx = rng.between(3, std::max(3, w - 4)), cy = rng.between(3, std::max(3, h - 4));
             if (!land(cx, cy) || taken[idx(cx, cy)]) continue;
@@ -834,30 +862,7 @@ void populate_economy(Economy& economy, const CargoRegistry& cargo,
             if (crowded && attempt < 150) continue;
             std::string name = town_name(rng);
             while (std::find(used_names.begin(), used_names.end(), name) != used_names.end()) name = town_name(rng);
-            used_names.push_back(name);
-            economy.add_town({name, cx, cy});
-
-            if (house) {
-                // Houses scattered over the nodes around the centre.
-                std::vector<std::int32_t> houses(static_cast<std::size_t>(side * side), 0);
-                const auto slot = [&](std::int32_t dx, std::int32_t dy) {
-                    return static_cast<std::size_t>((dy + spread) * side + dx + spread);
-                };
-                const std::int32_t count = rng.between(mg.town_min_houses, mg.town_max_houses);
-                for (std::int32_t i = 0; i < count; ++i) {
-                    const std::int32_t dx = rng.between(-spread, spread), dy = rng.between(-spread, spread);
-                    if (land(cx + dx, cy + dy)) ++houses[slot(dx, dy)];
-                }
-                for (std::int32_t dy = -spread; dy <= spread; ++dy) {
-                    for (std::int32_t dx = -spread; dx <= spread; ++dx) {
-                        const std::int32_t n = houses[slot(dx, dy)];
-                        if (n == 0) continue;
-                        const SiteId site = economy.add_site(industries, *house, cx + dx, cy + dy, n);
-                        economy.town_mut(economy.towns().size() - 1).houses.push_back(site);
-                        taken[idx(cx + dx, cy + dy)] = true;
-                    }
-                }
-            }
+            add_town(std::move(name), cx, cy, rng.between(mg.town_min_houses, mg.town_max_houses));
             break;
         }
     }

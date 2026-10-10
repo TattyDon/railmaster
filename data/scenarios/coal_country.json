@@ -1,0 +1,26 @@
+{
+  "key": "coal_country",
+  "name": "Coal Country",
+  "briefing": "The hills around Harlow and Kestrel Gap are full of coal, and the mills downriver are hungry for it. Two rival lines have the same idea. Move the coal, then prove your railroad is worth more than theirs.",
+  "start": "1880-01-01",
+  "seed": 23,
+  "map": "small",
+  "rivals": 2,
+  "towns": [
+    {"name": "Harlow", "x": 72, "y": 72, "houses": 28},
+    {"name": "Kestrel Gap", "x": 120, "y": 160, "houses": 18},
+    {"name": "Millbrook", "x": 184, "y": 120, "houses": 34}
+  ],
+  "medals": {
+    "bronze": {"by": "1890-12-31", "goals": [
+      {"kind": "deliver", "cargo": "coal", "count": 30}
+    ]},
+    "silver": {"by": "1895-12-31", "goals": [
+      {"kind": "deliver", "cargo": "coal", "count": 80},
+      {"kind": "revenue", "amount": 1000000}
+    ]},
+    "gold": {"by": "1900-12-31", "goals": [
+      {"kind": "highest_value"}
+    ]}
+  }
+}

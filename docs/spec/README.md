@@ -18,6 +18,7 @@ with it.
 | [overview-finance-scenarios.md](overview-finance-scenarios.md) | Product facts, modes, campaign, finance, stock market, AI, engine |
 | [calibration.md](calibration.md) | `railmaster_calibrate`: metrics, targets and their sources, results |
 | [balance.md](balance.md) | `data/balance.json`: where every tunable number lives and how to change it |
+| [scenarios.md](scenarios.md) | Scenario files: format, goals, medals and score |
 | [rivals-model.md](rivals-model.md) | Rival companies: ownership, trackage rights, the market across companies, the AI |
 | [m1-provisional-models.md](m1-provisional-models.md) | Stand-in rules used until real values are measured |
 | [m2-economy-model.md](m2-economy-model.md) | How the cargo economy works: researched facts vs our design, and its constants |

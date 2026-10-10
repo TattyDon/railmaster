@@ -64,7 +64,15 @@ World::World(const WorldConfig& config, GameData data)
       railway_(config.seed),
       sandbox_(config.sandbox),
       difficulty_(config.difficulty),
-      business_cycle_(config.business_cycle) {
+      business_cycle_(config.business_cycle),
+      scenario_(config.scenario) {
+    if (scenario_) {
+        // A scenario's founding money, for every founder.
+        Balance::Stock& st = data_.balance.stock;
+        if (scenario_->founder_fortune) st.founder_fortune = *scenario_->founder_fortune;
+        if (scenario_->founder_investment) st.founder_investment = *scenario_->founder_investment;
+        if (scenario_->outside_investment) st.outside_investment = *scenario_->outside_investment;
+    }
     Investor you;
     you.name = "You";
     you.cash = Money::dollars(data_.balance.stock.founder_fortune);
@@ -85,9 +93,21 @@ World::World(const WorldConfig& config, GameData data)
     town_growth_ = config.town_growth;
     industries_appear_ = config.industries_appear;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
+    std::vector<PlacedTown> fixed_towns;
+    if (scenario_) {
+        // A scenario's towns stand on dry land: drain the ground they cover.
+        const std::int32_t r = data_.balance.map.town_spread_cells + economy_.cells_per_node();
+        for (const ScenarioTown& t : scenario_->towns) {
+            for (std::int32_t y = std::max(0, t.y - r); y <= std::min(terrain_.height() - 1, t.y + r); ++y)
+                for (std::int32_t x = std::max(0, t.x - r); x <= std::min(terrain_.width() - 1, t.x + r); ++x)
+                    if (terrain_.ground(x, y) == GroundType::Water) terrain_.set_ground(x, y, GroundType::Grass);
+            const std::int32_t k = economy_.cells_per_node();
+            fixed_towns.push_back({t.name, t.x / k, t.y / k, t.houses});
+        }
+    }
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
-        populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance);
+        populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns);
         // Territories go down once the towns are placed, before trade starts across them.
         if (config.territories > 0) make_territories(config.territories);
         // History, so the map starts with prices and cargo in place.
@@ -168,6 +188,7 @@ void World::tick() {
         Company& runner = company(t.owner);
         if (t.owner == company().id()) earned_ += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
+        for (const auto& [cargo, milli] : e.delivered) runner.record_delivery(cargo, milli);
         // Service to a town makes it grow.
         if (const auto town = railway_.station(station).town) {
             Town& tw = economy_.town_mut(*town);
@@ -385,6 +406,63 @@ void World::on_new_month() {
         }
     }
     run_rivals();
+    check_scenario();
+}
+
+void World::check_scenario() {
+    if (!scenario_ || scenario_result_.finished) return;
+    // Checked on the 1st: the state at the end of the month just ended.
+    const std::int32_t day = date_.days_since_epoch() - 1;
+    const auto rank = [](Medal m) { return static_cast<std::int32_t>(m); };
+    for (std::int32_t m = rank(Medal::Gold); m >= rank(Medal::Bronze); --m) {
+        const auto medal = static_cast<Medal>(m);
+        if (scenario_result_.medal && rank(*scenario_result_.medal) >= m) break;
+        if (day > scenario_->medals[static_cast<std::size_t>(m)].deadline.days_since_epoch()) continue;
+        const std::vector<Goal> goals = scenario_->goals_for(medal);
+        if (!std::all_of(goals.begin(), goals.end(), [&](const Goal& g) { return check_goal(*this, g).met; })) continue;
+        scenario_result_.medal = medal;
+        scenario_result_.won_on = date_;
+        news_.push_back(std::string(medal_name(medal)) + " medal won: " + scenario_->name);
+        break;
+    }
+    const bool gold = scenario_result_.medal == Medal::Gold;
+    if (gold || day >= scenario_->last_deadline().days_since_epoch()) {
+        scenario_result_.finished = true;
+        if (!scenario_result_.medal) news_.push_back(scenario_->name + ": time is up, no medal");
+        else if (!gold) news_.push_back(scenario_->name + " over: " + medal_name(*scenario_result_.medal) + " medal");
+    }
+}
+
+std::int64_t World::scenario_score_milli() const {
+    if (!scenario_ || !scenario_result_.medal || !scenario_result_.won_on) return 0;
+    const Medal m = *scenario_result_.medal;
+    const std::int32_t early_days =
+        scenario_->medals[static_cast<std::size_t>(m)].deadline.days_since_epoch() - scenario_result_.won_on->days_since_epoch();
+    return sim::scenario_score_milli(m, difficulty_score_percent(difficulty_), std::max(0, early_days) / 365);
+}
+
+std::int32_t difficulty_score_percent(Difficulty d) {
+    switch (d) {
+    case Difficulty::Easy: return 75;
+    case Difficulty::Medium: return 100;
+    case Difficulty::Hard: return 125;
+    case Difficulty::Expert: return 150;
+    }
+    return 100;
+}
+
+WorldConfig scenario_config(const Scenario& s, Difficulty difficulty) {
+    WorldConfig c;
+    c.seed = s.seed;
+    c.start_date = s.start;
+    c.set_map_size(s.map_size == "large" ? MapSize::Large : s.map_size == "medium" ? MapSize::Medium : MapSize::Small);
+    c.difficulty = difficulty;
+    c.rivals = s.rivals;
+    c.territories = s.territories;
+    c.chairman_can_resign = s.chairman_can_resign;
+    c.chairman_can_be_fired = s.chairman_can_be_fired;
+    c.scenario = s;
+    return c;
 }
 
 void World::account_industries(std::int32_t months) {

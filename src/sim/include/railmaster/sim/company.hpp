@@ -148,6 +148,14 @@ public:
     bool has_access(std::uint16_t territory) const;
     void grant_access(std::uint16_t territory, std::int32_t credit_grades);
     const std::vector<std::pair<std::uint16_t, std::int32_t>>& access() const { return access_; }
+    // Loads delivered over the company's life, in thousandths, by cargo.
+    std::int64_t delivered_milli(std::uint16_t cargo) const {
+        return cargo < delivered_.size() ? delivered_[cargo] : 0;
+    }
+    void record_delivery(std::uint16_t cargo, std::int64_t milli) {
+        if (delivered_.size() <= cargo) delivered_.resize(std::size_t{cargo} + 1, 0);
+        delivered_[cargo] += milli;
+    }
     // For a new bond: the prime rate plus the rating's spread.
     std::int32_t bond_rate_bp() const;
     // Interest a year on the bonds outstanding.
@@ -255,6 +263,7 @@ private:
     Money industries_;
     std::vector<Bond> bonds_;
     std::vector<std::pair<std::uint16_t, std::int32_t>> access_; // territory, credit grades
+    std::vector<std::int64_t> delivered_;                        // by cargo, milli
     std::vector<YearAccounts> history_;
     std::int64_t shares_ = 0;
     Money price_;

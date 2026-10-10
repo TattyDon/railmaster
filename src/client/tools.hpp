@@ -12,7 +12,7 @@
 
 namespace railmaster::client {
 
-enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry };
+enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry, Status };
 
 // The player's build tools. Every change to the game is sent to the world
 // as a command; the tools only hold in-progress choices (where a run of
@@ -61,6 +61,7 @@ private:
     std::string cell_text() const;
     void draw_finance_panel() const;
     void draw_market_panel() const;
+    void draw_status_panel() const;
 
     sim::World& world_;
     const Camera& cam_;

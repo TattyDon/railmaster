@@ -11,6 +11,7 @@
 #include "railmaster/sim/locomotive.hpp"
 #include "railmaster/sim/railway.hpp"
 #include "railmaster/sim/random.hpp"
+#include "railmaster/sim/scenario.hpp"
 #include "railmaster/sim/terrain.hpp"
 #include "railmaster/sim/territory.hpp"
 
@@ -69,7 +70,16 @@ struct WorldConfig {
     // for none, as in a sandbox map. The territory of the first town is free.
     std::int32_t territories = 0;
     bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
+    // A scenario's towns, founding money and medal goals (scenario_config
+    // fills in the rest of this config from it).
+    std::optional<Scenario> scenario;
 };
+
+// The config for playing a scenario: its seed, start, map size, rivals,
+// territories, chairmanship rules and the scenario itself.
+WorldConfig scenario_config(const Scenario& s, Difficulty difficulty = Difficulty::Medium);
+// Score multiplier for a difficulty level, in percent: 75, 100, 125, 150.
+std::int32_t difficulty_score_percent(Difficulty d);
 
 // Static definitions shared by the whole game, loaded from data/.
 struct GameData {
@@ -165,6 +175,13 @@ public:
     // The state the economy changed to since the last call, if it did: news.
     std::optional<EconomicState> take_economy_news();
 
+    // --- Scenario goals (rt3-clone-spec §14.3) ---
+    // The scenario being played, if any; checked on the 1st of each month.
+    const std::optional<Scenario>& scenario() const { return scenario_; }
+    const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // The score for the medal won, in thousandths; 0 without one.
+    std::int64_t scenario_score_milli() const;
+
 private:
     void on_new_day();
     void on_new_month();
@@ -205,6 +222,9 @@ private:
     std::optional<EconomicState> economy_news_;
     EconomicState economic_state_ = EconomicState::Normal;
     std::uint64_t economy_terrain_revision_ = 0;
+    std::optional<Scenario> scenario_;
+    ScenarioResult scenario_result_;
+    void check_scenario();
 
     void refresh_economy_terrain();
 

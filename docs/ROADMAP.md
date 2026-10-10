@@ -158,8 +158,11 @@ Still to do:
 
 ## M5: Opponents and scenarios
 - AI chairmen with personality traits.
-- Scenario format, event and trigger system, medal conditions.
-- Original scenarios built to RT3's design patterns (new maps and text).
+- Scenario format and medal conditions: done (JSON files, nested goals
+  with deadlines, F10 status screen; [spec/scenarios.md](spec/scenarios.md)).
+- Event and trigger system; restrictions such as track budgets.
+- Original scenarios built to RT3's design patterns (new maps and text):
+  three to start, on generated terrain.
 - Map editor with heightmap import.
 
 ## M6: Multiplayer and polish

@@ -1,0 +1,28 @@
+{
+  "key": "lowland_junction",
+  "name": "Lowland Junction",
+  "briefing": "The river towns of the lowlands trade by barge and cart, and both are slow. Join Ashford to Brennan Falls, then carry the line on to Corwin and Dunmore before the canal company wins the argument.",
+  "start": "1850-01-01",
+  "seed": 11,
+  "map": "small",
+  "rivals": 0,
+  "towns": [
+    {"name": "Ashford", "x": 60, "y": 128, "houses": 30},
+    {"name": "Brennan Falls", "x": 104, "y": 112, "houses": 24},
+    {"name": "Corwin", "x": 152, "y": 136, "houses": 20},
+    {"name": "Dunmore", "x": 196, "y": 96, "houses": 26}
+  ],
+  "medals": {
+    "bronze": {"by": "1856-12-31", "goals": [
+      {"kind": "connect_towns", "towns": ["Ashford", "Brennan Falls"]}
+    ]},
+    "silver": {"by": "1862-12-31", "goals": [
+      {"kind": "connect_towns", "towns": ["Ashford", "Brennan Falls", "Corwin"]},
+      {"kind": "book_value", "amount": 8000000}
+    ]},
+    "gold": {"by": "1866-12-31", "goals": [
+      {"kind": "connect_towns", "towns": ["Ashford", "Brennan Falls", "Corwin", "Dunmore"]},
+      {"kind": "revenue", "amount": 1500000}
+    ]}
+  }
+}

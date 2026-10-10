@@ -320,9 +320,15 @@ std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& carg
 // Place towns and industries on a new map. A stand-in for authored scenario
 // maps: towns, and a spread of industries of every type whose products
 // exist in `year`, all on dry land (sizes and counts: Balance::map). Call
-// set_terrain first: water comes from it.
+// set_terrain first: water comes from it. A scenario's own towns go down
+// first, at their nodes, and random towns fill up the usual number.
+struct PlacedTown {
+    std::string name;
+    std::int32_t cx = 0, cy = 0; // economy node
+    std::int32_t houses = 20;
+};
 void populate_economy(Economy& economy, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year,
-                      const Balance& b = default_balance());
+                      const Balance& b = default_balance(), const std::vector<PlacedTown>& fixed_towns = {});
 
 } // namespace railmaster::sim

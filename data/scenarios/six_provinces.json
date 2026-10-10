@@ -1,0 +1,30 @@
+{
+  "key": "six_provinces",
+  "name": "The Six Provinces",
+  "briefing": "Six provinces, each with its own charter office and its own price for the right to build. The board has staked its name on you and will not let you go; make the railroad national and make yourself rich doing it.",
+  "start": "1900-01-01",
+  "seed": 37,
+  "map": "small",
+  "rivals": 1,
+  "territories": 6,
+  "founder_fortune": 2000000,
+  "founder_investment": 1500000,
+  "outside_investment": 2500000,
+  "chairman_can_resign": false,
+  "chairman_can_be_fired": false,
+  "towns": [
+    {"name": "Port Salden", "x": 128, "y": 128, "houses": 40}
+  ],
+  "medals": {
+    "bronze": {"by": "1910-12-31", "goals": [
+      {"kind": "territories", "count": 3}
+    ]},
+    "silver": {"by": "1920-12-31", "goals": [
+      {"kind": "personal_net_worth", "amount": 10000000}
+    ]},
+    "gold": {"by": "1925-12-31", "goals": [
+      {"kind": "territories", "count": 5},
+      {"kind": "only_railroad"}
+    ]}
+  }
+}
