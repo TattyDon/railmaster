@@ -102,7 +102,7 @@ and checks the economy against the spec's targets
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy. The second line shows the engine's speed chart (speed with that many freight or express cars on the flat and up 1%, 2% and 3%) and its passenger appeal |
 | F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
-| F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
+| F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse or port does (exports, imports or both); C sets a warehouse to convert one cargo into another, at a quarter yield. Ports can be bought too |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
 | Ctrl+S, Ctrl+L | Save the game to `railmaster.sav`, load it back (`--load=FILE` starts from a save) |

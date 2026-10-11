@@ -145,3 +145,55 @@ TEST_CASE("industries can be held to the map they started with") {
     run_days(w, 365 * 3);
     CHECK(w.economy().sites().empty());
 }
+
+TEST_CASE("a warehouse can convert one delivered cargo into another, at a low yield (§6.3 [D/C])") {
+    World w = flat_world(Date::from_ymd(1905, 1, 1), false);
+    const CommandResult built = w.execute(BuildIndustry{.type = type(w, "warehouse"), .cx = 10, .cy = 10});
+    REQUIRE(built.ok);
+    const CargoId coal = *w.data().cargo.find("coal");
+    const CargoId rubber = *w.data().cargo.find("rubber");
+    CHECK(w.execute(SetPortMode{.site = built.created_id, .mode = PortMode::Convert, .convert_from = rubber,
+                                .convert_to = coal})
+              .error == "a warehouse converts one of the cargos it takes into one it supplies");
+    REQUIRE(w.execute(SetPortMode{.site = built.created_id, .mode = PortMode::Convert, .convert_from = coal,
+                                  .convert_to = rubber})
+                .ok);
+    w.economy().add_stock(coal, 10, 10, 50'000);
+    run_days(w, 20);
+    const Site& s = w.economy().sites()[built.created_id];
+    // A load a day taken in, a quarter of it made into rubber.
+    CHECK(s.received_year_milli == 20'000);
+    CHECK(s.produced_milli == 5'000);
+    CHECK(w.economy().stock_milli(rubber, 10, 10) > 0);
+}
+
+TEST_CASE("ports can be bought: they earn a margin on their trade and are upgraded by their owner") {
+    GameData d = data();
+    d.industries = IndustryRegistry::from_json(R"({"industries": [
+        {"key": "coal_mine", "name": "Coal Mine", "kind": "raw", "outputs": ["coal"], "rate": 24},
+        {"key": "port", "name": "Port", "kind": "port", "rate": 365, "inputs": [{"cargo": "coal"}], "outputs": ["rubber"]}
+    ]})",
+                                               d.cargo);
+    WorldConfig cfg;
+    testing::legacy_scale(cfg);
+    cfg.width_tiles = cfg.height_tiles = 30;
+    cfg.populate = false;
+    cfg.business_cycle = false;
+    cfg.industries_appear = false;
+    cfg.start_date = Date::from_ymd(1905, 1, 1);
+    World w(cfg, std::move(d));
+    const SiteId port = w.economy().add_site(w.data().industries, *w.data().industries.find("port"), 10, 10);
+    REQUIRE(w.execute(BuyIndustry{.site = port}).ok);
+    REQUIRE(w.execute(SetPortMode{.site = port, .mode = PortMode::Exchange}).ok);
+    CHECK(w.execute(SetPortMode{.site = port, .mode = PortMode::Convert, .convert_from = 0, .convert_to = 1}).error ==
+          "only warehouses convert cargo");
+    w.economy().add_stock(*w.data().cargo.find("coal"), 10, 10, 400'000);
+    run_days(w, 60); // two month ends of accounts
+    const Site& s = w.economy().sites()[port];
+    // Imports and exports a load a day each, at $30 x price unit, 10% of it, less overhead.
+    CHECK(s.monthly_profit.size() >= 2);
+    CHECK(w.company().history().back().lines[static_cast<std::size_t>(Ledger::IndustryIncome)] > Money{});
+    const std::int32_t level = s.level;
+    REQUIRE(w.execute(UpgradeIndustry{.site = port}).ok);
+    CHECK(w.economy().sites()[port].level == level * 2);
+}

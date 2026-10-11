@@ -701,7 +701,7 @@ CommandResult World::run(const BuyIndustry& cmd) {
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);
     const IndustryType& t = data_.industries.get(s.type);
-    if (!ownable(t.kind)) return fail("only producers and processing plants can be bought");
+    if (!ownable(t.kind)) return fail("only producers, processing plants and ports can be bought");
     if (s.closed) return fail("that industry has closed");
     if (s.owner) {
         return fail(s.owner == acting().id() ? "your company already owns it"
@@ -748,7 +748,11 @@ CommandResult World::run(const UpgradeIndustry& cmd) {
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);
     if (s.owner != acting().id()) return fail("you can only upgrade your own industries");
-    if (!buildable(data_.industries.get(s.type).kind)) return fail("only processing plants and warehouses can be upgraded");
+    const IndustryKind kind = data_.industries.get(s.type).kind;
+    // Owned ports no longer expand by themselves, so their owners may.
+    if (!buildable(kind) && kind != IndustryKind::Port) {
+        return fail("only processing plants, warehouses and ports can be upgraded");
+    }
     if (s.closed) return fail("that industry has closed");
     const Money cost = construction_cost(industry_upgrade_cost(s, data_.balance.industries));
     if (auto why = cannot_afford(cost)) return fail(*why);
@@ -778,8 +782,19 @@ CommandResult World::run(const BuildStationBuilding& cmd) {
 CommandResult World::run(const SetPortMode& cmd) {
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);
-    if (s.kind != IndustryKind::Warehouse) return fail("only warehouses can be set");
-    if (s.owner != acting().id()) return fail("you can only set your own warehouses");
+    if (s.kind != IndustryKind::Warehouse && s.kind != IndustryKind::Port) return fail("only warehouses and ports can be set");
+    if (s.owner != acting().id()) return fail("you can only set your own warehouses and ports");
+    if (cmd.mode == PortMode::Convert) {
+        if (s.kind != IndustryKind::Warehouse) return fail("only warehouses convert cargo");
+        const IndustryType& t = data_.industries.get(s.type);
+        const bool takes = std::any_of(t.inputs.begin(), t.inputs.end(),
+                                       [&](const IndustryInput& i) { return i.cargo == cmd.convert_from; });
+        const bool makes = std::find(t.outputs.begin(), t.outputs.end(), cmd.convert_to) != t.outputs.end();
+        if (!takes || !makes) return fail("a warehouse converts one of the cargos it takes into one it supplies");
+        if (cmd.convert_from == cmd.convert_to) return fail("that would convert a cargo into itself");
+        s.convert_from = cmd.convert_from;
+        s.convert_to = cmd.convert_to;
+    }
     s.port_mode = cmd.mode;
     return success(Money{}, s.id);
 }

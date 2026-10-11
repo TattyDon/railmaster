@@ -48,6 +48,7 @@ Format versions:
 - **5:** level crossings and overpasses.
 - **6:** express loads changing trains.
 - **7:** luxury demand and the cost index's start year.
+- **8:** warehouse conversion.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

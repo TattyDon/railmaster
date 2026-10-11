@@ -421,7 +421,12 @@ warehouses and power plants upgrade on demand [C].
 - **Upgrade on demand [C/I]:** at each year end, an unowned port or
   consumer (power plant and the like) that received 90% of its capacity
   doubles it, up to 8 times the original.
-- **Not yet:** owning ports.
+- **Owning ports [I]:** ports can be bought, priced like any industry
+  from their profit. An owned port earns 10% of the base value of all it
+  trades, imports and exports (`industries.port_margin_percent`), less
+  overhead. Its owner sets its mode (M in the Industry tool) and upgrades
+  it, since owned ports no longer expand on demand. Unowned ports never
+  close, however little they trade.
 
 ## Warehouses (rt3-clone-spec §6.3, research §8)
 
@@ -443,8 +448,16 @@ Our design:
   prices, less the usual overhead [C: "its profit is the loss it saves"].
   It posts to the owner's Industry income and costs like any owned
   industry.
-- **Not yet:** converting cargo (one observed case: goods to rubber at up
-  to 6 a year, low yield).
+- **Converting [D/C, I numbers]:** set to convert, a warehouse takes one of
+  the cargos it receives and supplies one of those it imports instead, at
+  a quarter of a load for each load taken (`industries.convert_yield_percent`).
+  - **The case:** the one observed case was goods into rubber at a low
+    yield, so the shipped warehouse also takes goods.
+  - **Accounts:** a converting warehouse is accounted like a processing
+    plant, its output's value less its input's, besides the spoilage it
+    saves; at this yield it usually loses money.
+  - **In the game:** C in the Industry tool steps through the conversions
+    a warehouse can make.
 
 ## New industries over time (research §5)
 

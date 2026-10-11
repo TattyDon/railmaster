@@ -52,7 +52,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Industries, labour_perc
                                                 profit_multiple, floor_price, build_cost_percent,
                                                 upgrade_cost_percent, close_after_loss_years, close_chance_percent,
                                                 receiver_upgrade_permille, receiver_max_level, warehouse_radius_cells,
-                                                warehouse_spoilage_percent)
+                                                warehouse_spoilage_percent, port_margin_percent,
+                                                convert_yield_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::EconomicStates, activity_percent, cost_percent,
                                                 prime_rate_bp, stock_percent, checks_per_year, stay_percent,
                                                 toward_normal_percent,

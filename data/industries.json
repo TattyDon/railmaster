@@ -54,7 +54,7 @@
 
   {"key": "warehouse", "name": "Warehouse", "kind": "warehouse", "rate": 3,
    "inputs": [{"cargo": "grain"}, {"cargo": "cotton"}, {"cargo": "wool"}, {"cargo": "lumber"}, {"cargo": "coffee"},
-              {"cargo": "rice"}, {"cargo": "sugar"}, {"cargo": "diesel"}],
+              {"cargo": "rice"}, {"cargo": "sugar"}, {"cargo": "diesel"}, {"cargo": "goods"}],
    "outputs": ["rubber", "goods"]},
 
   {"key": "house", "name": "Houses", "kind": "house", "rate": 0.1,

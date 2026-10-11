@@ -124,6 +124,7 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
       cells_per_node_(std::max(1, cells_per_node)), balance_(balance.economy) {
     warehouse_radius_ = balance.industries.warehouse_radius_cells;
     warehouse_spoilage_percent_ = balance.industries.warehouse_spoilage_percent;
+    convert_yield_percent_ = balance.industries.convert_yield_percent;
     if (width_ <= 0 || height_ <= 0 || cell_size_mm_ <= 0) throw std::invalid_argument("bad economy grid size");
     const auto cells = static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_);
     const std::size_t n = cargo.all().size();
@@ -406,6 +407,28 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
         }
         case IndustryKind::Port:
         case IndustryKind::Warehouse: {
+            if (s.port_mode == PortMode::Convert) {
+                // One delivered cargo into another, at a low yield [D/C, I].
+                const auto in = std::find_if(t.inputs.begin(), t.inputs.end(),
+                                             [&](const IndustryInput& i) { return i.cargo == s.convert_from; });
+                const auto out = std::find(t.outputs.begin(), t.outputs.end(), s.convert_to);
+                if (in == t.inputs.end() || out == t.outputs.end() || !input_active(*in, cargo, year) ||
+                    !cargo_available(s.convert_to, cargo, year)) {
+                    break;
+                }
+                const auto i = static_cast<std::size_t>(in - t.inputs.begin());
+                const auto o = static_cast<std::size_t>(out - t.outputs.begin());
+                const std::int32_t took = take_stock(s.convert_from, s.cx, s.cy, daily);
+                s.used_milli[i] += took;
+                s.received_year_milli += took;
+                demand(s.convert_from, at, rate, balance_.industry_demand_days);
+                const std::int32_t made = took * convert_yield_percent_ / 100;
+                add_stock(s.convert_to, s.cx, s.cy, made);
+                s.made_milli[o] += made;
+                s.produced_milli += made;
+                supply(s.convert_to, at, rate * convert_yield_percent_ / 100);
+                break;
+            }
             // Exports leave; imports arrive, both up to capacity.
             if (s.port_mode != PortMode::Supply) {
                 for (std::size_t i = 0; i < t.inputs.size(); ++i) {
@@ -601,7 +624,8 @@ void Economy::settle(const CargoRegistry& cargo, const IndustryRegistry& industr
 // --- Industry accounts ---------------------------------------------------------
 
 bool ownable(IndustryKind k) {
-    return k == IndustryKind::Raw || k == IndustryKind::Processor || k == IndustryKind::Warehouse;
+    return k == IndustryKind::Raw || k == IndustryKind::Processor || k == IndustryKind::Warehouse ||
+           k == IndustryKind::Port;
 }
 bool buildable(IndustryKind k) { return k == IndustryKind::Processor || k == IndustryKind::Warehouse; }
 
@@ -614,11 +638,29 @@ std::vector<IndustryAccounts> Economy::close_accounts(const CargoRegistry& cargo
         IndustryAccounts& a = out[s.id];
         if (t.kind == IndustryKind::Warehouse) {
             // Its income is the spoilage it saves; its only cost, overhead.
+            // Converting, it also earns its output and pays for its input.
             if (!s.closed) {
                 a.revenue = s.spoilage_saved;
                 a.costs = Money::dollars(b.overhead_per_level * s.level).scaled(months, 12);
+                if (s.port_mode == PortMode::Convert) {
+                    for (std::size_t o = 0; o < t.outputs.size(); ++o)
+                        a.revenue += cargo.get(t.outputs[o]).base_price.scaled(s.made_milli[o], kMilli);
+                    for (std::size_t i = 0; i < t.inputs.size(); ++i)
+                        a.costs += cargo.get(t.inputs[i].cargo).base_price.scaled(s.used_milli[i], kMilli);
+                }
             }
             s.spoilage_saved = Money{};
+        } else if (t.kind == IndustryKind::Port) {
+            // A margin on all it trades, both ways [I].
+            if (!s.closed) {
+                Money traded;
+                for (std::size_t o = 0; o < t.outputs.size(); ++o)
+                    traded += cargo.get(t.outputs[o]).base_price.scaled(s.made_milli[o], kMilli);
+                for (std::size_t i = 0; i < t.inputs.size(); ++i)
+                    traded += cargo.get(t.inputs[i].cargo).base_price.scaled(s.used_milli[i], kMilli);
+                a.revenue = traded.scaled(b.port_margin_percent, 100);
+                a.costs = Money::dollars(b.overhead_per_level * s.level).scaled(months, 12);
+            }
         } else if (!s.closed) {
             for (std::size_t o = 0; o < t.outputs.size(); ++o) {
                 a.revenue += cargo.get(t.outputs[o]).base_price.scaled(s.made_milli[o], kMilli);
@@ -651,6 +693,7 @@ const char* port_mode_name(PortMode m) {
     case PortMode::Exchange: return "imports and exports";
     case PortMode::Receive: return "exports";
     case PortMode::Supply: return "imports";
+    case PortMode::Convert: return "converts";
     }
     return "?";
 }
@@ -670,7 +713,7 @@ Economy::YearEnd Economy::close_year(const IndustryRegistry& industries, const B
         s.received_year_milli = 0;
         if (!ownable(t.kind)) continue;
         s.loss_years = annual_profit(s) < Money{} ? s.loss_years + 1 : 0;
-        if (!s.owner && s.loss_years >= b.close_after_loss_years &&
+        if (!s.owner && t.kind != IndustryKind::Port && s.loss_years >= b.close_after_loss_years &&
             rng.chance(static_cast<std::uint32_t>(b.close_chance_percent), 100)) {
             s.closed = true;
             out.closed.push_back(s.id);

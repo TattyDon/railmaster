@@ -711,16 +711,51 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     case Tool::Industry:
-        if (key == SDLK_m) {
+        if (key == SDLK_m || key == SDLK_c) {
             const auto id = site_under_cursor();
-            if (!id || world_.economy().sites()[*id].kind != sim::IndustryKind::Warehouse) {
-                show("POINT AT ONE OF YOUR WAREHOUSES TO CHANGE WHAT IT DOES", false);
+            const auto kind = id ? world_.economy().sites()[*id].kind : sim::IndustryKind::Raw;
+            if (!id || (kind != sim::IndustryKind::Warehouse && kind != sim::IndustryKind::Port) ||
+                (key == SDLK_c && kind != sim::IndustryKind::Warehouse)) {
+                show(key == SDLK_m ? "POINT AT ONE OF YOUR WAREHOUSES OR PORTS TO CHANGE WHAT IT DOES"
+                                   : "POINT AT ONE OF YOUR WAREHOUSES TO SET WHAT IT CONVERTS",
+                     false);
                 return true;
             }
-            const auto next = static_cast<sim::PortMode>((static_cast<int>(world_.economy().sites()[*id].port_mode) + 1) % 3);
-            const sim::CommandResult r = world_.execute(sim::SetPortMode{.site = *id, .mode = next});
-            if (r.ok) show(std::string("THE WAREHOUSE NOW HANDLES ") + sim::port_mode_name(next), true);
-            else show("CANNOT: " + r.error, false);
+            const sim::Site& site = world_.economy().sites()[*id];
+            const std::string what = kind == sim::IndustryKind::Port ? "PORT" : "WAREHOUSE";
+            sim::SetPortMode cmd{.site = *id};
+            if (key == SDLK_m) {
+                // Exchange, exports, imports, round again.
+                cmd.mode = site.port_mode == sim::PortMode::Convert
+                               ? sim::PortMode::Exchange
+                               : static_cast<sim::PortMode>((static_cast<int>(site.port_mode) + 1) % 3);
+            } else {
+                // The next of the conversions it can make: each cargo it takes into each it supplies.
+                const sim::IndustryType& t = world_.data().industries.get(site.type);
+                std::vector<std::pair<sim::CargoId, sim::CargoId>> pairs;
+                for (const sim::IndustryInput& in : t.inputs)
+                    for (sim::CargoId out : t.outputs)
+                        if (in.cargo != out) pairs.emplace_back(in.cargo, out);
+                if (pairs.empty()) {
+                    show("THIS WAREHOUSE HAS NOTHING TO CONVERT", false);
+                    return true;
+                }
+                std::size_t next = 0;
+                if (site.port_mode == sim::PortMode::Convert) {
+                    for (std::size_t i = 0; i < pairs.size(); ++i)
+                        if (pairs[i] == std::pair{site.convert_from, site.convert_to}) next = (i + 1) % pairs.size();
+                }
+                cmd.mode = sim::PortMode::Convert;
+                cmd.convert_from = pairs[next].first;
+                cmd.convert_to = pairs[next].second;
+            }
+            const sim::CommandResult r = world_.execute(cmd);
+            if (!r.ok) show("CANNOT: " + r.error, false);
+            else if (cmd.mode == sim::PortMode::Convert)
+                show("THE WAREHOUSE NOW CONVERTS " + world_.data().cargo.get(cmd.convert_from).name + " INTO " +
+                         world_.data().cargo.get(cmd.convert_to).name,
+                     true);
+            else show("THE " + what + " NOW HANDLES " + sim::port_mode_name(cmd.mode), true);
             return true;
         }
         if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
@@ -1118,14 +1153,22 @@ std::string Tools::industry_text() const {
     const sim::Balance::Industries& b = world_.data().balance.industries;
     const sim::IndustryType& type = world_.data().industries.get(s.type);
     std::string text = type.name + " (LEVEL " + std::to_string(s.level) + "): ";
-    if (type.kind == sim::IndustryKind::Port) return text + sim::port_mode_name(s.port_mode) + ". NOT FOR SALE";
     if (type.kind == sim::IndustryKind::Sink) return text + "A CONSUMER. NOT FOR SALE";
     if (!s.owner) {
+        if (type.kind == sim::IndustryKind::Port) text += std::string(sim::port_mode_name(s.port_mode)) + ", ";
         text += "FOR SALE AT " + format_money(sim::industry_price(s, b));
     } else if (s.owner == world_.player_company()) {
         text += "YOURS";
-        if (type.kind == sim::IndustryKind::Warehouse) text += std::string(", ") + sim::port_mode_name(s.port_mode) + " (M TO CHANGE)";
-        if (sim::buildable(type.kind)) {
+        if (type.kind == sim::IndustryKind::Warehouse || type.kind == sim::IndustryKind::Port) {
+            if (s.port_mode == sim::PortMode::Convert) {
+                text += ", CONVERTS " + world_.data().cargo.get(s.convert_from).name + " INTO " +
+                        world_.data().cargo.get(s.convert_to).name;
+            } else {
+                text += std::string(", ") + sim::port_mode_name(s.port_mode);
+            }
+            text += type.kind == sim::IndustryKind::Warehouse ? " (M MODE, C CONVERT)" : " (M MODE)";
+        }
+        if (sim::buildable(type.kind) || type.kind == sim::IndustryKind::Port) {
             text += ", UPGRADE " + format_money(world_.construction_cost(sim::industry_upgrade_cost(s, b)));
         }
     } else {

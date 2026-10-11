@@ -23,8 +23,8 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 7; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
-                                           // 7: luxury demand, cost index
+constexpr std::uint32_t kSaveVersion = 8; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+                                           // 7: luxury demand, cost index; 8: warehouse conversion
 
 class Writer {
 public:
@@ -256,8 +256,8 @@ void io(Ar& ar, Train& t) {
 
 template <class Ar>
 void io(Ar& ar, Site& s) {
-    fields(ar, s.id, s.type, s.kind, s.cx, s.cy, s.level, s.buffer, s.produced_milli, s.port_mode, s.received_year_milli,
-           s.spoilage_saved);
+    fields(ar, s.id, s.type, s.kind, s.cx, s.cy, s.level, s.buffer, s.produced_milli, s.port_mode, s.convert_from,
+           s.convert_to, s.received_year_milli, s.spoilage_saved);
     fields(ar, s.owner, s.closed, s.made_milli, s.used_milli, s.monthly_profit, s.loss_years, s.utilisation_permille,
            s.pace_permille, s.owner_paid);
 }
@@ -403,7 +403,8 @@ void io(Ar& ar, Economy& e) {
         for (auto& a : list) fields(ar, a.cell, a.demand_milli, a.supply_milli);
     }
     fields(ar, e.active_, e.scratch_, e.conductance_, e.east_w_, e.south_w_, e.node_territory_, e.closed_territory_,
-           e.activity_percent_, e.demand_percent_, e.warehouse_radius_, e.warehouse_spoilage_percent_, e.sites_, e.towns_);
+           e.activity_percent_, e.demand_percent_, e.warehouse_radius_, e.warehouse_spoilage_percent_,
+           e.convert_yield_percent_, e.sites_, e.towns_);
     if constexpr (Ar::loading) e.balance_ = ar.balance->economy;
 }
 

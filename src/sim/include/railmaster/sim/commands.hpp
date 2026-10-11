@@ -205,10 +205,13 @@ struct BuildStationBuilding {
     MapPoint pos{};
 };
 
-// Set what one of your warehouses does: receive, supply or exchange [C].
+// Set what one of your warehouses or ports does: receive, supply or
+// exchange [C]; a warehouse may instead convert one of its inputs into one
+// of its outputs [D/C].
 struct SetPortMode {
     SiteId site = 0;
     PortMode mode = PortMode::Exchange;
+    CargoId convert_from = 0, convert_to = 0; // Convert only
 };
 
 // Declare the company bankrupt [D]: a last resort that halves its bond debt,

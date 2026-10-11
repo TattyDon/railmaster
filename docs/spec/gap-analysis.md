@@ -68,6 +68,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §11.2 [D/I] | Crossing lines stop each other at level crossings; overpasses (4×) separate them | lines passed through each other | level crossings taken in turn by rank; overpasses per line when building ([m1-provisional-models.md](m1-provisional-models.md)) |
 | §8.3 [D] | Travellers go to a hub to catch a direct train; volume rises with reachable destinations | only stations one train joins | one change of trains; destinations one change away generate traffic; each leg paid ([m2-economy-model.md](m2-economy-model.md)) |
 | §3, §5.3, §5.5 [C/I] | Rivers on the map (middlemen fast along them); automobile demand dropping sharply in recessions; an optional slow cost index | no rivers; one activity level for all | rivers run downhill from high ground to water or the edge; luxury demand 40–120% by state; cost index off by default (`economic_states`, `map`) |
+| §6.3 [D/C/I] | Warehouses can convert delivered cargo (goods into rubber, low yield); ports can be owned | warehouses only traded; ports unownable | conversion at 25% yield in a Convert mode; owned ports earn a 10% trading margin and are upgraded by their owner ([m2-economy-model.md](m2-economy-model.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -106,7 +107,6 @@ Grouped by the spec's own build order (§17).
 - Bridge, tunnel and overpass frequency settings (Common to Never); overpasses are all or nothing per line (§11.2 [D]).
 
 **Economy**
-- Owning ports; warehouse cargo conversion (§6.3 [D/C]).
 - Industry and demand-block footprints of 4 × 4 cells (§3.1 [C]); ours sit
   on one economy node (2 × 2 cells on the Small map).
 

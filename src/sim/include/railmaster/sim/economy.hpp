@@ -38,7 +38,9 @@ inline bool trades(IndustryKind k) { return k == IndustryKind::Port || k == Indu
 
 // What a port does with its cargo lists: each port can be set to receive,
 // supply or exchange [C, research §8].
-enum class PortMode : std::uint8_t { Exchange, Receive, Supply };
+// Convert (warehouses only): turn one delivered cargo into another, at a low
+// yield (rt3-clone-spec §6.3 [D/C]: goods into rubber, up to 6 a year).
+enum class PortMode : std::uint8_t { Exchange, Receive, Supply, Convert };
 const char* port_mode_name(PortMode m);
 
 enum class InputRule : std::uint8_t {
@@ -89,7 +91,8 @@ struct Site {
     std::vector<std::int32_t> buffer; // per input, milli-carloads held by a processor
     std::int64_t produced_milli = 0;  // lifetime output
 
-    PortMode port_mode = PortMode::Exchange; // ports only
+    PortMode port_mode = PortMode::Exchange; // ports and warehouses
+    CargoId convert_from = 0, convert_to = 0; // Convert mode: one of its inputs into one of its outputs
     std::int64_t received_year_milli = 0;    // consumers and ports: deliveries this year
     Money spoilage_saved{};                  // warehouses: value kept from spoiling, since the accounts closed
 
@@ -306,6 +309,7 @@ private:
     std::vector<std::int32_t> demand_percent_; // by cargo; 100 when absent
     std::int32_t warehouse_radius_ = 2;
     std::int32_t warehouse_spoilage_percent_ = 25;
+    std::int32_t convert_yield_percent_ = 25;
     std::vector<Site> sites_;
     std::vector<Town> towns_;
     Balance::Economy balance_;

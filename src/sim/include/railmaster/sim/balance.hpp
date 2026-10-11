@@ -322,6 +322,12 @@ struct Balance {
         // earns the value saved [C: "its profit is the loss it saves"].
         std::int32_t warehouse_radius_cells = 3;
         std::int32_t warehouse_spoilage_percent = 25;
+        // An owned port earns this share of the base value of all it trades,
+        // imports and exports, less overhead [I].
+        std::int32_t port_margin_percent = 10;
+        // A converting warehouse makes this much of its output for each load
+        // taken in [I: the one observed case had a "low yield"].
+        std::int32_t convert_yield_percent = 25;
     } industries;
 
     // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,
