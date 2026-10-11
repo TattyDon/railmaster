@@ -21,13 +21,15 @@
   },
   "breakdowns": {
     "breakdown_age_years": 15,
-    "breakdown_ticks": 32,
+    "breakdown_max_days": 10,
+    "breakdown_min_days": 3,
     "crash_age_years": 20,
     "crash_ppb_per_tick": 342,
     "empty_oil_multiplier": 4,
     "maintenance_age_percent_per_year": 4,
     "maintenance_no_oil_percent": 150,
-    "mean_distance_mm": 2000000000
+    "mean_distance_mm": 2000000000,
+    "repair_cost_percent": 5
   },
   "corporate": {
     "grumble_after_bad_years": 2,
@@ -141,6 +143,12 @@
     "wait_loss_per_mille_per_sensitivity": 1
   },
   "finance": {
+    "ai_revenue_percent": [
+      90,
+      100,
+      110,
+      120
+    ],
     "bankruptcy_debt_kept_percent": 50,
     "bankruptcy_loss_years": 2,
     "bankruptcy_rating_years": 5,
@@ -325,6 +333,7 @@
   "track": {
     "default_max_grade_bp": 300,
     "double_track_percent": 170,
+    "double_upgrade_percent": 90,
     "electrify_percent": 75,
     "ground_per_km": 25000,
     "piece_mm": 500000,

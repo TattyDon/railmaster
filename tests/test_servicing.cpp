@@ -182,7 +182,13 @@ TEST_CASE("a broken-down train stays put, then carries on") {
     const MapPoint where = l.rw.train_position(t);
     const auto progress = [&] { return std::pair{l.rw.train(t).step, l.rw.train(t).offset_mm}; };
     const auto stopped_at = progress();
-    for (int i = 0; i < default_balance().breakdowns.breakdown_ticks - 1; ++i) {
+    // Out of action for 3 to 10 days (rt3-clone-spec §9.4 [I]).
+    const std::int32_t wait = l.rw.train(t).wait_ticks_left;
+    CHECK(wait >= 3 * kTrainTicksPerDay);
+    CHECK(wait <= 10 * kTrainTicksPerDay);
+    CHECK(wait % kTrainTicksPerDay == 0);
+    CHECK(l.rw.take_breakdowns() == std::vector<TrainId>{t}); // for the owner's repair bill
+    for (int i = 0; i < wait - 1; ++i) {
         l.rw.tick(reg);
         CHECK(l.rw.train_position(t) == where);
     }

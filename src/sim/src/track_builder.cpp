@@ -16,6 +16,8 @@ std::int64_t pieces_for(std::int64_t length_mm, std::int64_t max_piece_mm) {
 
 MapPoint midpoint(MapPoint a, MapPoint b) { return {(a.x_mm + b.x_mm) / 2, (a.y_mm + b.y_mm) / 2}; }
 
+} // namespace
+
 std::int64_t per_km_rate(TrackKind kind, BridgeType bridge, const Balance::Track& t) {
     switch (kind) {
     case TrackKind::Ground: return t.ground_per_km;
@@ -32,6 +34,8 @@ std::int64_t per_km_rate(TrackKind kind, BridgeType bridge, const Balance::Track
     }
     throw std::logic_error("bridge piece without a bridge type");
 }
+
+namespace {
 
 // Pick the bridge type for this run, or explain why none fits.
 std::optional<BridgeType> choose_bridge(const TrackBuildOptions& o, std::string& error) {

@@ -91,6 +91,7 @@ In the `finance` and `stock` sections of
 | Founding (default terms) | Fortune $3.5M; you invest $3M; outside investors $3M; shares at $10 |
 | Fuel per km | Steam $28, diesel $23, electric $18 for the reference train (four freight cars of the era and a 60 t engine). Other trains pay in proportion to the weight moved (cars and engine) × the engine's fuel economy, and +25% per 1% of uphill grade (rt3-clone-spec §9.1, §10.2 [D/I]). Fuel prices fall as cars grow heavier, so the reference train costs the same in every era [I] |
 | Track upkeep | 2% of cost a year |
+| Difficulty and rivals | The player earns the difficulty's revenue modifier (Easy +20%, Hard −10%, Expert −20% [D]). Rivals instead earn the AI's: Easy −10%, Medium 0, Hard +10%, Expert +20% (rt3-clone-spec §8.4 [D]: the AI is penalised on Easy and given a bonus on Hard and Expert; RT2's figures [C], Easy ours [I]); `finance.ai_revenue_percent` |
 | Building upkeep | 6% of cost a year |
 | Rating score | See above: weights and thresholds in `finance.rating_*` |
 | Spread over prime | A+ 0, A 0.5%, A- 1%, B+ 2%, B 3%, B- 4% [spec]; C+ 5%, C 6%, C- 7%, D 8% (ours, for display) |

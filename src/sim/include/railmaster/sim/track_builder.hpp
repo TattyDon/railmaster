@@ -86,6 +86,9 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
                               std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
                               const TrackBuildOptions& options, const Balance& b = default_balance());
 
+// Price per km of single track of a kind, before the economy's cost level.
+std::int64_t per_km_rate(TrackKind kind, BridgeType bridge, const Balance::Track& t);
+
 // Add a plan's nodes and pieces to the network, each piece carrying its
 // cost. Returns the end node; `built`, if given, receives the new pieces.
 NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner = 0, std::vector<EdgeId>* built = nullptr);

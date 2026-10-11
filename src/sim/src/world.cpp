@@ -189,13 +189,21 @@ void World::tick() {
     ++total_ticks_;
     railway_.set_today(date_.days_since_epoch());
     railway_.tick(data_.locomotives);
+    // Repairs after a breakdown (rt3-clone-spec §9.4 [I]).
+    for (TrainId id : railway_.take_breakdowns()) {
+        const Train& t = railway_.train(id);
+        const Money repair =
+            data_.locomotives.get(t.loco).cost.scaled(data_.balance.breakdowns.repair_cost_percent, 100);
+        if (!company(t.owner).defunct()) company(t.owner).post(Ledger::TrainMaintenance, repair);
+    }
     for (TrainId id : railway_.take_crashes()) {
         const Train& t = railway_.train(id);
         company(t.owner).write_off_train(data_.locomotives.get(t.loco).cost);
     }
     for (const auto& [train, station] : railway_.take_arrivals()) {
         const Earnings e = handle_arrival(railway_, economy_, data_.cargo, data_.industries, train, station,
-                                          date_.days_since_epoch(), total_ticks_, revenue_permille(station),
+                                          date_.days_since_epoch(), total_ticks_,
+                                          revenue_permille(station, railway_.train(train).owner),
                                           data_.locomotives.get(railway_.train(train).loco).appeal_percent);
         Train& t = railway_.train_mut(train);
         Company& runner = company(t.owner);
@@ -342,7 +350,7 @@ void World::set_economic_state(EconomicState s) {
 
 std::optional<EconomicState> World::take_economy_news() { return std::exchange(economy_news_, std::nullopt); }
 
-std::int32_t World::revenue_permille(StationId s) const {
+std::int32_t World::revenue_permille(StationId s, std::optional<CompanyId> owner) const {
     const Station& st = railway_.station(s);
     const std::int32_t today = date_.days_since_epoch();
     std::int32_t age_permille;
@@ -352,7 +360,10 @@ std::int32_t World::revenue_permille(StationId s) const {
     } else {
         age_permille = station_age_permille(today - st.built_day, true);
     }
-    return difficulty_revenue_permille(difficulty_) * age_permille / 1000;
+    const bool rival = owner && owner != player_company();
+    const std::int32_t level = rival ? data_.balance.finance.ai_revenue_percent[static_cast<std::size_t>(difficulty_)] * 10
+                                     : difficulty_revenue_permille(difficulty_);
+    return level * age_permille / 1000;
 }
 
 void World::charge_running_costs() {

@@ -203,3 +203,74 @@ TEST_CASE("the demo network cannot be undone") {
     CHECK(w.undoable_track() == 0);
     CHECK(w.execute(UndoTrack{}).error == "nothing to undo");
 }
+
+TEST_CASE("doubling single track costs 90% of laying it again, as track (§11.2 [D/I])") {
+    World w = flat_world();
+    REQUIRE(w.execute(BuildTrack{.start = free_at(5, 10), .end = free_at(15, 10)}).ok);
+    const std::vector<EdgeId> run = w.railway().run_of(edges_of(w).front());
+    const Money before = w.company().track_value();
+    Money expected;
+    for (EdgeId e : run) expected += w.double_upgrade_cost(e);
+    // 10 km of open ground at $25,000 a km, 90% of it.
+    CHECK(expected == Money::dollars(225'000));
+    const CommandResult r = w.execute(UpgradeTrack{.edges = run});
+    REQUIRE(r.ok);
+    CHECK(r.cost == expected);
+    CHECK(w.company().track_value() == before + expected);
+    CHECK(edge_costs(w) == w.company().track_value());
+    for (EdgeId e : run) CHECK(w.railway().track().edge(e).double_track);
+    CHECK(w.execute(UpgradeTrack{.edges = run}).error == "that track is already double");
+    // More than building double at once (+70%).
+    World w2 = flat_world();
+    const CommandResult once =
+        w2.execute(BuildTrack{.start = free_at(5, 10), .end = free_at(15, 10), .double_track = true});
+    CHECK(once.cost < before + expected);
+}
+
+TEST_CASE("rivals earn the AI's difficulty bonus, the player the difficulty's revenue (§8.4 [D])") {
+    WorldConfig cfg;
+    testing::legacy_scale(cfg);
+    cfg.width_tiles = cfg.height_tiles = 30;
+    cfg.difficulty = Difficulty::Expert;
+    World w(cfg, test_data());
+    for (int y = 0; y <= 30; ++y)
+        for (int x = 0; x <= 30; ++x) w.terrain().set_corner_height(x, y, 10);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < 30; ++x) w.terrain().set_ground(x, y, GroundType::Grass);
+    REQUIRE(w.execute(BuildTrack{.start = free_at(5, 10), .end = free_at(15, 10)}).ok);
+    const CommandResult st = w.execute(BuildStation{.at = node_at(w, 15, 10)});
+    REQUIRE(st.ok);
+    const PlayerId rival = w.add_player_company("Rival Line", "Someone");
+    const CompanyId rival_co = *w.investors()[rival].chairs;
+    const std::int32_t player = w.revenue_permille(st.created_id);
+    CHECK(player == w.revenue_permille(st.created_id, w.company().id()));
+    // Expert: the player -20%, rivals +20%, both by the same station age.
+    CHECK(w.revenue_permille(st.created_id, rival_co) * 800 == player * 1200);
+}
+
+TEST_CASE("a breakdown costs 5% of the engine's price to repair (§9.4 [I])") {
+    WorldConfig cfg;
+    testing::legacy_scale(cfg);
+    cfg.width_tiles = cfg.height_tiles = 30;
+    cfg.start_date = Date::from_ymd(1835, 1, 1);
+    cfg.business_cycle = false;
+    GameData d{CargoRegistry::from_json(R"({"cargo": [{"key": "coal", "name": "Coal", "base_price": 30}]})"),
+               LocomotiveRegistry::from_json(R"({"locomotives": [
+                   {"key": "wreck", "name": "Wreck", "fuel": "diesel", "available_from": 1800, "top_speed_mph": 40,
+                    "cost": 100000, "maintenance_per_year": 1000, "reliability": 2}]})")};
+    World w(cfg, std::move(d));
+    for (int y = 0; y <= 30; ++y)
+        for (int x = 0; x <= 30; ++x) w.terrain().set_corner_height(x, y, 10);
+    for (int y = 0; y < 30; ++y)
+        for (int x = 0; x < 30; ++x) w.terrain().set_ground(x, y, GroundType::Grass);
+    REQUIRE(w.execute(BuildTrack{.start = free_at(2, 10), .end = free_at(28, 10)}).ok);
+    REQUIRE(w.execute(BuildStation{.at = node_at(w, 2, 10)}).ok);
+    REQUIRE(w.execute(BuildStation{.at = node_at(w, 28, 10)}).ok);
+    const CommandResult t = w.execute(BuyTrain{.loco = 0, .cars = 0, .route = {0, 1}});
+    REQUIRE(t.ok);
+    for (int i = 0; i < 25 * World::kTicksPerDay; ++i) w.tick(); // within January: no monthly maintenance yet
+    const std::uint32_t n = w.railway().train(t.created_id).breakdowns;
+    REQUIRE(n > 0);
+    CHECK(w.company().history().back().lines[static_cast<std::size_t>(Ledger::TrainMaintenance)] ==
+          Money::dollars(5'000) * n);
+}

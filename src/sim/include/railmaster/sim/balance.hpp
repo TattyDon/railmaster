@@ -82,7 +82,11 @@ struct Balance {
     struct Breakdowns {
         std::int64_t mean_distance_mm = 2'000'000'000; // at reliability 100, full oil
         std::int32_t empty_oil_multiplier = 4;
-        std::int32_t breakdown_ticks = 32;
+        // A breakdown stops the train for 3-10 days and costs 5% of the
+        // engine's price to repair (rt3-clone-spec §9.4 [I]).
+        std::int32_t breakdown_min_days = 3;
+        std::int32_t breakdown_max_days = 10;
+        std::int32_t repair_cost_percent = 5;
         std::int64_t crash_ppb_per_tick = 342; // 0.2% a year at reliability 100
         // Ageing (rt3-clone-spec §9.4 [I]): breakdowns x (1 + age / 15 years),
         // crashes x (1 + age / 20 years).
@@ -117,6 +121,10 @@ struct Balance {
         std::int32_t remove_refund_percent = 10;
         // Track builds that can still be undone at full refund, per player.
         std::int32_t undo_depth = 64;
+        // Doubling existing track costs this share of laying it again as
+        // single track (rt3-clone-spec §11.2 [D/I]: +90% as an upgrade,
+        // against +70% when built double).
+        std::int32_t double_upgrade_percent = 90;
     } track;
 
     struct Stations {
@@ -356,6 +364,10 @@ struct Balance {
         std::int32_t reference_engine_tons = 60;
         // Steep grades raise fuel use [D]: this much more per 1% of climb [I].
         std::int32_t fuel_uphill_percent_per_1pct = 25;
+        // Rivals' revenue by difficulty, Easy to Expert, in percent: a
+        // penalty on Easy, a bonus on Hard and Expert (rt3-clone-spec §8.4
+        // [D]; RT2's +10% and +20% [C], -10% on Easy [I]).
+        std::array<std::int32_t, 4> ai_revenue_percent{90, 100, 110, 120};
         // A year's upkeep as a share of build cost, charged monthly. Track:
         // rt3-clone-spec §11.2 [I] 2%. Buildings: no figure in the spec;
         // ours, RT2's 6%.

@@ -297,6 +297,8 @@ public:
     std::vector<std::pair<TrainId, StationId>> take_arrivals();
     // Trains destroyed in crashes since the last call.
     std::vector<TrainId> take_crashes();
+    // Trains that broke down since the last call, to charge their repairs.
+    std::vector<TrainId> take_breakdowns();
     // The current date, for train ages (crash risk).
     void set_today(std::int32_t day) {
         today_ = day;
@@ -341,6 +343,7 @@ private:
     std::vector<Train> trains_;
     std::vector<std::pair<TrainId, StationId>> arrivals_;
     std::vector<TrainId> crashes_;
+    std::vector<TrainId> breakdowns_;
     std::int32_t today_ = 0;
     std::int32_t year_ = Date::kEpochYear;
     OperatingRules rules_;

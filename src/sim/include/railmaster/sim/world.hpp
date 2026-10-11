@@ -145,7 +145,9 @@ public:
     bool sandbox() const { return sandbox_; }
     Difficulty difficulty() const { return difficulty_; }
     // Difficulty x station age, in thousandths, for income at a station.
-    std::int32_t revenue_permille(StationId s) const;
+    // Rivals' trains earn by the AI's difficulty bonus or penalty instead
+    // of the player's (`owner`: the train's company; none: the player's).
+    std::int32_t revenue_permille(StationId s, std::optional<CompanyId> owner = std::nullopt) const;
     Investor& investor() { return market_.investors.front(); }
     const Investor& investor() const { return market_.investors.front(); }
     // Shares sold automatically at the last month end because purchasing
@@ -172,6 +174,8 @@ public:
     Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100).scaled(build_cost_percent_, 100); }
     // What electrifying a piece of track would cost now, nothing if it is.
     Money electrify_cost(EdgeId e) const;
+    // What doubling a piece of single track would cost now.
+    Money double_upgrade_cost(EdgeId e) const;
     // The state the economy changed to since the last call, if it did: news.
     std::optional<EconomicState> take_economy_news();
 
@@ -306,6 +310,7 @@ private:
     CommandResult run(const ElectrifyTrack& cmd);
     CommandResult run(const RemoveTrack& cmd);
     CommandResult run(const UndoTrack& cmd);
+    CommandResult run(const UpgradeTrack& cmd);
     CommandResult run(const EndTrackUndo& cmd);
     CommandResult run(const BuyTerritoryAccess& cmd);
     // Why the acting company may not change train `id`, if it may not.

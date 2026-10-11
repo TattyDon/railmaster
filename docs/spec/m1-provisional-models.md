@@ -153,7 +153,8 @@ and plain freight engines score low (the Shay −15%).
 | Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
 | Out of sand | Three times the speed lost on grades (rt3-clone-spec §9.4 [I]). | "Much of its grade performance" [M]. |
 | Breakdown rate | One per 2,000 km on average at reliability 100 with full oil; up to 4× with empty oil; inversely proportional to reliability; × (1 + age/15 years) (rt3-clone-spec §9.4 [I]). Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
-| Breakdown | The train stops where it is for two days. | Observation; the spec suggests 3–10 days and a repair cost [I]. |
+| Breakdown | The train stops where it is for 3 to 10 days, drawn evenly, and its owner pays 5% of the engine's price for repairs, booked as train maintenance (rt3-clone-spec §9.4 [I]). | Observation. |
+| Double-track upgrade | Doubling existing single track costs 90% of laying it again as single track (§11.2 [D]: dearer than building double at once, +70% [I]: +90%). Not on wooden bridges [D]. The piece's book value rises by the cost. The upgrade counts against a scenario's track budget once. | In-game readout. |
 | Crash | 0.2% a year at reliability 100, scaled by 100/reliability, by (1 + age/20), and ×3 with no oil (rt3-clone-spec §9.4 [I]). The train is destroyed and written off. | Observation. |
 | Maintenance growth | +4% of the new cost per year of age, without limit (2× at 25 years, 3× at 50); 1.5× while out of oil (rt3-clone-spec §9.4 [I]). | [EM] gives about 3× at 20 years, which this undershoots. |
 | Support building prices | Service tower $30K; maintenance facility $100K ("relatively expensive" [M]). | In-game prices. |

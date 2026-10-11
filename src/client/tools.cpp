@@ -572,6 +572,18 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             }
             return true;
         }
+        if (key == SDLK_u) {
+            // Double the run of single track under the cursor.
+            const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
+            if (!p) {
+                show("POINT AT A PIECE OF YOUR TRACK TO DOUBLE IT", false);
+                return true;
+            }
+            const sim::CommandResult r = world_.execute(sim::UpgradeTrack{.edges = world_.railway().run_of(p->edge)});
+            if (r.ok) show("DOUBLED FOR " + format_money(r.cost), true);
+            else show("CANNOT: " + r.error, false);
+            return true;
+        }
         if (key == SDLK_x) {
             // Bulldoze the run of track under the cursor, on a second press.
             const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
@@ -1171,7 +1183,7 @@ std::string Tools::hint() const {
     case Tool::Track:
         return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
                (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") + "  [ ] TUNNELS " +
-               std::to_string(tunnel_preference_) + "%  E WIRE (SHIFT ALL)  CTRL+Z UNDO  XX REMOVE";
+               std::to_string(tunnel_preference_) + "%  E WIRE  U DOUBLE UP  CTRL+Z UNDO  XX REMOVE";
     case Tool::Station:
         if (station_building_) {
             return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +

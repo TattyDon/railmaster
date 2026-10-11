@@ -119,6 +119,12 @@ struct RemoveTrack {
 // support building stands on it, a train is on it, or other track has
 // split it.
 struct UndoTrack {};
+
+// Double pieces of your single track (rt3-clone-spec §11.2 [D]): dearer
+// than building it double at once. Not wooden bridges.
+struct UpgradeTrack {
+    std::vector<EdgeId> edges{};
+};
 struct EndTrackUndo {};
 
 // Buy your company access rights to a territory, so it may build there
@@ -206,7 +212,7 @@ struct SetPortMode {
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
-using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
+using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,

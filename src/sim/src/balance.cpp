@@ -19,14 +19,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_
                                                 maintenance_facility_cost)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Time, normal_seconds_per_year, speed_step_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Breakdowns, mean_distance_mm, empty_oil_multiplier,
-                                                breakdown_ticks, crash_ppb_per_tick, breakdown_age_years, crash_age_years,
+                                                breakdown_min_days, breakdown_max_days, repair_cost_percent, crash_ppb_per_tick, breakdown_age_years, crash_age_years,
                                                 maintenance_age_percent_per_year,
                                                 maintenance_no_oil_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Track, default_max_grade_bp, tunnel_cover_mm,
                                                 viaduct_clearance_mm, piece_mm, ground_per_km, wood_bridge_multiple,
                                                 steel_bridge_multiple, stone_bridge_multiple,
                                                 suspension_bridge_multiple, tunnel_multiple, double_track_percent, electrify_percent,
-                                                suspension_min_span_mm, remove_refund_percent, undo_depth)
+                                                suspension_min_span_mm, remove_refund_percent, undo_depth,
+                                                double_upgrade_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stations, small_cost, medium_cost, large_cost,
                                                 catchment_small, catchment_medium, catchment_large,
                                                 gather_percent_per_day, cap_milli, town_reach_cells, building_range_mm,
@@ -78,6 +79,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_r
                                                 recession_cut_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Finance, fuel_per_km_steam, fuel_per_km_diesel,
                                                 fuel_per_km_electric, reference_engine_tons, fuel_uphill_percent_per_1pct,
+                                                ai_revenue_percent,
                                                 track_upkeep_bp_per_year, building_upkeep_bp_per_year,
                                                 easy_cost_percent, rating_asset_points, rating_asset_cap_doublings,
                                                 rating_cover_points, rating_cover_cap, rating_profit_year_points,
@@ -194,6 +196,9 @@ Balance Balance::from_json(std::string_view json_text) {
     for (std::size_t i = 0; i < rs.size(); ++i) {
         if (rs[i].mph <= 0) throw std::runtime_error("balance: reference speeds must be positive");
         if (i > 0 && rs[i].year <= rs[i - 1].year) throw std::runtime_error("balance: reference_speeds years must rise");
+    }
+    if (b.breakdowns.breakdown_min_days < 0 || b.breakdowns.breakdown_max_days < b.breakdowns.breakdown_min_days) {
+        throw std::runtime_error("balance: breakdown days must run from min to max");
     }
     if (b.express.fare_reference_km <= 0) throw std::runtime_error("balance: express.fare_reference_km must be positive");
     if (b.trains.reference_cars <= 0) throw std::runtime_error("balance: trains.reference_cars must be positive");

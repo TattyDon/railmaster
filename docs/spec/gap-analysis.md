@@ -64,6 +64,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §16 [I] | Versioned saves holding scenario, full simulation state and random state | none | binary, uncompressed, everything saved so a loaded game plays on exactly as the original; the balance travels with the save, the other data is checked by key ([saves.md](saves.md)) |
 | §14.4 [C] | Scenario events: conditions (date, goals, counters, chance) and effects (news, cash, cargo prices, passenger demand, production, costs, engines, territory offers, counters, briefing), optionally timed | none | as described in [scenarios.md](scenarios.md); counters are game-wide only |
 | §11.3 [C], §14.3 [I] | Restrictions: track-tile budget (double counts two, yearly grant, optional bulldoze refund), no unconnected track, one company only, purchase bans, cannot resign | chair locks only | as the spec, for every company; tiles are map cells of track length |
+| §8.4 [D/C], §9.4 [I], §11.2 [D] | AI revenue bonus by difficulty; breakdowns of 3–10 days costing 5% of the engine; double-track upgrades at +90% | rivals shared the player's modifier; 2-day breakdowns, free; no upgrades | as the spec ([m1-provisional-models.md](m1-provisional-models.md), [m3-finance-model.md](m3-finance-model.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -99,8 +100,7 @@ Grouped by the spec's own build order (§17).
 
 **Trains and track**
 - Measured per-locomotive numbers to replace ours (§17 items 1 and 4).
-- Overpasses; double-track upgrades at +90%; track-tile budgets (§11.1–11.3 [D/C]).
-- Breakdown repair cost and duration (§9.4 [I]).
+- Overpasses: crossing lines do not interact at all yet (§11.2 [D]).
 
 **Economy**
 - Rivers in the map generator, and closed borders (conductance 0) (§5.3).
@@ -113,9 +113,6 @@ Grouped by the spec's own build order (§17).
 - Units with origin and destination houses chosen by gravity weighting;
   transfers via hubs; won't board rarely served stops; travellers who
   give up avoid rail for a while (§8.3 [D/I]).
-
-**Company and market**
-- AI difficulty multipliers (§8.4).
 
 **Scenarios and presentation**
 - Event disasters and choice dialogs, average-speed goals, hand-made maps

@@ -504,6 +504,8 @@ void Railway::arrive_at_stop(Train& t) {
     arrivals_.emplace_back(t.id, t.route[t.stop_index]);
 }
 
+std::vector<TrainId> Railway::take_breakdowns() { return std::exchange(breakdowns_, {}); }
+
 std::vector<TrainId> Railway::take_crashes() {
     std::vector<TrainId> out;
     out.swap(crashes_);
@@ -633,9 +635,11 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
 
     if (roll_breakdown(t, loco, travelled)) {
         t.state = TrainState::BrokenDown;
-        t.wait_ticks_left = balance_.breakdowns.breakdown_ticks;
+        const Balance::Breakdowns& b = balance_.breakdowns;
+        t.wait_ticks_left = rng_.between(b.breakdown_min_days, b.breakdown_max_days) * kTrainTicksPerDay;
         t.speed_mm_per_tick = 0;
         ++t.breakdowns;
+        breakdowns_.push_back(t.id);
     } else if (travelled > 0 && roll_crash(t, loco)) {
         t.state = TrainState::Crashed;
         t.at_node = track_.step_start(t.path[t.step]); // wreck shown at the last node passed

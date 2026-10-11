@@ -118,6 +118,10 @@ fell to 8% (below its band), while the six maps gave 8% to 56%. That is
 too wide for one map's three rivals to measure. Pooled, it is 34%, and
 rival revenue is $1.2M a year each.
 
+With breakdowns of 3–10 days that cost 5% of the engine to repair (was 2
+days, free), the demo's return fell from 10.5% to 9.9% and its share price
+from $28 to $26. Rivals are unchanged at Medium difficulty.
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2

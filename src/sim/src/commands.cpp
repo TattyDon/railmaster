@@ -264,6 +264,50 @@ CommandResult World::run(const UndoTrack&) {
     return success(Money{} - cost, 0);
 }
 
+Money World::double_upgrade_cost(EdgeId id) const {
+    const TrackEdge& e = railway_.track().edge(id);
+    const Balance::Track& b = data_.balance.track;
+    const Money laid = Money::dollars(per_km_rate(e.kind, e.bridge, b)).scaled(e.length_mm, 1'000'000);
+    return construction_cost(laid.scaled(b.double_upgrade_percent, 100));
+}
+
+CommandResult World::run(const UpgradeTrack& cmd) {
+    if (scenario_ && scenario_->restrictions.no_track) return fail("this scenario does not allow building track");
+    std::vector<EdgeId> edges = cmd.edges;
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    if (edges.empty()) return fail("no track chosen");
+    const TrackNetwork& net = railway_.track();
+    Money cost;
+    std::int64_t length = 0;
+    for (EdgeId id : edges) {
+        if (id >= net.edges().size() || net.edge(id).removed) return fail("no such track");
+        const TrackEdge& e = net.edge(id);
+        if (e.owner != acting().id()) return fail("you can only double your own track");
+        if (e.double_track) return fail("that track is already double");
+        if (e.bridge == BridgeType::Wood) return fail("wooden bridges are single track");
+        cost += double_upgrade_cost(id);
+        length += e.length_mm;
+    }
+    std::int64_t tiles = 0;
+    if (scenario_ && scenario_->restrictions.track_tiles) {
+        const std::int64_t cell = std::int64_t{terrain_.tile_size_m()} * 1000;
+        tiles = (length + cell - 1) / cell;
+        if (tiles > track_tiles(acting().id())) {
+            return fail("needs " + std::to_string(tiles) + " track tiles; the budget has " +
+                        std::to_string(track_tiles(acting().id())) + " left");
+        }
+    }
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_track(cost);
+    track_tiles(acting().id()) -= tiles;
+    for (EdgeId id : edges) {
+        railway_.track().add_cost(id, double_upgrade_cost(id));
+        railway_.track().set_double_track(id, true);
+    }
+    return success(cost, 0);
+}
+
 CommandResult World::run(const EndTrackUndo&) {
     if (actor_ < track_undo_.size()) track_undo_[actor_].clear();
     return success(Money{}, 0);
