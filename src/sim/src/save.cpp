@@ -23,7 +23,7 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 2; // 2: scenario events, the Grants ledger line
+constexpr std::uint32_t kSaveVersion = 3; // 2: scenario events, the Grants ledger line; 3: restrictions
 
 class Writer {
 public:
@@ -335,10 +335,15 @@ void io(Ar& ar, ScenarioEvent& e) {
     fields(ar, e.id, e.when, e.effects, e.repeat_months);
 }
 template <class Ar>
+void io(Ar& ar, Restrictions& r) {
+    fields(ar, r.track_tiles, r.tiles_per_year, r.tile_refund, r.no_unconnected_track, r.one_company_only, r.no_track,
+           r.no_stations, r.no_trains, r.no_industries);
+}
+template <class Ar>
 void io(Ar& ar, Scenario& s) {
     fields(ar, s.key, s.name, s.briefing, s.start, s.seed, s.map_size, s.rivals, s.territories, s.founder_fortune,
            s.founder_investment, s.outside_investment);
-    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals, s.events);
+    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals, s.events, s.restrictions);
 }
 template <class Ar>
 void io(Ar& ar, ScenarioResult& r) {
@@ -424,9 +429,9 @@ void io(Ar& ar, World& w) {
     for (auto& stack : w.track_undo_) {
         if constexpr (Ar::loading) stack.assign(ar.count(1), {});
         else ar.put(stack.size(), 8);
-        for (auto& u : stack) fields(ar, u.edges, u.ends, u.first_new_node);
+        for (auto& u : stack) fields(ar, u.edges, u.ends, u.first_new_node, u.tiles);
     }
-    fields(ar, w.scenario_, w.scenario_result_, w.event_month_, w.variables_);
+    fields(ar, w.scenario_, w.scenario_result_, w.event_month_, w.variables_, w.founder_, w.track_tiles_);
     if constexpr (Ar::loading) w.modifiers_.assign(ar.count(1), {});
     else ar.put(w.modifiers_.size(), 8);
     for (auto& m : w.modifiers_) fields(ar, m.kind, m.target, m.percent, m.until_month);

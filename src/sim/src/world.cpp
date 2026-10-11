@@ -152,6 +152,10 @@ std::optional<std::string> World::founding_problem(PlayerId who, const FoundComp
     const Balance::Stock& b = data_.balance.stock;
     const Investor& inv = market_.investors.at(who);
     if (inv.chairs) return std::string("you already run a company");
+    if (scenario_ && scenario_->restrictions.one_company_only &&
+        std::find(founder_.begin(), founder_.end(), who) != founder_.end()) {
+        return std::string("this scenario allows only one company");
+    }
     if (t.personal_investment < Money::dollars(b.min_founder_investment)) {
         return "you must put in at least " + std::to_string(b.min_founder_investment) + " dollars";
     }
@@ -169,6 +173,8 @@ CompanyId World::found_for(PlayerId who, const FoundCompany& t) {
     std::string name = t.name.empty() ? inv.name + " Railroad" : t.name;
     market_.companies.emplace_back(std::move(name), t.personal_investment + t.outside_investment, date_.year(),
                                    data_.balance, id);
+    if (founder_.size() <= id) founder_.resize(std::size_t{id} + 1, kHumanPlayer);
+    founder_[id] = who;
     market_.companies.back().set_economic_state(economic_state_);
     // The founder's money buys shares at the founding price; the rest are the outside investors'.
     inv.cash -= t.personal_investment;
@@ -704,7 +710,22 @@ void World::run_rivals() {
     for (Rival& r : rivals_) run_rival(*this, r, data_.tycoons.all()[r.tycoon]);
 }
 
+std::int64_t& World::track_tiles(CompanyId c) {
+    const std::int64_t initial = scenario_ && scenario_->restrictions.track_tiles ? *scenario_->restrictions.track_tiles : 0;
+    if (track_tiles_.size() <= c) track_tiles_.resize(std::size_t{c} + 1, initial);
+    return track_tiles_[c];
+}
+
+std::optional<std::int64_t> World::track_tiles_left(CompanyId c) const {
+    if (!scenario_ || !scenario_->restrictions.track_tiles) return std::nullopt;
+    return c < track_tiles_.size() ? track_tiles_[c] : *scenario_->restrictions.track_tiles;
+}
+
 void World::on_new_year() {
+    if (scenario_ && scenario_->restrictions.track_tiles) {
+        for (const Company& c : market_.companies)
+            if (!c.defunct()) track_tiles(c.id()) += scenario_->restrictions.tiles_per_year;
+    }
     for (Company& c : market_.companies) {
         if (!c.defunct()) c.close_year();
     }

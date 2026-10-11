@@ -172,6 +172,27 @@ CommandResult World::run(const BuildTrack& cmd) {
     for (const MapPoint& p : where)
         if (auto why = access_problem(acting().id(), p)) return fail(*why);
     if (auto why = cannot_afford(check.plan->total_cost)) return fail(*why);
+    // Scenario restrictions (rt3-clone-spec §14.3).
+    std::int64_t tiles = 0;
+    if (scenario_) {
+        const Restrictions& r = scenario_->restrictions;
+        if (r.no_track) return fail("this scenario does not allow building track");
+        if (r.no_unconnected_track && !owns_track_at(cmd.start) && !owns_track_at(cmd.end)) {
+            const bool has_track = std::any_of(railway_.track().edges().begin(), railway_.track().edges().end(),
+                                               [&](const TrackEdge& e) { return !e.removed && e.owner == acting().id(); });
+            if (has_track) return fail("new track must join your own track in this scenario");
+        }
+        if (r.track_tiles) {
+            for (const PlannedPiece& p : check.plan->pieces) tiles += p.length_mm;
+            const std::int64_t cell = std::int64_t{terrain_.tile_size_m()} * 1000;
+            tiles = (tiles + cell - 1) / cell * (cmd.double_track ? 2 : 1);
+            const std::int64_t left = track_tiles(acting().id());
+            if (tiles > left) {
+                return fail("needs " + std::to_string(tiles) + " track tiles; the budget has " + std::to_string(left) +
+                            " left");
+            }
+        }
+    }
 
     const auto first_new_node = static_cast<NodeId>(railway_.track().nodes().size());
     const NodeId from = resolve_on_track(cmd.start);
@@ -183,6 +204,8 @@ CommandResult World::run(const BuildTrack& cmd) {
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
     TrackUndo undo;
     undo.first_new_node = first_new_node;
+    undo.tiles = tiles;
+    if (tiles > 0) track_tiles(acting().id()) -= tiles;
     build_track(railway_.track(), *plan.plan, acting().id(), &undo.edges);
     for (EdgeId e : undo.edges) undo.ends.emplace_back(railway_.track().edge(e).a, railway_.track().edge(e).b);
     acting().invest_track(plan.plan->total_cost);
@@ -208,6 +231,11 @@ CommandResult World::run(const RemoveTrack& cmd) {
         book += net.edge(id).cost;
     }
     const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
+    if (scenario_ && scenario_->restrictions.track_tiles && scenario_->restrictions.tile_refund) {
+        std::int64_t length = 0;
+        for (EdgeId id : edges) length += net.edge(id).length_mm * (net.edge(id).double_track ? 2 : 1);
+        track_tiles(acting().id()) += length / (std::int64_t{terrain_.tile_size_m()} * 1000);
+    }
     railway_.remove_edges(edges);
     acting().remove_track(book, refund);
     return success(Money{} - refund, 0);
@@ -231,6 +259,7 @@ CommandResult World::run(const UndoTrack&) {
         if (built_here(b.node)) return fail("a support building stands on that track");
     railway_.remove_edges(last.edges);
     acting().remove_track(cost, cost);
+    if (last.tiles > 0) track_tiles(acting().id()) += last.tiles; // undo is free [D]
     track_undo_[actor_].pop_back();
     return success(Money{} - cost, 0);
 }
@@ -241,6 +270,7 @@ CommandResult World::run(const EndTrackUndo&) {
 }
 
 CommandResult World::run(const BuildStation& cmd) {
+    if (scenario_ && scenario_->restrictions.no_stations) return fail("this scenario does not allow building stations");
     if (cmd.at.kind == TrackEnd::Kind::Free) return fail("stations must be built on track");
     if (!owns_track_at(cmd.at)) return fail("stations must be built on your own track");
     if (cmd.at.kind == TrackEnd::Kind::Node) {
@@ -297,6 +327,7 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
 }
 
 CommandResult World::run(const BuyTrain& cmd) {
+    if (scenario_ && scenario_->restrictions.no_trains) return fail("this scenario does not allow buying trains");
     if (cmd.loco >= data_.locomotives.all().size()) return fail("unknown locomotive");
     const LocomotiveType& loco = data_.locomotives.get(cmd.loco);
     if (!loco.available_in(date_.year())) return fail(loco.name + " is not available in " + std::to_string(date_.year()));
@@ -316,6 +347,7 @@ CommandResult World::run(const BuyTrain& cmd) {
 }
 
 CommandResult World::run(const ReplaceLocomotive& cmd) {
+    if (scenario_ && scenario_->restrictions.no_trains) return fail("this scenario does not allow buying engines");
     if (cmd.loco >= data_.locomotives.all().size()) return fail("unknown locomotive");
     if (auto why = own_train_problem(cmd.train)) return fail(*why);
     const Train& t = railway_.train(cmd.train);
@@ -372,6 +404,7 @@ CommandResult World::run(const SetSpecialCars& cmd) {
 }
 
 CommandResult World::run(const CopyTrain& cmd) {
+    if (scenario_ && scenario_->restrictions.no_trains) return fail("this scenario does not allow buying trains");
     if (auto why = own_train_problem(cmd.train)) return fail(*why);
     const Train original = railway_.train(cmd.train);
     const CommandResult bought = run(BuyTrain{.loco = original.loco,
@@ -575,6 +608,7 @@ CommandResult World::run(const DeclareBankruptcy&) {
 }
 
 CommandResult World::run(const BuyIndustry& cmd) {
+    if (scenario_ && scenario_->restrictions.no_industries) return fail("this scenario does not allow buying industries");
     if (cmd.site >= economy_.sites().size()) return fail("no such industry");
     Site& s = economy_.site_mut(cmd.site);
     const IndustryType& t = data_.industries.get(s.type);
@@ -593,6 +627,7 @@ CommandResult World::run(const BuyIndustry& cmd) {
 }
 
 CommandResult World::run(const BuildIndustry& cmd) {
+    if (scenario_ && scenario_->restrictions.no_industries) return fail("this scenario does not allow building industries");
     if (cmd.type >= data_.industries.all().size()) return fail("unknown industry");
     const IndustryType& t = data_.industries.get(cmd.type);
     if (!buildable(t.kind)) return fail("only processing plants and warehouses can be built; producers can only be bought");

@@ -289,9 +289,11 @@ int main(int argc, char* argv[]) {
         for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         std::string pace = sim::game_speed_name(speed.speed());
         for (char& ch : pace) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        const std::string status =
-            world.date().month_year_label() + "  " + economy + " ECONOMY  " +
-            (speed.speed() == sim::GameSpeed::Paused ? pace : "SPEED " + pace) + "  +/- SPEED, PAUSE";
+        std::string status = world.date().month_year_label() + "  " + economy + " ECONOMY  " +
+                             (speed.speed() == sim::GameSpeed::Paused ? pace : "SPEED " + pace);
+        // A scenario's track budget, in place of the speed keys' reminder.
+        const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;
+        status += tiles ? "  TRACK BUDGET " + std::to_string(*tiles) : std::string("  +/- SPEED, PAUSE");
         tools.draw_ui(status);
         SDL_GL_SwapWindow(window);
     }

@@ -13,9 +13,9 @@ deliver cargo, reach a book value, win the market.
 
 | File | Start | Goals | Events |
 |---|---|---|---|
-| `lowland_junction.json` | 1850, no rivals | Connect two towns, then four; book value; revenue | A frozen canal lifts passenger and mail demand; a council subsidy for the first connection; a new briefing once Corwin is joined |
-| `coal_country.json` | 1880, two rivals | Deliver coal; revenue; be the most valuable railroad | A steel boom raises coal prices; occasional miners' strikes halve mine output; an early heavy freight engine once coal moves |
-| `six_provinces.json` | 1900, one rival, six territories, smaller founding money, chair locked | Stations in 3 and then 5 territories; personal net worth; be the only railroad | Expansion fever cuts building costs for two years; a board bonus for reaching a second province |
+| `lowland_junction.json` | 1850, no rivals, no unconnected track | Connect two towns, then four; book value; revenue | A frozen canal lifts passenger and mail demand; a council subsidy for the first connection; a new briefing once Corwin is joined |
+| `coal_country.json` | 1880, two rivals, a track budget of 500 cells + 80 a year | Deliver coal; revenue; be the most valuable railroad | A steel boom raises coal prices; occasional miners' strikes halve mine output; an early heavy freight engine once coal moves |
+| `six_provinces.json` | 1900, one rival, six territories, smaller founding money, chair locked, one company only | Stations in 3 and then 5 territories; personal net worth; be the only railroad | Expansion fever cuts building costs for two years; a board bonus for reaching a second province |
 
 ## Format
 
@@ -81,6 +81,34 @@ A file is refused, with a reason, if it has any of these faults:
 - a deadline on or before the start;
 - a bad date;
 - founding investment above the founder's fortune.
+
+### Restrictions
+
+`restrictions` limits what every company may do (rt3-clone-spec §14.3
+[C/I]). All its fields are optional:
+
+```json
+"restrictions": {"track_budget": {"initial": 800, "per_year": 100, "refund": false},
+                 "no_unconnected_track": true, "one_company_only": true,
+                 "no_purchase": ["track", "stations", "trains", "industries"]}
+```
+
+- **`track_budget`:** each company may lay so many map cells of track.
+  - Double track counts twice.
+  - Each company starts with `initial` cells and gains `per_year` more each
+    new year.
+  - Undo gives the cells back. Bulldozing gives them back only with
+    `refund`, as in the spec's Central Pacific.
+  - The top bar shows the player's budget left.
+- **`no_unconnected_track`:** after a company's first line, new track must
+  start or end on its own track, as in the spec's Go West!.
+- **`one_company_only`:** the player may not found a second company, for
+  example after resigning.
+- **`no_purchase`:** bans building track or stations, buying trains or
+  engines, or buying or building industries.
+
+`chairman_can_resign` and `chairman_can_be_fired` (above) are restrictions
+too. F10 lists a scenario's rules.
 
 ### Events
 
@@ -158,11 +186,6 @@ deadline).
   - dialogs with choices;
   - offers with deadlines;
   - per-player, per-company and per-territory counters.
-- Restrictions:
-  - track budgets;
-  - no unconnected track;
-  - no purchase of track, stations or trains;
-  - one company only (§14.3).
 - The goals `avgLocoSpeed` and `variable`, and deliveries from or to a
   particular place (§14.3).
 - Hand-made maps: the terrain is still generated from the seed.

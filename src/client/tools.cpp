@@ -805,6 +805,25 @@ void Tools::draw_status_panel() const {
             line += (line.empty() ? "" : " ") + word;
         }
         if (!line.empty()) rows.push_back({line, 1});
+        // What the scenario forbids or limits.
+        const sim::Restrictions& r = sc->restrictions;
+        std::string rules;
+        const auto rule = [&](bool on, const char* text) {
+            if (on) rules += (rules.empty() ? "" : ", ") + std::string(text);
+        };
+        if (r.track_tiles) {
+            rules += "TRACK BUDGET " + std::to_string(*r.track_tiles) + " CELLS + " + std::to_string(r.tiles_per_year) +
+                     " A YEAR" + (r.tile_refund ? "" : ", NO REFUND");
+        }
+        rule(r.no_unconnected_track, "NO UNCONNECTED TRACK");
+        rule(r.one_company_only, "ONE COMPANY ONLY");
+        rule(r.no_track, "NO NEW TRACK");
+        rule(r.no_stations, "NO NEW STATIONS");
+        rule(r.no_trains, "NO NEW TRAINS");
+        rule(r.no_industries, "NO INDUSTRY PURCHASES");
+        rule(!sc->chairman_can_resign, "YOU CANNOT RESIGN");
+        rule(!sc->chairman_can_be_fired, "YOU CANNOT BE FIRED");
+        if (!rules.empty()) rows.push_back({"RULES: " + rules, 1});
         rows.push_back({"", 1});
         for (int m = 0; m < 3; ++m) {
             const auto medal = static_cast<sim::Medal>(m);

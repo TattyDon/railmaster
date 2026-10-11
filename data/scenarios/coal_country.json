@@ -60,6 +60,12 @@
       ]
     }
   },
+  "restrictions": {
+    "track_budget": {
+      "initial": 500,
+      "per_year": 80
+    }
+  },
   "events": [
     {
       "id": "steel_boom",

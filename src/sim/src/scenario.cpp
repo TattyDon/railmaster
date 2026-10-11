@@ -130,6 +130,28 @@ Scenario Scenario::from_json(std::string_view json_text) {
                 s.medals[m].goals.push_back(std::move(goal));
             }
         }
+        if (j.contains("restrictions")) {
+            const auto& r = j.at("restrictions");
+            Restrictions& out = s.restrictions;
+            if (r.contains("track_budget")) {
+                const auto& tb = r.at("track_budget");
+                out.track_tiles = tb.at("initial").get<std::int64_t>();
+                out.tiles_per_year = tb.value("per_year", std::int64_t{0});
+                out.tile_refund = tb.value("refund", false);
+                if (*out.track_tiles < 0 || out.tiles_per_year < 0) {
+                    throw std::runtime_error("track_budget cannot be negative");
+                }
+            }
+            out.no_unconnected_track = r.value("no_unconnected_track", false);
+            out.one_company_only = r.value("one_company_only", false);
+            for (const auto& what : r.value("no_purchase", std::vector<std::string>{})) {
+                if (what == "track") out.no_track = true;
+                else if (what == "stations") out.no_stations = true;
+                else if (what == "trains") out.no_trains = true;
+                else if (what == "industries") out.no_industries = true;
+                else throw std::runtime_error("no_purchase: unknown '" + what + "' (track, stations, trains, industries)");
+            }
+        }
         for (const auto& ev : j.value("events", nlohmann::json::array())) {
             ScenarioEvent event;
             event.id = ev.at("id").get<std::string>();

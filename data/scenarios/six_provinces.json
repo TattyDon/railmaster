@@ -52,6 +52,9 @@
       ]
     }
   },
+  "restrictions": {
+    "one_company_only": true
+  },
   "events": [
     {
       "id": "expansion_fever",

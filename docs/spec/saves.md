@@ -43,6 +43,7 @@ A Small map saves to about 6 MB in about 15 ms, and loads in under 10 ms.
 Format versions:
 - **1:** first version.
 - **2:** scenario events and the Grants ledger line.
+- **3:** scenario restrictions, track budgets and company founders.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

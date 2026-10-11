@@ -398,3 +398,92 @@ TEST_CASE("an event can wait on a goal, such as a connection") {
     CHECK(w.variable("rich") == 1);
     CHECK(w.variable("joined") == 0);
 }
+
+namespace {
+
+Scenario restricted(const std::string& restrictions) {
+    return Scenario::from_json(scenario_json(kEasy, kEasy, kEasy, R"("restrictions": )" + restrictions + ", "));
+}
+
+// Flatten a strip of the small world so track can be laid anywhere on it.
+void flatten(World& w) {
+    for (int y = 0; y <= 64; ++y)
+        for (int x = 0; x <= 64; ++x) w.terrain().set_corner_height(x, y, 20);
+    for (int y = 0; y < 64; ++y)
+        for (int x = 0; x < 64; ++x) w.terrain().set_ground(x, y, GroundType::Grass);
+}
+
+TrackEnd cell_point(const World& w, std::int64_t x, std::int64_t y) {
+    const std::int64_t cell = std::int64_t{w.terrain().tile_size_m()} * 1000;
+    return free_at({x * cell, y * cell});
+}
+
+} // namespace
+
+TEST_CASE("restrictions are parsed, and bad ones refused") {
+    const Scenario s = restricted(R"({"track_budget": {"initial": 800, "per_year": 100}, "no_unconnected_track": true,
+                                      "one_company_only": true, "no_purchase": ["trains", "industries"]})");
+    CHECK(s.restrictions.track_tiles == 800);
+    CHECK(s.restrictions.tiles_per_year == 100);
+    CHECK_FALSE(s.restrictions.tile_refund);
+    CHECK(s.restrictions.no_unconnected_track);
+    CHECK(s.restrictions.one_company_only);
+    CHECK(s.restrictions.no_trains);
+    CHECK(s.restrictions.no_industries);
+    CHECK_FALSE(s.restrictions.no_stations);
+    CHECK_THROWS_WITH_AS(restricted(R"({"no_purchase": ["land"]})"), doctest::Contains("unknown 'land'"),
+                         std::runtime_error);
+    CHECK_THROWS_AS(restricted(R"({"track_budget": {"initial": -1}})"), std::runtime_error);
+}
+
+TEST_CASE("a track budget: double track counts twice, a year adds more, undo gives it back (§14.3 [C])") {
+    World w = small_world(restricted(R"({"track_budget": {"initial": 30, "per_year": 10}})"));
+    flatten(w);
+    const CompanyId me = w.company().id();
+    CHECK(w.track_tiles_left(me) == 30);
+    REQUIRE(w.execute(BuildTrack{.start = cell_point(w, 5, 10), .end = cell_point(w, 15, 10)}).ok); // 10 cells
+    CHECK(w.track_tiles_left(me) == 20);
+    const CommandResult dbl =
+        w.execute(BuildTrack{.start = cell_point(w, 5, 20), .end = cell_point(w, 20, 20), .double_track = true});
+    CHECK(dbl.error == "needs 30 track tiles; the budget has 20 left");
+    REQUIRE(w.execute(BuildTrack{.start = cell_point(w, 5, 20), .end = cell_point(w, 13, 20), .double_track = true}).ok);
+    CHECK(w.track_tiles_left(me) == 4);
+    REQUIRE(w.execute(UndoTrack{}).ok);
+    CHECK(w.track_tiles_left(me) == 20);
+    // Bulldozing gives nothing back without the refund rule.
+    REQUIRE(w.execute(EndTrackUndo{}).ok);
+    const EdgeId e = w.railway().track().edges().front().id;
+    REQUIRE(w.execute(RemoveTrack{.edges = w.railway().run_of(e)}).ok);
+    CHECK(w.track_tiles_left(me) == 20);
+    run_to(w, Date::from_ymd(1851, 1, 1));
+    CHECK(w.track_tiles_left(me) == 30);
+    // Saved with the game.
+    CHECK(World::load(w.save(), GameData{}).track_tiles_left(me) == 30);
+}
+
+TEST_CASE("no unconnected track: new lines must join your own after the first") {
+    World w = small_world(restricted(R"({"no_unconnected_track": true})"));
+    flatten(w);
+    REQUIRE(w.execute(BuildTrack{.start = cell_point(w, 5, 10), .end = cell_point(w, 15, 10)}).ok); // the first is free
+    CHECK(w.execute(BuildTrack{.start = cell_point(w, 5, 20), .end = cell_point(w, 15, 20)}).error ==
+          "new track must join your own track in this scenario");
+    const TrackNetwork& net = w.railway().track();
+    const NodeId end = *net.nearest_node(cell_point(w, 15, 10).pos, 10'000);
+    CHECK(w.execute(BuildTrack{.start = {TrackEnd::Kind::Node, end, 0, net.node(end).pos}, .end = cell_point(w, 15, 20)})
+              .ok);
+}
+
+TEST_CASE("purchase bans and one company only") {
+    World w = small_world(restricted(R"({"no_purchase": ["track", "stations", "trains", "industries"],
+                                         "one_company_only": true})"),
+                          shipped());
+    flatten(w);
+    CHECK(w.execute(BuildTrack{.start = cell_point(w, 5, 10), .end = cell_point(w, 15, 10)}).error ==
+          "this scenario does not allow building track");
+    CHECK(w.execute(BuyTrain{.loco = 0, .cars = 1, .route = {0, 1}}).error == "this scenario does not allow buying trains");
+    CHECK(w.execute(BuyIndustry{.site = 0}).error == "this scenario does not allow buying industries");
+    CHECK(w.execute(BuildStation{.at = cell_point(w, 5, 10)}).error == "this scenario does not allow building stations");
+    REQUIRE(w.execute(Resign{}).ok);
+    CHECK(w.execute(FoundCompany{.name = "Second Go", .personal_investment = Money::dollars(100'000)}).error ==
+          "this scenario allows only one company");
+}

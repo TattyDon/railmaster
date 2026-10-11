@@ -81,6 +81,9 @@
       ]
     }
   },
+  "restrictions": {
+    "no_unconnected_track": true
+  },
   "events": [
     {
       "id": "canal_freeze",

@@ -98,6 +98,20 @@ struct ScenarioEvent {
     std::int32_t repeat_months = 0; // 0: fires once; otherwise may fire again this many months later
 };
 
+// What a scenario forbids or limits (rt3-clone-spec §14.3 [C/I]), for every
+// company in the game.
+struct Restrictions {
+    // A budget of track, in map cells (double track counts twice): so many
+    // at the start, more each year; bulldozing gives cells back only with
+    // tile_refund. No budget when unset.
+    std::optional<std::int64_t> track_tiles{};
+    std::int64_t tiles_per_year = 0;
+    bool tile_refund = false;
+    bool no_unconnected_track = false; // new track must join the company's own (after its first)
+    bool one_company_only = false;     // the player may not found a second company
+    bool no_track = false, no_stations = false, no_trains = false, no_industries = false; // purchases
+};
+
 struct Scenario {
     std::string key, name, briefing;
     Date start = Date::from_ymd(1830, 1, 1);
@@ -111,6 +125,7 @@ struct Scenario {
     std::vector<ScenarioTown> towns{};
     std::array<MedalTier, 3> medals{}; // bronze, silver, gold
     std::vector<ScenarioEvent> events{};
+    Restrictions restrictions{};
 
     // Parse and check a scenario file. Throws std::runtime_error on bad data.
     static Scenario from_json(std::string_view json_text);

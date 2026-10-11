@@ -63,6 +63,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §11.1–11.2 [D/I] | Free undo while the Track panel is open; removing your own track returns little cash (10%) and writes off its book value | track was permanent | as documented; each piece carries its cost; trains re-route around removed track |
 | §16 [I] | Versioned saves holding scenario, full simulation state and random state | none | binary, uncompressed, everything saved so a loaded game plays on exactly as the original; the balance travels with the save, the other data is checked by key ([saves.md](saves.md)) |
 | §14.4 [C] | Scenario events: conditions (date, goals, counters, chance) and effects (news, cash, cargo prices, passenger demand, production, costs, engines, territory offers, counters, briefing), optionally timed | none | as described in [scenarios.md](scenarios.md); counters are game-wide only |
+| §11.3 [C], §14.3 [I] | Restrictions: track-tile budget (double counts two, yearly grant, optional bulldoze refund), no unconnected track, one company only, purchase bans, cannot resign | chair locks only | as the spec, for every company; tiles are map cells of track length |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -117,8 +118,7 @@ Grouped by the spec's own build order (§17).
 - AI difficulty multipliers (§8.4).
 
 **Scenarios and presentation**
-- Scenario restrictions (track budgets, purchase bans, one company only),
-  event disasters and choice dialogs, average-speed goals, hand-made maps
-  (§11.3, §14 [C/I]).
+- Event disasters and choice dialogs, average-speed goals, hand-made maps
+  (§14 [C/I]).
 - Ledger reports, lists, overlays F2–F5, radar, 3D camera (§15 [D]).
 - Compressed saves with a command log for replays; content packaging (§16 [I]).

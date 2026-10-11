@@ -184,6 +184,8 @@ public:
         const auto it = variables_.find(name);
         return it == variables_.end() ? 0 : it->second;
     }
+    // A scenario's track budget: the tiles a company has left, if there is a budget.
+    std::optional<std::int64_t> track_tiles_left(CompanyId c) const;
     // How many track builds the player can still undo.
     std::size_t undoable_track(PlayerId who = kHumanPlayer) const {
         return who < track_undo_.size() ? track_undo_[who].size() : 0;
@@ -248,6 +250,7 @@ private:
         std::vector<EdgeId> edges;
         std::vector<std::pair<NodeId, NodeId>> ends;
         NodeId first_new_node = 0;
+        std::int64_t tiles = 0; // from the track budget, given back by an undo
     };
     std::vector<std::vector<TrackUndo>> track_undo_;
     std::optional<Scenario> scenario_;
@@ -270,6 +273,9 @@ private:
     IndustryRegistry base_industries_;
     LocomotiveRegistry base_locos_;
     std::int32_t build_cost_percent_ = 100;
+    std::vector<PlayerId> founder_;          // who founded each company
+    std::vector<std::int64_t> track_tiles_;  // each company's track budget left
+    std::int64_t& track_tiles(CompanyId c);
     void check_event_targets() const;
     void run_events();
     void fire(const ScenarioEvent& e);
