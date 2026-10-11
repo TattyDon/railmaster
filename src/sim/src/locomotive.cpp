@@ -48,6 +48,10 @@ LocomotiveRegistry LocomotiveRegistry::from_json(std::string_view json_text) {
         t.free_weight_tons = entry.value("free_weight_tons", t.free_weight_tons);
         t.fuel_economy_percent = entry.value("fuel_economy", t.fuel_economy_percent);
         t.weight_tons = entry.value("weight_tons", t.weight_tons);
+        t.appeal_percent = entry.value("appeal", t.appeal_percent);
+        if (t.appeal_percent < -15 || t.appeal_percent > 30) {
+            throw std::runtime_error("locomotive data: appeal must be -15 to 30 for '" + t.key + "'");
+        }
         t.reliability = entry.value("reliability", 100);
         t.scenario_only = entry.value("scenario_only", false);
         if (t.top_speed_mph <= 0) throw std::runtime_error("locomotive data: bad top speed for '" + t.key + "'");

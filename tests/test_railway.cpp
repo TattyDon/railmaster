@@ -220,6 +220,40 @@ TEST_CASE("double track removes the wait") {
     }
 }
 
+TEST_CASE("no overtaking on single track: a fast train follows a slow one at a gap (§10.3 [I])") {
+    const auto locos = LocomotiveRegistry::from_json(R"({"locomotives": [
+        {"key": "slow", "name": "Slow", "fuel": "diesel", "available_from": 1800, "top_speed_mph": 20, "cost": 1,
+         "maintenance_per_year": 1},
+        {"key": "fast", "name": "Fast", "fuel": "diesel", "available_from": 1800, "top_speed_mph": 90, "cost": 1,
+         "maintenance_per_year": 1}]})");
+    const auto race = [&](bool double_track) {
+        Line l = make_line(30, 0, double_track);
+        const TrainId slow = l.rw.add_train(0, 0, {l.west, l.east});
+        for (int i = 0; i < 20; ++i) l.rw.tick(locos); // a head start
+        const TrainId fast = l.rw.add_train(1, 0, {l.west, l.east});
+        std::int64_t closest = 1'000'000'000;
+        for (int i = 0; i < 2000 && l.rw.train(slow).stops_made < 2; ++i) {
+            l.rw.tick(locos);
+            const Train& a = l.rw.train(slow);
+            const Train& b = l.rw.train(fast);
+            // Both out on the line together (the fast one held at the
+            // platform until the slow one is a gap ahead counts as waiting).
+            if (a.state == TrainState::Moving && b.state == TrainState::Moving && a.stops_made == b.stops_made &&
+                b.offset_mm > 0) {
+                closest = std::min(closest, a.offset_mm - b.offset_mm);
+            }
+            if (l.rw.train(fast).stops_made == 2) return std::pair{false, closest}; // fast got there first
+        }
+        return std::pair{true, closest};
+    };
+    const auto [slow_first, gap] = race(false);
+    CHECK(slow_first);
+    CHECK(gap >= default_balance().trains.follow_gap_mm);
+    CHECK(gap < default_balance().trains.follow_gap_mm + 200'000); // it closed right up
+    // On double track the fast train overtakes.
+    CHECK_FALSE(race(true).first);
+}
+
 TEST_CASE("a train with no route to its next stop waits and recovers") {
     const auto locos = test_locos();
     Railway rw;

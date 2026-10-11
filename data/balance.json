@@ -106,8 +106,38 @@
   "express": {
     "attraction_half": 2,
     "cap_milli": 20000,
+    "fare_distance_exponent_permille": 900,
+    "fare_reference_km": 50,
     "mail_cap_months": 2,
     "min_load_milli": 500,
+    "reference_speeds": [
+      {
+        "mph": 14,
+        "year": 1830
+      },
+      {
+        "mph": 29,
+        "year": 1870
+      },
+      {
+        "mph": 46,
+        "year": 1910
+      },
+      {
+        "mph": 63,
+        "year": 1950
+      },
+      {
+        "mph": 92,
+        "year": 1990
+      },
+      {
+        "mph": 126,
+        "year": 2030
+      }
+    ],
+    "speed_factor_max_permille": 1500,
+    "speed_factor_min_permille": 250,
     "wait_loss_per_mille_per_sensitivity": 1
   },
   "finance": {
@@ -328,6 +358,8 @@
     ],
     "curve_comfort_radius_mm": 4000000,
     "express_permille_of_freight": 667,
+    "follow_distance_mm": 2000000,
+    "follow_gap_mm": 500000,
     "load_slowdown_permille": 500,
     "min_curve_speed_permille": 250,
     "min_grade_speed_permille": 50,

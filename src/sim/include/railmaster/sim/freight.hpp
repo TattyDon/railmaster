@@ -60,6 +60,15 @@ std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const Industr
 
 // Express fare for one full load between two stations, before decay.
 Money express_fare(const CargoType& c, const Railway& rw, StationId from, StationId to);
+// The fare for `distance_mm` before speed and appeal: rate per km x the
+// reference distance x (distance / reference)^0.9 (rt3-clone-spec §8.3 [I]).
+Money express_base_fare(const CargoType& c, std::int64_t distance_mm, const Balance& b = default_balance());
+// The era's reference express speed, in mph.
+std::int32_t reference_speed_mph(std::int32_t year, const Balance& b = default_balance());
+// Speed factor, in thousandths: the trip's time at the reference speed over
+// its actual time, within the balance's bounds.
+std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t ticks, std::int32_t year,
+                                    const Balance& b = default_balance());
 
 // Each day: every station draws in the freight around it that some train
 // calling there could sell for more at another stop on its route, and its
@@ -80,9 +89,11 @@ void start_new_month(Railway& rw);
 // local economy. Returns the income.
 // Express loads are only unloaded at their destination, earning the fare
 // less decay (mail past the town's monthly demand earns nothing).
-// `revenue_permille` scales all income here (difficulty x station age).
+// `revenue_permille` scales all income here (difficulty x station age);
+// express fares also go by trip speed, and passenger and mail fares by
+// the engine's `appeal_percent`.
 Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
                         TrainId train, StationId station, std::int32_t today, std::uint64_t tick,
-                        std::int32_t revenue_permille = 1000);
+                        std::int32_t revenue_permille = 1000, std::int32_t appeal_percent = 0);
 
 } // namespace railmaster::sim

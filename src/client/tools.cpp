@@ -1071,8 +1071,9 @@ std::string Tools::speed_chart_text() const {
         }
         return out;
     };
+    const std::string appeal = (l.appeal_percent > 0 ? "+" : "") + std::to_string(l.appeal_percent) + "%";
     return "SPEED WITH " + std::to_string(cars_) + " CARS, FLAT/1%/2%/3%: FREIGHT " + row(false) + " MPH, EXPRESS " +
-           row(true) + " MPH";
+           row(true) + " MPH.  APPEAL " + appeal;
 }
 
 std::vector<Tools::Button> Tools::layout_buttons() const {

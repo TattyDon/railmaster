@@ -129,6 +129,7 @@ struct Car {
     std::uint32_t loaded_at = 0;   // StationId where loaded; never sold back there
     std::optional<std::uint32_t> destination; // express only: the StationId it must reach
     std::int32_t expected_value = 0; // dollars this load should earn; decides meets at equal priority
+    std::uint64_t loaded_tick = 0;   // World::total_ticks() when loaded: express pay goes by trip time
 };
 
 struct Train {
@@ -303,6 +304,13 @@ private:
     void plan_to_current_stop(Train& t, bool electric);
     bool must_yield(const Train& t) const;
     void use_supplies(Train& t, const LocomotiveType& loco, std::int64_t distance_mm, std::int32_t grade_bp);
+    // The nearest train ahead going the same way on single track, within
+    // follow_distance along t's path: how far ahead it is and its speed.
+    struct Leader {
+        std::int64_t distance_mm;
+        std::int64_t speed_mm_per_tick;
+    };
+    std::optional<Leader> leader_ahead(const Train& t) const;
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);
     bool roll_crash(const Train& t, const LocomotiveType& loco);
     // Refill at any support buildings at `node` the train needs. True if it stopped.

@@ -3,7 +3,7 @@
 `railmaster_calibrate` (built from `tools/calibrate/`) runs a few headless
 games and scores seventeen metrics against the spec's targets. It exits 0
 when every metric is in range and 1 otherwise, so it can gate a balance
-change. A run takes about half a minute.
+change. A run takes about two minutes.
 
 ```sh
 cmake --build build
@@ -18,7 +18,7 @@ cmake --build build
 | Economy alone | Seed 1, two years, no railway | Producer output, processor capacity, producer prices |
 | Price field | A strip of 48 × 9 economy nodes (2 × 2 cells each), flat or mountainous; a coal mine and a power plant 30 cells apart, a mine alone, or a new plant | Middleman speed, spread with no demand, how fast the price map reshapes |
 | Demo network | The client's opening network (`sim::build_demo_network`), seeds 1 to 6, ten years | Return on capital, revenue, town growth, share price |
-| Rivals | Seed 3, three AI tycoons, five years | Share of rivals in profit, rival revenue, station-building income |
+| Rivals | Seeds 1 to 6, three AI tycoons each, five years | Share of rivals in profit, rival revenue, station-building income |
 
 ## Targets
 
@@ -106,6 +106,17 @@ curves, first-order acceleration, fuel by weight), the demo's return rose
 from 8.6% to 10.1% a year and its revenue stayed about the same ($501K). Its
 1830s trains are light, so they burn less fuel than the old flat
 per-car rate. Rival freight share went from 18.5% to 22%.
+
+With the spec's express fares (distance^0.9, a speed factor against the
+era's reference speed, engine appeal) and following on single track, the
+first reference speeds (12 mph in 1830) were below what the 1830s trains
+achieve: the average trip earned 1.14 × the plain fare. Raised by 15%,
+the average is 0.99 and the demo's revenue is $512K (return 10.5%).
+
+The rival metrics now pool six maps. On seed 3 alone, rivals' freight share
+fell to 8% (below its band), while the six maps gave 8% to 56%. That is
+too wide for one map's three rivals to measure. Pooled, it is 34%, and
+rival revenue is $1.2M a year each.
 
 ## What changed
 

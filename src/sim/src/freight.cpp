@@ -1,5 +1,7 @@
 #include "railmaster/sim/freight.hpp"
 
+#include "railmaster/sim/fixed_math.hpp"
+
 #include <algorithm>
 #include <map>
 
@@ -109,9 +111,34 @@ std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const Industr
     return total;
 }
 
+Money express_base_fare(const CargoType& c, std::int64_t distance_mm, const Balance& b) {
+    const std::int64_t ref_mm = std::int64_t{b.express.fare_reference_km} * 1'000'000;
+    const std::int64_t scaled_mm = ref_mm * pow_ratio_permille(distance_mm, ref_mm, b.express.fare_distance_exponent_permille) / 1000;
+    return Money::dollars(std::int64_t{c.fare_per_km} * (distance_mm > 0 ? scaled_mm : 0) / 1'000'000);
+}
+
 Money express_fare(const CargoType& c, const Railway& rw, StationId from, StationId to) {
     const std::int64_t mm = distance_mm(rw.track().node(rw.station(from).node).pos, rw.track().node(rw.station(to).node).pos);
-    return Money::dollars(std::int64_t{c.fare_per_km} * mm / 1'000'000);
+    return express_base_fare(c, mm, rw.balance());
+}
+
+std::int32_t reference_speed_mph(std::int32_t year, const Balance& b) {
+    const auto& r = b.express.reference_speeds;
+    if (year <= r.front().year) return r.front().mph;
+    for (std::size_t i = 1; i < r.size(); ++i) {
+        if (year > r[i].year) continue;
+        return r[i - 1].mph + (r[i].mph - r[i - 1].mph) * (year - r[i - 1].year) / (r[i].year - r[i - 1].year);
+    }
+    return r.back().mph;
+}
+
+std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t ticks, std::int32_t year, const Balance& b) {
+    const std::int64_t per_tick = std::max<std::int64_t>(1, mph_to_mm_per_tick(reference_speed_mph(year, b), b));
+    const std::int64_t actual = std::max<std::int64_t>(1, static_cast<std::int64_t>(ticks));
+    // Ideal ticks over actual ticks, in thousandths.
+    const std::int64_t f = distance_mm * 1000 / per_tick / actual;
+    return static_cast<std::int32_t>(
+        std::clamp<std::int64_t>(f, b.express.speed_factor_min_permille, b.express.speed_factor_max_permille));
 }
 
 void start_new_month(Railway& rw) {
@@ -255,7 +282,8 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
 
 Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
                         TrainId train_id, StationId station_id, std::int32_t today, std::uint64_t tick,
-                        std::int32_t revenue_permille) {
+                        std::int32_t revenue_permille, std::int32_t appeal_percent) {
+    const std::int32_t year = Date::from_days(today).year();
     Station& st = rw.station_mut(station_id);
     size_pool(st, cargo);
     Earnings income;
@@ -272,12 +300,21 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                 const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) / 12 *
                                          rw.balance().express.mail_cap_months;
                 if (!c.demand_cap || received < cap) {
-                    // A dining car makes passengers pay more [D].
+                    // A dining car makes passengers pay more [D], and a
+                    // handsome engine passengers and mail [D]; faster trips
+                    // pay more [D].
                     const std::int32_t diner = c.key == "passengers" && rw.train(train_id).diner ? kDinerPassengerPercent : 100;
-                    income.add(c.id, express_fare(c, rw, car.loaded_at, station_id)
+                    const std::int32_t appeal = c.key == "passengers" || c.key == "mail" ? 100 + appeal_percent : 100;
+                    const std::int64_t mm = distance_mm(rw.track().node(rw.station(car.loaded_at).node).pos,
+                                                        rw.track().node(st.node).pos);
+                    const std::int32_t speed = express_speed_permille(mm, tick - std::min(tick, car.loaded_tick), year,
+                                                                      rw.balance());
+                    income.add(c.id, express_base_fare(c, mm, rw.balance())
                                          .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli)
                                          .scaled(revenue_permille, 1000)
-                                         .scaled(diner, 100));
+                                         .scaled(diner, 100)
+                                         .scaled(appeal, 100)
+                                         .scaled(speed, 1000));
                 }
                 received += car.milli;
                 income.delivered.emplace_back(c.id, car.milli);
@@ -370,13 +407,13 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             const std::int32_t load = std::min(kMilli, pool);
             pool -= load;
             if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += load;
-            car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain)};
+            car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain), tick};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];
             const std::int32_t price = pool.average_price();
             pool.milli -= kMilli;
             pool.value -= std::int64_t{price} * kMilli;
-            car = Car{pick.cargo, kMilli, price, today, station_id, std::nullopt, static_cast<std::int32_t>(pick.gain)};
+            car = Car{pick.cargo, kMilli, price, today, station_id, std::nullopt, static_cast<std::int32_t>(pick.gain), tick};
         }
     }
 

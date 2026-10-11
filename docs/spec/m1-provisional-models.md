@@ -116,6 +116,18 @@ number of freight or express cars on the flat and up 1%, 2% and 3%.
 Rivals pick the engine that is fastest with their usual train up 1%,
 rather than the one with the highest top speed.
 
+Following (rt3-clone-spec §10.3 [I]): on single track there is no
+overtaking. A train looks 2 km ahead along its path for one going the same
+way. If it finds one, it holds that train's speed and comes no closer than
+0.5 km. A train ghosting through a meet blocks nobody. Without this rule a
+queue behind a yielding train could deadlock against the train it yields
+to. On double track trains overtake freely [D].
+
+Each engine also has a passenger appeal, from −15% to +30% of passenger
+and mail fares [D range]. The values are ours: handsome, streamlined
+express engines score high (Mallard +30%, the E-88 +30%, the Zephyr +25%),
+and plain freight engines score low (the Shay −15%).
+
 ## Provisional
 
 | Item | Stand-in | What would replace it |

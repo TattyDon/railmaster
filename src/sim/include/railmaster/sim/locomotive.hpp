@@ -35,8 +35,11 @@ struct LocomotiveType {
     std::int32_t free_weight_tons = 50;
     // - fuel used per ton-km, in percent of average;
     std::int32_t fuel_economy_percent = 100;
-    // - its own weight, which it also burns fuel to move.
+    // - its own weight, which it also burns fuel to move;
     std::int32_t weight_tons = 60;
+    // - passenger appeal: passenger and mail fares +30% (handsome) to -15%
+    //   (ugly) [D range].
+    std::int32_t appeal_percent = 0;
     // Relative chance of breaking down: 100 is average, 200 fails half as
     // often. RT3 shows a word rating; per-engine values are not yet known.
     std::int32_t reliability = 100;

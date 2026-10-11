@@ -373,6 +373,32 @@ bool Railway::must_yield(const Train& t) const {
     return false;
 }
 
+std::optional<Railway::Leader> Railway::leader_ahead(const Train& t) const {
+    const std::int64_t reach = balance_.trains.follow_distance_mm;
+    std::optional<Leader> best;
+    std::int64_t before = -t.offset_mm; // distance from t to the start of step i
+    for (std::size_t i = t.step; i < t.path.size() && before <= reach; ++i) {
+        const PathStep s = t.path[i];
+        const TrackEdge& e = track_.edge(s.edge);
+        if (!e.double_track) { // on double track trains overtake [D]
+            for (const Train& o : trains_) {
+                // A ghosting train blocks nobody (rt3-clone-spec §10.3 [D]).
+                if (o.id == t.id || !on_path(o.state) || o.yielding) continue;
+                const PathStep theirs = o.path[o.step];
+                if (theirs != s) continue;
+                if (i == t.step && o.offset_mm <= t.offset_mm) continue; // behind, or level
+                const std::int64_t d = before + o.offset_mm;
+                if (d <= reach && (!best || d < best->distance_mm)) {
+                    best = Leader{d, o.state == TrainState::Moving ? o.speed_mm_per_tick : 0};
+                }
+            }
+            if (best) return best;
+        }
+        before += e.length_mm;
+    }
+    return best;
+}
+
 void Railway::use_supplies(Train& t, const LocomotiveType& loco, std::int64_t distance_mm, std::int32_t grade_bp) {
     if (loco.fuel == Fuel::Steam) {
         t.water_used_mm += distance_mm;
@@ -508,8 +534,16 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
     // being the engine's time constant (rt3-clone-spec §10.2 [I]).
     const std::int64_t lag_ticks =
         std::max<std::int64_t>(1, std::int64_t{loco.accel_milli_days} * kTrainTicksPerDay / 1000);
+    // On single track there is no overtaking (rt3-clone-spec §10.3 [I]):
+    // close on the train ahead, hold its speed, keep the gap.
+    const std::optional<Leader> leader = leader_ahead(t);
+    if (leader) target = std::min(target, leader->speed_mm_per_tick);
     const std::int64_t gap = target - t.speed_mm_per_tick;
     t.speed_mm_per_tick += gap >= 0 ? (gap + lag_ticks - 1) / lag_ticks : -((-gap + lag_ticks - 1) / lag_ticks);
+    if (leader) {
+        const std::int64_t room = std::max<std::int64_t>(0, leader->distance_mm - balance_.trains.follow_gap_mm);
+        if (t.speed_mm_per_tick > room) t.speed_mm_per_tick = room;
+    }
 
     std::int64_t remaining = t.speed_mm_per_tick;
     std::int64_t travelled = 0;

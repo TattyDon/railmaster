@@ -57,6 +57,11 @@ struct Balance {
         // Curves: radius / curve_comfort_radius, at least min_curve_speed.
         // The radius is read from the turn between pieces of track.
         std::int64_t curve_comfort_radius_mm = 4'000'000;
+        // Following on single track (rt3-clone-spec §10.3 [I]): no
+        // overtaking; within follow_distance a train holds the speed of the
+        // one ahead and comes no closer than follow_gap.
+        std::int64_t follow_distance_mm = 2'000'000;
+        std::int64_t follow_gap_mm = 500'000;
         std::int32_t min_curve_speed_permille = 250;
         std::int32_t wood_bridge_speed_permille = 500;
         std::int32_t other_bridge_speed_permille = 900;
@@ -228,12 +233,31 @@ struct Balance {
         std::int32_t expired_permille = 100;
     } freight;
 
+    // An era's reference express speed (rt3-clone-spec §8.3 [I]):
+    // interpolated between the listed years.
+    struct ReferenceSpeed {
+        std::int32_t year = 1830;
+        std::int32_t mph = 15;
+    };
+
     struct Express {
         std::int32_t attraction_half = 2; // destination pull, in loads a year of house demand
         std::int32_t min_load_milli = 500; // an express car leaves with at least half a load [C]
         std::int32_t cap_milli = 20'000;
         std::int32_t wait_loss_per_mille_per_sensitivity = 1; // ~half the on-train rate [I, spec §8.2]
         std::int32_t mail_cap_months = 2;
+        // Fares (rt3-clone-spec §8.3 [I]): the cargo's rate per km x
+        // reference distance x (distance / reference)^0.9, so a trip of the
+        // reference distance pays the plain rate per km ...
+        std::int32_t fare_reference_km = 50;
+        std::int32_t fare_distance_exponent_permille = 900;
+        // ... x a speed factor: the trip's time at the era's reference
+        // speed over its actual time, from loading to unloading, within
+        // these bounds.
+        std::int32_t speed_factor_min_permille = 250;
+        std::int32_t speed_factor_max_permille = 1500;
+        std::vector<ReferenceSpeed> reference_speeds{
+            {1830, 14}, {1870, 29}, {1910, 46}, {1950, 63}, {1990, 92}, {2030, 126}};
     } express;
 
     // Town growth (rt3-clone-spec §6.4 [I]), per year: a base rate, plus a

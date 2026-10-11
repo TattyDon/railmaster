@@ -42,7 +42,7 @@ Each key's name carries its unit:
 
 | Section | Covers | Described in |
 |---|---|---|
-| `trains` | movement: car weights by era, load, grade and curve factors, bridge speeds, dwell | [m1-provisional-models.md](m1-provisional-models.md) |
+| `trains` | movement: car weights by era, load, grade and curve factors, following on single track, bridge speeds, dwell | [m1-provisional-models.md](m1-provisional-models.md) |
 | `servicing` | water, sand and oil ranges; service buildings | m1 |
 | `breakdowns` | breakdown and crash rates, maintenance ageing | m1 |
 | `track` | grade limit, structure clearances, costs per km | m1 |
@@ -50,7 +50,7 @@ Each key's name carries its unit:
 | `economy` | price field, drift, saturation, stockpiles, terrain conductance, price-responsive output | m2 |
 | `map` | towns, industries and ports on a new map; new industries over time | m2 |
 | `freight` | timeliness curve, expiry | m2 |
-| `express` | passengers, mail and troops | m2 |
+| `express` | passengers, mail and troops; fares by distance and speed | m2 |
 | `towns` | town growth and star ratings | m2 |
 | `industries` | owning industries: labour, overhead, prices, building, upgrading, closure | m2 |
 | `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |

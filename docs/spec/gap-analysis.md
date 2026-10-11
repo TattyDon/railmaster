@@ -58,6 +58,8 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §3.3 [D/C], §5.3 [C] | Territories with access rights needed to build; access prices; credit, station-cost and overhead modifiers; closed borders block middlemen | none | as described in [m2-economy-model.md](m2-economy-model.md) (Territories); a generator splits new maps on request or for a scenario; rivals buy access for the lines they plan |
 | §14.3 [D/C/I] | Medal tiers of nested goals with deadlines, checked at month end; status screen; score by medal, difficulty and years early | none | as the spec, from JSON scenario files ([scenarios.md](scenarios.md)); goals: connect towns, territories, book value, cash, revenue, net worth, industry profit, deliveries, only railroad, highest value |
 | §4.2 [D], §9.1, §10.2 [I] | Era car weights (10/20/40/80 t, express 2/3); speed = top × load × grade × curve × bridge × water; first-order acceleration with the engine's time constant; fuel by weight × economy | one grade formula by car count, 8-tick linear acceleration, no curves, fuel per car | as the spec; per-engine figures ours from its role guidance; the reference train's fuel cost is held across eras ([m1-provisional-models.md](m1-provisional-models.md)) |
+| §8.3 [D/I], §9.1 [D] | Express pay rises with distance and speed: rate × distance^0.9 × speed factor (0.25–1.5 against the era's reference speed) × engine appeal (+30% to −15%) × dining car | rate × distance, speed paid only through decay | as the spec; distance normalised at 50 km and reference speeds calibrated ([m2-economy-model.md](m2-economy-model.md)); appeal values ours |
+| §10.3 [I] | Same-direction trains on single track: no overtaking; the follower holds the leader's speed within a gap | trains passed through each other | as the spec: within 2 km a train holds the speed of the one ahead and stays 0.5 km behind; a ghosting (yielding) train blocks nobody; double track overtakes |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -92,11 +94,9 @@ say why (for example the price field's site nodes, m2-economy-model.md).
 Grouped by the spec's own build order (§17).
 
 **Trains and track**
-- Passenger appeal (§9.1 [D]); measured per-locomotive numbers to replace
-  ours (§17 items 1 and 4).
+- Measured per-locomotive numbers to replace ours (§17 items 1 and 4).
 - Free undo while laying track; removing track (10% refund); overpasses
   (§11.1–11.2 [D]).
-- Following trains on single track (§10 [C/I]).
 - Breakdown repair cost and duration (§9.4 [I]).
 
 **Economy**
@@ -110,7 +110,6 @@ Grouped by the spec's own build order (§17).
 - Units with origin and destination houses chosen by gravity weighting;
   transfers via hubs; won't board rarely served stops; travellers who
   give up avoid rail for a while (§8.3 [D/I]).
-- Fare speed factor, locomotive appeal and dining car (§8.3 [D]).
 
 **Company and market**
 - AI difficulty multipliers (§8.4).

@@ -96,7 +96,7 @@ and checks the economy against the spec's targets
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
-| L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy. The second line shows the engine's speed chart: speed with that many freight or express cars on the flat and up 1%, 2% and 3% |
+| L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy. The second line shows the engine's speed chart (speed with that many freight or express cars on the flat and up 1%, 2% and 3%) and its passenger appeal |
 | F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |

@@ -58,8 +58,10 @@ struct Towns {
             if (e.cargo == c && e.destination == dest) return e.milli;
         return 0;
     }
-    Money arrive(TrainId t, StationId s, std::int32_t day) {
-        return handle_arrival(rw, eco, cargo, ind, t, s, day, static_cast<std::uint64_t>(day)).total;
+    Money arrive(TrainId t, StationId s, std::int32_t day, std::int32_t appeal = 0) {
+        return handle_arrival(rw, eco, cargo, ind, t, s, day, static_cast<std::uint64_t>(day) * kTrainTicksPerDay, 1000,
+                              appeal)
+            .total;
     }
 };
 
@@ -123,23 +125,62 @@ TEST_CASE("express loads go only where the train goes, and only off at their des
     w.arrive(t, w.st[1], 101);
     CHECK(train.cars[0].destination == w.st[2]);
 
-    // At the destination: paid by distance (40 km), less two days' decay.
+    // At the destination: paid by distance (40 km), less two days' decay,
+    // x 1.5 for a trip far quicker than the era's reference speed.
     const Money income = w.arrive(t, w.st[2], 102);
-    const Money fare = Money::dollars(500 * 40);
     const CargoType& pax = w.cargo.get(w.pax());
+    const Money fare = express_fare(pax, w.rw, w.st[0], w.st[2]);
     const std::int32_t left = value_left_permille(pax, 2);
-    CHECK(income >= fare.scaled(left, 1000) * 2 - Money::dollars(1));
+    CHECK(income >= fare.scaled(left, 1000).scaled(1500, 1000) * 2 - Money::dollars(1));
     // ...and the cars are refilled with passengers heading back.
     REQUIRE(train.cars[0].cargo.has_value());
     CHECK(train.cars[0].loaded_at == w.st[2]);
     CHECK(train.cars[0].destination != w.st[2]);
 }
 
-TEST_CASE("express fares grow with distance") {
-    Towns w({5, 15, 45}, 20);
+TEST_CASE("express fares grow with distance^0.9, the plain rate at 50 km (§8.3 [I])") {
+    Towns w({5, 15, 45, 55}, 20);
     const CargoType& pax = w.cargo.get(w.pax());
-    CHECK(express_fare(pax, w.rw, w.st[0], w.st[1]) == Money::dollars(500 * 10));
-    CHECK(express_fare(pax, w.rw, w.st[0], w.st[2]) == Money::dollars(500 * 40));
+    CHECK(express_fare(pax, w.rw, w.st[0], w.st[3]) == Money::dollars(500 * 50));
+    // 10 km pays as 50 x 0.2^0.9 = 11.7 km; 40 km as 40.9 km.
+    const Money ten = express_fare(pax, w.rw, w.st[0], w.st[1]);
+    const Money forty = express_fare(pax, w.rw, w.st[0], w.st[2]);
+    CHECK(ten > Money::dollars(500 * 116 / 10));
+    CHECK(ten < Money::dollars(500 * 119 / 10));
+    CHECK(forty > Money::dollars(500 * 405 / 10));
+    CHECK(forty < Money::dollars(500 * 413 / 10));
+    CHECK(express_base_fare(pax, 0) == Money{});
+}
+
+TEST_CASE("express pays by trip speed against the era's reference, within 0.25-1.5 (§8.3 [I])") {
+    CHECK(reference_speed_mph(1800) == 14);
+    CHECK(reference_speed_mph(1850) == 21); // between 14 (1830) and 29 (1870)
+    CHECK(reference_speed_mph(2100) == 126);
+    const std::int64_t per_tick = mph_to_mm_per_tick(reference_speed_mph(1850));
+    const std::int64_t mm = per_tick * 100; // 100 ticks at the reference speed
+    CHECK(express_speed_permille(mm, 100, 1850) == 1000);
+    CHECK(express_speed_permille(mm, 200, 1850) == 500);
+    CHECK(express_speed_permille(mm, 80, 1850) == 1250);
+    CHECK(express_speed_permille(mm, 10, 1850) == 1500);   // capped
+    CHECK(express_speed_permille(mm, 1000, 1850) == 250);  // floored
+    // The same trip is slow by the standards of a later era.
+    CHECK(express_speed_permille(mm, 100, 1950) < 1000);
+}
+
+TEST_CASE("a handsome engine raises passenger fares, an ugly one lowers them (§9.1 [D])") {
+    const auto income_with = [](std::int32_t appeal) {
+        Towns w({5, 25}, 40);
+        const TrainId t = w.rw.add_train(0, 1, {w.st[0], w.st[1]});
+        w.gather(60);
+        w.arrive(t, w.st[0], 100, appeal);
+        REQUIRE(w.rw.train(t).cars[0].destination.has_value()); // passengers or mail
+        return w.arrive(t, w.st[1], 110, appeal);
+    };
+    const Money plain = income_with(0);
+    REQUIRE(plain > Money{});
+    const auto near = [](Money a, Money b) { return a - b <= Money::dollars(1) && b - a <= Money::dollars(1); };
+    CHECK(near(income_with(30), plain.scaled(130, 100)));
+    CHECK(near(income_with(-15), plain.scaled(85, 100)));
 }
 
 TEST_CASE("a town stops paying for mail beyond its monthly demand") {

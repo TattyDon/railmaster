@@ -228,8 +228,22 @@ How we implement them (code: `freight.hpp`):
    at their fare. Only loads whose destination is on this train's route
    are taken.
 4. **Delivery.** Express loads leave the train only at their destination.
-   Fare = `fare_per_km` × straight-line distance between the stations ×
-   value left after the days in transit, so speed pays. Mail delivered to a
+   Fare (rt3-clone-spec §8.3 [I]) is the product of:
+   - `fare_per_km` × 50 km × (straight-line distance ÷ 50 km)^0.9, so a
+     50 km trip pays the plain rate per km and longer trips a little less
+     per km;
+   - a speed factor, between 0.25 and 1.5: the trip's time at the era's
+     reference speed over its actual time, from loading to unloading.
+     The reference speeds are 14 mph in 1830, 29 in 1870, 46 in 1910, 63 in
+     1950, 92 in 1990 and 126 in 2030, interpolated between. They were
+     calibrated so the 1830s demo and rival games average a factor of 1;
+   - the engine's appeal, for passengers and mail: +30% for a handsome
+     engine down to −15% for an ugly one [D range; per-engine values ours];
+   - a dining car's +20% for passengers [D];
+   - the value left after the days in transit.
+
+   Speed therefore pays twice: through the speed factor and through less
+   decay. Mail delivered to a
    town past two months of its yearly demand in a month earns nothing
    (`demand_cap`). Loads that go stale on board are dropped.
 

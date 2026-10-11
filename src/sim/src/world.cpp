@@ -182,7 +182,8 @@ void World::tick() {
     }
     for (const auto& [train, station] : railway_.take_arrivals()) {
         const Earnings e = handle_arrival(railway_, economy_, data_.cargo, data_.industries, train, station,
-                                          date_.days_since_epoch(), total_ticks_, revenue_permille(station));
+                                          date_.days_since_epoch(), total_ticks_, revenue_permille(station),
+                                          data_.locomotives.get(railway_.train(train).loco).appeal_percent);
         Train& t = railway_.train_mut(train);
         Company& runner = company(t.owner);
         if (t.owner == company().id()) earned_ += e.total;

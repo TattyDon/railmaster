@@ -162,7 +162,7 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
             for (const ExpressRates& e : express) {
                 const std::int64_t ij = e.made[i] * e.drawn[j] / std::max<std::int64_t>(1, e.drawn[j] + half);
                 const std::int64_t ji = e.made[j] * e.drawn[i] / std::max<std::int64_t>(1, e.drawn[i] + half);
-                value += std::int64_t{e.cargo->fare_per_km} * d * (ij + ji) / kMilli;
+                value += express_base_fare(*e.cargo, d * 1'000'000, b).whole_dollars() * (ij + ji) / kMilli;
             }
             if (value > 0) out.push_back({towns[i], towns[j], value, 0});
         }

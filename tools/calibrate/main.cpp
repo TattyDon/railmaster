@@ -240,31 +240,34 @@ void demo_network(const GameData& data) {
            "spec §12.4 [C]: a profitable railroad can borrow");
 }
 
-// C: three AI rivals, five years.
+// C: three AI rivals, five years, on six maps (one map's three rivals were
+// too few: freight's share ranged from 8% to 56% between maps).
 void rivals(const GameData& data) {
-    WorldConfig cfg;
-    cfg.seed = 3;
-    cfg.rivals = 3;
-    World w(cfg, data);
-    run_years(w, 5);
     int profitable = 0, n = 0;
-    double revenue = 0, buildings = 0, freight = 0;
-    for (const Rival& r : w.rivals()) {
-        const auto co = w.investors()[r.player].chairs;
-        if (!co) continue;
-        const YearAccounts& y = w.company(*co).history()[w.company(*co).history().size() - 2];
-        profitable += y.profit() > Money{};
-        revenue += dollars(y.revenue());
-        freight += dollars(y.lines[static_cast<std::size_t>(Ledger::FreightRevenue)]);
-        buildings += dollars(y.lines[static_cast<std::size_t>(Ledger::StationBuildingIncome)]);
-        ++n;
+    double revenue = 0, buildings = 0, freight = 0, count = 0;
+    for (const std::uint64_t seed : {1u, 2u, 3u, 4u, 5u, 6u}) {
+        WorldConfig cfg;
+        cfg.seed = seed;
+        cfg.rivals = 3;
+        World w(cfg, data);
+        run_years(w, 5);
+        for (const Rival& r : w.rivals()) {
+            const auto co = w.investors()[r.player].chairs;
+            if (!co) continue;
+            const YearAccounts& y = w.company(*co).history()[w.company(*co).history().size() - 2];
+            profitable += y.profit() > Money{};
+            revenue += dollars(y.revenue());
+            freight += dollars(y.lines[static_cast<std::size_t>(Ledger::FreightRevenue)]);
+            buildings += dollars(y.lines[static_cast<std::size_t>(Ledger::StationBuildingIncome)]);
+            ++n;
+        }
+        count += static_cast<double>(w.railway().station_buildings().size());
     }
-    const auto count = static_cast<double>(std::max<std::size_t>(1, w.railway().station_buildings().size()));
     report("rivals profitable in year 5", n ? 100.0 * profitable / n : 0, 60, 100, "%", "spec §13 [I]: competent AI");
     report("rival revenue, year 5", n ? revenue / n : 0, 200'000, 5'000'000, "$/yr", "[I] as the demo network");
     report("rival revenue from freight, year 5", revenue > 0 ? 100 * freight / revenue : 0, 10, 80, "%",
            "spec §13 [I]: plans city pairs and industry-consumer pairs alike");
-    report("station building income each", buildings / count, 0, 20'000, "$/yr", "spec §7.2 [C]: ~$1K");
+    report("station building income each", buildings / std::max(1.0, count), 0, 20'000, "$/yr", "spec §7.2 [C]: ~$1K");
 }
 
 } // namespace

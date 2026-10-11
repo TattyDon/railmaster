@@ -10,7 +10,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::CarWeight, from_year, f
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Trains, seconds_per_tick, station_dwell_ticks,
                                                 load_slowdown_permille, min_load_speed_permille,
                                                 min_grade_speed_permille, reference_cars, express_permille_of_freight,
-                                                car_weights, curve_comfort_radius_mm, min_curve_speed_permille,
+                                                car_weights, curve_comfort_radius_mm, follow_distance_mm, follow_gap_mm,
+                                                min_curve_speed_permille,
                                                 wood_bridge_speed_permille, other_bridge_speed_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_mm, sand_range_climb_mm, oil_range_mm,
                                                 service_threshold_permille, service_ticks, no_water_speed_permille,
@@ -63,8 +64,11 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_pe
                                                 territory_station_cost_max_percent, territory_overhead_max_percent,
                                                 territory_credit_percent, territory_closed_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::ReferenceSpeed, year, mph)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,
-                                                wait_loss_per_mille_per_sensitivity, mail_cap_months)
+                                                wait_loss_per_mille_per_sensitivity, mail_cap_months,
+                                                fare_reference_km, fare_distance_exponent_permille,
+                                                speed_factor_min_permille, speed_factor_max_permille, reference_speeds)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_route_km, build_interval_months_min,
                                                 build_interval_months_max, cash_reserve, candidates_previewed,
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
@@ -185,6 +189,13 @@ Balance Balance::from_json(std::string_view json_text) {
         if (w[i].freight_tons <= 0) throw std::runtime_error("balance: car weights must be positive");
         if (i > 0 && w[i].from_year <= w[i - 1].from_year) throw std::runtime_error("balance: car_weights years must rise");
     }
+    const auto& rs = b.express.reference_speeds;
+    if (rs.empty()) throw std::runtime_error("balance: express.reference_speeds needs at least one era");
+    for (std::size_t i = 0; i < rs.size(); ++i) {
+        if (rs[i].mph <= 0) throw std::runtime_error("balance: reference speeds must be positive");
+        if (i > 0 && rs[i].year <= rs[i - 1].year) throw std::runtime_error("balance: reference_speeds years must rise");
+    }
+    if (b.express.fare_reference_km <= 0) throw std::runtime_error("balance: express.fare_reference_km must be positive");
     if (b.trains.reference_cars <= 0) throw std::runtime_error("balance: trains.reference_cars must be positive");
     return b;
 }
