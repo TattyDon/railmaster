@@ -117,6 +117,10 @@ public:
     std::optional<std::vector<PathStep>> shortest_path(NodeId from, NodeId to, bool electric_only = false) const;
     void set_electrified(EdgeId id, bool value) { edges_.at(id).electrified = value; }
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, TrackNetwork& v);
+
 private:
     std::vector<TrackNode> nodes_;
     std::vector<TrackEdge> edges_;

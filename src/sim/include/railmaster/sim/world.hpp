@@ -186,7 +186,18 @@ public:
     // The score for the medal won, in thousandths; 0 without one.
     std::int64_t scenario_score_milli() const;
 
+    // Save the whole game (binary; save.cpp), and load one. Loading takes
+    // the game data from data/ (cargo, engines, industries, tycoons, which
+    // must match the save's by key) but uses the balance the game was
+    // played with, kept in the save. Throws std::runtime_error on a bad file.
+    std::string save() const;
+    static World load(std::string_view bytes, GameData data);
+    template <class Ar>
+    friend void io(Ar& ar, World& v);
+
 private:
+    struct LoadTag {};
+    World(LoadTag, GameData data);
     void on_new_day();
     void on_new_month();
     void on_new_year();

@@ -48,6 +48,7 @@ Early development. Done so far:
 - scenarios: JSON files that set the map, towns and rivals, with Bronze,
   Silver and Gold goals and deadlines (three original ones in
   `data/scenarios/`)
+- saved games that load and play on exactly as the original
 - a placeholder top-down client with a demo network of three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
@@ -103,6 +104,7 @@ and checks the economy against the spec's targets
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse does |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
+| Ctrl+S, Ctrl+L | Save the game to `railmaster.sav`, load it back (`--load=FILE` starts from a save) |
 | O / P | Cycle the cargo price map (red cheap, green dear) |
 | Arrows, mouse wheel | Pan, zoom |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |

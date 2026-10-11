@@ -62,6 +62,10 @@ public:
     // map generator and scenario loader exist.
     void generate_rolling_hills(Random& rng, std::int32_t max_height_m);
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, Terrain& v);
+
 private:
     std::size_t corner_index(std::int32_t cx, std::int32_t cy) const;
     std::size_t tile_index(std::int32_t tx, std::int32_t ty) const;

@@ -311,6 +311,10 @@ public:
     // Where a train is now, interpolated along its current piece of track.
     MapPoint train_position(TrainId id) const;
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, Railway& v);
+
 private:
     void tick_train(Train& t, const LocomotiveRegistry& locos);
     // Electric engines keep to electrified track [D].

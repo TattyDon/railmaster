@@ -251,6 +251,10 @@ public:
     const YearAccounts& this_year() const { return history_.back(); }
     const std::vector<YearAccounts>& history() const { return history_; }
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, Company& v);
+
 private:
     std::string name_;
     CompanyId id_ = 0;

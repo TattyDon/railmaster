@@ -253,6 +253,10 @@ public:
     // Is this cargo produced or consumed anywhere this year?
     bool active(CargoId c) const { return active_[c]; }
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, Economy& v);
+
 private:
     // A site's pull on its node: demand and supply over their horizons.
     struct Anchor {

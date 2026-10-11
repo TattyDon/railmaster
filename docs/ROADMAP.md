@@ -167,7 +167,9 @@ Still to do:
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.
-- Save/load, replays, localisation, packaging for Windows/macOS/Linux.
+- Save/load: done ([spec/saves.md](spec/saves.md)); compression and a
+  command log still to come.
+- Replays, localisation, packaging for Windows/macOS/Linux.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

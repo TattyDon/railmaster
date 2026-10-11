@@ -61,6 +61,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §8.3 [D/I], §9.1 [D] | Express pay rises with distance and speed: rate × distance^0.9 × speed factor (0.25–1.5 against the era's reference speed) × engine appeal (+30% to −15%) × dining car | rate × distance, speed paid only through decay | as the spec; distance normalised at 50 km and reference speeds calibrated ([m2-economy-model.md](m2-economy-model.md)); appeal values ours |
 | §10.3 [I] | Same-direction trains on single track: no overtaking; the follower holds the leader's speed within a gap | trains passed through each other | as the spec: within 2 km a train holds the speed of the one ahead and stays 0.5 km behind; a ghosting (yielding) train blocks nobody; double track overtakes |
 | §11.1–11.2 [D/I] | Free undo while the Track panel is open; removing your own track returns little cash (10%) and writes off its book value | track was permanent | as documented; each piece carries its cost; trains re-route around removed track |
+| §16 [I] | Versioned saves holding scenario, full simulation state and random state | none | binary, uncompressed, everything saved so a loaded game plays on exactly as the original; the balance travels with the save, the other data is checked by key ([saves.md](saves.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -118,4 +119,4 @@ Grouped by the spec's own build order (§17).
 - Scenario events and triggers, track budgets and purchase restrictions,
   average-speed and variable goals, hand-made maps (§11.3, §14 [C/I]).
 - Ledger reports, lists, overlays F2–F5, radar, 3D camera (§15 [D]).
-- Save/load and content packaging (§16 [I]).
+- Compressed saves with a command log for replays; content packaging (§16 [I]).

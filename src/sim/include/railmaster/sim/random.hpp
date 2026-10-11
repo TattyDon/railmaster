@@ -43,6 +43,10 @@ public:
     // True with probability num/den.
     constexpr bool chance(std::uint32_t num, std::uint32_t den) { return below(den) < num; }
 
+    // Saving and loading (save.cpp) reads and writes every member.
+    template <class Ar>
+    friend void io(Ar& ar, Random& v);
+
 private:
     std::uint64_t state_ = 0;
     std::uint64_t inc_;

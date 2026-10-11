@@ -4,7 +4,8 @@
 // replaces it later.
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
-//                   [--scenario=FILE]
+//                   [--scenario=FILE] [--load=FILE]
+// Ctrl+S saves the game to railmaster.sav, Ctrl+L loads it back.
 // A scenario sets the map, rivals and territories itself, and starts with
 // no demo network.
 
@@ -60,6 +61,7 @@ int main(int argc, char* argv[]) {
     sim::MapSize map_size = sim::MapSize::Small;
     int territories = 0;
     std::string scenario_path;
+    std::string load_path;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--empty") empty = true;
@@ -67,6 +69,7 @@ int main(int argc, char* argv[]) {
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
         else if (arg.rfind("--territories=", 0) == 0) territories = std::stoi(arg.substr(14));
         else if (arg.rfind("--scenario=", 0) == 0) scenario_path = arg.substr(11);
+        else if (arg.rfind("--load=", 0) == 0) load_path = arg.substr(7);
         else if (arg == "--map=small") map_size = sim::MapSize::Small;
         else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
         else if (arg == "--map=large") map_size = sim::MapSize::Large;
@@ -94,8 +97,17 @@ int main(int argc, char* argv[]) {
         }
         empty = true;
     }
-    config.found_player_company = quick;
+    config.found_player_company = quick || !load_path.empty();
     sim::World world(config, std::move(data));
+    if (!load_path.empty()) {
+        try {
+            world = sim::World::load(read_file(load_path), load_game_data(data_dir));
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "Failed to load %s: %s\n", load_path.c_str(), e.what());
+            return 1;
+        }
+        empty = true;
+    }
     // The demo network is built once the player has a company to pay for it.
     bool demo_pending = !empty;
 
@@ -169,6 +181,30 @@ int main(int argc, char* argv[]) {
                                ev.button.button == SDL_BUTTON_RIGHT);
                 break;
             case SDL_KEYDOWN:
+                // Ctrl+S saves the game, Ctrl+L loads the last save.
+                if ((ev.key.keysym.mod & KMOD_CTRL) != 0 &&
+                    (ev.key.keysym.sym == SDLK_s || ev.key.keysym.sym == SDLK_l)) {
+                    const std::string file = "railmaster.sav";
+                    try {
+                        if (ev.key.keysym.sym == SDLK_s) {
+                            std::ofstream out(file, std::ios::binary);
+                            const std::string bytes = world.save();
+                            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+                            if (!out) throw std::runtime_error("cannot write " + file);
+                            tools.show("GAME SAVED TO " + file, true);
+                        } else {
+                            world = sim::World::load(read_file(file), load_game_data(data_dir));
+                            demo_pending = false;
+                            tools.select(tools.tool()); // drop half-made lines and routes
+                            tools.show("GAME LOADED FROM " + file + ": " + world.date().month_year_label(), true);
+                        }
+                    } catch (const std::exception& e) {
+                        std::string why = e.what();
+                        for (char& ch : why) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                        tools.show(why, false);
+                    }
+                    break;
+                }
                 if (tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod)) break;
                 // Game speed: + and - step through the six speeds, Pause
                 // stops and resumes [D]. Space pauses too.
