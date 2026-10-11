@@ -57,6 +57,47 @@ struct MedalTier {
     std::vector<Goal> goals{}; // on top of the lower tiers' (Silver needs Bronze's too)
 };
 
+// Scenario events (rt3-clone-spec §14.4 [C]): conditions and effects,
+// checked at each month end in file order.
+struct EventCondition {
+    std::optional<Date> after{};      // on or after this date
+    std::optional<Date> before{};     // on or before; a one-shot event lapses after it
+    std::vector<Goal> goals{};        // all must be met, as for medals
+    std::optional<std::string> variable{}; // a counter (see SetVariable) ...
+    std::int64_t at_least = 0;        // ... at least this
+    std::int32_t chance_percent = 100; // then fires with this chance each month
+};
+
+enum class EffectKind : std::uint8_t {
+    News,          // text: a newspaper headline
+    CompanyCash,   // amount: to (or, negative, from) the player's company, as a grant
+    PlayerCash,    // amount: to the player's own account
+    CargoPrice,    // target cargo, percent, months (0: for good): its base price
+    ExpressDemand, // target cargo (passengers, mail, troops), percent, months: how many travel
+    Production,    // target industry type, percent, months: its output
+    BuildCost,     // percent, months: all construction costs
+    UnlockEngine,  // target engine: available from now, even before its year
+    TerritoryPrice, // target territory, amount: a new price for access rights
+    SetVariable,   // target counter, value
+    AddVariable,   // target counter, value
+    Briefing,      // text: replaces the scenario's briefing
+};
+struct EventEffect {
+    EffectKind kind = EffectKind::News;
+    std::string target{};
+    std::string text{};
+    std::int32_t percent = 100;
+    std::int32_t months = 0;
+    Money amount{};
+    std::int64_t value = 0;
+};
+struct ScenarioEvent {
+    std::string id;
+    EventCondition when{};
+    std::vector<EventEffect> effects{};
+    std::int32_t repeat_months = 0; // 0: fires once; otherwise may fire again this many months later
+};
+
 struct Scenario {
     std::string key, name, briefing;
     Date start = Date::from_ymd(1830, 1, 1);
@@ -69,6 +110,7 @@ struct Scenario {
     bool chairman_can_be_fired = true;
     std::vector<ScenarioTown> towns{};
     std::array<MedalTier, 3> medals{}; // bronze, silver, gold
+    std::vector<ScenarioEvent> events{};
 
     // Parse and check a scenario file. Throws std::runtime_error on bad data.
     static Scenario from_json(std::string_view json_text);

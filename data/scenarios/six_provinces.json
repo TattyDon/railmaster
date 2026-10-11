@@ -13,18 +13,88 @@
   "chairman_can_resign": false,
   "chairman_can_be_fired": false,
   "towns": [
-    {"name": "Port Salden", "x": 128, "y": 128, "houses": 40}
+    {
+      "name": "Port Salden",
+      "x": 128,
+      "y": 128,
+      "houses": 40
+    }
   ],
   "medals": {
-    "bronze": {"by": "1910-12-31", "goals": [
-      {"kind": "territories", "count": 3}
-    ]},
-    "silver": {"by": "1920-12-31", "goals": [
-      {"kind": "personal_net_worth", "amount": 10000000}
-    ]},
-    "gold": {"by": "1925-12-31", "goals": [
-      {"kind": "territories", "count": 5},
-      {"kind": "only_railroad"}
-    ]}
-  }
+    "bronze": {
+      "by": "1910-12-31",
+      "goals": [
+        {
+          "kind": "territories",
+          "count": 3
+        }
+      ]
+    },
+    "silver": {
+      "by": "1920-12-31",
+      "goals": [
+        {
+          "kind": "personal_net_worth",
+          "amount": 10000000
+        }
+      ]
+    },
+    "gold": {
+      "by": "1925-12-31",
+      "goals": [
+        {
+          "kind": "territories",
+          "count": 5
+        },
+        {
+          "kind": "only_railroad"
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "expansion_fever",
+      "when": {
+        "after": "1904-06-01"
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "Expansion fever: contractors cut their prices to win railroad work"
+        },
+        {
+          "kind": "build_cost",
+          "percent": 85,
+          "months": 24
+        }
+      ]
+    },
+    {
+      "id": "board_bonus",
+      "when": {
+        "goals": [
+          {
+            "kind": "territories",
+            "count": 2
+          }
+        ]
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "The board pays you a bonus for reaching a second province"
+        },
+        {
+          "kind": "player_cash",
+          "amount": 250000
+        },
+        {
+          "kind": "add_variable",
+          "target": "provinces_rewarded",
+          "value": 1
+        }
+      ]
+    }
+  ]
 }

@@ -72,6 +72,7 @@ public:
 
     const std::vector<IndustryType>& all() const { return types_; }
     const IndustryType& get(IndustryTypeId id) const { return types_.at(id); }
+    IndustryType& get_mut(IndustryTypeId id) { return types_.at(id); } // for scenario events
     std::optional<IndustryTypeId> find(std::string_view key) const;
 
 private:

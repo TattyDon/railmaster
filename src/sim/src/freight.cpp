@@ -267,7 +267,7 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         for (StationId sid = 0; sid < n_stations; ++sid) {
             const std::int64_t produced = catchment_rate(eco, rw, industries, rw.station(sid), c.id, true);
             if (produced == 0) continue;
-            const std::int64_t daily = produced * c.generation / 365; // produced is already in thousandths
+            const std::int64_t daily = produced * c.generation * c.demand_percent / 100 / 365; // produced is already in thousandths
             for (StationId dest : partners[sid]) {
                 const std::int64_t a = attraction[dest];
                 if (a == 0) continue;

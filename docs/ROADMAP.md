@@ -160,7 +160,8 @@ Still to do:
 - AI chairmen with personality traits.
 - Scenario format and medal conditions: done (JSON files, nested goals
   with deadlines, F10 status screen; [spec/scenarios.md](spec/scenarios.md)).
-- Event and trigger system; restrictions such as track budgets.
+- Event and trigger system: done (dated, goal and counter triggers; timed
+  effects). Restrictions such as track budgets still to come.
 - Original scenarios built to RT3's design patterns (new maps and text):
   three to start, on generated terrain.
 - Map editor with heightmap import.

@@ -21,7 +21,8 @@ reads it back (`src/sim/src/save.cpp`). In the client, Ctrl+S saves to
   - Rivals' memory.
   - News waiting to be shown.
   - Undo stacks.
-  - The scenario and its result.
+  - The scenario, its result, and its events' state: which have fired,
+    counters, effects in force.
 
 Caches are saved too, so a loaded game is bit for bit the game that was
 saved. The simulation is deterministic, so it then plays on exactly as the
@@ -39,13 +40,18 @@ A Small map saves to about 6 MB in about 15 ms, and loads in under 10 ms.
 
 ## Compatibility
 
+Format versions:
+- **1:** first version.
+- **2:** scenario events and the Grants ledger line.
+
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration
   yet.
 - **Balance:** a save keeps the balance it was played with. A changed
   `data/balance.json` does not change a saved game.
 - **Game data:** the cargo, engines, industries and tycoons come from
-  `data/` when loading, and must match the save's keys. A save made with
+  `data/` when loading, and must match the save's keys. Event effects in
+  force are applied to them again. A save made with
   different data is refused with a reason.
 - **Damaged files:** a file that is not a save, or is cut short, or has
   data left over, is refused with a reason. Counts are checked against the

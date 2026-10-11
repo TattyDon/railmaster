@@ -7,20 +7,120 @@
   "map": "small",
   "rivals": 2,
   "towns": [
-    {"name": "Harlow", "x": 72, "y": 72, "houses": 28},
-    {"name": "Kestrel Gap", "x": 120, "y": 160, "houses": 18},
-    {"name": "Millbrook", "x": 184, "y": 120, "houses": 34}
+    {
+      "name": "Harlow",
+      "x": 72,
+      "y": 72,
+      "houses": 28
+    },
+    {
+      "name": "Kestrel Gap",
+      "x": 120,
+      "y": 160,
+      "houses": 18
+    },
+    {
+      "name": "Millbrook",
+      "x": 184,
+      "y": 120,
+      "houses": 34
+    }
   ],
   "medals": {
-    "bronze": {"by": "1890-12-31", "goals": [
-      {"kind": "deliver", "cargo": "coal", "count": 30}
-    ]},
-    "silver": {"by": "1895-12-31", "goals": [
-      {"kind": "deliver", "cargo": "coal", "count": 80},
-      {"kind": "revenue", "amount": 1000000}
-    ]},
-    "gold": {"by": "1900-12-31", "goals": [
-      {"kind": "highest_value"}
-    ]}
-  }
+    "bronze": {
+      "by": "1890-12-31",
+      "goals": [
+        {
+          "kind": "deliver",
+          "cargo": "coal",
+          "count": 30
+        }
+      ]
+    },
+    "silver": {
+      "by": "1895-12-31",
+      "goals": [
+        {
+          "kind": "deliver",
+          "cargo": "coal",
+          "count": 80
+        },
+        {
+          "kind": "revenue",
+          "amount": 1000000
+        }
+      ]
+    },
+    "gold": {
+      "by": "1900-12-31",
+      "goals": [
+        {
+          "kind": "highest_value"
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "steel_boom",
+      "when": {
+        "after": "1884-03-01"
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "Steel orders flood in: coal prices jump"
+        },
+        {
+          "kind": "cargo_price",
+          "target": "coal",
+          "percent": 130,
+          "months": 36
+        }
+      ]
+    },
+    {
+      "id": "mine_strike",
+      "repeat_months": 12,
+      "when": {
+        "after": "1882-01-01",
+        "chance_percent": 8
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "Miners strike across the coalfield"
+        },
+        {
+          "kind": "production",
+          "target": "coal_mine",
+          "percent": 50,
+          "months": 4
+        }
+      ]
+    },
+    {
+      "id": "heavy_haul",
+      "when": {
+        "after": "1881-01-01",
+        "goals": [
+          {
+            "kind": "deliver",
+            "cargo": "coal",
+            "count": 10
+          }
+        ]
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "A Pittsburgh works offers you an early heavy freight engine"
+        },
+        {
+          "kind": "unlock_engine",
+          "target": "camelback_060"
+        }
+      ]
+    }
+  ]
 }

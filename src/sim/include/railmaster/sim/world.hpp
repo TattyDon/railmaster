@@ -169,7 +169,7 @@ public:
     void set_economic_state(EconomicState s); // for scenarios and tests
     // Construction, fuel and labour costs, in percent of Normal.
     std::int32_t cost_percent() const;
-    Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100); }
+    Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100).scaled(build_cost_percent_, 100); }
     // What electrifying a piece of track would cost now, nothing if it is.
     Money electrify_cost(EdgeId e) const;
     // The state the economy changed to since the last call, if it did: news.
@@ -179,6 +179,11 @@ public:
     // The scenario being played, if any; checked on the 1st of each month.
     const std::optional<Scenario>& scenario() const { return scenario_; }
     const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // A scenario's counters (rt3-clone-spec §14.4), set by its events.
+    std::int64_t variable(const std::string& name) const {
+        const auto it = variables_.find(name);
+        return it == variables_.end() ? 0 : it->second;
+    }
     // How many track builds the player can still undo.
     std::size_t undoable_track(PlayerId who = kHumanPlayer) const {
         return who < track_undo_.size() ? track_undo_[who].size() : 0;
@@ -248,6 +253,28 @@ private:
     std::optional<Scenario> scenario_;
     ScenarioResult scenario_result_;
     void check_scenario();
+
+    // Scenario events (events.cpp): for each, the month index from which it
+    // may fire (-1 once done); counters; and the effects in force for a
+    // while, applied to a clean copy of the game data.
+    struct Modifier {
+        EffectKind kind = EffectKind::CargoPrice;
+        std::string target;
+        std::int32_t percent = 100;
+        std::int32_t until_month = 0; // 0: for good
+    };
+    std::vector<std::int32_t> event_month_;
+    std::map<std::string, std::int64_t> variables_;
+    std::vector<Modifier> modifiers_;
+    CargoRegistry base_cargo_;
+    IndustryRegistry base_industries_;
+    LocomotiveRegistry base_locos_;
+    std::int32_t build_cost_percent_ = 100;
+    void check_event_targets() const;
+    void run_events();
+    void fire(const ScenarioEvent& e);
+    void apply_modifiers();
+    std::int32_t month_index() const { return date_.year() * 12 + date_.month() - 1; }
 
     void refresh_economy_terrain();
 

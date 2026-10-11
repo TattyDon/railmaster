@@ -33,6 +33,8 @@ struct CargoType {
     // whether destinations stop paying past their monthly demand (mail).
     std::int32_t fare_per_km = 0;
     std::int32_t generation = 0;
+    // Scenario events can raise or lower express demand (rt3-clone-spec §14.4), in percent.
+    std::int32_t demand_percent = 100;
     bool demand_cap = false;
 };
 
@@ -46,6 +48,7 @@ public:
 
     const std::vector<CargoType>& all() const { return types_; }
     const CargoType& get(CargoId id) const { return types_.at(id); }
+    CargoType& get_mut(CargoId id) { return types_.at(id); } // for scenario events
     std::optional<CargoId> find(std::string_view key) const;
 
 private:

@@ -115,6 +115,13 @@ World::World(const WorldConfig& config, GameData data)
         economy_.close_accounts(data_.cargo, data_.industries, data_.balance.industries, 12);
     }
     if (config.territories > 0 && territories_.empty()) make_territories(config.territories);
+    base_cargo_ = data_.cargo;
+    base_industries_ = data_.industries;
+    base_locos_ = data_.locomotives;
+    if (scenario_) {
+        check_event_targets();
+        event_month_.assign(scenario_->events.size(), 0);
+    }
     railway_.set_balance(data_.balance);
     railway_.set_rules({.breakdowns = !config.sandbox});
 
@@ -408,6 +415,7 @@ void World::on_new_month() {
         }
     }
     run_rivals();
+    run_events();
     check_scenario();
 }
 

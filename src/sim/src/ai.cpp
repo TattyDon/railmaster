@@ -148,7 +148,7 @@ std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {
         if (c.cargo_class != CargoClass::Express || c.generation <= 0 || year < c.available_year) continue;
         ExpressRates e{&c, {}, {}};
         for (const Town& t : eco.towns()) {
-            e.made.push_back(town_rate(w, t, c.id, true) * c.generation);
+            e.made.push_back(town_rate(w, t, c.id, true) * c.generation * c.demand_percent / 100);
             e.drawn.push_back(town_rate(w, t, c.id, false));
         }
         express.push_back(std::move(e));

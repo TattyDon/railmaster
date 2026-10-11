@@ -21,6 +21,7 @@ const char* ledger_name(Ledger line) {
     case Ledger::IndustryIncome: return "Industry income";
     case Ledger::StationBuildingIncome: return "Station buildings";
     case Ledger::TrackageIncome: return "Trackage income";
+    case Ledger::Grants: return "Grants";
     case Ledger::TrainMaintenance: return "Train maintenance";
     case Ledger::Fuel: return "Fuel";
     case Ledger::TrackagePaid: return "Trackage paid";
@@ -35,7 +36,7 @@ const char* ledger_name(Ledger line) {
     return "?";
 }
 
-bool is_revenue(Ledger line) { return line <= Ledger::TrackageIncome; }
+bool is_revenue(Ledger line) { return line <= Ledger::Grants; }
 
 Money YearAccounts::revenue() const {
     Money m;

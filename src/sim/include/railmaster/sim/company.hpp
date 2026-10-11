@@ -42,6 +42,7 @@ enum class Ledger : std::uint8_t {
     IndustryIncome, // output of the industries it owns [C]
     StationBuildingIncome, // hotels, restaurants and taverns
     TrackageIncome, // rivals' share of income for running on our track [D]
+    Grants, // money a scenario event gives the company [C]
     TrainMaintenance,
     Fuel,
     TrackagePaid,

@@ -18,6 +18,7 @@ add_library(railmaster_sim
     src/game_speed.cpp
     src/locomotive.cpp
     src/railway.cpp
+    src/events.cpp
     src/save.cpp
     src/scenario.cpp
     src/stock.cpp

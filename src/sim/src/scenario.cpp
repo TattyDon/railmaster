@@ -43,6 +43,22 @@ GoalKind parse_kind(const std::string& k) {
     throw std::runtime_error("unknown goal kind '" + k + "'");
 }
 
+EffectKind parse_effect(const std::string& k) {
+    if (k == "news") return EffectKind::News;
+    if (k == "company_cash") return EffectKind::CompanyCash;
+    if (k == "player_cash") return EffectKind::PlayerCash;
+    if (k == "cargo_price") return EffectKind::CargoPrice;
+    if (k == "express_demand") return EffectKind::ExpressDemand;
+    if (k == "production") return EffectKind::Production;
+    if (k == "build_cost") return EffectKind::BuildCost;
+    if (k == "unlock_engine") return EffectKind::UnlockEngine;
+    if (k == "territory_price") return EffectKind::TerritoryPrice;
+    if (k == "set_variable") return EffectKind::SetVariable;
+    if (k == "add_variable") return EffectKind::AddVariable;
+    if (k == "briefing") return EffectKind::Briefing;
+    throw std::runtime_error("unknown effect kind '" + k + "'");
+}
+
 std::string dollars(Money m) {
     const std::string digits = std::to_string(m.whole_dollars() < 0 ? -m.whole_dollars() : m.whole_dollars());
     std::string out;
@@ -84,31 +100,79 @@ Scenario Scenario::from_json(std::string_view json_text) {
             s.towns.push_back({t.at("name").get<std::string>(), t.at("x").get<std::int32_t>(), t.at("y").get<std::int32_t>(),
                                t.value("houses", 20)});
         }
+        const auto parse_goal = [&](const nlohmann::json& g) {
+            Goal goal;
+            goal.kind = parse_kind(g.at("kind").get<std::string>());
+            goal.towns = g.value("towns", std::vector<std::string>{});
+            goal.cargo = g.value("cargo", std::string());
+            goal.count = g.value("count", std::int64_t{0});
+            goal.amount = Money::dollars(g.value("amount", std::int64_t{0}));
+            for (const std::string& name : goal.towns) {
+                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == name; })) {
+                    throw std::runtime_error("goal names town '" + name + "', which the scenario does not place");
+                }
+            }
+            if (goal.kind == GoalKind::ConnectTowns && goal.towns.size() < 2) {
+                throw std::runtime_error("connect_towns needs at least two towns");
+            }
+            if (goal.kind == GoalKind::Deliver && (goal.cargo.empty() || goal.count <= 0)) {
+                throw std::runtime_error("deliver needs a cargo and a count");
+            }
+            return goal;
+        };
         const auto& medals = j.at("medals");
         const char* keys[] = {"bronze", "silver", "gold"};
         for (std::size_t m = 0; m < 3; ++m) {
             const auto& tier = medals.at(keys[m]);
             s.medals[m].deadline = parse_date(tier.at("by").get<std::string>());
             for (const auto& g : tier.at("goals")) {
-                Goal goal;
-                goal.kind = parse_kind(g.at("kind").get<std::string>());
-                goal.towns = g.value("towns", std::vector<std::string>{});
-                goal.cargo = g.value("cargo", std::string());
-                goal.count = g.value("count", std::int64_t{0});
-                goal.amount = Money::dollars(g.value("amount", std::int64_t{0}));
-                for (const std::string& name : goal.towns) {
-                    if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == name; })) {
-                        throw std::runtime_error("goal names town '" + name + "', which the scenario does not place");
-                    }
-                }
-                if (goal.kind == GoalKind::ConnectTowns && goal.towns.size() < 2) {
-                    throw std::runtime_error("connect_towns needs at least two towns");
-                }
-                if (goal.kind == GoalKind::Deliver && (goal.cargo.empty() || goal.count <= 0)) {
-                    throw std::runtime_error("deliver needs a cargo and a count");
-                }
+                Goal goal = parse_goal(g);
                 s.medals[m].goals.push_back(std::move(goal));
             }
+        }
+        for (const auto& ev : j.value("events", nlohmann::json::array())) {
+            ScenarioEvent event;
+            event.id = ev.at("id").get<std::string>();
+            for (const ScenarioEvent& other : s.events)
+                if (other.id == event.id) throw std::runtime_error("two events are called '" + event.id + "'");
+            event.repeat_months = ev.value("repeat_months", 0);
+            const auto& when = ev.value("when", nlohmann::json::object());
+            if (when.contains("after")) event.when.after = parse_date(when.at("after").get<std::string>());
+            if (when.contains("before")) event.when.before = parse_date(when.at("before").get<std::string>());
+            for (const auto& g : when.value("goals", nlohmann::json::array())) event.when.goals.push_back(parse_goal(g));
+            if (when.contains("variable")) {
+                event.when.variable = when.at("variable").at("name").get<std::string>();
+                event.when.at_least = when.at("variable").value("at_least", std::int64_t{1});
+            }
+            event.when.chance_percent = when.value("chance_percent", 100);
+            if (event.when.chance_percent < 0 || event.when.chance_percent > 100) {
+                throw std::runtime_error("event '" + event.id + "': chance_percent must be 0 to 100");
+            }
+            for (const auto& ef : ev.at("effects")) {
+                EventEffect effect;
+                effect.kind = parse_effect(ef.at("kind").get<std::string>());
+                effect.target = ef.value("target", std::string());
+                effect.text = ef.value("text", std::string());
+                effect.percent = ef.value("percent", 100);
+                effect.months = ef.value("months", 0);
+                effect.amount = Money::dollars(ef.value("amount", std::int64_t{0}));
+                effect.value = ef.value("value", std::int64_t{0});
+                const bool needs_target = effect.kind != EffectKind::News && effect.kind != EffectKind::CompanyCash &&
+                                          effect.kind != EffectKind::PlayerCash && effect.kind != EffectKind::BuildCost &&
+                                          effect.kind != EffectKind::Briefing;
+                if (needs_target && effect.target.empty()) {
+                    throw std::runtime_error("event '" + event.id + "': this effect needs a target");
+                }
+                if ((effect.kind == EffectKind::News || effect.kind == EffectKind::Briefing) && effect.text.empty()) {
+                    throw std::runtime_error("event '" + event.id + "': this effect needs text");
+                }
+                if (effect.percent < 0 || effect.months < 0) {
+                    throw std::runtime_error("event '" + event.id + "': percent and months cannot be negative");
+                }
+                event.effects.push_back(std::move(effect));
+            }
+            if (event.effects.empty()) throw std::runtime_error("event '" + event.id + "' does nothing");
+            s.events.push_back(std::move(event));
         }
     } catch (const nlohmann::json::exception& e) {
         throw std::runtime_error(std::string("scenario: ") + e.what());

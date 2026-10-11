@@ -251,3 +251,150 @@ TEST_CASE("money goals read the company's books and the player's net worth") {
     const Goal places{.kind = GoalKind::Territories, .count = 1};
     CHECK(check_goal(w, places).text == "Stations in 0 of 1 territories");
 }
+
+namespace {
+
+const std::string kEasy = R"({"by": "1899-12-31", "goals": [{"kind": "book_value", "amount": 900000000}]})";
+
+Scenario with_events(const std::string& events) {
+    return Scenario::from_json(scenario_json(kEasy, kEasy, kEasy, R"("events": )" + events + ", "));
+}
+
+} // namespace
+
+TEST_CASE("scenario events are parsed and checked") {
+    const Scenario s = with_events(R"([
+        {"id": "rush", "when": {"after": "1851-01-01", "chance_percent": 50},
+         "effects": [{"kind": "news", "text": "Gold!"}, {"kind": "express_demand", "target": "passengers",
+                      "percent": 150, "months": 12}]},
+        {"id": "subsidy", "repeat_months": 12, "when": {"goals": [{"kind": "connect_towns", "towns": ["Alpha", "Beta"]}],
+         "variable": {"name": "x", "at_least": 2}}, "effects": [{"kind": "company_cash", "amount": 1000}]}])");
+    REQUIRE(s.events.size() == 2);
+    CHECK(s.events[0].when.after == Date::from_ymd(1851, 1, 1));
+    CHECK(s.events[0].when.chance_percent == 50);
+    CHECK(s.events[0].effects[1].kind == EffectKind::ExpressDemand);
+    CHECK(s.events[0].effects[1].months == 12);
+    CHECK(s.events[1].repeat_months == 12);
+    CHECK(s.events[1].when.goals.front().kind == GoalKind::ConnectTowns);
+    CHECK(s.events[1].when.variable == "x");
+    CHECK(s.events[1].when.at_least == 2);
+
+    const auto error = [](const std::string& events) {
+        try {
+            (void)with_events(events);
+        } catch (const std::runtime_error& e) {
+            return std::string(e.what());
+        }
+        return std::string();
+    };
+    CHECK(error(R"([{"id": "a", "effects": [{"kind": "flood"}]}])").find("unknown effect kind") != std::string::npos);
+    CHECK(error(R"([{"id": "a", "effects": [{"kind": "cargo_price", "percent": 120}]}])").find("needs a target") !=
+          std::string::npos);
+    CHECK(error(R"([{"id": "a", "effects": [{"kind": "news"}]}])").find("needs text") != std::string::npos);
+    CHECK(error(R"([{"id": "a", "effects": []}])").find("does nothing") != std::string::npos);
+    CHECK(error(R"([{"id": "a", "effects": [{"kind": "news", "text": "x"}]},
+                    {"id": "a", "effects": [{"kind": "news", "text": "y"}]}])")
+              .find("two events") != std::string::npos);
+    CHECK(error(R"([{"id": "a", "when": {"goals": [{"kind": "connect_towns", "towns": ["Alpha", "Nowhere"]}]},
+                     "effects": [{"kind": "news", "text": "x"}]}])")
+              .find("Nowhere") != std::string::npos);
+    // Targets are checked against the game data when the game starts.
+    CHECK_THROWS_AS(small_world(with_events(R"([{"id": "a", "effects": [{"kind": "cargo_price", "target": "gold"}]}])"),
+                                shipped()),
+                    std::invalid_argument);
+}
+
+TEST_CASE("a dated event brings news and a grant at the end of the month it falls in") {
+    const auto world = [](std::int64_t gift) {
+        return small_world(with_events(R"([{"id": "grant", "when": {"after": "1850-02-15"},
+            "effects": [{"kind": "news", "text": "The county pays up"}, {"kind": "company_cash", "amount": 250000},
+                        {"kind": "player_cash", "amount": )" + std::to_string(gift) + R"(},
+                        {"kind": "briefing", "text": "New orders."}]}])"),
+                           shipped());
+    };
+    World w = world(1000);
+    World control = world(0);
+    const auto grants = [](const World& x) {
+        return x.company().history().back().lines[static_cast<std::size_t>(Ledger::Grants)];
+    };
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    CHECK(grants(w) == Money{});
+    run_to(w, Date::from_ymd(1850, 3, 1)); // the end of February
+    run_to(control, Date::from_ymd(1850, 3, 1));
+    CHECK(grants(w) == Money::dollars(250'000));
+    CHECK(w.investor().cash - control.investor().cash == Money::dollars(1000));
+    CHECK(w.scenario()->briefing == "New orders.");
+    const auto news = w.take_news();
+    CHECK(std::find(news.begin(), news.end(), "The county pays up") != news.end());
+    run_to(w, Date::from_ymd(1850, 6, 1)); // once only
+    CHECK(grants(w) == Money::dollars(250'000));
+}
+
+TEST_CASE("timed effects change the game data and lapse; lasting ones stay") {
+    World w = small_world(with_events(R"([{"id": "boom", "when": {"after": "1850-01-01"}, "effects": [
+        {"kind": "cargo_price", "target": "coal", "percent": 200, "months": 2},
+        {"kind": "express_demand", "target": "passengers", "percent": 150, "months": 2},
+        {"kind": "production", "target": "coal_mine", "percent": 50, "months": 2},
+        {"kind": "build_cost", "percent": 50, "months": 2},
+        {"kind": "unlock_engine", "target": "gp35"}]}])"),
+                          shipped());
+    const CargoId coal = *w.data().cargo.find("coal");
+    const CargoId pax = *w.data().cargo.find("passengers");
+    const IndustryTypeId mine = *w.data().industries.find("coal_mine");
+    const LocoTypeId gp35 = *w.data().locomotives.find("gp35");
+    const Money price = w.data().cargo.get(coal).base_price;
+    const std::int64_t rate = w.data().industries.get(mine).rate_milli;
+    const Money track = w.construction_cost(Money::dollars(1000));
+    CHECK_FALSE(w.data().locomotives.get(gp35).available_in(1850));
+
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    CHECK(w.data().cargo.get(coal).base_price == price.scaled(200, 100));
+    CHECK(w.data().cargo.get(pax).demand_percent == 150);
+    CHECK(w.data().industries.get(mine).rate_milli == rate / 2);
+    CHECK(w.construction_cost(Money::dollars(1000)) == track.scaled(50, 100));
+    CHECK(w.data().locomotives.get(gp35).available_in(1850));
+
+    // Saved and loaded, the effects in force come back.
+    World loaded = World::load(w.save(), shipped());
+    CHECK(loaded.data().cargo.get(coal).base_price == price.scaled(200, 100));
+    CHECK(loaded.save() == w.save());
+
+    run_to(w, Date::from_ymd(1850, 4, 1));
+    CHECK(w.data().cargo.get(coal).base_price == price);
+    CHECK(w.data().cargo.get(pax).demand_percent == 100);
+    CHECK(w.data().industries.get(mine).rate_milli == rate);
+    CHECK(w.construction_cost(Money::dollars(1000)) == track);
+    CHECK(w.data().locomotives.get(gp35).available_in(1850)); // for good
+}
+
+TEST_CASE("repeating events, counters and windows") {
+    World w = small_world(with_events(R"([
+        {"id": "tick", "repeat_months": 1, "effects": [{"kind": "add_variable", "target": "months", "value": 1}]},
+        {"id": "third", "when": {"variable": {"name": "months", "at_least": 3}},
+         "effects": [{"kind": "set_variable", "target": "done", "value": 7}]},
+        {"id": "never", "repeat_months": 1, "when": {"chance_percent": 0},
+         "effects": [{"kind": "add_variable", "target": "never", "value": 1}]},
+        {"id": "late", "when": {"before": "1850-01-15", "variable": {"name": "months", "at_least": 99}},
+         "effects": [{"kind": "set_variable", "target": "late", "value": 1}]},
+        {"id": "late2", "when": {"before": "1850-03-15"},
+         "effects": [{"kind": "set_variable", "target": "late2", "value": 1}]}])"));
+    run_to(w, Date::from_ymd(1850, 3, 1));
+    CHECK(w.variable("months") == 2);
+    CHECK(w.variable("done") == 0);
+    run_to(w, Date::from_ymd(1850, 4, 1));
+    CHECK(w.variable("months") == 3);
+    CHECK(w.variable("done") == 7);
+    CHECK(w.variable("never") == 0);
+    CHECK(w.variable("late") == 0);  // its window closed before its counter was reached
+    CHECK(w.variable("late2") == 1); // inside its window
+}
+
+TEST_CASE("an event can wait on a goal, such as a connection") {
+    World w = small_world(with_events(R"([{"id": "rich", "when": {"goals": [{"kind": "company_cash", "amount": 1}]},
+        "effects": [{"kind": "set_variable", "target": "rich", "value": 1}]},
+        {"id": "joined", "when": {"goals": [{"kind": "connect_towns", "towns": ["Alpha", "Beta"]}]},
+        "effects": [{"kind": "set_variable", "target": "joined", "value": 1}]}])"));
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    CHECK(w.variable("rich") == 1);
+    CHECK(w.variable("joined") == 0);
+}

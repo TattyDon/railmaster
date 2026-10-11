@@ -23,7 +23,7 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 1;
+constexpr std::uint32_t kSaveVersion = 2; // 2: scenario events, the Grants ledger line
 
 class Writer {
 public:
@@ -323,10 +323,22 @@ void io(Ar& ar, MedalTier& t) {
     fields(ar, t.deadline, t.goals);
 }
 template <class Ar>
+void io(Ar& ar, EventCondition& c) {
+    fields(ar, c.after, c.before, c.goals, c.variable, c.at_least, c.chance_percent);
+}
+template <class Ar>
+void io(Ar& ar, EventEffect& f) {
+    fields(ar, f.kind, f.target, f.text, f.percent, f.months, f.amount, f.value);
+}
+template <class Ar>
+void io(Ar& ar, ScenarioEvent& e) {
+    fields(ar, e.id, e.when, e.effects, e.repeat_months);
+}
+template <class Ar>
 void io(Ar& ar, Scenario& s) {
     fields(ar, s.key, s.name, s.briefing, s.start, s.seed, s.map_size, s.rivals, s.territories, s.founder_fortune,
            s.founder_investment, s.outside_investment);
-    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals);
+    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals, s.events);
 }
 template <class Ar>
 void io(Ar& ar, ScenarioResult& r) {
@@ -414,7 +426,10 @@ void io(Ar& ar, World& w) {
         else ar.put(stack.size(), 8);
         for (auto& u : stack) fields(ar, u.edges, u.ends, u.first_new_node);
     }
-    fields(ar, w.scenario_, w.scenario_result_);
+    fields(ar, w.scenario_, w.scenario_result_, w.event_month_, w.variables_);
+    if constexpr (Ar::loading) w.modifiers_.assign(ar.count(1), {});
+    else ar.put(w.modifiers_.size(), 8);
+    for (auto& m : w.modifiers_) fields(ar, m.kind, m.target, m.percent, m.until_month);
 }
 
 World::World(LoadTag, GameData data)
@@ -452,6 +467,11 @@ World World::load(std::string_view bytes, GameData data) {
     io(ar, w);
     if (!ar.done()) throw std::runtime_error("save: unexpected data at the end of the file");
     w.railway_.set_balance(w.data_.balance); // its copy of the balance, as for the parts below
+    // Event effects in force are rebuilt on the data as loaded.
+    w.base_cargo_ = w.data_.cargo;
+    w.base_industries_ = w.data_.industries;
+    w.base_locos_ = w.data_.locomotives;
+    w.apply_modifiers();
     return w;
 }
 

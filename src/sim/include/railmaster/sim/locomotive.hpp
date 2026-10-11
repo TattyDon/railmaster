@@ -57,6 +57,7 @@ public:
 
     const std::vector<LocomotiveType>& all() const { return types_; }
     const LocomotiveType& get(LocoTypeId id) const { return types_.at(id); }
+    LocomotiveType& get_mut(LocoTypeId id) { return types_.at(id); } // for scenario events
     std::optional<LocoTypeId> find(std::string_view key) const;
 
 private:
