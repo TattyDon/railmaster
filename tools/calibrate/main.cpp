@@ -188,6 +188,20 @@ void price_field(const GameData& data) {
 }
 
 // B: the demo network, ten years, six maps (fewer are too noisy to judge by).
+// Maps where the demo network could be built, and maps tried, in all eras.
+int demo_built = 0, demo_tried = 0;
+
+bool try_demo(World& w) {
+    ++demo_tried;
+    try {
+        build_demo_network(w);
+    } catch (const std::exception&) {
+        return false;
+    }
+    ++demo_built;
+    return true;
+}
+
 void demo_network(const GameData& data) {
     double roi = 0, revenue = 0, growth = 0, price = 0, to_book = 0, grade = 0;
     int n = 0;
@@ -195,11 +209,7 @@ void demo_network(const GameData& data) {
         WorldConfig cfg;
         cfg.seed = seed;
         World w(cfg, data);
-        try {
-            build_demo_network(w);
-        } catch (const std::exception&) {
-            continue;
-        }
+        if (!try_demo(w)) continue;
         const Company& c = w.company();
         const Money invested = c.track_value() + c.building_value() + c.rolling_stock_value();
         std::vector<std::pair<std::size_t, std::int64_t>> served;
@@ -238,6 +248,35 @@ void demo_network(const GameData& data) {
            "spec §12.3 [C]: book value per share is the main anchor");
     report("demo network: credit grade (0 = A+, 4 = B)", grade, 0, 4, "worst",
            "spec §12.4 [C]: a profitable railroad can borrow");
+}
+
+// B2: the demo network started in later eras, four years, the same six
+// maps: the fastest steam or diesel engine of the day, the era's car
+// weights, fares, fuel and passenger volumes.
+void demo_later_eras(const GameData& data) {
+    for (const std::int32_t year : {1900, 1950}) {
+        double roi = 0;
+        int n = 0;
+        for (const std::uint64_t seed : {1u, 2u, 3u, 4u, 5u, 6u}) {
+            WorldConfig cfg;
+            cfg.seed = seed;
+            cfg.start_date = Date::from_ymd(year, 1, 1);
+            World w(cfg, data);
+            if (!try_demo(w)) continue;
+            const Company& c = w.company();
+            const Money invested = c.track_value() + c.building_value() + c.rolling_stock_value();
+            run_years(w, 4);
+            Money profit;
+            for (std::int32_t y = year + 1; y <= year + 3; ++y) profit += year_of(c, y).profit();
+            roi += dollars(profit) / 3 / std::max(1.0, dollars(invested));
+            ++n;
+        }
+        if (n == 0) continue;
+        report("demo network from " + std::to_string(year) + ": return", roi / n * 100, 4, 20, "%/yr",
+               "[I] as from 1830");
+    }
+    report("demo network: maps it can be built on", demo_tried ? 100.0 * demo_built / demo_tried : 0, 100, 100, "%",
+           "every map, every era");
 }
 
 // C: three AI rivals, five years, on six maps (one map's three rivals were
@@ -284,6 +323,7 @@ int main(int argc, char** argv) {
     economy_alone(data);
     price_field(data);
     demo_network(data);
+    demo_later_eras(data);
     rivals(data);
     int bad = 0;
     std::printf("%-44s %14s %22s  %s\n", "metric", "value", "target", "source");

@@ -100,6 +100,11 @@ Still to do:
 - Transfers of express loads between trains.
 - Warehouse cargo conversion.
 
+Later eras are calibrated too: the demo network started in 1900 and 1950
+runs the era's fastest steam or diesel engine and returns about what it
+does from 1830, helped by the spec's era factor on passenger and mail
+spawning and rarer breakdowns ([spec/calibration.md](spec/calibration.md)).
+
 Done since: territories (rt3-clone-spec §3.3): access rights to build,
 territory fees, station-cost, overhead and credit modifiers, closed borders
 for middlemen, a generator for new maps and rivals that buy access.

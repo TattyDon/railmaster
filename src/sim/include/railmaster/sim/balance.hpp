@@ -84,7 +84,11 @@ struct Balance {
     } servicing;
 
     struct Breakdowns {
-        std::int64_t mean_distance_mm = 2'000'000'000; // at reliability 100, full oil
+        // Mean distance between breakdowns at reliability 100 with full oil.
+        // RT2's Near Perfect engines run about 24,000 cells (19,300 km)
+        // between breakdowns [RL, trains-track-operations §1.5]; ours is
+        // reliability 300, so 100 runs a third as far [I].
+        std::int64_t mean_distance_mm = 6'400'000'000;
         std::int32_t empty_oil_multiplier = 4;
         // A breakdown stops the train for 3-10 days and costs 5% of the
         // engine's price to repair (rt3-clone-spec §9.4 [I]).
@@ -265,6 +269,10 @@ struct Balance {
         std::int32_t year = 1830;
         std::int32_t mph = 15;
     };
+    struct YearPercent {
+        std::int32_t year = 1830;
+        std::int32_t percent = 100;
+    };
 
     struct Express {
         std::int32_t attraction_half = 2; // destination pull, in loads a year of house demand
@@ -284,6 +292,11 @@ struct Balance {
         std::int32_t speed_factor_max_permille = 1500;
         std::vector<ReferenceSpeed> reference_speeds{
             {1830, 14}, {1870, 29}, {1910, 46}, {1950, 63}, {1990, 92}, {2030, 126}};
+        // Towns make more passengers and mail in later eras (rt3-clone-spec
+        // §8.3: spawning x an era factor [I]), in percent, interpolated
+        // between the listed years.
+        std::vector<YearPercent> era_volume_percent{
+            {1830, 100}, {1870, 105}, {1910, 115}, {1950, 135}, {1990, 150}, {2030, 165}};
     } express;
 
     // Town growth (rt3-clone-spec §6.4 [I]), per year: a base rate, plus a
@@ -379,6 +392,12 @@ struct Balance {
         std::int32_t recession_reserve_percent = 100;
         std::int32_t recession_cut_percent = 50;
     } ai;
+
+    // The demo network the client opens with and calibration measures
+    // (demo.hpp, [I]): the share of the company's cash its track may cost.
+    struct Demo {
+        std::int32_t track_budget_percent = 60;
+    } demo;
 
     struct Finance {
         // Fuel per km for a train of the reference weight behind an engine

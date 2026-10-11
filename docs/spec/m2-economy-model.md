@@ -214,7 +214,13 @@ How we implement them (code: `freight.hpp`):
 
 1. **Generation (daily).** For each station, *production* is the summed
    yearly rate of catchment sites that output the cargo (houses: 0.1 per
-   house) × the cargo's `generation` multiplier. For every station sharing a
+   house) × the cargo's `generation` multiplier × an era factor
+   (rt3-clone-spec §8.3 [I]: 100% in 1830, 105% in 1870, 115% in 1910,
+   135% in 1950, 150% in 1990 and 165% in 2030, interpolated between;
+   `express.era_volume_percent`). The factor keeps later eras as
+   profitable as the 1830s: faster trains run more kilometres, and so pay
+   more fuel and break down more, for passengers a town makes at the same
+   rate. For every station sharing a
    train route with it, add production × A ÷ (A + 2) per year to the
    waiting pool for that destination, where A is the destination's
    *attraction*: the summed rate of its catchment sites that take the cargo.

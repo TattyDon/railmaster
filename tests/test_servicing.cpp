@@ -164,8 +164,8 @@ TEST_CASE("breakdowns happen at roughly the expected rate and stop the train") {
     l.rw.add_service_building(ServiceType::ServiceTower, l.nodes[400]);
     const TrainId t = l.rw.add_train(kSteam, 0, {l.west, l.east});
 
-    run_until(l.rw, reg, t, 40); // 40 trips of 500 km = 20,000 km
-    // About 10 expected at one per 2,000 km with oil kept high; allow wide variance.
+    run_until(l.rw, reg, t, 128); // 128 trips of 500 km = 64,000 km
+    // About 10 expected at one per 6,400 km with oil kept high; allow wide variance.
     const auto n = l.rw.train(t).breakdowns;
     CHECK(n >= 3);
     CHECK(n <= 25);

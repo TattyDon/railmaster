@@ -140,6 +140,16 @@ Money express_fare(const CargoType& c, const Railway& rw, StationId from, Statio
     return express_base_fare(c, mm, rw.balance());
 }
 
+std::int32_t express_era_percent(std::int32_t year, const Balance& b) {
+    const auto& r = b.express.era_volume_percent;
+    if (year <= r.front().year) return r.front().percent;
+    for (std::size_t i = 1; i < r.size(); ++i) {
+        if (year > r[i].year) continue;
+        return r[i - 1].percent + (r[i].percent - r[i - 1].percent) * (year - r[i - 1].year) / (r[i].year - r[i - 1].year);
+    }
+    return r.back().percent;
+}
+
 std::int32_t reference_speed_mph(std::int32_t year, const Balance& b) {
     const auto& r = b.express.reference_speeds;
     if (year <= r.front().year) return r.front().mph;
@@ -276,6 +286,7 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         }
     }
     const auto reach = express_reach(route_partners(rw));
+    const std::int32_t era_percent = express_era_percent(year, rw.balance());
     for (const CargoType& c : cargo.all()) {
         if (c.cargo_class != CargoClass::Express || c.generation <= 0 || year < c.available_year) continue;
         std::vector<std::int64_t> attraction(n_stations);
@@ -285,7 +296,8 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         for (StationId sid = 0; sid < n_stations; ++sid) {
             const std::int64_t produced = catchment_rate(eco, rw, industries, rw.station(sid), c.id, true);
             if (produced == 0) continue;
-            const std::int64_t daily = produced * c.generation * c.demand_percent / 100 / 365; // produced is already in thousandths
+            // produced is already in thousandths
+            const std::int64_t daily = produced * c.generation * c.demand_percent / 100 * era_percent / 100 / 365;
             for (StationId dest : reach[sid]) {
                 const std::int64_t a = attraction[dest];
                 if (a == 0) continue;

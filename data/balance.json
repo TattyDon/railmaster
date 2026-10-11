@@ -28,7 +28,7 @@
     "empty_oil_multiplier": 4,
     "maintenance_age_percent_per_year": 4,
     "maintenance_no_oil_percent": 150,
-    "mean_distance_mm": 2000000000,
+    "mean_distance_mm": 6400000000,
     "repair_cost_percent": 5
   },
   "corporate": {
@@ -42,6 +42,9 @@
     "takeover_base_support_permille": 250,
     "takeover_below_book_permille": 250,
     "takeover_loss_year_permille": 250
+  },
+  "demo": {
+    "track_budget_percent": 60
   },
   "economic_states": {
     "activity_percent": [
@@ -119,6 +122,32 @@
   "express": {
     "attraction_half": 2,
     "cap_milli": 20000,
+    "era_volume_percent": [
+      {
+        "percent": 100,
+        "year": 1830
+      },
+      {
+        "percent": 105,
+        "year": 1870
+      },
+      {
+        "percent": 115,
+        "year": 1910
+      },
+      {
+        "percent": 135,
+        "year": 1950
+      },
+      {
+        "percent": 150,
+        "year": 1990
+      },
+      {
+        "percent": 165,
+        "year": 2030
+      }
+    ],
     "fare_distance_exponent_permille": 900,
     "fare_reference_km": 50,
     "mail_cap_months": 2,

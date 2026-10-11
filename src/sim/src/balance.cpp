@@ -34,6 +34,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stations, small_cost, m
                                                 post_office_cost, hotel_cost, restaurant_cost, tavern_cost,
                                                 hotel_per_load_day, restaurant_per_load, tavern_per_load,
                                                 wait_loss_percent)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::YearPercent, year, percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Economy, cargo_price_unit, neutral_price_percent,
                                                 price_alpha_permille, price_epsilon_milli, town_demand_days,
                                                 industry_demand_days, supply_days, price_floor_percent,
@@ -72,7 +73,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::ReferenceSpeed, year, m
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,
                                                 wait_loss_per_mille_per_sensitivity, mail_cap_months,
                                                 fare_reference_km, fare_distance_exponent_permille,
-                                                speed_factor_min_permille, speed_factor_max_permille, reference_speeds)
+                                                speed_factor_min_permille, speed_factor_max_permille, reference_speeds,
+                                                era_volume_percent)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Demo, track_budget_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_route_km, build_interval_months_min,
                                                 build_interval_months_max, cash_reserve, candidates_previewed,
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
@@ -128,6 +131,7 @@ nlohmann::json to_tree(const Balance& b) {
     j["industries"] = b.industries;
     j["economic_states"] = b.economic_states;
     j["ai"] = b.ai;
+    j["demo"] = b.demo;
     j["finance"] = b.finance;
     j["stock"] = b.stock;
     j["corporate"] = b.corporate;
@@ -182,6 +186,7 @@ Balance Balance::from_json(std::string_view json_text) {
         read_section(j, "industries", b.industries);
         read_section(j, "economic_states", b.economic_states);
         read_section(j, "ai", b.ai);
+        read_section(j, "demo", b.demo);
         read_section(j, "finance", b.finance);
         read_section(j, "stock", b.stock);
         read_section(j, "corporate", b.corporate);
@@ -193,6 +198,12 @@ Balance Balance::from_json(std::string_view json_text) {
     for (std::size_t i = 0; i < w.size(); ++i) {
         if (w[i].freight_tons <= 0) throw std::runtime_error("balance: car weights must be positive");
         if (i > 0 && w[i].from_year <= w[i - 1].from_year) throw std::runtime_error("balance: car_weights years must rise");
+    }
+    const auto& ep = b.express.era_volume_percent;
+    if (ep.empty()) throw std::runtime_error("balance: express.era_volume_percent needs at least one era");
+    for (std::size_t i = 0; i < ep.size(); ++i) {
+        if (ep[i].percent <= 0) throw std::runtime_error("balance: era_volume_percent must be positive");
+        if (i > 0 && ep[i].year <= ep[i - 1].year) throw std::runtime_error("balance: era_volume_percent years must rise");
     }
     const auto& rs = b.express.reference_speeds;
     if (rs.empty()) throw std::runtime_error("balance: express.reference_speeds needs at least one era");

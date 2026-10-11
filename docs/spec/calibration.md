@@ -1,9 +1,9 @@
 # Calibration
 
 `railmaster_calibrate` (built from `tools/calibrate/`) runs a few headless
-games and scores seventeen metrics against the spec's targets. It exits 0
+games and scores twenty metrics against the spec's targets. It exits 0
 when every metric is in range and 1 otherwise, so it can gate a balance
-change. A run takes about two minutes.
+change. A run takes about five minutes.
 
 ```sh
 cmake --build build
@@ -18,6 +18,7 @@ cmake --build build
 | Economy alone | Seed 1, two years, no railway | Producer output, processor capacity, producer prices |
 | Price field | A strip of 48 × 9 economy nodes (2 × 2 cells each), flat or mountainous; a coal mine and a power plant 30 cells apart, a mine alone, or a new plant | Middleman speed, spread with no demand, how fast the price map reshapes |
 | Demo network | The client's opening network (`sim::build_demo_network`), seeds 1 to 6, ten years | Return on capital, revenue, town growth, share price |
+| Later eras | The demo network started in 1900 and in 1950, seeds 1 to 6, four years | Return on capital; that it can be built on every map |
 | Rivals | Seeds 1 to 6, three AI tycoons each, five years | Share of rivals in profit, rival revenue, station-building income |
 
 ## Targets
@@ -37,6 +38,9 @@ cmake --build build
 | Demo share price after ten years | $15–120 | §12.3 [C]: typically $50–100 |
 | Demo price ÷ book value per share | 0.8–2.5 | §12.3 [C]: book value per share is the main anchor |
 | Demo company's credit grade, worst seed | A+ to B | §12.4 [C]: a profitable railroad can borrow |
+| Demo return from 1900, years 2–4 | 4–20% a year | [I], as from 1830 |
+| Demo return from 1950, years 2–4 | 4–20% a year | [I], as from 1830 |
+| Maps the demo network can be built on, all eras | 100% | it must not silently skip a map |
 | Rivals in profit in year 5 | 60–100% | §13 [I]: a competent AI |
 | Rival revenue, year 5 | $200K–$5M a year | [I], as the demo network |
 | Rival revenue from freight, year 5 | 10–80% | §13 [I]: the planner weighs city pairs and industry–consumer pairs alike |
@@ -132,6 +136,25 @@ destinations. The demo network, a single triangle, barely moved (return
 With rivers on the map, every generated map changed. The demo's revenue
 rose to $614K a year and its return settled at 9.5%. The rivals were
 about the same ($2.1M, 33% freight).
+
+With later eras measured, three problems showed. The demo network took the
+first engine of the year, so it ran a slow Fairlie in 1900 and an electric
+engine (on unelectrified track) in 1950. It now takes the fastest steam or
+diesel engine hauling four cars up 1%, as rivals do. It could not pay for
+its track on half the maps since rivers and tunnels came in, and the tool
+skipped those maps silently. It now chooses, among each town and its two
+nearest, the triangle with the most houses whose track and territory
+access cost at most 60% of its cash (`demo.track_budget_percent`), and
+builds each line by the cheapest of its tunnel settings. A map it cannot
+build on now counts against it. Finally, the returns fell with the era:
+about 13% from 1830, 10% from 1900 and 4% from 1950. Faster trains run
+more kilometres for the same passengers, so they burn more fuel and broke
+down far more often: once per 2,000 km, six times a year for a 1950
+express. Breakdowns are now once per 6,400 km at reliability 100, a third
+of RT2's Near Perfect figure [RL]. The spec's era factor on passenger and
+mail spawning (§8.3), absent until now, rises from 100% in 1830 to 135% in
+1950. The demo now returns 12.5% from 1830, 15.4% from 1900 and 14.8% from
+1950; its other metrics and the rivals' are as before.
 
 ## What changed
 

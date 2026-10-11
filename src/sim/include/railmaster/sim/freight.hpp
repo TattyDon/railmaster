@@ -65,6 +65,9 @@ Money express_fare(const CargoType& c, const Railway& rw, StationId from, Statio
 Money express_base_fare(const CargoType& c, std::int64_t distance_mm, const Balance& b = default_balance());
 // The era's reference express speed, in mph.
 std::int32_t reference_speed_mph(std::int32_t year, const Balance& b = default_balance());
+// How many more passengers and mail towns make than in 1830, in percent
+// (rt3-clone-spec §8.3: spawning x an era factor [I]).
+std::int32_t express_era_percent(std::int32_t year, const Balance& b = default_balance());
 // Speed factor, in thousandths: the trip's time at the reference speed over
 // its actual time, within the balance's bounds.
 std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t ticks, std::int32_t year,
