@@ -65,6 +65,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §14.4 [C] | Scenario events: conditions (date, goals, counters, chance) and effects (news, cash, cargo prices, passenger demand, production, costs, engines, territory offers, counters, briefing), optionally timed | none | as described in [scenarios.md](scenarios.md); counters are game-wide only |
 | §11.3 [C], §14.3 [I] | Restrictions: track-tile budget (double counts two, yearly grant, optional bulldoze refund), no unconnected track, one company only, purchase bans, cannot resign | chair locks only | as the spec, for every company; tiles are map cells of track length |
 | §8.4 [D/C], §9.4 [I], §11.2 [D] | AI revenue bonus by difficulty; breakdowns of 3–10 days costing 5% of the engine; double-track upgrades at +90% | rivals shared the player's modifier; 2-day breakdowns, free; no upgrades | as the spec ([m1-provisional-models.md](m1-provisional-models.md), [m3-finance-model.md](m3-finance-model.md)) |
+| §11.2 [D/I] | Crossing lines stop each other at level crossings; overpasses (4×) separate them | lines passed through each other | level crossings taken in turn by rank; overpasses per line when building ([m1-provisional-models.md](m1-provisional-models.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -100,7 +101,7 @@ Grouped by the spec's own build order (§17).
 
 **Trains and track**
 - Measured per-locomotive numbers to replace ours (§17 items 1 and 4).
-- Overpasses: crossing lines do not interact at all yet (§11.2 [D]).
+- Bridge, tunnel and overpass frequency settings (Common to Never); overpasses are all or nothing per line (§11.2 [D]).
 
 **Economy**
 - Rivers in the map generator, and closed borders (conductance 0) (§5.3).

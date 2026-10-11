@@ -10,7 +10,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::CarWeight, from_year, f
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Trains, seconds_per_tick, station_dwell_ticks,
                                                 load_slowdown_permille, min_load_speed_permille,
                                                 min_grade_speed_permille, reference_cars, express_permille_of_freight,
-                                                car_weights, curve_comfort_radius_mm, follow_distance_mm, follow_gap_mm,
+                                                car_weights, curve_comfort_radius_mm, follow_distance_mm, follow_gap_mm, crossing_clear_mm,
                                                 min_curve_speed_permille,
                                                 wood_bridge_speed_permille, other_bridge_speed_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Servicing, water_range_mm, sand_range_climb_mm, oil_range_mm,
@@ -27,7 +27,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Track, default_max_grad
                                                 steel_bridge_multiple, stone_bridge_multiple,
                                                 suspension_bridge_multiple, tunnel_multiple, double_track_percent, electrify_percent,
                                                 suspension_min_span_mm, remove_refund_percent, undo_depth,
-                                                double_upgrade_percent)
+                                                double_upgrade_percent, overpass_multiple)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Stations, small_cost, medium_cost, large_cost,
                                                 catchment_small, catchment_medium, catchment_large,
                                                 gather_percent_per_day, cap_milli, town_reach_cells, building_range_mm,

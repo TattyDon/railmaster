@@ -1,12 +1,52 @@
 #include "railmaster/sim/track.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <queue>
 #include <stdexcept>
 #include <utility>
 
 namespace railmaster::sim {
+
+namespace {
+
+// Which side of line ab point p lies on: +1, -1, or 0 on the line.
+int side(MapPoint a, MapPoint b, MapPoint p) {
+    const std::int64_t c = (b.x_mm - a.x_mm) * (p.y_mm - a.y_mm) - (b.y_mm - a.y_mm) * (p.x_mm - a.x_mm);
+    return (c > 0) - (c < 0);
+}
+
+} // namespace
+
+std::optional<MapPoint> segment_crossing(MapPoint a, MapPoint b, MapPoint c, MapPoint d) {
+    const int ca = side(c, d, a), cb = side(c, d, b), ac = side(a, b, c), ad = side(a, b, d);
+    if (ca == 0 || cb == 0 || ac == 0 || ad == 0 || ca == cb || ac == ad) return std::nullopt;
+    // Halve ab until the crossing is pinned to a millimetre: integer only,
+    // so every machine finds the same point.
+    MapPoint lo = a, hi = b;
+    for (int i = 0; i < 64 && std::max(std::abs(hi.x_mm - lo.x_mm), std::abs(hi.y_mm - lo.y_mm)) > 1; ++i) {
+        const MapPoint mid{lo.x_mm + (hi.x_mm - lo.x_mm) / 2, lo.y_mm + (hi.y_mm - lo.y_mm) / 2};
+        if (side(c, d, mid) == ca) lo = mid;
+        else hi = mid;
+    }
+    return lo;
+}
+
+std::optional<MapPoint> segment_meeting(MapPoint a, MapPoint b, MapPoint c, MapPoint d) {
+    const int ca = side(c, d, a), cb = side(c, d, b), ac = side(a, b, c), ad = side(a, b, d);
+    if (ca == 0 && cb == 0) return std::nullopt; // along the same line
+    if (ca * cb > 0 || ac * ad > 0) return std::nullopt;
+    const auto within = [](MapPoint p, MapPoint s, MapPoint e) {
+        return p.x_mm >= std::min(s.x_mm, e.x_mm) && p.x_mm <= std::max(s.x_mm, e.x_mm) &&
+               p.y_mm >= std::min(s.y_mm, e.y_mm) && p.y_mm <= std::max(s.y_mm, e.y_mm);
+    };
+    if (ca == 0) return within(a, c, d) ? std::optional<MapPoint>{a} : std::nullopt;
+    if (cb == 0) return within(b, c, d) ? std::optional<MapPoint>{b} : std::nullopt;
+    if (ac == 0) return within(c, a, b) ? std::optional<MapPoint>{c} : std::nullopt;
+    if (ad == 0) return within(d, a, b) ? std::optional<MapPoint>{d} : std::nullopt;
+    return segment_crossing(a, b, c, d);
+}
 
 NodeId TrackNetwork::add_node(MapPoint pos, std::int64_t z_mm) {
     const auto id = static_cast<NodeId>(nodes_.size());

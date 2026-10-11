@@ -93,7 +93,7 @@ and checks the economy against the spec's targets
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Over a train (Inspect) | F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). Each applies to every stop |
-| D, C, [ ] (Track) | Double track, curves on/off, tunnel preference |
+| D, C, G, [ ] (Track) | Double track, curves on/off, overpasses on/off (a line crossing others otherwise meets them at level crossings, where trains take turns), tunnel preference |
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | Ctrl+Z (Track) | Undo the last run of track, at full refund, until you leave the Track tool |
 | U (Track) | Double the run of single track under the cursor, at 90% of laying it again (dearer than building double at once) |

@@ -192,6 +192,14 @@ struct Train {
     std::size_t slots_at(std::size_t i) const;
 };
 
+// Where two lines cross without joining (rt3-clone-spec §11.2 [D]). At a
+// level crossing trains take turns; an overpass lets both run on.
+struct Crossing {
+    EdgeId a = 0, b = 0;
+    MapPoint at{};
+    bool overpass = false;
+};
+
 // Game rules that change how trains are operated.
 struct OperatingRules {
     // RT3's sandbox has "allow breakdown/crash for locomotives", off by
@@ -259,6 +267,8 @@ public:
     // over them find another at the end of the piece they are on; callers
     // must not remove a piece a train is on (see train_on).
     void remove_edges(const std::vector<EdgeId>& edges);
+    void add_crossing(Crossing c) { crossings_.push_back(c); }
+    const std::vector<Crossing>& crossings() const { return crossings_; }
     // The train standing or running on a piece of track, if any.
     std::optional<TrainId> train_on(EdgeId e) const;
     // The run of track a piece belongs to: it and its neighbours out to the
@@ -344,6 +354,9 @@ private:
     std::vector<std::pair<TrainId, StationId>> arrivals_;
     std::vector<TrainId> crashes_;
     std::vector<TrainId> breakdowns_;
+    std::vector<Crossing> crossings_;
+    // How far t may go before the first level crossing it must wait at, if any.
+    std::optional<std::int64_t> crossing_stop(const Train& t) const;
     std::int32_t today_ = 0;
     std::int32_t year_ = Date::kEpochYear;
     OperatingRules rules_;

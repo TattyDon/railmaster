@@ -23,7 +23,7 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 4; // 2: scenario events, the Grants ledger line; 3: restrictions; 4: breakdowns
+constexpr std::uint32_t kSaveVersion = 5; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings
 
 class Writer {
 public:
@@ -221,6 +221,10 @@ void io(Ar& ar, Station& s) {
            s.passengers_boarded_milli, s.passengers_arrived_milli, s.passengers_waiting_milli_days);
 }
 template <class Ar>
+void io(Ar& ar, Crossing& c) {
+    fields(ar, c.a, c.b, c.at, c.overpass);
+}
+template <class Ar>
 void io(Ar& ar, StationBuilding& b) {
     fields(ar, b.id, b.type, b.owner, b.pos);
 }
@@ -382,7 +386,7 @@ void io(Ar& ar, TrackNetwork& n) {
 template <class Ar>
 void io(Ar& ar, Railway& r) {
     fields(ar, r.track_, r.stations_, r.service_buildings_, r.station_buildings_, r.trains_, r.arrivals_, r.crashes_,
-           r.breakdowns_,
+           r.breakdowns_, r.crossings_,
            r.today_, r.year_, r.rules_.breakdowns, r.rng_);
 }
 

@@ -65,6 +65,16 @@ struct TrackPlan {
     std::vector<PlannedPiece> pieces;
     bool double_track = false;
     Money total_cost;
+    // Where it crosses existing track at ground level (rt3-clone-spec §11.2):
+    // level crossings, or overpasses when asked for (the piece then costs
+    // more; see World::preview).
+    struct Crossing {
+        std::size_t piece = 0; // index into pieces
+        EdgeId edge = 0;       // the track it crosses
+        MapPoint at{};
+    };
+    std::vector<Crossing> crossings{};
+    bool overpasses = false;
 };
 
 struct PlanResult {

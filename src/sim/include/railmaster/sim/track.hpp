@@ -63,6 +63,13 @@ struct EdgePoint {
     std::int64_t along_mm = 0; // distance from edge.a
 };
 
+// Where segment ab crosses segment cd strictly inside both (not at or
+// through an end, not along a shared line), if it does; to the millimetre.
+std::optional<MapPoint> segment_crossing(MapPoint a, MapPoint b, MapPoint c, MapPoint d);
+// As segment_crossing, but also where one passes through the other's end
+// (two lines with pieces ending at the same spot still cross there).
+std::optional<MapPoint> segment_meeting(MapPoint a, MapPoint b, MapPoint c, MapPoint d);
+
 class TrackNetwork {
 public:
     NodeId add_node(MapPoint pos, std::int64_t z_mm);

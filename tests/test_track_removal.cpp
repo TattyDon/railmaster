@@ -274,3 +274,107 @@ TEST_CASE("a breakdown costs 5% of the engine's price to repair (§9.4 [I])") {
     CHECK(w.company().history().back().lines[static_cast<std::size_t>(Ledger::TrainMaintenance)] ==
           Money::dollars(5'000) * n);
 }
+
+TEST_CASE("segments cross only strictly inside both") {
+    const auto at = segment_crossing({0, 0}, {10'000, 10'000}, {0, 10'000}, {10'000, 0});
+    REQUIRE(at.has_value());
+    CHECK(std::abs(at->x_mm - 5'000) <= 1);
+    CHECK(std::abs(at->y_mm - 5'000) <= 1);
+    CHECK_FALSE(segment_crossing({0, 0}, {10'000, 0}, {5'000, 0}, {5'000, 9'000}).has_value()); // a T: touching
+    CHECK_FALSE(segment_crossing({0, 0}, {10'000, 0}, {0, 1'000}, {10'000, 1'000}).has_value()); // parallel
+    CHECK_FALSE(segment_crossing({0, 0}, {10'000, 0}, {2'000, 0}, {8'000, 0}).has_value());     // along each other
+    CHECK_FALSE(segment_crossing({0, 0}, {4'000, 4'000}, {0, 10'000}, {10'000, 0}).has_value()); // short of it
+}
+
+namespace {
+
+// Two lines crossing at (15, 15): A west-east, then B north-south.
+World crossing_world(bool overpass, CommandResult* b_result = nullptr) {
+    World w = flat_world();
+    REQUIRE(w.execute(BuildTrack{.start = free_at(5, 15), .end = free_at(25, 15)}).ok);
+    const CommandResult b = w.execute(BuildTrack{.start = free_at(15, 5), .end = free_at(15, 25), .overpasses = overpass});
+    REQUIRE(b.ok);
+    if (b_result) *b_result = b;
+    return w;
+}
+
+} // namespace
+
+TEST_CASE("a line built across another meets it at a level crossing, or goes over for 4x the piece (§11.2)") {
+    CommandResult level, over;
+    const World flat = crossing_world(false, &level);
+    REQUIRE(flat.railway().crossings().size() == 1);
+    const Crossing& c = flat.railway().crossings().front();
+    CHECK_FALSE(c.overpass);
+    CHECK(std::abs(c.at.x_mm - 15 * kKm) <= 1);
+    CHECK(std::abs(c.at.y_mm - 15 * kKm) <= 1);
+    // The lines do not join: no path from one to the other.
+    const TrackNetwork& net = flat.railway().track();
+    CHECK_FALSE(net.shortest_path(*net.nearest_node({5 * kKm, 15 * kKm}, 10), *net.nearest_node({15 * kKm, 5 * kKm}, 10))
+                    .has_value());
+
+    const World lifted = crossing_world(true, &over);
+    REQUIRE(lifted.railway().crossings().size() == 1);
+    CHECK(lifted.railway().crossings().front().overpass);
+    // One 0.5 km piece at 4x instead of 1x: 3 x $25,000 x 0.5 more.
+    CHECK(over.cost - level.cost == Money::dollars(37'500));
+    // The preview says so before building.
+    World w = flat_world();
+    REQUIRE(w.execute(BuildTrack{.start = free_at(5, 15), .end = free_at(25, 15)}).ok);
+    const PlanResult plan = w.preview(BuildTrack{.start = free_at(15, 5), .end = free_at(15, 25)});
+    REQUIRE(plan.plan);
+    CHECK(plan.plan->crossings.size() == 1);
+}
+
+TEST_CASE("trains take turns at a level crossing, and run on at an overpass") {
+    // Two identical trains leave at once and reach the crossing together.
+    const auto arrivals = [](bool overpass) {
+        World w = crossing_world(overpass);
+        REQUIRE(w.execute(BuildStation{.at = node_at(w, 5, 15)}).ok);
+        REQUIRE(w.execute(BuildStation{.at = node_at(w, 25, 15)}).ok);
+        REQUIRE(w.execute(BuildStation{.at = node_at(w, 15, 5)}).ok);
+        REQUIRE(w.execute(BuildStation{.at = node_at(w, 15, 25)}).ok);
+        const TrainId a = w.execute(BuyTrain{.loco = 0, .cars = 0, .route = {0, 1}}).created_id;
+        const TrainId b = w.execute(BuyTrain{.loco = 0, .cars = 0, .route = {2, 3}}).created_id;
+        const auto arrived = [&](TrainId t) { return w.railway().train(t).at_node == w.railway().station(t == a ? 1 : 3).node; };
+        int at_a = 0, at_b = 0;
+        for (int tick = 1; tick < 5'000 && (at_a == 0 || at_b == 0); ++tick) {
+            w.tick();
+            if (at_a == 0 && arrived(a)) at_a = tick;
+            if (at_b == 0 && arrived(b)) at_b = tick;
+        }
+        REQUIRE(at_a > 0);
+        REQUIRE(at_b > 0);
+        return std::pair{at_a, at_b};
+    };
+    const auto [level_a, level_b] = arrivals(false);
+    const auto [over_a, over_b] = arrivals(true);
+    CHECK(over_a == over_b);   // over the bridge, neither waits
+    CHECK(level_a == over_a);  // the older train has right of way [D] ...
+    CHECK(level_b > over_b);   // ... and the other waits for it to clear
+}
+
+TEST_CASE("crossings follow splits and go with removed or undone track") {
+    World w = crossing_world(false);
+    const Crossing before = w.railway().crossings().front();
+    const TrackNetwork& net = w.railway().track();
+    // Branch from A between its west end of the crossing piece and the crossing.
+    const TrackEdge& piece = net.edge(before.a);
+    const MapPoint west = net.node(piece.a).pos.x_mm < net.node(piece.b).pos.x_mm ? net.node(piece.a).pos : net.node(piece.b).pos;
+    const MapPoint split{(west.x_mm + before.at.x_mm) / 2, before.at.y_mm};
+    REQUIRE(w.execute(BuildTrack{.start = {TrackEnd::Kind::OnEdge, 0, before.a, split}, .end = free_at(10, 25)}).ok);
+    REQUIRE(w.railway().crossings().size() == 1);
+    const Crossing& after = w.railway().crossings().front();
+    // The crossing is on whichever half now holds its point.
+    const TrackEdge& holder = net.edge(after.a);
+    const MapPoint p = net.node(holder.a).pos, q = net.node(holder.b).pos;
+    CHECK(std::min(p.x_mm, q.x_mm) <= after.at.x_mm);
+    CHECK(std::max(p.x_mm, q.x_mm) >= after.at.x_mm);
+
+    REQUIRE(w.execute(UndoTrack{}).ok); // the branch
+    REQUIRE(w.execute(UndoTrack{}).ok); // line B, and its crossing with it
+    CHECK(w.railway().crossings().empty());
+    // Saved games keep them.
+    World again = crossing_world(false);
+    CHECK(World::load(again.save(), test_data()).railway().crossings().size() == 1);
+}

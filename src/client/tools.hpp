@@ -75,6 +75,7 @@ private:
     std::optional<sim::TrackEnd> track_start_;
     bool double_track_ = false;
     bool curves_ = true;
+    bool overpasses_ = false; // lift new track over the lines it crosses
     std::int32_t tunnel_preference_ = 50;
 
     sim::StationSize station_size_ = sim::StationSize::Medium;

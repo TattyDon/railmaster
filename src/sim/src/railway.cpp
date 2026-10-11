@@ -220,6 +220,12 @@ NodeId Railway::split_edge(EdgeId e, MapPoint at) {
         t.step = new_step;
         t.offset_mm = new_offset;
     }
+    // Crossings on the far half now belong to the new piece.
+    const MapPoint a = track_.node(track_.edge(e).a).pos;
+    for (Crossing& c : crossings_) {
+        for (EdgeId* side : {&c.a, &c.b})
+            if (*side == e && distance_mm(a, c.at) > len_first) *side = second;
+    }
     return mid;
 }
 
@@ -448,6 +454,7 @@ bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco) {
 
 void Railway::remove_edges(const std::vector<EdgeId>& edges) {
     for (EdgeId e : edges) track_.remove_edge(e);
+    std::erase_if(crossings_, [&](const Crossing& c) { return track_.edge(c.a).removed || track_.edge(c.b).removed; });
     for (Train& t : trains_) {
         if (!on_path(t.state)) continue;
         for (std::size_t i = t.step + 1; i < t.path.size(); ++i) {
@@ -502,6 +509,54 @@ void Railway::arrive_at_stop(Train& t) {
     t.wait_ticks_left = balance_.trains.station_dwell_ticks;
     ++t.stops_made;
     arrivals_.emplace_back(t.id, t.route[t.stop_index]);
+}
+
+std::optional<std::int64_t> Railway::crossing_stop(const Train& t) const {
+    if (crossings_.empty()) return std::nullopt;
+    const std::int64_t clear = balance_.trains.crossing_clear_mm;
+    const std::int64_t reach = t.speed_mm_per_tick + clear + 1;
+    std::int64_t before = -t.offset_mm; // from t to the start of step i
+    for (std::size_t i = t.step; i < t.path.size() && before <= reach; ++i) {
+        const PathStep s = t.path[i];
+        const TrackEdge& e = track_.edge(s.edge);
+        for (const Crossing& c : crossings_) {
+            if (c.overpass || (c.a != s.edge && c.b != s.edge)) continue;
+            const std::int64_t along = distance_mm(track_.node(e.a).pos, c.at);
+            const std::int64_t d = before + (s.forward ? along : e.length_mm - along); // to the crossing
+            if (d <= clear || d - clear > reach) continue; // inside it already, or far off
+            const EdgeId other = c.a == s.edge ? c.b : c.a;
+            const std::int64_t other_along = distance_mm(track_.node(track_.edge(other).a).pos, c.at);
+            for (const Train& o : trains_) {
+                // A train ghosting through a meet blocks nobody [D].
+                if (o.id == t.id || !on_path(o.state) || o.yielding) continue;
+                // How far o has left to the crossing, negative once past. A
+                // crossing at a node is recorded on one of the two pieces
+                // that meet there, so look a piece either side of o.
+                std::optional<std::int64_t> left;
+                const std::int64_t here_len = track_.edge(o.path[o.step].edge).length_mm;
+                for (std::size_t j = o.step == 0 ? 0 : o.step - 1; j <= o.step + 1 && j < o.path.size(); ++j) {
+                    const PathStep os = o.path[j];
+                    if (os.edge != other) continue;
+                    const std::int64_t len = track_.edge(other).length_mm;
+                    const std::int64_t into = os.forward ? other_along : len - other_along; // from the step's start
+                    if (j == o.step) left = into - o.offset_mm;
+                    else if (j > o.step) left = here_len - o.offset_mm + into;
+                    else left = -(o.offset_mm + len - into);
+                    break;
+                }
+                if (!left) continue;
+                const std::int64_t ahead = *left;
+                // A tick is 40 s of travel: a train that passed within its
+                // last tick's run is still using the crossing.
+                const bool inside = ahead <= clear && ahead >= -(clear + o.speed_mm_per_tick);
+                // Coming up to it: the higher-ranked train goes first.
+                const bool arriving = ahead > clear && ahead - clear <= o.speed_mm_per_tick + 1 && outranks(o, t);
+                if (inside || arriving) return d - clear;
+            }
+        }
+        before += e.length_mm;
+    }
+    return std::nullopt;
 }
 
 std::vector<TrainId> Railway::take_breakdowns() { return std::exchange(breakdowns_, {}); }
@@ -592,6 +647,9 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         const std::int64_t room = std::max<std::int64_t>(0, leader->distance_mm - balance_.trains.follow_gap_mm);
         if (t.speed_mm_per_tick > room) t.speed_mm_per_tick = room;
     }
+
+    // Level crossings: wait short of one another line's train is using.
+    if (const auto stop = crossing_stop(t)) t.speed_mm_per_tick = std::min(t.speed_mm_per_tick, *stop);
 
     std::int64_t remaining = t.speed_mm_per_tick;
     std::int64_t travelled = 0;

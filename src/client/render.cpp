@@ -131,6 +131,28 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
     }
     glEnd();
 
+    // Crossings: a white cross where lines meet at level, a blue bar where
+    // one goes over the other.
+    {
+        const float k = 5.0f / cam.zoom; // five pixels, in tiles
+        for (const sim::Crossing& c : rw.crossings()) {
+            const float x = tiles(c.at.x_mm, cam), y = tiles(c.at.y_mm, cam);
+            glLineWidth(2.0f);
+            glBegin(GL_LINES);
+            if (c.overpass) {
+                glColor3f(0.4f, 0.75f, 1.0f);
+                glVertex2f(x - k, y - k);
+                glVertex2f(x + k, y + k);
+            } else {
+                glColor3f(1.0f, 1.0f, 1.0f);
+                glVertex2f(x - k, y - k);
+                glVertex2f(x + k, y + k);
+                glVertex2f(x - k, y + k);
+                glVertex2f(x + k, y - k);
+            }
+            glEnd();
+        }
+    }
     // Markers stay the same size on screen at any zoom.
     const float px = 1.0f / cam.zoom;
     glBegin(GL_QUADS);

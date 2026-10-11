@@ -62,6 +62,10 @@ struct Balance {
         // one ahead and comes no closer than follow_gap.
         std::int64_t follow_distance_mm = 2'000'000;
         std::int64_t follow_gap_mm = 500'000;
+        // Level crossings (rt3-clone-spec §11.2 [D]: crossing lines stop each
+        // other): a train keeps out of this distance either side of the
+        // crossing while a train on the other line is in it [I].
+        std::int64_t crossing_clear_mm = 300'000;
         std::int32_t min_curve_speed_permille = 250;
         std::int32_t wood_bridge_speed_permille = 500;
         std::int32_t other_bridge_speed_permille = 900;
@@ -125,6 +129,10 @@ struct Balance {
         // single track (rt3-clone-spec §11.2 [D/I]: +90% as an upgrade,
         // against +70% when built double).
         std::int32_t double_upgrade_percent = 90;
+        // An overpass lifts a piece of new track over the line it crosses:
+        // the piece costs this multiple of plain track (rt3-clone-spec §11.2
+        // [D/I]: 4x). Without one, the lines meet at a level crossing.
+        std::int32_t overpass_multiple = 4;
     } track;
 
     struct Stations {

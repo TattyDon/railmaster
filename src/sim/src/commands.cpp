@@ -85,9 +85,50 @@ PlanResult World::preview(const BuildTrack& cmd) const {
     const std::optional<std::int64_t> end_z =
         cmd.end.kind == TrackEnd::Kind::Free ? std::nullopt
                                              : std::optional<std::int64_t>{anchor_z(net, terrain_, cmd.end)};
-    return priced(plan_track_between(terrain_, cmd.start.pos, anchor_z(net, terrain_, cmd.start),
-                                     run_points(cmd, data_.balance), end_z, options_for(cmd, date_.year()),
-                                     data_.balance));
+    PlanResult r = priced(plan_track_between(terrain_, cmd.start.pos, anchor_z(net, terrain_, cmd.start),
+                                             run_points(cmd, data_.balance), end_z, options_for(cmd, date_.year()),
+                                             data_.balance));
+    if (r.plan) mark_crossings(*r.plan, cmd.start.pos, cmd.overpasses);
+    return r;
+}
+
+void World::mark_crossings(TrackPlan& plan, MapPoint start, bool overpasses) const {
+    const TrackNetwork& net = railway_.track();
+    plan.crossings.clear();
+    plan.overpasses = overpasses;
+    if (plan.points.empty()) return;
+    const MapPoint finish = plan.points.back();
+    MapPoint prev = start;
+    for (std::size_t i = 0; i < plan.pieces.size(); ++i) {
+        const MapPoint next = plan.points[i];
+        // Bridges and tunnels already pass at another level.
+        if (plan.pieces[i].kind == TrackKind::Ground) {
+            for (const TrackEdge& e : net.edges()) {
+                if (e.removed || e.kind != TrackKind::Ground) continue;
+                const auto at = segment_meeting(prev, next, net.node(e.a).pos, net.node(e.b).pos);
+                // Where the run starts or ends on track it joins rather than crosses it.
+                if (!at || *at == start || *at == finish) continue;
+                // One crossing per place, though pieces of either line may meet there twice.
+                const bool known = std::any_of(plan.crossings.begin(), plan.crossings.end(), [&](const TrackPlan::Crossing& c) {
+                    return std::abs(c.at.x_mm - at->x_mm) <= 2 && std::abs(c.at.y_mm - at->y_mm) <= 2;
+                });
+                if (!known) plan.crossings.push_back({i, e.id, *at});
+            }
+        }
+        prev = next;
+    }
+    if (!overpasses) return;
+    std::vector<bool> lifted(plan.pieces.size(), false);
+    for (const TrackPlan::Crossing& c : plan.crossings) {
+        if (lifted[c.piece]) continue;
+        lifted[c.piece] = true;
+        PlannedPiece& p = plan.pieces[c.piece];
+        const Money extra = construction_cost(
+            Money::dollars(data_.balance.track.ground_per_km * (data_.balance.track.overpass_multiple - 1))
+                .scaled(p.length_mm, 1'000'000));
+        p.cost += extra;
+        plan.total_cost += extra;
+    }
 }
 
 PlanResult World::priced(PlanResult r) const {
@@ -202,12 +243,16 @@ CommandResult World::run(const BuildTrack& cmd) {
     PlanResult plan = priced(plan_track(railway_.track(), terrain_, from, std::move(points), to,
                                         options_for(cmd, date_.year()), data_.balance));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
+    mark_crossings(*plan.plan, railway_.track().node(from).pos, cmd.overpasses);
     TrackUndo undo;
     undo.first_new_node = first_new_node;
     undo.tiles = tiles;
     if (tiles > 0) track_tiles(acting().id()) -= tiles;
     build_track(railway_.track(), *plan.plan, acting().id(), &undo.edges);
     for (EdgeId e : undo.edges) undo.ends.emplace_back(railway_.track().edge(e).a, railway_.track().edge(e).b);
+    for (const TrackPlan::Crossing& c : plan.plan->crossings) {
+        railway_.add_crossing({c.edge, undo.edges[c.piece], c.at, plan.plan->overpasses});
+    }
     acting().invest_track(plan.plan->total_cost);
     if (track_undo_.size() <= actor_) track_undo_.resize(std::size_t{actor_} + 1);
     auto& stack = track_undo_[actor_];

@@ -227,6 +227,7 @@ std::optional<sim::BuildTrack> Tools::pending_track() const {
     cmd.start = *track_start_;
     cmd.end = hover_pick_;
     cmd.double_track = double_track_;
+    cmd.overpasses = overpasses_;
     cmd.tunnel_preference = tunnel_preference_;
     if (curves_ && cmd.start.kind == sim::TrackEnd::Kind::Node) {
         cmd.curve_control = sim::continuing_control_point(world_.railway().track(), cmd.start.node, cmd.end.pos);
@@ -613,7 +614,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             }
             return true;
         }
-        if (key == SDLK_d) double_track_ = !double_track_;
+        if (key == SDLK_g) overpasses_ = !overpasses_;
+        else if (key == SDLK_d) double_track_ = !double_track_;
         else if (key == SDLK_c) curves_ = !curves_;
         else if (key == SDLK_LEFTBRACKET) tunnel_preference_ = std::max(0, tunnel_preference_ - 10);
         else if (key == SDLK_RIGHTBRACKET) tunnel_preference_ = std::min(100, tunnel_preference_ + 10);
@@ -1181,9 +1183,9 @@ std::string Tools::hint() const {
         return "TRAIN: F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
     }
     case Tool::Track:
-        return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
-               (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") + "  [ ] TUNNELS " +
-               std::to_string(tunnel_preference_) + "%  E WIRE  U DOUBLE UP  CTRL+Z UNDO  XX REMOVE";
+        return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP" : "CLICK TO START A LINE") +
+               "  D DOUBLE " + (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") +
+               "  G OVERPASSES " + (overpasses_ ? "ON" : "OFF") + "  [ ] TUNNELS " + std::to_string(tunnel_preference_) + "%";
     case Tool::Station:
         if (station_building_) {
             return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +
@@ -1336,6 +1338,18 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = industry_text();
     } else if (tool_ == Tool::Train) {
         line2 = speed_chart_text();
+    } else if (tool_ == Tool::Track) {
+        line2 = "E WIRE (SHIFT: ALL)  U DOUBLE UP  CTRL+Z UNDO  X TWICE REMOVE";
+        if (const auto cmd = pending_track()) {
+            const sim::PlanResult plan = world_.preview(*cmd);
+            if (plan.plan && !plan.plan->crossings.empty()) {
+                const std::size_t n = plan.plan->crossings.size();
+                line2 = std::to_string(n) +
+                        (overpasses_ ? (n == 1 ? " OVERPASS, AT 4X THAT PIECE'S COST" : " OVERPASSES, AT 4X THOSE PIECES' COST")
+                                     : (n == 1 ? " LEVEL CROSSING: TRAINS WILL TAKE TURNS (G FOR AN OVERPASS)"
+                                               : " LEVEL CROSSINGS: TRAINS WILL TAKE TURNS (G FOR OVERPASSES)"));
+            }
+        }
     }
     if (good) glColor3f(0.6f, 0.95f, 0.6f);
     else glColor3f(1.0f, 0.45f, 0.4f);

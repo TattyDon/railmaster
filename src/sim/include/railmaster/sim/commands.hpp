@@ -47,6 +47,9 @@ struct BuildTrack {
     bool double_track = false;
     std::int32_t tunnel_preference = 50;
     std::optional<BridgeType> bridge_type{};
+    // Lift this line over the track it crosses (4x the piece's cost)
+    // rather than meeting it at level crossings [D].
+    bool overpasses = false;
 };
 
 struct BuildStation {

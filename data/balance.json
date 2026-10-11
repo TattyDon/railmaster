@@ -336,6 +336,7 @@
     "double_upgrade_percent": 90,
     "electrify_percent": 75,
     "ground_per_km": 25000,
+    "overpass_multiple": 4,
     "piece_mm": 500000,
     "remove_refund_percent": 10,
     "steel_bridge_multiple": 5,
@@ -367,6 +368,7 @@
         "from_year": 1950
       }
     ],
+    "crossing_clear_mm": 300000,
     "curve_comfort_radius_mm": 4000000,
     "express_permille_of_freight": 667,
     "follow_distance_mm": 2000000,

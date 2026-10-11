@@ -297,6 +297,9 @@ private:
     bool owns_track_at(const TrackEnd& at);
     // A track plan with its costs moved by the economic state.
     PlanResult priced(PlanResult r) const;
+    // Find where a planned run crosses existing track at ground level, and
+    // add the overpass surcharge if it is to go over.
+    void mark_crossings(TrackPlan& plan, MapPoint start, bool overpasses) const;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);
