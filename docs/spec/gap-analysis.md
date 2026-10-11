@@ -66,6 +66,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §11.3 [C], §14.3 [I] | Restrictions: track-tile budget (double counts two, yearly grant, optional bulldoze refund), no unconnected track, one company only, purchase bans, cannot resign | chair locks only | as the spec, for every company; tiles are map cells of track length |
 | §8.4 [D/C], §9.4 [I], §11.2 [D] | AI revenue bonus by difficulty; breakdowns of 3–10 days costing 5% of the engine; double-track upgrades at +90% | rivals shared the player's modifier; 2-day breakdowns, free; no upgrades | as the spec ([m1-provisional-models.md](m1-provisional-models.md), [m3-finance-model.md](m3-finance-model.md)) |
 | §11.2 [D/I] | Crossing lines stop each other at level crossings; overpasses (4×) separate them | lines passed through each other | level crossings taken in turn by rank; overpasses per line when building ([m1-provisional-models.md](m1-provisional-models.md)) |
+| §8.3 [D] | Travellers go to a hub to catch a direct train; volume rises with reachable destinations | only stations one train joins | one change of trains; destinations one change away generate traffic; each leg paid ([m2-economy-model.md](m2-economy-model.md)) |
 | §0 rule | Every [C] and [I] number in a data file | compiled `provisional` constants | `data/balance.json`, validated on load ([balance.md](balance.md)) |
 
 ## Matches already
@@ -112,8 +113,8 @@ Grouped by the spec's own build order (§17).
 
 **Express**
 - Units with origin and destination houses chosen by gravity weighting;
-  transfers via hubs; won't board rarely served stops; travellers who
-  give up avoid rail for a while (§8.3 [D/I]).
+  more than one change of trains; won't board rarely served stops;
+  travellers who give up avoid rail for a while (§8.3 [D/I]).
 
 **Scenarios and presentation**
 - Event disasters and choice dialogs, average-speed goals, hand-made maps

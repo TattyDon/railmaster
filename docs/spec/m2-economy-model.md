@@ -225,8 +225,18 @@ How we implement them (code: `freight.hpp`):
    (passengers 0.9%, mail 1%), half the on-train rate [C], and holds at most
    20 loads.
 3. **Loading.** Express loads compete with freight for empty cars, valued
-   at their fare. Only loads whose destination is on this train's route
-   are taken.
+   at their fare. Loads whose destination is on this train's route ride
+   straight there. Otherwise a load may ride to a stop of this train from
+   which another train runs to its destination, choosing the one nearest
+   the destination. At that hub it gets off and waits with the others for
+   its destination (rt3-clone-spec §8.3 [D]: travellers go to a hub to
+   catch a direct train). One change at most [I].
+   - **Destinations:** stations generate passengers and mail for every
+     station they can reach with at most one change, so joining networks
+     (your own or a rival's) brings more traffic [D].
+   - **Fares:** each train is paid for its own leg, from the station where
+     the load boarded it.
+   - **Patience:** it starts again at the hub [I].
 4. **Delivery.** Express loads leave the train only at their destination.
    Fare (rt3-clone-spec §8.3 [I]) is the product of:
    - `fare_per_km` × 50 km × (straight-line distance ÷ 50 km)^0.9, so a

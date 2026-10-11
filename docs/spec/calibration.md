@@ -122,6 +122,13 @@ With breakdowns of 3–10 days that cost 5% of the engine to repair (was 2
 days, free), the demo's return fell from 10.5% to 9.9% and its share price
 from $28 to $26. Rivals are unchanged at Medium difficulty.
 
+With level crossings, rival revenue rose slightly ($1.25M a year each). Then
+with changes of trains, it rose to $2.0M, and its freight share fell to
+21%. Rivals run many lines from the same towns, so one change opens many
+new destinations. The spec expects this: volume rises with reachable
+destinations. The demo network, a single triangle, barely moved (return
+10.3%).
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2

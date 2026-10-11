@@ -23,7 +23,7 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 5; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings
+constexpr std::uint32_t kSaveVersion = 6; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via
 
 class Writer {
 public:
@@ -239,7 +239,7 @@ void io(Ar& ar, ConsistRule& r) {
 template <class Ar>
 void io(Ar& ar, Car& c) {
     fields(ar, c.cargo, c.milli, c.pickup_price, c.loaded_day, c.loaded_at, c.destination, c.expected_value,
-           c.loaded_tick);
+           c.loaded_tick, c.via);
 }
 template <class Ar>
 void io(Ar& ar, Train& t) {

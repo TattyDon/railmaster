@@ -50,6 +50,24 @@ std::vector<std::vector<StationId>> route_partners(const Railway& rw) {
 
 bool on_route(const Train& t, StationId s) { return std::find(t.route.begin(), t.route.end(), s) != t.route.end(); }
 
+bool has(const std::vector<StationId>& sorted, StationId s) { return std::binary_search(sorted.begin(), sorted.end(), s); }
+
+// Where express from each station can go: stations a train runs to
+// directly, and those one change of trains away (rt3-clone-spec §8.3 [D]:
+// travellers may go to a hub to catch a direct train).
+std::vector<std::vector<StationId>> express_reach(const std::vector<std::vector<StationId>>& partners) {
+    std::vector<std::vector<StationId>> reach(partners.size());
+    for (std::size_t s = 0; s < partners.size(); ++s) {
+        reach[s] = partners[s];
+        for (StationId hub : partners[s]) reach[s].insert(reach[s].end(), partners[hub].begin(), partners[hub].end());
+        auto& r = reach[s];
+        std::sort(r.begin(), r.end());
+        r.erase(std::unique(r.begin(), r.end()), r.end());
+        r.erase(std::remove(r.begin(), r.end(), static_cast<StationId>(s)), r.end());
+    }
+    return reach;
+}
+
 // For each cargo, the best price at any *other* stop of any train calling
 // at `station`: what the cargo could be sold for if loaded here.
 std::vector<std::int32_t> best_onward_prices(const Economy& eco, const Railway& rw, const CargoRegistry& cargo,
@@ -257,7 +275,7 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             if (c.key == "passengers") st.passengers_waiting_milli_days += e.milli;
         }
     }
-    const auto partners = route_partners(rw);
+    const auto reach = express_reach(route_partners(rw));
     for (const CargoType& c : cargo.all()) {
         if (c.cargo_class != CargoClass::Express || c.generation <= 0 || year < c.available_year) continue;
         std::vector<std::int64_t> attraction(n_stations);
@@ -268,7 +286,7 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             const std::int64_t produced = catchment_rate(eco, rw, industries, rw.station(sid), c.id, true);
             if (produced == 0) continue;
             const std::int64_t daily = produced * c.generation * c.demand_percent / 100 / 365; // produced is already in thousandths
-            for (StationId dest : partners[sid]) {
+            for (StationId dest : reach[sid]) {
                 const std::int64_t a = attraction[dest];
                 if (a == 0) continue;
                 ExpressWaiting& pool = express_pool(rw.station_mut(sid), c.id, dest);
@@ -295,6 +313,28 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         const CargoType& c = cargo.get(*car.cargo);
         const std::int32_t left = value_left_permille(c, today - car.loaded_day, rw.balance());
         if (car.destination) {
+            if (car.via && *car.via == station_id && *car.destination != station_id) {
+                // A change of trains: paid for this leg, then they wait here
+                // with the others for their destination [I].
+                const std::int64_t mm = distance_mm(rw.track().node(rw.station(car.loaded_at).node).pos,
+                                                    rw.track().node(st.node).pos);
+                const std::int32_t speed =
+                    express_speed_permille(mm, tick - std::min(tick, car.loaded_tick), year, rw.balance());
+                const std::int32_t appeal = c.key == "passengers" || c.key == "mail" ? 100 + appeal_percent : 100;
+                const std::int32_t diner = c.key == "passengers" && rw.train(train_id).diner ? kDinerPassengerPercent : 100;
+                income.add(c.id, express_base_fare(c, mm, rw.balance())
+                                     .scaled(std::int64_t{left} * car.milli, 1000LL * kMilli)
+                                     .scaled(revenue_permille, 1000)
+                                     .scaled(diner, 100)
+                                     .scaled(appeal, 100)
+                                     .scaled(speed, 1000));
+                if (left > 0) {
+                    std::int32_t& pool = express_pool(st, c.id, *car.destination).milli;
+                    pool = std::min(rw.balance().express.cap_milli, pool + car.milli);
+                }
+                car = Car{};
+                continue;
+            }
             if (*car.destination == station_id) {
                 std::int32_t& received = st.received_this_month[c.id];
                 const std::int64_t cap = catchment_rate(eco, rw, industries, st, c.id, false) / 12 *
@@ -358,7 +398,9 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         CargoId cargo;
         std::optional<StationId> destination;
         std::int64_t gain;
+        std::optional<StationId> via{};
     };
+    const auto partners = route_partners(rw);
     std::vector<Candidate> candidates;
     for (const CargoType& c : cargo.all()) {
         const WaitingCargo& pool = st.waiting[c.id];
@@ -371,9 +413,29 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         if (gain > 0) candidates.push_back({c.id, std::nullopt, gain});
     }
     for (const ExpressWaiting& e : st.express) {
-        if (e.milli < express_min || !on_route(t, e.destination) || !allowed(cargo.get(e.cargo))) continue;
-        candidates.push_back({e.cargo, e.destination,
-                              express_fare(cargo.get(e.cargo), rw, station_id, e.destination).whole_dollars()});
+        if (e.milli < express_min || !allowed(cargo.get(e.cargo))) continue;
+        if (on_route(t, e.destination)) {
+            candidates.push_back({e.cargo, e.destination,
+                                  express_fare(cargo.get(e.cargo), rw, station_id, e.destination).whole_dollars()});
+            continue;
+        }
+        // No direct train: ride to a stop of this train from which one runs,
+        // the one nearest the destination.
+        std::optional<StationId> hub;
+        std::int64_t best = 0;
+        const MapPoint dest_at = rw.track().node(rw.station(e.destination).node).pos;
+        for (StationId h : t.route) {
+            if (h == station_id || !has(partners[h], e.destination)) continue;
+            const std::int64_t d = distance_mm(rw.track().node(rw.station(h).node).pos, dest_at);
+            if (!hub || d < best) {
+                hub = h;
+                best = d;
+            }
+        }
+        if (hub) {
+            candidates.push_back({e.cargo, e.destination, express_fare(cargo.get(e.cargo), rw, station_id, *hub).whole_dollars(),
+                                  hub});
+        }
     }
     std::stable_sort(candidates.begin(), candidates.end(),
                      [](const Candidate& a, const Candidate& b) { return a.gain > b.gain; });
@@ -407,7 +469,8 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             const std::int32_t load = std::min(kMilli, pool);
             pool -= load;
             if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += load;
-            car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain), tick};
+            car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain), tick,
+                      pick.via};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];
             const std::int32_t price = pool.average_price();

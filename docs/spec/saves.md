@@ -46,6 +46,7 @@ Format versions:
 - **3:** scenario restrictions, track budgets and company founders.
 - **4:** breakdowns awaiting a repair bill.
 - **5:** level crossings and overpasses.
+- **6:** express loads changing trains.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

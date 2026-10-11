@@ -130,6 +130,9 @@ struct Car {
     std::optional<std::uint32_t> destination; // express only: the StationId it must reach
     std::int32_t expected_value = 0; // dollars this load should earn; decides meets at equal priority
     std::uint64_t loaded_tick = 0;   // World::total_ticks() when loaded: express pay goes by trip time
+    // Express only: the hub where this load changes trains, when no train
+    // runs from where it boarded to its destination (rt3-clone-spec §8.3).
+    std::optional<std::uint32_t> via{};
 };
 
 struct Train {

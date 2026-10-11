@@ -211,3 +211,43 @@ TEST_CASE("express loads that never arrive go stale and are dropped") {
     w.arrive(t, w.st[1], 200);
     CHECK_FALSE(w.rw.train(t).cars[0].cargo.has_value());
 }
+
+TEST_CASE("travellers change trains at a hub, and each train is paid for its leg (§8.3 [D/I])") {
+    Towns w({5, 25, 45}, 40);
+    const TrainId first = w.rw.add_train(0, 1, {w.st[0], w.st[1]});
+    const TrainId second = w.rw.add_train(0, 1, {w.st[1], w.st[2]});
+    w.gather(60);
+    // No train runs from the first town to the third, but one change gets there.
+    REQUIRE(w.waiting(w.st[0], w.pax(), w.st[2]) >= kMilli);
+    // Keep only passengers for the third town at the first, so they board.
+    for (ExpressWaiting& e : w.rw.station_mut(w.st[0]).express)
+        if (e.destination != w.st[2] || e.cargo != w.pax()) e.milli = 0;
+    w.arrive(first, w.st[0], 100);
+    const Car& car = w.rw.train(first).cars[0];
+    REQUIRE(car.destination == w.st[2]);
+    CHECK(car.via == w.st[1]);
+    // At the hub: paid for 20 km, and they wait there for the onward train.
+    const std::int32_t before = w.waiting(w.st[1], w.pax(), w.st[2]);
+    const Money leg1 = w.arrive(first, w.st[1], 101);
+    CHECK(leg1 > Money{});
+    CHECK(w.waiting(w.st[1], w.pax(), w.st[2]) > before);
+    // The second train takes them on.
+    for (ExpressWaiting& e : w.rw.station_mut(w.st[1]).express)
+        if (e.destination != w.st[2] || e.cargo != w.pax()) e.milli = 0;
+    w.arrive(second, w.st[1], 102);
+    REQUIRE(w.rw.train(second).cars[0].destination == w.st[2]);
+    CHECK_FALSE(w.rw.train(second).cars[0].via.has_value());
+    CHECK(w.arrive(second, w.st[2], 103) > Money{});
+}
+
+TEST_CASE("joining networks makes more passengers: destinations one change away count") {
+    Towns two({5, 25, 45}, 20);
+    two.rw.add_train(0, 4, {two.st[0], two.st[1]});
+    Towns joined({5, 25, 45}, 20);
+    joined.rw.add_train(0, 4, {joined.st[0], joined.st[1]});
+    joined.rw.add_train(0, 4, {joined.st[1], joined.st[2]});
+    two.gather(10);
+    joined.gather(10);
+    CHECK(two.waiting(two.st[0], two.pax(), two.st[2]) == 0);
+    CHECK(joined.waiting(joined.st[0], joined.pax(), joined.st[2]) > 0);
+}
