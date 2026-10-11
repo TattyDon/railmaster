@@ -20,6 +20,18 @@ TrackEnd at_node(const World& world, NodeId n) {
 
 TrackEnd on_ground(MapPoint p) { return {TrackEnd::Kind::Free, 0, 0, p}; }
 
+// Build a line, first buying access to any territory it crosses.
+CommandResult build(World& world, const BuildTrack& cmd) {
+    if (const PlanResult plan = world.preview(cmd); plan.plan) {
+        std::vector<MapPoint> points = plan.plan->points;
+        points.push_back(cmd.start.pos);
+        for (TerritoryId t : world.access_needed(world.company().id(), points)) {
+            must(world, BuyTerritoryAccess{.territory = t});
+        }
+    }
+    return must(world, cmd);
+}
+
 } // namespace
 
 std::string build_demo_network(World& world) {
@@ -36,10 +48,10 @@ std::string build_demo_network(World& world) {
     const TrackNetwork& net = world.railway().track();
 
     NodeId nodes[3];
-    nodes[1] = must(world, BuildTrack{.start = on_ground(at[0]), .end = on_ground(at[1])}).created_id;
+    nodes[1] = build(world, BuildTrack{.start = on_ground(at[0]), .end = on_ground(at[1])}).created_id;
     nodes[0] = *net.nearest_node(at[0], 1);
-    nodes[2] = must(world, BuildTrack{.start = at_node(world, nodes[1]), .end = on_ground(at[2])}).created_id;
-    must(world, BuildTrack{.start = at_node(world, nodes[2]), .end = at_node(world, nodes[0])});
+    nodes[2] = build(world, BuildTrack{.start = at_node(world, nodes[1]), .end = on_ground(at[2])}).created_id;
+    build(world, BuildTrack{.start = at_node(world, nodes[2]), .end = at_node(world, nodes[0])});
 
     StationId st[3];
     for (int i = 0; i < 3; ++i) {

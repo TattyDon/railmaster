@@ -92,6 +92,17 @@ World::World(const WorldConfig& config, GameData data)
     town_growth_ = config.town_growth;
     industries_appear_ = config.industries_appear;
     terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
+    {
+        // Rivers, in the map's usual number for its size.
+        const std::int64_t cell_km = config.tile_size_m;
+        const std::int64_t area_permille =
+            std::max<std::int64_t>(1000, std::int64_t{terrain_.width()} * cell_km / 1000 * terrain_.height() * cell_km / 1000 *
+                                             1000 / (128 * 128));
+        terrain_.generate_rivers(rng_,
+                                 static_cast<std::int32_t>(data_.balance.map.rivers_per_map * area_permille / 1000),
+                                 data_.balance.map.river_source_percent);
+    }
+    start_year_ = date_.year();
     std::vector<PlacedTown> fixed_towns;
     if (scenario_) {
         // A scenario's towns stand on dry land: drain the ground they cover.
@@ -338,7 +349,10 @@ void World::refresh_economy_terrain() {
 }
 
 std::int32_t World::cost_percent() const {
-    return data_.balance.economic_states.cost_percent[index_of(economic_state())];
+    const Balance::EconomicStates& b = data_.balance.economic_states;
+    // The optional cost index: so much more each year since the start [I].
+    const std::int64_t index = 10'000 + std::int64_t{b.cost_index_bp_per_year} * std::max(0, date_.year() - start_year_);
+    return static_cast<std::int32_t>(b.cost_percent[index_of(economic_state())] * index / 10'000);
 }
 
 void World::set_economic_state(EconomicState s) {
@@ -346,6 +360,11 @@ void World::set_economic_state(EconomicState s) {
     economic_state_ = s;
     for (Company& c : market_.companies) c.set_economic_state(s);
     economy_.set_activity_percent(data_.balance.economic_states.activity_percent[index_of(s)]);
+    // Luxuries swing harder [C].
+    for (const std::string& key : data_.balance.economic_states.luxury_cargo)
+        if (const auto c = data_.cargo.find(key)) {
+            economy_.set_demand_percent(*c, data_.balance.economic_states.luxury_demand_percent[index_of(s)]);
+        }
 }
 
 std::optional<EconomicState> World::take_economy_news() { return std::exchange(economy_news_, std::nullopt); }

@@ -214,6 +214,12 @@ public:
     std::int32_t south_weight(std::int32_t cx, std::int32_t cy) const { return south_w_[cell(cx, cy)]; }
     // Production and demand everywhere, in percent (the economic state).
     void set_activity_percent(std::int32_t pct) { activity_percent_ = pct; }
+    // A cargo's demand on top of the activity level, in percent (luxuries in bad times).
+    void set_demand_percent(CargoId c, std::int32_t pct) {
+        if (demand_percent_.size() <= c) demand_percent_.resize(std::size_t{c} + 1, 100);
+        demand_percent_[c] = pct;
+    }
+    std::int32_t demand_percent(CargoId c) const { return c < demand_percent_.size() ? demand_percent_[c] : 100; }
     std::int32_t activity_percent() const { return activity_percent_; }
 
     Site& site_mut(SiteId id) { return sites_.at(id); }
@@ -297,6 +303,7 @@ private:
     std::vector<bool> closed_territory_;        // per territory
     void apply_borders();
     std::int32_t activity_percent_ = 100;
+    std::vector<std::int32_t> demand_percent_; // by cargo; 100 when absent
     std::int32_t warehouse_radius_ = 2;
     std::int32_t warehouse_spoilage_percent_ = 25;
     std::vector<Site> sites_;

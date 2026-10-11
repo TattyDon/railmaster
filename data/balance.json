@@ -52,12 +52,23 @@
       125
     ],
     "checks_per_year": 2,
+    "cost_index_bp_per_year": 0,
     "cost_percent": [
       85,
       92,
       100,
       108,
       115
+    ],
+    "luxury_cargo": [
+      "automobiles"
+    ],
+    "luxury_demand_percent": [
+      40,
+      60,
+      100,
+      110,
+      120
     ],
     "prime_rate_bp": [
       800,
@@ -223,6 +234,8 @@
     "ports": 3,
     "processors_per_type": 2,
     "raw_per_type": 4,
+    "river_source_percent": 60,
+    "rivers_per_map": 2,
     "sinks_per_type": 2,
     "territory_access_big": 10000000,
     "territory_access_max": 2000000,

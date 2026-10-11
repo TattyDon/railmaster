@@ -61,6 +61,11 @@ public:
     // Fill with gently rolling procedural hills. A stand-in until the real
     // map generator and scenario loader exist.
     void generate_rolling_hills(Random& rng, std::int32_t max_height_m);
+    // Rivers: each starts on high ground (at least source_percent of the
+    // highest corner) and runs to the lowest neighbouring cell until it
+    // reaches water or the map edge, cutting through any hollow on the way
+    // so it always runs downhill. River cells are water.
+    void generate_rivers(Random& rng, std::int32_t count, std::int32_t source_percent);
 
     // Saving and loading (save.cpp) reads and writes every member.
     template <class Ar>

@@ -227,6 +227,11 @@ struct Balance {
         std::int32_t processors_per_type = 2;
         std::int32_t sinks_per_type = 2;
         std::int32_t max_height_m = 400;
+        // Rivers run from high ground down to the sea or the map edge [C]
+        // (rt3-clone-spec §3: ocean, lakes, rivers), from sources at least
+        // this share of the highest ground [I].
+        std::int32_t rivers_per_map = 2;
+        std::int32_t river_source_percent = 60;
         std::int32_t ports = 3; // on the coast, or else the map edge
         // New industries over time [C/I]: the yearly chance of an extra one
         // of each type (times the economy's activity), and the cap on how
@@ -329,6 +334,15 @@ struct Balance {
         std::int32_t checks_per_year = 2;
         std::int32_t stay_percent = 50;
         std::int32_t toward_normal_percent = 30; // the rest moves one step away
+        // Luxuries whose demand swings harder (rt3-clone-spec §5.5 [C]:
+        // automobile demand drops sharply in recessions), on top of the
+        // activity above: their demand in percent, Depression to Boom [I].
+        std::vector<std::string> luxury_cargo{"automobiles"};
+        std::array<std::int32_t, 5> luxury_demand_percent{40, 60, 100, 110, 120};
+        // An optional slow rise in construction and running costs, in
+        // hundredths of a percent a year since the game began (§5.5 [I]:
+        // 0.5-1% a year, off by default).
+        std::int32_t cost_index_bp_per_year = 0;
     } economic_states;
 
     // Rival companies' decisions (rt3-clone-spec §13.2, all [I]).

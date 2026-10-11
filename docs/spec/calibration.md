@@ -129,6 +129,10 @@ new destinations. The spec expects this: volume rises with reachable
 destinations. The demo network, a single triangle, barely moved (return
 10.3%).
 
+With rivers on the map, every generated map changed. The demo's revenue
+rose to $614K a year and its return settled at 9.5%. The rivals were
+about the same ($2.1M, 33% freight).
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2

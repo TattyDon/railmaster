@@ -435,9 +435,10 @@ void Economy::run_sites(const CargoRegistry& cargo, const IndustryRegistry& indu
                                                                     : balance_.industry_demand_days;
             for (const IndustryInput& in : t.inputs) {
                 if (!input_active(in, cargo, year)) continue;
-                const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily);
+                const std::int32_t pct = demand_percent(in.cargo);
+                const std::int32_t took = take_stock(in.cargo, s.cx, s.cy, daily * pct / 100);
                 if (t.kind == IndustryKind::Sink) s.received_year_milli += took;
-                demand(in.cargo, at, rate, days);
+                demand(in.cargo, at, rate * pct / 100, days);
             }
             for (CargoId c : t.outputs) {
                 if (!cargo_available(c, cargo, year)) continue;

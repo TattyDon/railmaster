@@ -55,7 +55,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Industries, labour_perc
                                                 warehouse_spoilage_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::EconomicStates, activity_percent, cost_percent,
                                                 prime_rate_bp, stock_percent, checks_per_year, stay_percent,
-                                                toward_normal_percent)
+                                                toward_normal_percent,
+                                                luxury_cargo, luxury_demand_percent, cost_index_bp_per_year)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_per_map, town_min_houses,
                                                 town_max_houses, town_spacing_cells, town_spread_cells,
                                                 industry_near_town_cells, raw_per_type,
@@ -63,7 +64,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_pe
                                                 appear_chance_percent, max_count_multiple, territory_access_min,
                                                 territory_access_max, territory_access_big, territory_big_percent,
                                                 territory_station_cost_max_percent, territory_overhead_max_percent,
-                                                territory_credit_percent, territory_closed_percent)
+                                                territory_credit_percent, territory_closed_percent,
+                                                rivers_per_map, river_source_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::ReferenceSpeed, year, mph)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,

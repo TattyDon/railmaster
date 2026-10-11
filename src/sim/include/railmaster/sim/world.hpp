@@ -248,6 +248,7 @@ private:
     std::optional<EconomicState> economy_news_;
     EconomicState economic_state_ = EconomicState::Normal;
     std::uint64_t economy_terrain_revision_ = 0;
+    std::int32_t start_year_ = 0; // for the optional cost index
     // Track builds each player may still undo (newest last): the pieces,
     // their ends as built, and the first node id the build created.
     struct TrackUndo {

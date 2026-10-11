@@ -259,3 +259,46 @@ TEST_CASE("terrain edits after the world is made reach the economy") {
     CHECK(w.economy().conductance(5, 5) == default_balance().economy.water_conductance_permille);
     CHECK(w.economy().conductance(5, 6) == default_balance().economy.coast_conductance_permille);
 }
+
+TEST_CASE("automobile demand drops sharply in recessions; an optional cost index (§5.5 [C/I])") {
+    GameData d;
+    d.cargo = CargoRegistry::from_json(R"({"cargo": [{"key": "automobiles", "name": "Automobiles", "base_price": 40},
+                                                     {"key": "coal", "name": "Coal", "base_price": 30}]})");
+    d.balance.economic_states.cost_index_bp_per_year = 100; // 1% a year
+    WorldConfig cfg;
+    testing::legacy_scale(cfg);
+    cfg.width_tiles = cfg.height_tiles = 20;
+    cfg.business_cycle = false;
+    World w(cfg, std::move(d));
+    const CargoId cars = *w.data().cargo.find("automobiles");
+    const CargoId coal = *w.data().cargo.find("coal");
+    CHECK(w.economy().demand_percent(cars) == 100);
+    w.set_economic_state(EconomicState::Recession);
+    CHECK(w.economy().demand_percent(cars) == 60);
+    CHECK(w.economy().demand_percent(coal) == 100);
+    w.set_economic_state(EconomicState::Depression);
+    CHECK(w.economy().demand_percent(cars) == 40);
+    w.set_economic_state(EconomicState::Boom);
+    CHECK(w.economy().demand_percent(cars) == 120);
+    w.set_economic_state(EconomicState::Normal);
+    CHECK(w.cost_percent() == 100);
+    for (int i = 0; i < 366 * World::kTicksPerDay; ++i) w.tick();
+    CHECK(w.cost_percent() == 101);
+}
+
+TEST_CASE("a consumer takes less of a luxury in bad times") {
+    const CargoRegistry cargo = CargoRegistry::from_json(R"({"cargo": [{"key": "automobiles", "name": "Autos", "base_price": 40}]})");
+    const IndustryRegistry ind = IndustryRegistry::from_json(R"({"industries": [
+        {"key": "dealer", "name": "Dealer", "kind": "sink", "inputs": [{"cargo": "automobiles"}], "rate": 365}]})",
+                                                             cargo);
+    const auto taken = [&](std::int32_t pct) {
+        Economy eco(10, 10, kKm, cargo);
+        eco.add_site(ind, 0, 5, 5);
+        eco.add_stock(0, 5, 5, 100'000);
+        eco.set_demand_percent(0, pct);
+        eco.step_day(cargo, ind, 1900);
+        return eco.sites()[0].received_year_milli;
+    };
+    CHECK(taken(100) > 0);
+    CHECK(taken(60) * 100 == taken(100) * 60);
+}

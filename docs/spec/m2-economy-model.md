@@ -538,3 +538,26 @@ In the `economy`, `map`, `freight` and `express` sections of
 | Bakery | A consumer only: no output is listed for RT3. | Data gap. |
 | Rubber | Rubber plantations from 1900 (rt3-clone-spec §6.3); ports, which also supply it, are not modelled yet. | |
 | Diesel | Made by refineries; nothing consumes it yet. | Data gap. |
+
+## Rivers, luxuries and the cost index
+
+**Rivers** (rt3-clone-spec §3 [C]: maps have ocean, lakes and rivers).
+- **Where they start:** a new map gets `map.rivers_per_map` of them per
+  128 km square, two by default, about five on the Small map. Each starts on
+  ground at least `river_source_percent` (60%) of the highest.
+- **How they run:** each flows to its lowest neighbouring cell and carries
+  straight on over level ground. It cuts through any hollow's rim so it
+  always runs downhill, and ends at the sea, a lake or the map edge.
+- **Effect:** river cells are water. The nodes beside them are coast, so
+  middlemen move freight cheaply along them and prices are flat along them
+  (§5.3 [D]); track crossing them needs bridges.
+
+**Luxuries** (§5.5 [C]: automobile demand drops sharply in recessions).
+The cargos in `economic_states.luxury_cargo` (automobiles) are wanted at
+`luxury_demand_percent` of the usual by consumers and houses: 40% in a
+depression, 60% in a recession, 110% and 120% in prosperity and boom.
+This comes on top of the general activity level.
+
+**Cost index** (§5.5 [I]: optional, off by default). Construction and
+running costs rise by `cost_index_bp_per_year` hundredths of a percent for
+each year since the game began.

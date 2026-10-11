@@ -23,7 +23,8 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 6; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via
+constexpr std::uint32_t kSaveVersion = 7; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+                                           // 7: luxury demand, cost index
 
 class Writer {
 public:
@@ -402,7 +403,7 @@ void io(Ar& ar, Economy& e) {
         for (auto& a : list) fields(ar, a.cell, a.demand_milli, a.supply_milli);
     }
     fields(ar, e.active_, e.scratch_, e.conductance_, e.east_w_, e.south_w_, e.node_territory_, e.closed_territory_,
-           e.activity_percent_, e.warehouse_radius_, e.warehouse_spoilage_percent_, e.sites_, e.towns_);
+           e.activity_percent_, e.demand_percent_, e.warehouse_radius_, e.warehouse_spoilage_percent_, e.sites_, e.towns_);
     if constexpr (Ar::loading) e.balance_ = ar.balance->economy;
 }
 
@@ -428,7 +429,7 @@ void io(Ar& ar, World& w) {
     fields(ar, w.spent_, w.earned_, w.sandbox_, w.difficulty_, w.market_, w.rivals_, w.news_, w.last_player_company_);
     fields(ar, w.chairman_can_be_fired_, w.chairman_can_resign_, w.town_growth_, w.industries_appear_,
            w.failed_attempts_, w.rival_ai_, w.actor_, w.last_forced_sale_, w.business_cycle_, w.economy_news_,
-           w.economic_state_, w.economy_terrain_revision_);
+           w.economic_state_, w.economy_terrain_revision_, w.start_year_);
     if constexpr (Ar::loading) w.track_undo_.assign(ar.count(1), {});
     else ar.put(w.track_undo_.size(), 8);
     for (auto& stack : w.track_undo_) {

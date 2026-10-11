@@ -78,6 +78,63 @@ GroundType Terrain::ground_at_mm(MapPoint p) const {
     return ground(tx, ty);
 }
 
+void Terrain::generate_rivers(Random& rng, std::int32_t count, std::int32_t source_percent) {
+    if (width_ < 3 || height_ < 3) return;
+    std::int32_t highest = 0;
+    for (std::int32_t h : heights_) highest = std::max(highest, h);
+    const std::int32_t source_min = highest * source_percent / 100;
+    // A cell's level: its lowest corner.
+    const auto level = [&](std::int32_t x, std::int32_t y) {
+        return std::min({corner_height(x, y), corner_height(x + 1, y), corner_height(x, y + 1), corner_height(x + 1, y + 1)});
+    };
+    for (std::int32_t r = 0; r < count; ++r) {
+        std::int32_t x = -1, y = -1;
+        for (int attempt = 0; attempt < 200; ++attempt) {
+            const std::int32_t tx = rng.between(1, width_ - 2), ty = rng.between(1, height_ - 2);
+            if (ground(tx, ty) != GroundType::Water && level(tx, ty) >= source_min) {
+                x = tx;
+                y = ty;
+                break;
+            }
+        }
+        if (x < 0) continue;
+        int heading = -1; // the way it last flowed: kept on level ground
+        for (std::int32_t steps = 0; steps < 4 * (width_ + height_); ++steps) {
+            const std::int32_t here = level(x, y);
+            set_ground(x, y, GroundType::Water);
+            if (x == 0 || y == 0 || x == width_ - 1 || y == height_ - 1) break; // out to the edge
+            // The lowest neighbour that is not river already behind us. On
+            // a tie it carries straight on; otherwise east, south, west, north.
+            static constexpr std::int32_t kDx[] = {1, 0, -1, 0}, kDy[] = {0, 1, 0, -1};
+            std::int32_t nx = -1, ny = -1, best = 0;
+            int way = -1;
+            bool into_water = false;
+            for (int d = 0; d < 4; ++d) {
+                const std::int32_t cx = x + kDx[d], cy = y + kDy[d];
+                const std::int32_t l = level(cx, cy);
+                if (ground(cx, cy) == GroundType::Water) {
+                    if (l < here) into_water = true; // the sea, a lake or another river below
+                    continue;
+                }
+                if (nx < 0 || l < best || (l == best && d == heading)) {
+                    nx = cx;
+                    ny = cy;
+                    best = l;
+                    way = d;
+                }
+            }
+            heading = way;
+            if (into_water || nx < 0) break;
+            // Cut through a hollow's rim so the river keeps running down.
+            for (std::int32_t cy = ny; cy <= ny + 1; ++cy)
+                for (std::int32_t cx = nx; cx <= nx + 1; ++cx)
+                    if (corner_height(cx, cy) > here) set_corner_height(cx, cy, here);
+            x = nx;
+            y = ny;
+        }
+    }
+}
+
 void Terrain::generate_rolling_hills(Random& rng, std::int32_t max_height_m) {
     // Midpoint-free value noise: random coarse lattice, bilinearly upsampled.
     constexpr std::int32_t kCell = 8;
