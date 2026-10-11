@@ -297,7 +297,7 @@ std::pair<std::int64_t, std::int64_t> World::overhead_percent(CompanyId c) const
     const TrackNetwork& net = railway_.track();
     std::int64_t length = 0, weighted = 0;
     for (const TrackEdge& e : net.edges()) {
-        if (e.owner != c) continue;
+        if (e.owner != c || e.removed) continue;
         const MapPoint a = net.node(e.a).pos, b = net.node(e.b).pos;
         length += e.length_mm;
         weighted += e.length_mm * overhead({(a.x_mm + b.x_mm) / 2, (a.y_mm + b.y_mm) / 2});

@@ -108,6 +108,19 @@ struct ElectrifyTrack {
     std::vector<EdgeId> edges{};
 };
 
+// Bulldoze pieces of your own track (rt3-clone-spec §11.2 [D]): a little
+// cash back, the rest of their book value written off. Not under a train.
+struct RemoveTrack {
+    std::vector<EdgeId> edges{};
+};
+
+// Take back your last BuildTrack at full refund [D], while the Track tool
+// is still open (EndTrackUndo closes the window). Not once a station or
+// support building stands on it, a train is on it, or other track has
+// split it.
+struct UndoTrack {};
+struct EndTrackUndo {};
+
 // Buy your company access rights to a territory, so it may build there
 // (rt3-clone-spec §3.3 [D]). Paid once, as a territory fee.
 struct BuyTerritoryAccess {
@@ -193,7 +206,7 @@ struct SetPortMode {
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
-using Command = std::variant<BuildTrack, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
+using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,

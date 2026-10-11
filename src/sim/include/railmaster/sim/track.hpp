@@ -1,6 +1,7 @@
 #pragma once
 
 #include "railmaster/sim/fixed_math.hpp"
+#include "railmaster/sim/money.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -41,6 +42,8 @@ struct TrackEdge {
     BridgeType bridge = BridgeType::None; // set exactly when kind == Bridge
     CompanyId owner = 0;                  // who built it and is paid trackage for it
     bool electrified = false;             // electric engines may run here [D]
+    Money cost{};                         // what it cost to build and wire: its book value
+    bool removed = false;                 // bulldozed: kept so ids stay valid, joined to nothing
 
     NodeId other(NodeId n) const { return n == a ? b : a; }
 };
@@ -85,12 +88,19 @@ public:
     // Nearest point on any piece of track within `max_mm` of `p`.
     std::optional<EdgePoint> nearest_edge_point(MapPoint p, std::int64_t max_mm) const;
 
-    // Insert a node part-way along an edge, so new track can branch there.
+    // Insert a node part-way along an edge, so new track can branch there;
+    // the edge's cost is shared between the two pieces by length.
     // Edge `e` keeps its id and becomes a -> new node; a new edge (returned
     // through `second`) runs new node -> b with the same properties. Throws if
     // `at` is not strictly between the ends. Callers that hold paths over `e`
     // must patch them (Railway::split_edge does this for trains).
     NodeId split_edge(EdgeId e, MapPoint at, EdgeId* second = nullptr);
+
+    // Take a piece out of the network. Its id stays valid (marked removed),
+    // but nothing reaches it: paths, nearest-point searches and adjacency
+    // skip it.
+    void remove_edge(EdgeId id);
+    void add_cost(EdgeId id, Money cost) { edges_.at(id).cost += cost; }
 
     // Upgrade or downgrade a piece. Throws for a wooden bridge.
     void set_double_track(EdgeId id, bool value);

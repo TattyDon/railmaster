@@ -112,6 +112,11 @@ struct Balance {
         // (rt3-clone-spec §11.2 [I]: +75%).
         std::int32_t electrify_percent = 75;
         std::int64_t suspension_min_span_mm = 2'000'000;
+        // Bulldozing your own track returns this share of its book value;
+        // the rest is written off (rt3-clone-spec §11.2 [D/I]: 10%).
+        std::int32_t remove_refund_percent = 10;
+        // Track builds that can still be undone at full refund, per player.
+        std::int32_t undo_depth = 64;
     } track;
 
     struct Stations {

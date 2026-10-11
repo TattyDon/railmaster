@@ -257,6 +257,12 @@ void Company::invest_track(Money cost) {
     history_.back().track_built += cost;
 }
 
+void Company::remove_track(Money book, Money refund) {
+    track_ -= book;
+    cash_ += refund;
+    if (refund == book) history_.back().track_built -= book;
+}
+
 void Company::invest_buildings(Money cost) {
     cash_ -= cost;
     buildings_ += cost;

@@ -48,6 +48,7 @@ std::optional<EdgePoint> TrackNetwork::nearest_edge_point(MapPoint p, std::int64
     std::optional<EdgePoint> best;
     std::int64_t best_d = max_mm + 1;
     for (const TrackEdge& e : edges_) {
+        if (e.removed) continue;
         const MapPoint a = node(e.a).pos, b = node(e.b).pos;
         const std::int64_t dx = b.x_mm - a.x_mm, dy = b.y_mm - a.y_mm;
         const std::int64_t len = e.length_mm;
@@ -87,12 +88,24 @@ NodeId TrackNetwork::split_edge(EdgeId id, MapPoint at, EdgeId* second) {
     TrackEdge& first = edges_[id];
     first.b = mid;
     first.length_mm = da;
+    first.cost = old.cost.scaled(da, da + db);
     const auto new_id = static_cast<EdgeId>(edges_.size());
-    edges_.push_back({new_id, mid, old.b, db, old.double_track, old.kind, old.bridge, old.owner, old.electrified});
+    edges_.push_back(
+        {new_id, mid, old.b, db, old.double_track, old.kind, old.bridge, old.owner, old.electrified, old.cost - first.cost});
     std::replace(adjacency_[old.b].begin(), adjacency_[old.b].end(), id, new_id);
     adjacency_[mid] = {id, new_id};
     if (second) *second = new_id;
     return mid;
+}
+
+void TrackNetwork::remove_edge(EdgeId id) {
+    TrackEdge& e = edges_.at(id);
+    if (e.removed) return;
+    e.removed = true;
+    for (const NodeId n : {e.a, e.b}) {
+        auto& adj = adjacency_[n];
+        adj.erase(std::remove(adj.begin(), adj.end(), id), adj.end());
+    }
 }
 
 void TrackNetwork::transfer_owner(CompanyId from, CompanyId to) {

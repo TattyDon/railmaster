@@ -104,6 +104,7 @@ void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float
 void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
     const sim::TrackNetwork& net = rw.track();
     for (const sim::TrackEdge& e : net.edges()) {
+        if (e.removed) continue;
         glLineWidth(e.double_track ? 4.0f : 2.0f);
         glBegin(GL_LINES);
         if (e.owner == player) {
@@ -124,7 +125,7 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
     glBegin(GL_LINES);
     glColor3f(0.95f, 0.6f, 0.2f);
     for (const sim::TrackEdge& e : net.edges()) {
-        if (!e.electrified) continue;
+        if (!e.electrified || e.removed) continue;
         vertex(net.node(e.a).pos, cam);
         vertex(net.node(e.b).pos, cam);
     }

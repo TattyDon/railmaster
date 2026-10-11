@@ -45,7 +45,7 @@ Each key's name carries its unit:
 | `trains` | movement: car weights by era, load, grade and curve factors, following on single track, bridge speeds, dwell | [m1-provisional-models.md](m1-provisional-models.md) |
 | `servicing` | water, sand and oil ranges; service buildings | m1 |
 | `breakdowns` | breakdown and crash rates, maintenance ageing | m1 |
-| `track` | grade limit, structure clearances, costs per km | m1 |
+| `track` | grade limit, structure clearances, costs per km, removal refund, undo depth | m1 |
 | `stations` | costs, catchment, gathering, town reach; post offices, hotels, restaurants, taverns | m1, [m2-economy-model.md](m2-economy-model.md) |
 | `economy` | price field, drift, saturation, stockpiles, terrain conductance, price-responsive output | m2 |
 | `map` | towns, industries and ports on a new map; new industries over time | m2 |

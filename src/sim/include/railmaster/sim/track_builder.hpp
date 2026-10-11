@@ -86,7 +86,8 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
                               std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
                               const TrackBuildOptions& options, const Balance& b = default_balance());
 
-// Add a plan's nodes and pieces to the network. Returns the end node.
-NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner = 0);
+// Add a plan's nodes and pieces to the network, each piece carrying its
+// cost. Returns the end node; `built`, if given, receives the new pieces.
+NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner = 0, std::vector<EdgeId>* built = nullptr);
 
 } // namespace railmaster::sim

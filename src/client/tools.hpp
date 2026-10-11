@@ -96,6 +96,8 @@ private:
     Uint32 resign_armed_until_ = 0;     // a first Q press arms resigning for a few seconds
     Uint32 retire_armed_until_ = 0;     // and a first X press retiring this train
     sim::TrainId retire_armed_ = 0;
+    Uint32 remove_armed_until_ = 0;     // and a first X in the Track tool removing this run
+    std::vector<sim::EdgeId> remove_armed_;
     Uint32 bankrupt_armed_until_ = 0;   // likewise K for bankruptcy
     bool founding_ = false;
     bool founding_cancellable_ = false;

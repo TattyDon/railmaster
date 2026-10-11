@@ -198,6 +198,8 @@ std::string format_money(sim::Money m) {
 
 void Tools::select(Tool t) {
     cancel();
+    // Leaving the Track tool ends free undo [D].
+    if (tool_ == Tool::Track && t != Tool::Track) world_.execute(sim::EndTrackUndo{});
     tool_ = t;
 }
 
@@ -557,6 +559,46 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::CommandResult r = world_.execute(cmd);
             if (r.ok) show("ELECTRIFIED FOR " + format_money(r.cost), true);
             else show("CANNOT: " + r.error, false);
+            return true;
+        }
+        if (key == SDLK_z && (mod & KMOD_CTRL) != 0) {
+            // Free undo of the last run built since opening the Track tool [D].
+            const sim::CommandResult r = world_.execute(sim::UndoTrack{});
+            if (r.ok) {
+                cancel();
+                show("UNDONE: " + format_money(sim::Money{} - r.cost) + " REFUNDED", true);
+            } else {
+                show("CANNOT UNDO: " + r.error, false);
+            }
+            return true;
+        }
+        if (key == SDLK_x) {
+            // Bulldoze the run of track under the cursor, on a second press.
+            const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
+            if (!p) {
+                show("POINT AT A PIECE OF YOUR TRACK TO REMOVE IT", false);
+                return true;
+            }
+            const std::vector<sim::EdgeId> run = world_.railway().run_of(p->edge);
+            if (SDL_GetTicks() > remove_armed_until_ || remove_armed_ != run) {
+                sim::Money book;
+                for (sim::EdgeId e : run) book += world_.railway().track().edge(e).cost;
+                remove_armed_until_ = SDL_GetTicks() + 3000;
+                remove_armed_ = run;
+                show("PRESS X AGAIN TO REMOVE THIS TRACK: " + format_money(book) + " BOOK VALUE, " +
+                         std::to_string(world_.data().balance.track.remove_refund_percent) + "% BACK",
+                     false);
+                return true;
+            }
+            remove_armed_until_ = 0;
+            remove_armed_.clear();
+            const sim::CommandResult r = world_.execute(sim::RemoveTrack{.edges = run});
+            if (r.ok) {
+                cancel();
+                show("TRACK REMOVED: " + format_money(sim::Money{} - r.cost) + " BACK", true);
+            } else {
+                show("CANNOT: " + r.error, false);
+            }
             return true;
         }
         if (key == SDLK_d) double_track_ = !double_track_;
@@ -959,6 +1001,13 @@ void Tools::draw_world_overlay() const {
     const sim::TrackNetwork& net = world_.railway().track();
     switch (tool_) {
     case Tool::Track:
+        // Track about to be removed, in red.
+        if (SDL_GetTicks() <= remove_armed_until_) {
+            for (sim::EdgeId e : remove_armed_) {
+                const sim::TrackEdge& edge = net.edge(e);
+                if (!edge.removed) draw_line(net.node(edge.a).pos, net.node(edge.b).pos, cam_, 1.0f, 0.15f, 0.1f, 0.9f);
+            }
+        }
         if (const auto cmd = pending_track()) {
             const sim::PlanResult plan = world_.preview(*cmd);
             if (plan.plan) draw_plan(cmd->start.pos, *plan.plan, cam_);
@@ -1101,9 +1150,9 @@ std::string Tools::hint() const {
         return "TRAIN: F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
     }
     case Tool::Track:
-        return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP." : "CLICK TO START A LINE.") +
-               "  D DOUBLE: " + (double_track_ ? "ON" : "OFF") + "  C CURVES: " + (curves_ ? "ON" : "OFF") +
-               "  [ ] TUNNELS: " + std::to_string(tunnel_preference_) + "%  E ELECTRIFY (SHIFT: ALL)";
+        return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
+               (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") + "  [ ] TUNNELS " +
+               std::to_string(tunnel_preference_) + "%  E WIRE (SHIFT ALL)  CTRL+Z UNDO  XX REMOVE";
     case Tool::Station:
         if (station_building_) {
             return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +

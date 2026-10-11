@@ -179,6 +179,10 @@ public:
     // The scenario being played, if any; checked on the 1st of each month.
     const std::optional<Scenario>& scenario() const { return scenario_; }
     const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // How many track builds the player can still undo.
+    std::size_t undoable_track(PlayerId who = kHumanPlayer) const {
+        return who < track_undo_.size() ? track_undo_[who].size() : 0;
+    }
     // The score for the medal won, in thousandths; 0 without one.
     std::int64_t scenario_score_milli() const;
 
@@ -222,6 +226,14 @@ private:
     std::optional<EconomicState> economy_news_;
     EconomicState economic_state_ = EconomicState::Normal;
     std::uint64_t economy_terrain_revision_ = 0;
+    // Track builds each player may still undo (newest last): the pieces,
+    // their ends as built, and the first node id the build created.
+    struct TrackUndo {
+        std::vector<EdgeId> edges;
+        std::vector<std::pair<NodeId, NodeId>> ends;
+        NodeId first_new_node = 0;
+    };
+    std::vector<std::vector<TrackUndo>> track_undo_;
     std::optional<Scenario> scenario_;
     ScenarioResult scenario_result_;
     void check_scenario();
@@ -248,6 +260,9 @@ private:
     CommandResult run(const CopyTrain& cmd);
     CommandResult run(const RetireTrain& cmd);
     CommandResult run(const ElectrifyTrack& cmd);
+    CommandResult run(const RemoveTrack& cmd);
+    CommandResult run(const UndoTrack& cmd);
+    CommandResult run(const EndTrackUndo& cmd);
     CommandResult run(const BuyTerritoryAccess& cmd);
     // Why the acting company may not change train `id`, if it may not.
     std::optional<std::string> own_train_problem(TrainId id) const;

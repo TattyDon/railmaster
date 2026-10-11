@@ -446,6 +446,52 @@ bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco) {
     return stopped;
 }
 
+void Railway::remove_edges(const std::vector<EdgeId>& edges) {
+    for (EdgeId e : edges) track_.remove_edge(e);
+    for (Train& t : trains_) {
+        if (!on_path(t.state)) continue;
+        for (std::size_t i = t.step + 1; i < t.path.size(); ++i) {
+            if (!track_.edge(t.path[i].edge).removed) continue;
+            t.path.resize(t.step + 1);
+            t.replan = true;
+            break;
+        }
+    }
+}
+
+std::optional<TrainId> Railway::train_on(EdgeId e) const {
+    for (const Train& t : trains_)
+        if (on_path(t.state) && t.path[t.step].edge == e) return t.id;
+    return std::nullopt;
+}
+
+std::vector<EdgeId> Railway::run_of(EdgeId start) const {
+    const TrackEdge& first = track_.edge(start);
+    if (first.removed) return {};
+    const auto stop_at = [&](NodeId n) {
+        if (track_.edges_at(n).size() != 2) return true; // a junction or the end of the line
+        for (const Station& st : stations_)
+            if (st.node == n) return true;
+        for (const ServiceBuilding& b : service_buildings_)
+            if (b.node == n) return true;
+        return false;
+    };
+    std::vector<EdgeId> run{start};
+    for (NodeId n : {first.a, first.b}) {
+        EdgeId here = start;
+        while (!stop_at(n)) {
+            const auto& adj = track_.edges_at(n);
+            const EdgeId next = adj[0] == here ? adj[1] : adj[0];
+            if (track_.edge(next).owner != first.owner || next == start) break;
+            run.push_back(next);
+            here = next;
+            n = track_.edge(next).other(n);
+        }
+    }
+    std::sort(run.begin(), run.end());
+    return run;
+}
+
 void Railway::arrive_at_stop(Train& t) {
     t.at_node = track_.step_end(t.path[t.step]);
     t.path.clear();
@@ -563,6 +609,13 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
             break;
         }
         const NodeId node = track_.step_end(step);
+        if (t.step + 1 == t.path.size() && t.replan) {
+            // The track ahead was taken up: find another way from here.
+            t.replan = false;
+            t.at_node = node;
+            plan_to_current_stop(t, loco.fuel == Fuel::Electric);
+            return;
+        }
         if (t.step + 1 == t.path.size()) {
             arrive_at_stop(t);
             service_at(t, node, loco); // serviced during the station stop, no extra time

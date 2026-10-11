@@ -173,6 +173,7 @@ CommandResult World::run(const BuildTrack& cmd) {
         if (auto why = access_problem(acting().id(), p)) return fail(*why);
     if (auto why = cannot_afford(check.plan->total_cost)) return fail(*why);
 
+    const auto first_new_node = static_cast<NodeId>(railway_.track().nodes().size());
     const NodeId from = resolve_on_track(cmd.start);
     const NodeId to = resolve_on_track(cmd.end);
     // The end node already exists now (even for open ground), so plan into it.
@@ -180,9 +181,63 @@ CommandResult World::run(const BuildTrack& cmd) {
     PlanResult plan = priced(plan_track(railway_.track(), terrain_, from, std::move(points), to,
                                         options_for(cmd, date_.year()), data_.balance));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
-    build_track(railway_.track(), *plan.plan, acting().id());
+    TrackUndo undo;
+    undo.first_new_node = first_new_node;
+    build_track(railway_.track(), *plan.plan, acting().id(), &undo.edges);
+    for (EdgeId e : undo.edges) undo.ends.emplace_back(railway_.track().edge(e).a, railway_.track().edge(e).b);
     acting().invest_track(plan.plan->total_cost);
+    if (track_undo_.size() <= actor_) track_undo_.resize(std::size_t{actor_} + 1);
+    auto& stack = track_undo_[actor_];
+    stack.push_back(std::move(undo));
+    const auto depth = static_cast<std::size_t>(std::max(0, data_.balance.track.undo_depth));
+    if (stack.size() > depth) stack.erase(stack.begin(), stack.end() - static_cast<std::ptrdiff_t>(depth));
     return success(plan.plan->total_cost, to);
+}
+
+CommandResult World::run(const RemoveTrack& cmd) {
+    std::vector<EdgeId> edges = cmd.edges;
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    if (edges.empty()) return fail("no track chosen");
+    const TrackNetwork& net = railway_.track();
+    Money book;
+    for (EdgeId id : edges) {
+        if (id >= net.edges().size() || net.edge(id).removed) return fail("no such track");
+        if (net.edge(id).owner != acting().id()) return fail("you can only remove your own track");
+        if (railway_.train_on(id)) return fail("a train is on that track");
+        book += net.edge(id).cost;
+    }
+    const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
+    railway_.remove_edges(edges);
+    acting().remove_track(book, refund);
+    return success(Money{} - refund, 0);
+}
+
+CommandResult World::run(const UndoTrack&) {
+    if (actor_ >= track_undo_.size() || track_undo_[actor_].empty()) return fail("nothing to undo");
+    const TrackUndo& last = track_undo_[actor_].back();
+    const TrackNetwork& net = railway_.track();
+    Money cost;
+    for (std::size_t i = 0; i < last.edges.size(); ++i) {
+        const TrackEdge& e = net.edge(last.edges[i]);
+        if (e.removed || std::pair{e.a, e.b} != last.ends[i]) return fail("that track has been changed since");
+        if (railway_.train_on(e.id)) return fail("a train is on that track");
+        cost += e.cost;
+    }
+    const auto built_here = [&](NodeId n) { return n >= last.first_new_node; };
+    for (const Station& st : railway_.stations())
+        if (built_here(st.node)) return fail("a station stands on that track");
+    for (const ServiceBuilding& b : railway_.service_buildings())
+        if (built_here(b.node)) return fail("a support building stands on that track");
+    railway_.remove_edges(last.edges);
+    acting().remove_track(cost, cost);
+    track_undo_[actor_].pop_back();
+    return success(Money{} - cost, 0);
+}
+
+CommandResult World::run(const EndTrackUndo&) {
+    if (actor_ < track_undo_.size()) track_undo_[actor_].clear();
+    return success(Money{}, 0);
 }
 
 CommandResult World::run(const BuildStation& cmd) {
@@ -358,18 +413,21 @@ CommandResult World::run(const ElectrifyTrack& cmd) {
     edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
     if (edges.empty()) {
         for (const TrackEdge& e : net.edges())
-            if (e.owner == acting().id() && !e.electrified) edges.push_back(e.id);
+            if (e.owner == acting().id() && !e.electrified && !e.removed) edges.push_back(e.id);
         if (edges.empty()) return fail("all your track is already electrified");
     }
     Money cost;
     for (EdgeId id : edges) {
-        if (id >= net.edges().size()) return fail("no such track");
+        if (id >= net.edges().size() || net.edge(id).removed) return fail("no such track");
         if (net.edge(id).owner != acting().id()) return fail("you can only electrify your own track");
         cost += electrify_cost(id);
     }
     if (auto why = cannot_afford(cost)) return fail(*why);
     acting().invest_track(cost);
-    for (EdgeId id : edges) railway_.track().set_electrified(id, true);
+    for (EdgeId id : edges) {
+        railway_.track().add_cost(id, electrify_cost(id)); // before wiring: then it is free
+        railway_.track().set_electrified(id, true);
+    }
     return success(cost, 0);
 }
 

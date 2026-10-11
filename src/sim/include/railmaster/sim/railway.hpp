@@ -153,6 +153,9 @@ struct Train {
     std::int64_t speed_mm_per_tick = 0;
     std::int32_t wait_ticks_left = 0; // for Dwelling, Servicing and BrokenDown
     bool yielding = false; // stopped this tick to let a higher-priority train pass
+    // Track ahead was removed: at the end of the current piece, find a new
+    // way to the next stop.
+    bool replan = false;
 
     // Gauges, 0..kGaugeFull. Water only matters for steam engines.
     std::int32_t water = kGaugeFull;
@@ -252,6 +255,16 @@ public:
     // Split a piece of track (see TrackNetwork::split_edge) and patch the
     // paths of trains using it, so they carry on undisturbed.
     NodeId split_edge(EdgeId e, MapPoint at);
+    // Take pieces of track out of the network. Trains whose way ahead ran
+    // over them find another at the end of the piece they are on; callers
+    // must not remove a piece a train is on (see train_on).
+    void remove_edges(const std::vector<EdgeId>& edges);
+    // The train standing or running on a piece of track, if any.
+    std::optional<TrainId> train_on(EdgeId e) const;
+    // The run of track a piece belongs to: it and its neighbours out to the
+    // nearest junction, station, support building, end of line or change
+    // of owner.
+    std::vector<EdgeId> run_of(EdgeId e) const;
 
     StationId add_station(std::string name, NodeId node, StationSize size, CompanyId owner = 0);
     const Station& station(StationId id) const { return stations_.at(id); }

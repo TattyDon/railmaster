@@ -57,6 +57,7 @@ std::string build_demo_network(World& world) {
     }
     must(world, BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[1], st[2]}, .priority = 1});
     must(world, BuyTrain{.loco = loco, .cars = 4, .route = {st[0], st[2], st[1]}});
+    must(world, EndTrackUndo{}); // the starting network is not the player's to undo
     return "Demo network joining " + picked[0]->name + ", " + picked[1]->name + " and " + picked[2]->name +
            " built for $" + std::to_string(world.total_spent().whole_dollars());
 }

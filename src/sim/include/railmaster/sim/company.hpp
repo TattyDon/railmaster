@@ -126,6 +126,10 @@ public:
     void invest_industry(Money cost);
     // A train destroyed in a crash leaves the books.
     void write_off_train(Money cost) { rolling_stock_ -= cost; }
+    // Track taken up: its book value leaves the books and `refund` comes
+    // back in cash. An undo (refund == book) also takes it off this year's
+    // investment.
+    void remove_track(Money book, Money refund);
 
     Money track_value() const { return track_; }
     Money building_value() const { return buildings_; }

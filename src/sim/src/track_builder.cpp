@@ -256,13 +256,15 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
     return result;
 }
 
-NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner) {
+NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner, std::vector<EdgeId>* built) {
     NodeId prev = plan.from;
     for (std::size_t i = 0; i < plan.points.size(); ++i) {
         const bool last = i + 1 == plan.points.size();
         const NodeId next = (last && plan.end_node) ? *plan.end_node : net.add_node(plan.points[i], plan.rail_z_mm[i]);
         const PlannedPiece& p = plan.pieces[i];
-        net.add_edge(prev, next, plan.double_track, p.kind, p.bridge, owner);
+        const EdgeId e = net.add_edge(prev, next, plan.double_track, p.kind, p.bridge, owner);
+        net.add_cost(e, p.cost);
+        if (built) built->push_back(e);
         prev = next;
     }
     return prev;
