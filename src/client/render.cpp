@@ -473,95 +473,6 @@ void prism(float x, float y, float zc, float dx, float dy, float hl, float r, co
     }
 }
 
-// One piece of rolling stock: its kind decides the shape and colours.
-enum class Stock { Steam, Diesel, Electric, Coach, Mail, Diner, Boxcar, Hopper, Caboose };
-
-// Draw it with its front at `front` tiles along (dx, dy) from (x, y); returns its length.
-float rolling_stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery) {
-    const float wide = 0.05f * s;
-    const float frame[3] = {0.12f, 0.11f, 0.11f};
-    const auto at = [&](float along, float& ox, float& oy) {
-        ox = x - dx * along;
-        oy = y - dy * along;
-    };
-    float cx, cy;
-    switch (kind) {
-    case Stock::Steam: {
-        const float len = 0.30f * s;
-        const float black[3] = {0.14f, 0.14f, 0.15f};
-        at(len / 2, cx, cy);
-        box(cx, cy, z, dx, dy, len / 2, wide * 0.9f, 0.03f * s, frame, frame); // running gear
-        at(0.10f * s, cx, cy);
-        prism(cx, cy, z + 0.065f * s, dx, dy, 0.09f * s, 0.036f * s, black); // boiler
-        at(0.03f * s, cx, cy);
-        box(cx, cy, z + 0.03f * s, dx, dy, 0.012f * s, 0.012f * s, 0.085f * s, black, black); // chimney
-        at(0.215f * s, cx, cy);
-        box(cx, cy, z + 0.03f * s, dx, dy, 0.035f * s, wide, 0.085f * s, livery, black); // cab
-        at(0.275f * s, cx, cy);
-        box(cx, cy, z + 0.03f * s, dx, dy, 0.025f * s, wide * 0.9f, 0.05f * s, black, black); // tender
-        return len;
-    }
-    case Stock::Diesel:
-    case Stock::Electric: {
-        const float len = 0.26f * s;
-        const float roof[3] = {livery[0] * 0.6f, livery[1] * 0.6f, livery[2] * 0.6f};
-        at(len / 2, cx, cy);
-        box(cx, cy, z, dx, dy, len / 2, wide * 0.9f, 0.03f * s, frame, frame);
-        box(cx, cy, z + 0.03f * s, dx, dy, len / 2 * 0.95f, wide, 0.065f * s, livery, roof);
-        // A dark band of cab windows at the front.
-        const float glass[3] = {0.15f, 0.2f, 0.25f};
-        at(0.025f * s, cx, cy);
-        box(cx, cy, z + 0.07f * s, dx, dy, 0.018f * s, wide * 1.02f, 0.022f * s, glass, roof);
-        if (kind == Stock::Electric) {
-            // A pantograph up to the wires.
-            at(0.08f * s, cx, cy);
-            const float bar[3] = {0.3f, 0.3f, 0.3f};
-            box(cx, cy, z + 0.095f * s, dx, dy, 0.004f * s, wide * 0.6f, 0.05f * s, bar, bar);
-        }
-        return len;
-    }
-    case Stock::Coach:
-    case Stock::Mail:
-    case Stock::Diner: {
-        const float len = 0.22f * s;
-        const float body[3] = {kind == Stock::Mail ? 0.45f : 0.38f, kind == Stock::Mail ? 0.12f : 0.18f,
-                               kind == Stock::Mail ? 0.1f : 0.12f};
-        const float roof[3] = {0.32f, 0.32f, 0.34f};
-        const float band[3] = {kind == Stock::Diner ? 0.85f : 0.8f, kind == Stock::Diner ? 0.7f : 0.72f,
-                               kind == Stock::Diner ? 0.3f : 0.55f};
-        at(len / 2, cx, cy);
-        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
-        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.97f, wide, 0.065f * s, body, roof);
-        if (kind != Stock::Mail) {
-            // A line of windows.
-            box(cx, cy, z + 0.06f * s, dx, dy, len / 2 * 0.9f, wide * 1.02f, 0.016f * s, band, roof);
-        }
-        return len;
-    }
-    case Stock::Boxcar:
-    case Stock::Hopper: {
-        const float len = 0.18f * s;
-        const float body[3] = {kind == Stock::Hopper ? 0.25f : 0.5f, kind == Stock::Hopper ? 0.24f : 0.32f,
-                               kind == Stock::Hopper ? 0.23f : 0.2f};
-        const float top[3] = {kind == Stock::Hopper ? 0.08f : 0.42f, kind == Stock::Hopper ? 0.08f : 0.27f,
-                              kind == Stock::Hopper ? 0.08f : 0.17f};
-        at(len / 2, cx, cy);
-        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
-        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.97f, wide, (kind == Stock::Hopper ? 0.045f : 0.06f) * s, body, top);
-        return len;
-    }
-    case Stock::Caboose: {
-        const float len = 0.12f * s;
-        const float red[3] = {0.7f, 0.15f, 0.1f}, roof[3] = {0.3f, 0.1f, 0.08f};
-        at(len / 2, cx, cy);
-        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
-        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.95f, wide, 0.055f * s, red, roof);
-        box(cx, cy, z + 0.08f * s, dx, dy, len / 6, wide * 0.6f, 0.025f * s, red, roof); // cupola
-        return len;
-    }
-    }
-    return 0.0f;
-}
 
 // An upright cylinder of eight sides (tanks, silos, stacks, cooling towers);
 // `top_r` narrows or widens the top. Inside GL_QUADS.
@@ -630,6 +541,258 @@ void heap(float x, float y, float z, float half, float h, const float* colour) {
         glVertex3f(x, y, z + h);
         glVertex3f(x, y, z + h);
     }
+}
+
+// The end of a prism: an octagon facing along +-(dx, dy). Inside GL_QUADS.
+void prism_cap(float x, float y, float zc, float dx, float dy, float r, float facing, const float* colour) {
+    const float px = -dy, py = dx;
+    glColor3fv(colour);
+    glNormal3f(dx * facing, dy * facing, 0);
+    constexpr int kSides = 8;
+    for (int i = 0; i < kSides; i += 2) {
+        // Two triangles of the fan as one quad: centre, then three rim points.
+        const auto rim = [&](int j) {
+            const float an = 6.2831853f * static_cast<float>(j) / kSides;
+            glVertex3f(x + px * r * std::cos(an), y + py * r * std::cos(an), zc + r * std::sin(an));
+        };
+        glVertex3f(x, y, zc);
+        if (facing > 0) { rim(i); rim(i + 1); rim(i + 2); }
+        else { rim(i + 2); rim(i + 1); rim(i); }
+    }
+}
+
+// A pair of wheels on an axle across the track at (x, y), its hub `r` above
+// the rail: a drum with its faces. Inside GL_QUADS.
+void wheel(float x, float y, float rail_z, float dx, float dy, float r, float hw, const float* tyre, const float* face) {
+    const float px = -dy, py = dx, zc = rail_z + r;
+    constexpr int kSides = 8;
+    glColor3fv(tyre);
+    for (int i = 0; i < kSides; ++i) {
+        const float a0 = 6.2831853f * static_cast<float>(i) / kSides, a1 = 6.2831853f * static_cast<float>(i + 1) / kSides;
+        const float am = (a0 + a1) / 2;
+        glNormal3f(dx * std::cos(am), dy * std::cos(am), std::sin(am));
+        const float x0 = dx * r * std::cos(a0), y0 = dy * r * std::cos(a0), z0 = r * std::sin(a0);
+        const float x1 = dx * r * std::cos(a1), y1 = dy * r * std::cos(a1), z1 = r * std::sin(a1);
+        glVertex3f(x + x0 - px * hw, y + y0 - py * hw, zc + z0);
+        glVertex3f(x + x1 - px * hw, y + y1 - py * hw, zc + z1);
+        glVertex3f(x + x1 + px * hw, y + y1 + py * hw, zc + z1);
+        glVertex3f(x + x0 + px * hw, y + y0 + py * hw, zc + z0);
+    }
+    // The faces, seen from the side.
+    for (const float sgn : {-1.0f, 1.0f}) {
+        glColor3fv(face);
+        glNormal3f(px * sgn, py * sgn, 0);
+        for (int i = 0; i < kSides; i += 2) {
+            const auto rim = [&](int j) {
+                const float an = 6.2831853f * static_cast<float>(j) / kSides;
+                glVertex3f(x + dx * r * std::cos(an) + px * hw * sgn, y + dy * r * std::cos(an) + py * hw * sgn, zc + r * std::sin(an));
+            };
+            glVertex3f(x + px * hw * sgn, y + py * hw * sgn, zc);
+            if (sgn > 0) { rim(i + 2); rim(i + 1); rim(i); }
+            else { rim(i); rim(i + 1); rim(i + 2); }
+        }
+    }
+}
+
+// Marks along both sides of a body (windows, doors, stripes): `n` of them
+// evenly over its length, `w` half wide, from z0 to z1. Inside GL_QUADS.
+void side_marks(float x, float y, float dx, float dy, float hl, float hw, int n, float w, float z0, float z1, const float* colour) {
+    const float px = -dy, py = dx;
+    glColor3fv(colour);
+    for (const float sgn : {-1.0f, 1.0f}) {
+        glNormal3f(px * sgn, py * sgn, 0);
+        const float off = hw + 0.002f;
+        for (int i = 0; i < n; ++i) {
+            const float t = -hl + (static_cast<float>(i) + 0.5f) * 2 * hl / static_cast<float>(n);
+            const float cx = x + dx * t + px * off * sgn, cy = y + dy * t + py * off * sgn;
+            const float ex = dx * w * sgn, ey = dy * w * sgn;
+            glVertex3f(cx + ex, cy + ey, z0);
+            glVertex3f(cx - ex, cy - ey, z0);
+            glVertex3f(cx - ex, cy - ey, z1);
+            glVertex3f(cx + ex, cy + ey, z1);
+        }
+    }
+}
+
+// One piece of rolling stock: its kind decides the shape and colours.
+enum class Stock { Steam, Diesel, Electric, Coach, Mail, Diner, Boxcar, Hopper, Caboose };
+
+// Draw it with its front at (x, y), rail height z, facing (dx, dy), `s`
+// times life size; returns its length. `load` colours a hopper's heap.
+float rolling_stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery,
+                    const float* load = nullptr) {
+    const float wide = 0.05f * s;
+    const float frame[3] = {0.12f, 0.11f, 0.11f}, steel[3] = {0.22f, 0.22f, 0.24f};
+    const float glass[3] = {0.16f, 0.2f, 0.26f};
+    const auto at = [&](float along, float& ox, float& oy) {
+        ox = x - dx * along;
+        oy = y - dy * along;
+    };
+    float cx, cy;
+    // A bogie: a dark frame on two axles.
+    const auto bogie = [&](float along) {
+        at(along, cx, cy);
+        box(cx, cy, z + 0.008f * s, dx, dy, 0.03f * s, wide * 0.8f, 0.016f * s, frame, frame);
+        for (const float d : {-0.017f, 0.017f}) {
+            float wx, wy;
+            at(along + d * s, wx, wy);
+            wheel(wx, wy, z, dx, dy, 0.012f * s, wide * 0.75f, steel, frame);
+        }
+    };
+    switch (kind) {
+    case Stock::Steam: {
+        const float len = 0.31f * s;
+        const float black[3] = {0.13f, 0.13f, 0.14f}, smokebox[3] = {0.08f, 0.08f, 0.09f};
+        const float driver[3] = {0.62f, 0.12f, 0.1f}, brass[3] = {0.78f, 0.62f, 0.28f}, lamp[3] = {1.0f, 0.92f, 0.55f};
+        const float boiler[3] = {livery[0] * 0.35f + 0.08f, livery[1] * 0.35f + 0.08f, livery[2] * 0.35f + 0.08f};
+        // Wheels: a pony truck, three big drivers, and the tender's.
+        at(0.035f * s, cx, cy);
+        wheel(cx, cy, z, dx, dy, 0.016f * s, wide * 0.7f, steel, frame);
+        for (const float d : {0.095f, 0.15f, 0.205f}) {
+            at(d * s, cx, cy);
+            wheel(cx, cy, z, dx, dy, 0.03f * s, wide * 0.8f, steel, driver);
+        }
+        for (const float d : {0.25f, 0.295f}) {
+            at(d * s, cx, cy);
+            wheel(cx, cy, z, dx, dy, 0.015f * s, wide * 0.75f, steel, frame);
+        }
+        // The frame and running board.
+        at(0.13f * s, cx, cy);
+        box(cx, cy, z + 0.03f * s, dx, dy, 0.13f * s, wide * 0.55f, 0.012f * s, frame, frame);
+        box(cx, cy, z + 0.042f * s, dx, dy, 0.13f * s, wide, 0.006f * s, black, black);
+        // The cowcatcher and buffer beam.
+        at(0.002f * s, cx, cy);
+        box(cx, cy, z + 0.006f * s, dx, dy, 0.008f * s, wide * 0.8f, 0.034f * s, driver, driver);
+        // Boiler and smokebox, capped at the front.
+        const float zc = z + 0.084f * s, r = 0.036f * s;
+        at(0.11f * s, cx, cy);
+        prism(cx, cy, zc, dx, dy, 0.08f * s, r, boiler);
+        at(0.017f * s, cx, cy);
+        prism(cx, cy, zc, dx, dy, 0.013f * s, r * 1.05f, smokebox);
+        at(0.004f * s, cx, cy);
+        prism_cap(cx, cy, zc, dx, dy, r * 1.05f, 1.0f, smokebox);
+        // Chimney (flared), domes and headlamp.
+        at(0.02f * s, cx, cy);
+        cylinder(cx, cy, zc + r * 0.8f, 0.009f * s, 0.04f * s, black, black, 0.015f * s);
+        box(cx + dx * 0.012f * s, cy + dy * 0.012f * s, zc + r * 0.7f, dx, dy, 0.006f * s, 0.008f * s, 0.012f * s, lamp, lamp);
+        at(0.1f * s, cx, cy);
+        cylinder(cx, cy, zc + r * 0.8f, 0.013f * s, 0.024f * s, brass, brass, 0.008f * s);
+        at(0.15f * s, cx, cy);
+        cylinder(cx, cy, zc + r * 0.8f, 0.011f * s, 0.018f * s, boiler, boiler, 0.007f * s);
+        // The cab, with a roof and windows.
+        at(0.215f * s, cx, cy);
+        box(cx, cy, z + 0.048f * s, dx, dy, 0.035f * s, wide, 0.072f * s, livery, livery);
+        box(cx, cy, z + 0.12f * s, dx, dy, 0.042f * s, wide * 1.12f, 0.007f * s, black, black);
+        side_marks(cx, cy, dx, dy, 0.035f * s, wide, 1, 0.014f * s, z + 0.085f * s, z + 0.11f * s, glass);
+        // The tender, heaped with coal.
+        at(0.272f * s, cx, cy);
+        box(cx, cy, z + 0.03f * s, dx, dy, 0.035f * s, wide * 0.95f, 0.062f * s, livery, black);
+        heap(cx, cy, z + 0.092f * s, 0.028f * s, 0.018f * s, black);
+        return len;
+    }
+    case Stock::Diesel:
+    case Stock::Electric: {
+        const float len = 0.27f * s;
+        const float roof[3] = {livery[0] * 0.55f, livery[1] * 0.55f, livery[2] * 0.55f};
+        const float stripe[3] = {std::min(1.0f, livery[0] * 0.4f + 0.6f), std::min(1.0f, livery[1] * 0.4f + 0.55f),
+                                 std::min(1.0f, livery[2] * 0.4f + 0.3f)};
+        bogie(0.05f * s);
+        bogie(0.22f * s);
+        at(len / 2, cx, cy);
+        box(cx, cy, z + 0.024f * s, dx, dy, len / 2, wide * 0.9f, 0.012f * s, frame, frame);
+        if (kind == Stock::Diesel) {
+            // A road-switcher: a long hood, the cab near the front, a short nose.
+            at(0.03f * s, cx, cy);
+            box(cx, cy, z + 0.036f * s, dx, dy, 0.025f * s, wide * 0.7f, 0.045f * s, livery, roof);
+            at(0.075f * s, cx, cy);
+            box(cx, cy, z + 0.036f * s, dx, dy, 0.022f * s, wide, 0.075f * s, livery, roof);
+            side_marks(cx, cy, dx, dy, 0.022f * s, wide, 2, 0.007f * s, z + 0.08f * s, z + 0.1f * s, glass);
+            at(0.0545f * s, cx, cy);
+            box(cx, cy, z + 0.08f * s, dx, dy, 0.0015f * s, wide * 0.8f, 0.02f * s, glass, glass); // windscreen
+            at(0.18f * s, cx, cy);
+            box(cx, cy, z + 0.036f * s, dx, dy, 0.083f * s, wide * 0.72f, 0.058f * s, livery, roof);
+            side_marks(cx, cy, dx, dy, 0.083f * s, wide * 0.72f, 1, 0.08f * s, z + 0.05f * s, z + 0.058f * s, stripe);
+            // An exhaust stack.
+            at(0.16f * s, cx, cy);
+            cylinder(cx, cy, z + 0.094f * s, 0.006f * s, 0.01f * s, frame, frame);
+        } else {
+            // A box cab, windscreens at both ends and a pantograph.
+            at(len / 2, cx, cy);
+            box(cx, cy, z + 0.036f * s, dx, dy, len / 2 * 0.96f, wide, 0.075f * s, livery, roof);
+            side_marks(cx, cy, dx, dy, len / 2 * 0.96f, wide, 6, 0.008f * s, z + 0.08f * s, z + 0.098f * s, glass);
+            side_marks(cx, cy, dx, dy, len / 2 * 0.96f, wide, 1, len / 2 * 0.9f, z + 0.05f * s, z + 0.058f * s, stripe);
+            for (const float end : {0.006f, len / s - 0.006f}) {
+                at(end * s, cx, cy);
+                box(cx, cy, z + 0.08f * s, dx, dy, 0.002f * s, wide * 0.8f, 0.02f * s, glass, glass);
+            }
+            const float bar[3] = {0.3f, 0.3f, 0.32f};
+            at(0.09f * s, cx, cy);
+            box(cx, cy, z + 0.111f * s, dx, dy, 0.025f * s, wide * 0.5f, 0.006f * s, bar, bar); // base
+            at(0.08f * s, cx, cy);
+            box(cx, cy, z + 0.117f * s, dx, dy, 0.003f * s, 0.003f * s, 0.04f * s, bar, bar); // arm
+            box(cx, cy, z + 0.155f * s, dx, dy, 0.005f * s, wide * 0.7f, 0.004f * s, bar, bar); // shoe
+        }
+        return len;
+    }
+    case Stock::Coach:
+    case Stock::Mail:
+    case Stock::Diner: {
+        const float len = 0.23f * s;
+        const float body[3] = {kind == Stock::Mail ? 0.45f : 0.36f, kind == Stock::Mail ? 0.12f : 0.17f,
+                               kind == Stock::Mail ? 0.1f : 0.11f};
+        const float roof[3] = {0.3f, 0.3f, 0.32f};
+        const float lit[3] = {kind == Stock::Diner ? 0.85f : 0.75f, kind == Stock::Diner ? 0.72f : 0.7f,
+                              kind == Stock::Diner ? 0.4f : 0.55f};
+        bogie(0.04f * s);
+        bogie(len - 0.04f * s);
+        at(len / 2, cx, cy);
+        box(cx, cy, z + 0.024f * s, dx, dy, len / 2 * 0.97f, wide, 0.068f * s, body, roof);
+        // A clerestory along the roof.
+        box(cx, cy, z + 0.092f * s, dx, dy, len / 2 * 0.8f, wide * 0.5f, 0.01f * s, roof, roof);
+        if (kind == Stock::Mail) {
+            const float door[3] = {0.3f, 0.08f, 0.06f};
+            side_marks(cx, cy, dx, dy, len / 2 * 0.6f, wide, 2, 0.012f * s, z + 0.03f * s, z + 0.085f * s, door);
+        } else {
+            side_marks(cx, cy, dx, dy, len / 2 * 0.9f, wide, 8, 0.008f * s, z + 0.058f * s, z + 0.078f * s, lit);
+        }
+        return len;
+    }
+    case Stock::Boxcar:
+    case Stock::Hopper: {
+        const float len = 0.19f * s;
+        bogie(0.035f * s);
+        bogie(len - 0.035f * s);
+        at(len / 2, cx, cy);
+        if (kind == Stock::Boxcar) {
+            const float body[3] = {0.5f, 0.3f, 0.19f}, top[3] = {0.4f, 0.25f, 0.16f}, door[3] = {0.36f, 0.21f, 0.13f};
+            box(cx, cy, z + 0.024f * s, dx, dy, len / 2 * 0.97f, wide, 0.062f * s, body, top);
+            side_marks(cx, cy, dx, dy, len / 2 * 0.95f, wide, 6, 0.002f * s, z + 0.026f * s, z + 0.084f * s, door); // ribs
+            side_marks(cx, cy, dx, dy, 0.0f, wide, 1, 0.018f * s, z + 0.028f * s, z + 0.08f * s, door); // the door
+        } else {
+            const float body[3] = {0.24f, 0.23f, 0.22f};
+            const float heap_rgb[3] = {load ? load[0] : 0.08f, load ? load[1] : 0.08f, load ? load[2] : 0.08f};
+            box(cx, cy, z + 0.024f * s, dx, dy, len / 2 * 0.97f, wide, 0.05f * s, body, heap_rgb);
+            side_marks(cx, cy, dx, dy, len / 2 * 0.95f, wide, 4, 0.002f * s, z + 0.026f * s, z + 0.074f * s, frame); // ribs
+            // Its load heaped above the sides.
+            heap(cx - dx * len * 0.22f, cy - dy * len * 0.22f, z + 0.074f * s, wide * 0.85f, 0.02f * s, heap_rgb);
+            heap(cx + dx * len * 0.22f, cy + dy * len * 0.22f, z + 0.074f * s, wide * 0.85f, 0.02f * s, heap_rgb);
+        }
+        return len;
+    }
+    case Stock::Caboose: {
+        const float len = 0.13f * s;
+        const float red[3] = {0.7f, 0.15f, 0.1f}, roof[3] = {0.3f, 0.1f, 0.08f};
+        bogie(0.03f * s);
+        bogie(len - 0.03f * s);
+        at(len / 2, cx, cy);
+        box(cx, cy, z + 0.024f * s, dx, dy, len / 2 * 0.9f, wide, 0.058f * s, red, roof);
+        side_marks(cx, cy, dx, dy, len / 2 * 0.8f, wide, 3, 0.007f * s, z + 0.055f * s, z + 0.072f * s, glass);
+        box(cx, cy, z + 0.082f * s, dx, dy, len / 6, wide * 0.65f, 0.026f * s, red, roof); // cupola
+        side_marks(cx, cy, dx, dy, len / 6, wide * 0.65f, 2, 0.006f * s, z + 0.09f * s, z + 0.102f * s, glass);
+        return len;
+    }
+    }
+    return 0.0f;
 }
 
 // A patch of crop or pasture on the ground. Inside GL_QUADS.
@@ -1547,7 +1710,7 @@ void draw_railway(const sim::World& w, const Camera& cam) {
             const float gap = 0.012f * s;
             float back = rolling_stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
             if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
-                add_smoke(x - p.dx * 0.03f * s, y - p.dy * 0.03f * s, z + 0.115f * s, 0.028f * s);
+                add_smoke(x - p.dx * 0.02f * s, y - p.dy * 0.02f * s, z + 0.155f * s, 0.016f * s);
             }
             const auto behind = [&](Stock kind) {
                 back += rolling_stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
@@ -1556,7 +1719,12 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                 if (!car.cargo) continue; // empty cars are left behind
                 const sim::CargoType& cargo = w.data().cargo.get(*car.cargo);
                 if (cargo.cargo_class == sim::CargoClass::Express) behind(cargo.key == "mail" ? Stock::Mail : Stock::Coach);
-                else behind(cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite" ? Stock::Hopper : Stock::Boxcar);
+                else if (cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite") {
+                    static constexpr float kCoal[3] = {0.07f, 0.07f, 0.08f}, kIron[3] = {0.45f, 0.24f, 0.16f},
+                                           kBauxite[3] = {0.62f, 0.3f, 0.2f};
+                    const float* load = cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite;
+                    back += rolling_stock(Stock::Hopper, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c, load) + gap;
+                } else behind(Stock::Boxcar);
             }
             if (t.diner) behind(Stock::Diner);
             if (t.caboose) behind(Stock::Caboose);

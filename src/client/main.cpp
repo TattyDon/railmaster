@@ -384,8 +384,8 @@ int main(int argc, char* argv[]) {
             glEnable(GL_FOG);
             glFogi(GL_FOG_MODE, GL_LINEAR);
             glFogfv(GL_FOG_COLOR, sky);
-            glFogf(GL_FOG_START, cam.distance * 1.6f);
-            glFogf(GL_FOG_END, cam.distance * 5.0f);
+            glFogf(GL_FOG_START, cam.distance * 2.5f);
+            glFogf(GL_FOG_END, cam.distance * 7.0f);
         }
         client::draw_terrain(world.terrain(), cam);
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);

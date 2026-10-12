@@ -204,9 +204,17 @@ cottages, two-storey houses and terraced rows outside, shops and offices
 with awnings in the middle (taller as the town grows) and a church with a
 spire. Streets are dirt, then gravel from 1890 and asphalt from 1930.
 
+Rolling stock is modelled: steam engines with red spoked drivers, a pony
+truck, smokebox, flared chimney, brass steam dome, sand dome, headlamp,
+buffer beam, a windowed cab and a tender heaped with coal; road-switcher
+diesels (hood, cab, nose, stripe, exhaust) and box-cab electrics with a
+pantograph, on bogies; coaches with rows of lit windows and a clerestory,
+mail vans with doors, ribbed boxcars with a door, open hoppers showing
+their load (coal, iron or bauxite), and a caboose with its cupola.
+
 Next:
-- Proper low-poly models for engines, cars, stations and buildings, with
-  LOD; textures; a modern shader pipeline.
+- Proper low-poly models for stations and industries, with LOD; textures
+  on buildings; a modern shader pipeline.
 - Edge scrolling; smoke and lights; day and night.
 
 Still to do:
