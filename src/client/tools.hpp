@@ -84,9 +84,22 @@ private:
     // What the station tool places: a station, or a building near one.
     std::optional<sim::StationBuildingType> station_building_{};
 
-    std::vector<sim::StationId> route_;
-    std::vector<bool> route_service_;          // one per stop in route_
+    // The route being put together in the Train tool, stop by stop, with
+    // what the train takes on at each (rt3-clone-spec §9.3).
+    struct PendingStop {
+        sim::StationId station = 0;
+        bool service = false;
+        sim::ConsistRule rule{};
+    };
+    std::vector<PendingStop> stops_;
+    std::size_t stop_sel_ = 0;                 // the stop the consist keys change
+    std::size_t cargo_choice_ = 0;             // the cargo a custom consist's next car carries
     std::optional<sim::TrainId> editing_{};    // the train whose route the Train tool is changing
+    std::vector<sim::StationId> pending_route() const;
+    std::vector<bool> pending_service() const;
+    // Give the train each pending stop's consist; false (with a message) on refusal.
+    bool apply_consists(sim::TrainId id);
+    std::string stop_text() const;
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
 

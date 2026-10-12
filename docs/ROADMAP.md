@@ -36,9 +36,8 @@ manual service stops and priority (rt3-clone-spec §9.3), from Inspect
 Bridge, tunnel and overpass frequency settings (Never to Common, §11.2)
 are done too: T, B and G in the Track tool.
 
-Still to do:
-- Per-stop consists and custom cars in the client (the simulation has them:
-  rt3-clone-spec §9.3).
+Per-stop consists and custom cars can be set in the client too (Train
+tool, rt3-clone-spec §9.3).
 
 ## M2: The economy (in progress)
 Done in the first slice: the economy-node grid and cargo price field, with
