@@ -13,8 +13,8 @@ may and may not contain.
 Railmaster is a desktop game: you build it from source and run it. It takes
 a few minutes. The 3D client is in its first stage: lit, textured terrain
 with rivers, woods, shadows and distance haze; towns laid out along streets, with
-houses, terraces, shops and a church; modelled engines, cars and
-stations; track and industries as simple shapes; smoke from steam engines and works chimneys; and a
+houses, terraces, shops and a church; engines, cars and trees from
+Kenney's CC0 kits; stations, track and industries drawn in code; smoke from steam engines and works chimneys; and a
 camera you can turn and tilt. Proper models come later
 ([docs/ROADMAP.md](docs/ROADMAP.md)); V switches to the old flat map.
 
@@ -238,3 +238,8 @@ the behaviour down with a source, then implement it, then test it.
 ## Licence
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+Art in `data/models/` is by Kenney (www.kenney.nl), CC0; see each pack's
+`License.txt` and [docs/models.md](docs/models.md). The model and image
+loaders in `third_party/` are cgltf (MIT) and stb_image (public domain);
+see [third_party/README.md](third_party/README.md).

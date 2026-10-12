@@ -244,14 +244,15 @@ buildings, engines, cars and each industry; empty roles keep the code's
 shapes (docs/models.md). Models are fitted to their plot, track or site,
 turned to face the street or track, and lit and shadowed by the shaders
 (which recover map positions through the inverse view, so models keep
-their own transforms). No art ships yet: the CC0 sites are out of reach
-from the build environment, and the CC0 city models that were reachable
-were modern blocks, wrong for 1830.
+their own transforms). Engines and cars come from Kenney's Train Kit
+(CC0), freight cars by cargo (coal, ore, logs, lumber, tank wagons), and
+the woods from Kenney's Nature Kit (CC0), recoloured by material name to
+the game's greens. Town buildings, stations and industries are still drawn
+in code until period-appropriate art is found.
 
 Next:
-- Real art: period-appropriate CC0 packs for engines, cars, buildings and
-  industries, mapped in data/models/models.json; models for trees, with
-  LOD (code-drawn trees far off).
+- Real art: period-appropriate CC0 buildings, stations and industries
+  (or assembled from modular kits); LOD for model trees far off.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

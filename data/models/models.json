@@ -1,5 +1,57 @@
 {
   "about": "Art for the 3D client. For each role it draws, list the glTF models (.glb or .gltf, paths relative to this folder) that can play it; one is picked per object. Roles left empty are drawn in code. See docs/models.md for the roles and how to add art.",
+  "material_colors": {
+    "leafsGreen": [0.28, 0.5, 0.2],
+    "leafsDark": [0.15, 0.34, 0.18],
+    "woodBark": [0.45, 0.32, 0.22],
+    "woodBarkDark": [0.36, 0.26, 0.19]
+  },
   "roles": {
+    "engine_steam": [
+      "kenney-train-kit/train-locomotive-a.glb",
+      "kenney-train-kit/train-locomotive-b.glb",
+      "kenney-train-kit/train-locomotive-c.glb"
+    ],
+    "engine_diesel": [
+      "kenney-train-kit/train-diesel-a.glb",
+      "kenney-train-kit/train-diesel-b.glb",
+      "kenney-train-kit/train-diesel-box-a.glb"
+    ],
+    "engine_electric": [
+      "kenney-train-kit/train-electric-square-a.glb",
+      "kenney-train-kit/train-electric-square-b.glb"
+    ],
+    "car_coach": ["kenney-train-kit/train-locomotive-passenger-a.glb"],
+    "car_diner": ["kenney-train-kit/train-locomotive-passenger-a.glb"],
+    "car_mail": ["kenney-train-kit/train-locomotive-passenger-b.glb"],
+    "car_boxcar": [
+      "kenney-train-kit/train-carriage-container-red.glb",
+      "kenney-train-kit/train-carriage-container-green.glb",
+      "kenney-train-kit/train-carriage-container-blue.glb"
+    ],
+    "car_hopper": ["kenney-train-kit/train-carriage-coal.glb"],
+    "car:coal": ["kenney-train-kit/train-carriage-coal.glb"],
+    "car:iron": ["kenney-train-kit/train-carriage-dirt.glb"],
+    "car:bauxite": ["kenney-train-kit/train-carriage-dirt.glb"],
+    "car:uranium": ["kenney-train-kit/train-carriage-dirt.glb"],
+    "car:logs": ["kenney-train-kit/train-carriage-wood.glb"],
+    "car:pulpwood": ["kenney-train-kit/train-carriage-wood.glb"],
+    "car:lumber": ["kenney-train-kit/train-carriage-lumber.glb"],
+    "car:oil": ["kenney-train-kit/train-carriage-tank.glb"],
+    "car:diesel": ["kenney-train-kit/train-carriage-tank.glb"],
+    "car:chemicals": ["kenney-train-kit/train-carriage-tank.glb"],
+    "car:milk": ["kenney-train-kit/train-carriage-tank.glb"],
+    "tree_broadleaf": [
+      "kenney-nature-kit/tree_oak.glb",
+      "kenney-nature-kit/tree_default.glb",
+      "kenney-nature-kit/tree_fat.glb",
+      "kenney-nature-kit/tree_detailed.glb"
+    ],
+    "tree_conifer": [
+      "kenney-nature-kit/tree_pineTallA.glb",
+      "kenney-nature-kit/tree_pineTallB.glb",
+      "kenney-nature-kit/tree_pineDefaultA.glb",
+      "kenney-nature-kit/tree_cone.glb"
+    ]
   }
 }

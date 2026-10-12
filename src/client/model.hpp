@@ -32,8 +32,11 @@ bool has(const std::string& role);
 
 // Draw a model standing at (x, y, z) in tiles, turned so its front faces
 // (fx, fy), scaled so its footprint is `width` tiles across (x) and, when
-// `depth` > 0, `depth` tiles deep (y); height scales with the width. Not
-// inside glBegin/glEnd.
+// `depth` > 0, `depth` tiles deep (y); height scales with the width. With
+// `width` 0 it keeps its proportions, fitted to `depth`. Not inside
+// glBegin/glEnd.
 void draw(const Model& m, float x, float y, float z, float fx, float fy, float width, float depth = 0.0f);
+// The same, scaled evenly so it stands `height` tiles tall.
+void draw_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height);
 
 } // namespace railmaster::client::models

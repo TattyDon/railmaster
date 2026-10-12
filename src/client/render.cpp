@@ -809,13 +809,18 @@ const char* stock_role(Stock kind) {
     return "";
 }
 
-// Rolling stock from the art where its role has a model, else drawn in
-// code; returns its length. Inside GL_QUADS (a model briefly leaves it).
-float stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery, const float* load = nullptr) {
-    if (const models::Model* m = models::pick(stock_role(kind), 0)) {
+// Rolling stock from the art where it has a model, else drawn in code;
+// returns its length. A freight car looks first for its cargo's role
+// ("car:coal"), then its kind's; `seed` picks among several. Inside
+// GL_QUADS (a model briefly leaves it).
+float stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery, std::uint32_t seed,
+            const std::string& cargo = {}, const float* load = nullptr) {
+    const models::Model* m = cargo.empty() ? nullptr : models::pick("car:" + cargo, seed);
+    if (!m) m = models::pick(stock_role(kind), seed);
+    if (m) {
         const float len = stock_length(kind, s);
         glEnd();
-        models::draw(*m, x - dx * len / 2, y - dy * len / 2, z, dx, dy, 0.1f * s, len);
+        models::draw(*m, x - dx * len / 2, y - dy * len / 2, z, dx, dy, 0.0f, len * 0.96f);
         glBegin(GL_QUADS);
         return len;
     }
@@ -1732,6 +1737,11 @@ constexpr int kTreeChunk = 32;
 
 void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Camera& cam, int cx0, int cy0) {
     const float trunk[3] = {0.36f, 0.26f, 0.17f};
+    struct ArtTree {
+        const models::Model* model;
+        float x, y, z, fx, fy, height;
+    };
+    std::vector<ArtTree> art;
     glBegin(GL_QUADS);
     for (int ty = cy0; ty < std::min(cy0 + kTreeChunk, t.height()); ++ty) {
         for (int tx = cx0; tx < std::min(cx0 + kTreeChunk, t.width()); ++tx) {
@@ -1756,6 +1766,12 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
                 // Stands of conifers among broadleaf woods, and the odd one mixed in.
                 const float pick = unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 211)));
                 const bool conifer = map_noise(x, y, 18.0f, 63) > 0.58f ? pick < 0.85f : pick < 0.12f;
+                // A tree from the art where there is some, drawn after this batch.
+                if (const models::Model* m = models::pick(conifer ? "tree_conifer" : "tree_broadleaf", hh >> 3)) {
+                    const float yaw = unit(hh >> 6) * 6.2831853f;
+                    art.push_back({m, x, y, base + 0.01f, std::cos(yaw), std::sin(yaw), 0.42f * size});
+                    continue;
+                }
                 box(x, y, base, 1, 0, 0.012f * size, 0.012f * size, 0.1f * size, trunk, trunk);
                 if (conifer) {
                     const float green[3] = {0.1f * shade, 0.27f * shade, 0.13f * shade};
@@ -1775,6 +1791,7 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
         }
     }
     glEnd();
+    for (const ArtTree& a : art) models::draw_to_height(*a.model, a.x, a.y, a.z, a.fx, a.fy, a.height);
 }
 
 // The chunks near the camera, each a display list built when first seen or
@@ -2040,23 +2057,28 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                                  : loco.fuel == sim::Fuel::Diesel ? Stock::Diesel
                                                                   : Stock::Electric;
             const float gap = 0.012f * s;
-            float back = stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
+            const std::uint32_t seed = hash(t.id, 17, 5);
+            float back = stock(engine, x, y, z, p.dx, p.dy, s, c, seed) + gap;
             if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
                 add_smoke(x - p.dx * 0.02f * s, y - p.dy * 0.02f * s, z + 0.155f * s, 0.016f * s);
             }
-            const auto behind = [&](Stock kind) {
-                back += stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
+            std::uint32_t car_seed = seed;
+            const auto behind = [&](Stock kind, const std::string& cargo = {}, const float* load = nullptr) {
+                car_seed = hash(car_seed, 31, 7);
+                back += stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c, car_seed, cargo, load) + gap;
             };
             for (const sim::Car& car : t.cars) {
                 if (!car.cargo) continue; // empty cars are left behind
                 const sim::CargoType& cargo = w.data().cargo.get(*car.cargo);
-                if (cargo.cargo_class == sim::CargoClass::Express) behind(cargo.key == "mail" ? Stock::Mail : Stock::Coach);
-                else if (cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite") {
+                if (cargo.cargo_class == sim::CargoClass::Express) {
+                    behind(cargo.key == "mail" ? Stock::Mail : Stock::Coach, cargo.key);
+                } else if (cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite") {
                     static constexpr float kCoal[3] = {0.07f, 0.07f, 0.08f}, kIron[3] = {0.45f, 0.24f, 0.16f},
                                            kBauxite[3] = {0.62f, 0.3f, 0.2f};
-                    const float* load = cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite;
-                    back += stock(Stock::Hopper, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c, load) + gap;
-                } else behind(Stock::Boxcar);
+                    behind(Stock::Hopper, cargo.key, cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite);
+                } else {
+                    behind(Stock::Boxcar, cargo.key);
+                }
             }
             if (t.diner) behind(Stock::Diner);
             if (t.caboose) behind(Stock::Caboose);

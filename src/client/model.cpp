@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <array>
 #include <map>
 #include <optional>
 
@@ -21,6 +22,9 @@ namespace {
 
 std::map<std::string, std::vector<Model>> g_roles;
 std::map<std::string, GLuint> g_textures; // by file path, shared between models
+// Colours set by material name in the manifest ("material_colors"), as
+// screen colours: to fit a pack's palette to the game's.
+std::map<std::string, std::array<float, 3>> g_material_colors;
 
 GLuint upload(unsigned char* pixels, int w, int h) {
     GLuint tex = 0;
@@ -69,6 +73,10 @@ GLuint texture_of(const cgltf_image* image, const std::filesystem::path& dir) {
     return 0;
 }
 
+// glTF colour factors and vertex colours are linear; the drawing works in
+// screen (sRGB) colours, as textures are stored.
+float to_srgb(float c) { return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f; }
+
 std::optional<Model> load(const std::filesystem::path& path) {
     cgltf_options options{};
     cgltf_data* data = nullptr;
@@ -116,6 +124,12 @@ std::optional<Model> load(const std::filesystem::path& path) {
             if (prim.material) {
                 if (prim.material->has_pbr_metallic_roughness) {
                     for (int k = 0; k < 4; ++k) factor[k] = prim.material->pbr_metallic_roughness.base_color_factor[k];
+                    for (int k = 0; k < 3; ++k) factor[k] = to_srgb(factor[k]);
+                }
+                if (prim.material->name) {
+                    if (const auto it = g_material_colors.find(prim.material->name); it != g_material_colors.end()) {
+                        for (std::size_t k = 0; k < 3; ++k) factor[k] = it->second[k];
+                    }
                 }
                 tex = textures[static_cast<std::size_t>(prim.material - data->materials)];
             }
@@ -137,7 +151,7 @@ std::optional<Model> load(const std::filesystem::path& path) {
                 if (uv) cgltf_accessor_read_float(uv, v, t, 2);
                 if (col) {
                     cgltf_accessor_read_float(col, v, c, 4);
-                    glColor4f(c[0] * factor[0], c[1] * factor[1], c[2] * factor[2], c[3] * factor[3]);
+                    glColor4f(to_srgb(c[0]) * factor[0], to_srgb(c[1]) * factor[1], to_srgb(c[2]) * factor[2], c[3] * factor[3]);
                 }
                 // The node's transform, then glTF (x, y up, z) to map (x, z, y).
                 const float wx = world[0] * p[0] + world[4] * p[1] + world[8] * p[2] + world[12];
@@ -190,6 +204,11 @@ void init(const std::string& data_dir) {
         return;
     }
     std::size_t loaded = 0;
+    if (manifest.contains("material_colors") && manifest["material_colors"].is_object()) {
+        for (const auto& [name, rgb] : manifest["material_colors"].items()) {
+            if (rgb.is_array() && rgb.size() == 3) g_material_colors[name] = {rgb[0].get<float>(), rgb[1].get<float>(), rgb[2].get<float>()};
+        }
+    }
     if (!manifest.contains("roles") || !manifest["roles"].is_object()) return;
     const nlohmann::json& roles = manifest["roles"];
     for (const auto& [role, entries] : roles.items()) {
@@ -215,7 +234,7 @@ bool has(const std::string& role) { return pick(role, 0) != nullptr; }
 
 void draw(const Model& m, float x, float y, float z, float fx, float fy, float width, float depth) {
     const float mw = std::max(1e-4f, m.max[0] - m.min[0]), md = std::max(1e-4f, m.max[1] - m.min[1]);
-    const float sx = width / mw, sy = depth > 0 ? depth / md : sx;
+    const float sx = width > 0 ? width / mw : depth / md, sy = depth > 0 ? depth / md : sx;
     // The model's front (map +y) turned to face (fx, fy).
     const float angle = std::atan2(fy, fx) * 57.2957795f - 90.0f;
     glPushMatrix();
@@ -225,6 +244,11 @@ void draw(const Model& m, float x, float y, float z, float fx, float fy, float w
     glTranslatef(-(m.min[0] + m.max[0]) / 2, -(m.min[1] + m.max[1]) / 2, -m.min[2]);
     glCallList(m.list);
     glPopMatrix();
+}
+
+void draw_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height) {
+    const float k = height / std::max(1e-4f, m.max[2] - m.min[2]);
+    draw(m, x, y, z, fx, fy, (m.max[0] - m.min[0]) * k);
 }
 
 } // namespace railmaster::client::models
