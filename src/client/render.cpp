@@ -1200,6 +1200,270 @@ void bridge_rgb(sim::BridgeType b, float* c) {
     }
 }
 
+// Each bridge edge's span: the run of bridge edges it belongs to, from
+// one bank to the other, so suspension bridges can hang their cables over
+// the whole crossing.
+struct Span {
+    float x0, y0, z0, x1, y1, z1; // the two ends (tiles), at deck height
+};
+struct BridgeSpans {
+    std::vector<int> of_edge; // index into spans, or -1
+    std::vector<Span> spans;
+};
+
+BridgeSpans bridge_spans(const sim::TrackNetwork& net, const Camera& cam) {
+    BridgeSpans out;
+    const auto& edges = net.edges();
+    out.of_edge.assign(edges.size(), -1);
+    const auto is_bridge = [&](std::size_t i) { return !edges[i].removed && edges[i].kind == sim::TrackKind::Bridge; };
+    const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
+    for (std::size_t i = 0; i < edges.size(); ++i) {
+        if (!is_bridge(i) || out.of_edge[i] >= 0) continue;
+        // Gather the run through nodes joining exactly two bridge edges.
+        std::vector<std::size_t> run{i};
+        std::vector<sim::NodeId> ends;
+        out.of_edge[i] = static_cast<int>(out.spans.size());
+        for (std::size_t r = 0; r < run.size(); ++r) {
+            for (const sim::NodeId n : {edges[run[r]].a, edges[run[r]].b}) {
+                std::vector<std::size_t> here;
+                for (const sim::EdgeId id : net.edges_at(n)) {
+                    if (is_bridge(id)) here.push_back(id);
+                }
+                if (here.size() != 2) {
+                    ends.push_back(n);
+                    continue;
+                }
+                for (const std::size_t id : here) {
+                    if (out.of_edge[id] < 0) {
+                        out.of_edge[id] = static_cast<int>(out.spans.size());
+                        run.push_back(id);
+                    }
+                }
+            }
+        }
+        if (ends.size() < 2) ends = {edges[i].a, edges[i].b};
+        // The two ends furthest apart.
+        std::size_t ea = 0, eb = 1;
+        float best = -1;
+        for (std::size_t p = 0; p < ends.size(); ++p)
+            for (std::size_t q = p + 1; q < ends.size(); ++q) {
+                const sim::MapPoint pa = net.node(ends[p]).pos, pb = net.node(ends[q]).pos;
+                const float d = std::hypot(tile(pa.x_mm - pb.x_mm), tile(pa.y_mm - pb.y_mm));
+                if (d > best) {
+                    best = d;
+                    ea = p;
+                    eb = q;
+                }
+            }
+        const sim::TrackNode& na = net.node(ends[ea]);
+        const sim::TrackNode& nb = net.node(ends[eb]);
+        out.spans.push_back({tile(na.pos.x_mm), tile(na.pos.y_mm), cam.z_of(na.z_mm), tile(nb.pos.x_mm), tile(nb.pos.y_mm),
+                             cam.z_of(nb.z_mm)});
+    }
+    return out;
+}
+
+// One bridge edge's structure below and around its deck (ends a and b,
+// rail heights za and zb, tiles). Wood: timber trestle bents, braced.
+// Stone: piers with round arches between, under solid spandrel walls.
+// Steel: a through truss either side, chords, posts and diagonals, braced
+// overhead. Suspension: towers at the span's ends, main cables sagging
+// between them and hangers down to the deck. Inside GL_QUADS.
+void bridge_structure(const sim::TrackEdge& e, float ax, float ay, float za, float bx, float by, float zb, const Span* span,
+                      const Camera& cam) {
+    const float len = std::hypot(bx - ax, by - ay);
+    if (len <= 0) return;
+    const float dx = (bx - ax) / len, dy = (by - ay) / len, px = -dy, py = dx;
+    const float under = 0.05f; // the deck's underside below the rail
+    const auto at = [&](float t, float& x, float& y, float& z) {
+        x = ax + (bx - ax) * t;
+        y = ay + (by - ay) * t;
+        z = za + (zb - za) * t;
+    };
+    const auto ground = [&](float x, float y) { return cam.ground_z(x, y) - 0.15f; };
+    switch (e.bridge) {
+    case sim::BridgeType::Wood:
+    case sim::BridgeType::None: {
+        const float wood[3] = {0.42f, 0.3f, 0.19f}, dark[3] = {0.3f, 0.21f, 0.13f};
+        const int n = std::max(1, static_cast<int>(std::ceil(len / 0.28f)));
+        for (int i = 0; i <= n; ++i) {
+            float x, y, z;
+            at(static_cast<float>(i) / static_cast<float>(n), x, y, z);
+            const float top = z - under, g = ground(x, y);
+            if (top - g < 0.04f) continue;
+            const float splay = 0.06f + (top - g) * 0.12f;
+            // Two outer legs splayed out, two plumb, a cap beam.
+            for (const float sgn : {-1.0f, 1.0f}) {
+                beam(x + px * 0.06f * sgn, y + py * 0.06f * sgn, top, x + px * (0.06f + splay) * sgn, y + py * (0.06f + splay) * sgn, g,
+                     0.014f, wood);
+                beam(x + px * 0.025f * sgn, y + py * 0.025f * sgn, top, x + px * 0.025f * sgn, y + py * 0.025f * sgn, g, 0.012f, wood);
+            }
+            beam(x - px * 0.09f, y - py * 0.09f, top, x + px * 0.09f, y + py * 0.09f, top, 0.016f, dark);
+            // Girts and X braces down the bent.
+            const float h = top - g;
+            const int storeys = std::max(1, static_cast<int>(h / 0.22f));
+            for (int st = 0; st < storeys; ++st) {
+                const float z0 = top - h * static_cast<float>(st) / static_cast<float>(storeys);
+                const float z1 = top - h * static_cast<float>(st + 1) / static_cast<float>(storeys);
+                const float w0 = 0.06f + splay * (top - z0) / h, w1 = 0.06f + splay * (top - z1) / h;
+                beam(x - px * w0, y - py * w0, z0, x + px * w1, y + py * w1, z1, 0.007f, dark);
+                beam(x + px * w0, y + py * w0, z0, x - px * w1, y - py * w1, z1, 0.007f, dark);
+                beam(x - px * w1, y - py * w1, z1, x + px * w1, y + py * w1, z1, 0.008f, dark);
+            }
+        }
+        // Stringers along under the deck.
+        for (const float sgn : {-1.0f, 1.0f}) {
+            beam(ax + px * 0.05f * sgn, ay + py * 0.05f * sgn, za - under - 0.01f, bx + px * 0.05f * sgn, by + py * 0.05f * sgn,
+                 zb - under - 0.01f, 0.014f, dark);
+        }
+        break;
+    }
+    case sim::BridgeType::Stone: {
+        const float stone[3] = {0.66f, 0.63f, 0.58f}, coping[3] = {0.55f, 0.52f, 0.48f};
+        const float hw = 0.09f; // half the viaduct's width
+        const int bays = std::max(1, static_cast<int>(std::round(len / 0.45f)));
+        // Piers between the arches, battered out at the foot.
+        for (int i = 0; i <= bays; ++i) {
+            float x, y, z;
+            at(static_cast<float>(i) / static_cast<float>(bays), x, y, z);
+            const float g = ground(x, y), top = z - under;
+            if (top - g < 0.02f) continue;
+            box(x, y, g, dx, dy, 0.045f, hw, top - g, stone, stone);
+            box(x, y, g, dx, dy, 0.065f, hw * 1.15f, std::min(0.12f, (top - g) * 0.4f), coping, coping);
+        }
+        // Each bay: spandrel walls on both faces down to a round arch, and
+        // the arch's soffit beneath.
+        constexpr int kSteps = 8;
+        for (int i = 0; i < bays; ++i) {
+            const float t0 = static_cast<float>(i) / static_cast<float>(bays), t1 = static_cast<float>(i + 1) / static_cast<float>(bays);
+            float x0, y0, z0, x1, y1, z1;
+            at(t0, x0, y0, z0);
+            at(t1, x1, y1, z1);
+            const float bay = len / static_cast<float>(bays) - 0.09f, rise = std::min(bay * 0.5f, 0.3f);
+            for (int k2 = 0; k2 < kSteps; ++k2) {
+                const float u0 = static_cast<float>(k2) / kSteps, u1 = static_cast<float>(k2 + 1) / kSteps;
+                // From pier face to pier face; the arch springs at the deck less the rise.
+                const auto pos = [&](float u, float& x, float& y, float& zt, float& za2) {
+                    const float tt = t0 + (t1 - t0) * (0.045f / (len / static_cast<float>(bays)) +
+                                                        u * bay / (len / static_cast<float>(bays)));
+                    at(tt, x, y, zt);
+                    zt -= under;
+                    const float a = (u - 0.5f) * 2.0f; // -1 .. 1 across the bay
+                    za2 = zt - 0.04f - rise * (1.0f - std::sqrt(std::max(0.0f, 1.0f - a * a)));
+                };
+                float xa, ya, ta, aa, xb, yb, tb, ab;
+                pos(u0, xa, ya, ta, aa);
+                pos(u1, xb, yb, tb, ab);
+                glColor3fv(stone);
+                for (const float sgn : {-1.0f, 1.0f}) {
+                    glNormal3f(px * sgn, py * sgn, 0);
+                    glVertex3f(xa + px * hw * sgn, ya + py * hw * sgn, aa);
+                    glVertex3f(xb + px * hw * sgn, yb + py * hw * sgn, ab);
+                    glVertex3f(xb + px * hw * sgn, yb + py * hw * sgn, tb);
+                    glVertex3f(xa + px * hw * sgn, ya + py * hw * sgn, ta);
+                }
+                glColor3f(stone[0] * 0.6f, stone[1] * 0.6f, stone[2] * 0.6f);
+                glNormal3f(0, 0, -1);
+                glVertex3f(xa - px * hw, ya - py * hw, aa);
+                glVertex3f(xa + px * hw, ya + py * hw, aa);
+                glVertex3f(xb + px * hw, yb + py * hw, ab);
+                glVertex3f(xb - px * hw, yb - py * hw, ab);
+            }
+            (void)x0; (void)y0; (void)z0; (void)x1; (void)y1; (void)z1;
+        }
+        // A parapet along both sides of the deck.
+        for (const float sgn : {-1.0f, 1.0f}) {
+            beam(ax + px * hw * sgn, ay + py * hw * sgn, za + 0.03f, bx + px * hw * sgn, by + py * hw * sgn, zb + 0.03f, 0.022f, coping);
+        }
+        break;
+    }
+    case sim::BridgeType::Steel: {
+        const float iron[3] = {0.27f, 0.3f, 0.34f};
+        const float hw = 0.1f, high = 0.17f;
+        const int panels = std::max(1, static_cast<int>(std::ceil(len / 0.16f)));
+        for (const float sgn : {-1.0f, 1.0f}) {
+            const float ox = px * hw * sgn, oy = py * hw * sgn;
+            beam(ax + ox, ay + oy, za, bx + ox, by + oy, zb, 0.016f, iron);                // bottom chord
+            beam(ax + ox, ay + oy, za + high, bx + ox, by + oy, zb + high, 0.016f, iron);  // top chord
+            for (int i = 0; i <= panels; ++i) {
+                float x, y, z;
+                at(static_cast<float>(i) / static_cast<float>(panels), x, y, z);
+                beam(x + ox, y + oy, z, x + ox, y + oy, z + high, 0.01f, iron); // post
+                if (i < panels) {
+                    float x2, y2, z2;
+                    at(static_cast<float>(i + 1) / static_cast<float>(panels), x2, y2, z2);
+                    // Diagonals leaning alternately, a Warren pattern.
+                    if (i % 2 == 0) beam(x + ox, y + oy, z, x2 + ox, y2 + oy, z2 + high, 0.008f, iron);
+                    else beam(x + ox, y + oy, z + high, x2 + ox, y2 + oy, z2, 0.008f, iron);
+                }
+            }
+        }
+        // Overhead lateral bracing between the top chords.
+        for (int i = 0; i <= panels; i += 2) {
+            float x, y, z;
+            at(static_cast<float>(i) / static_cast<float>(panels), x, y, z);
+            beam(x - px * hw, y - py * hw, z + high, x + px * hw, y + py * hw, z + high, 0.008f, iron);
+        }
+        // Piers down to the ground at each end.
+        for (const float t : {0.0f, 1.0f}) {
+            float x, y, z;
+            at(t, x, y, z);
+            const float g = ground(x, y);
+            if (z - under - g > 0.03f) {
+                const float pier[3] = {0.55f, 0.53f, 0.5f};
+                box(x, y, g, dx, dy, 0.035f, hw * 1.1f, z - under - g, pier, pier);
+            }
+        }
+        break;
+    }
+    case sim::BridgeType::Suspension: {
+        const float steel[3] = {0.82f, 0.82f, 0.8f}, tower[3] = {0.72f, 0.7f, 0.66f}, cable[3] = {0.3f, 0.3f, 0.33f};
+        const float hw = 0.1f;
+        const Span sp = span ? *span : Span{ax, ay, za, bx, by, zb};
+        const float slen = std::max(1e-3f, std::hypot(sp.x1 - sp.x0, sp.y1 - sp.y0));
+        const float high = std::clamp(slen * 0.12f, 0.25f, 0.7f); // the towers above the deck
+        // Where along the span (0 to 1) a point lies, and the cable's height there.
+        const auto along = [&](float x, float y) {
+            return std::clamp(((x - sp.x0) * (sp.x1 - sp.x0) + (y - sp.y0) * (sp.y1 - sp.y0)) / (slen * slen), 0.0f, 1.0f);
+        };
+        const auto cable_z = [&](float u, float deck) {
+            const float c = 2.0f * u - 1.0f;
+            return deck + 0.04f + (high - 0.04f) * c * c;
+        };
+        // Towers, where this edge meets an end of the span.
+        for (const float t : {0.0f, 1.0f}) {
+            float x, y, z;
+            at(t, x, y, z);
+            const float u = along(x, y);
+            if (u > 0.02f && u < 0.98f) continue;
+            const float g = ground(x, y);
+            for (const float sgn : {-1.0f, 1.0f}) {
+                box(x + px * hw * 1.2f * sgn, y + py * hw * 1.2f * sgn, g, dx, dy, 0.025f, 0.02f, z + high + 0.05f - g, tower, tower);
+            }
+            beam(x - px * hw * 1.2f, y - py * hw * 1.2f, z + high + 0.03f, x + px * hw * 1.2f, y + py * hw * 1.2f, z + high + 0.03f, 0.03f,
+                 tower);
+            beam(x - px * hw * 1.2f, y - py * hw * 1.2f, z + 0.12f, x + px * hw * 1.2f, y + py * hw * 1.2f, z + 0.12f, 0.02f, tower);
+        }
+        // The cables and hangers over this edge, a few pieces for the curve.
+        const int pieces = std::max(2, static_cast<int>(std::ceil(len / 0.12f)));
+        for (const float sgn : {-1.0f, 1.0f}) {
+            const float ox = px * hw * 1.2f * sgn, oy = py * hw * 1.2f * sgn;
+            for (int i = 0; i < pieces; ++i) {
+                float x0, y0, z0, x1, y1, z1;
+                at(static_cast<float>(i) / static_cast<float>(pieces), x0, y0, z0);
+                at(static_cast<float>(i + 1) / static_cast<float>(pieces), x1, y1, z1);
+                const float c0 = cable_z(along(x0, y0), z0), c1 = cable_z(along(x1, y1), z1);
+                beam(x0 + ox, y0 + oy, c0, x1 + ox, y1 + oy, c1, 0.012f, cable);
+                beam(x0 + ox * 0.85f, y0 + oy * 0.85f, z0, x0 + ox * 0.85f, y0 + oy * 0.85f, c0, 0.004f, cable);
+            }
+            // The stiffening girder along the deck edge.
+            beam(ax + ox * 0.85f, ay + oy * 0.85f, za + 0.02f, bx + ox * 0.85f, by + oy * 0.85f, zb + 0.02f, 0.02f, steel);
+        }
+        break;
+    }
+    }
+}
+
 // Track close up (rt3-clone-spec §15.6 views): a ballast bed with sleepers
 // and two rails on each track, following the ground in cuttings; bridges as
 // decks on piers; tunnels unseen but for their mouths.
@@ -1209,6 +1473,7 @@ void track_body(const sim::Railway& rw, const Camera& cam, std::optional<sim::Co
     struct Strip {
         float x0, y0, z0, x1, y1, z1; // a straight bit of one edge
     };
+    const BridgeSpans spans = bridge_spans(net, cam);
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     for (const sim::TrackEdge& e : net.edges()) {
@@ -1281,16 +1546,10 @@ void track_body(const sim::Railway& rw, const Camera& cam, std::optional<sim::Co
                 }
             }
         }
-        // Piers under bridges, from the deck down to the ground.
+        // The bridge's structure, by type, from the deck down to the ground.
         if (e.kind == sim::TrackKind::Bridge) {
-            const float pier[3] = {ballast[0] * 0.8f, ballast[1] * 0.8f, ballast[2] * 0.8f};
-            const int n = std::max(1, static_cast<int>(len / 0.6f));
-            for (int i = 0; i <= n; ++i) {
-                const float t = static_cast<float>(i) / static_cast<float>(n);
-                const float x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
-                const float top = za + (zb - za) * t, ground = cam.ground_z(x, y) - 0.2f;
-                if (top - ground > 0.05f) box(x, y, ground, dx, dy, 0.03f, 0.05f, top - ground, pier, pier);
-            }
+            const int si = spans.of_edge[static_cast<std::size_t>(&e - net.edges().data())];
+            bridge_structure(e, ax, ay, za, bx, by, zb, si >= 0 ? &spans.spans[static_cast<std::size_t>(si)] : nullptr, cam);
             glNormal3f(0, 0, 1);
         }
     }

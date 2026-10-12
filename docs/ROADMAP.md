@@ -272,6 +272,14 @@ fences, a red gambrel barn, a domed silo and a farmhouse, and herds of
 cattle (black and white at dairies) or sheep. New primitives: beams
 between any two points, gambrel roofs, fences.
 
+Bridges are drawn by type: timber trestles (splayed bents with girts and
+X-braces, stringers under the deck), stone viaducts (piers with battered
+footings, round arches under spandrel walls, a parapet), steel through
+trusses (chords, posts and Warren diagonals either side, braced overhead,
+on end piers) and suspension bridges (towers at the ends of the whole
+crossing, main cables sagging between them, hangers to a stiffening
+girder).
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into
