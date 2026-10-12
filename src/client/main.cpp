@@ -4,11 +4,15 @@
 // simple shapes (V switches to the old top-down view).
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
-//                   [--scenario=FILE] [--load=FILE]
+//                   [--scenario=FILE] [--load=FILE] [--version]
+// The commit it was built from shows in the bottom-right corner, the window
+// title and --version.
 // Ctrl+S saves the game to railmaster.sav, Ctrl+L loads it back.
 // A scenario sets the map, rivals and territories itself, and starts with
 // no demo network.
 
+#include "build_info.hpp"
+#include "font.hpp"
 #include "render.hpp"
 #include "tools.hpp"
 
@@ -65,6 +69,10 @@ int main(int argc, char* argv[]) {
     std::string load_path;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        if (arg == "--version") {
+            std::printf("railmaster %s (%s)\n", client::kBuildCommit, client::kBuildDate);
+            return 0;
+        }
         if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
@@ -126,7 +134,9 @@ int main(int argc, char* argv[]) {
     cam.terrain = &world.terrain();
     cam.target_x = static_cast<float>(world.terrain().width()) / 2;
     cam.target_y = static_cast<float>(world.terrain().height()) / 2;
-    SDL_Window* window = SDL_CreateWindow("Railmaster", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    const std::string build_label = std::string("BUILD ") + client::kBuildCommit + "  " + client::kBuildDate;
+    const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
+    SDL_Window* window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           cam.width_px, cam.height_px, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -413,6 +423,21 @@ int main(int argc, char* argv[]) {
         status += tiles ? "  TRACK BUDGET " + std::to_string(*tiles) : std::string("  +/- SPEED, PAUSE");
         if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
         tools.draw_ui(status);
+        // Which build this is, bottom right above the hint bar, so players
+        // can tell whether they are on the latest commit.
+        {
+            const auto w = static_cast<float>(client::text_width(build_label, 2));
+            const float x = static_cast<float>(cam.width_px) - w - 10, y = static_cast<float>(cam.height_px) - 44.0f - 22.0f;
+            glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
+            glBegin(GL_QUADS);
+            glVertex2f(x - 5, y - 4);
+            glVertex2f(x + w + 5, y - 4);
+            glVertex2f(x + w + 5, y + 18);
+            glVertex2f(x - 5, y + 18);
+            glEnd();
+            glColor3f(0.85f, 0.85f, 0.8f);
+            client::draw_text(x, y, build_label, 2);
+        }
         SDL_GL_SwapWindow(window);
     }
 

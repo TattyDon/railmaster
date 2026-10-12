@@ -69,6 +69,10 @@ there):
   always says what the current tool does.
 - O and P cycle the map overlays: holdings, profit, grade, traffic and
   cargo prices.
+- The bottom-right corner shows which build you are running, as
+  `BUILD <commit> <date>`: compare the commit with the latest one on the
+  branch (`git log -1 --oneline`, or the branch page on GitHub). A `+`
+  after it means the build had local changes. `--version` prints the same.
 - Mouse wheel zooms, arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 

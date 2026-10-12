@@ -9,6 +9,17 @@ add_executable(railmaster
     tools.cpp
 )
 
+# Which commit this is, shown in the corner of the screen: refreshed on
+# every build, so it is never stale.
+set(RAILMASTER_BUILD_INFO ${CMAKE_CURRENT_BINARY_DIR}/generated/build_info.hpp)
+add_custom_target(railmaster_build_info
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR} -DOUTPUT=${RAILMASTER_BUILD_INFO}
+            -P ${PROJECT_SOURCE_DIR}/cmake/build_info.cmake
+    BYPRODUCTS ${RAILMASTER_BUILD_INFO}
+    COMMENT "Recording the build's commit")
+add_dependencies(railmaster railmaster_build_info)
+target_include_directories(railmaster PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
 target_link_libraries(railmaster PRIVATE
     railmaster::sim
     SDL2::SDL2
