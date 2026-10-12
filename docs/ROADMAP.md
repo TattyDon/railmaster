@@ -322,8 +322,11 @@ Still to do:
   (e.g. 931 to 55 polygons), so the art spec should ask for LOD chains.
 - Game UI: build tools, train manager, station and cargo overlays, finance screens.
   (Placeholder client so far: the holdings, profitability, grade, traffic
-  and cargo overlays of rt3-clone-spec §15.3 are on O/P, and lists of
-  trains, stations and companies on F11.)
+  and cargo overlays of rt3-clone-spec §15.3 are on O/P, lists of
+  trains, stations and companies on F11, and detail panels for trains,
+  stations and industries (§15.4) on a click in the Look tool. Still to
+  come from §15.4: the company detail's four tabs, the ledger on L, and
+  a train panel's cost window.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios

@@ -6,6 +6,7 @@
 
 #include <SDL.h>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -31,7 +32,8 @@ public:
     MapOverlay map_overlay() const { return map_overlay_; }
     // A map point the view should centre on (from the lists, or paging
     // through trains), once.
-    std::optional<sim::MapPoint> take_jump() { return std::exchange(jump_, std::nullopt); }
+    // While following a train from its detail panel, its position every frame.
+    std::optional<sim::MapPoint> take_jump();
     void select(Tool t);
 
     void on_mouse_move(float sx, float sy);
@@ -76,6 +78,24 @@ private:
     bool lists_key(SDL_Keycode key);
     std::size_t list_size() const;
     int list_kind_ = 0;            // 0 trains, 1 stations, 2 companies
+
+    // The detail panel (rt3-clone-spec §15.4): a train, station or industry
+    // opened by a click in the Look tool or Enter in the lists, shown at the
+    // right of the screen until Esc. The train keys act on its train.
+    enum class DetailKind { Train, Station, Industry };
+    struct Detail {
+        DetailKind kind;
+        std::uint32_t id;
+    };
+    std::optional<Detail> detail_{};
+    bool follow_ = false; // the view follows the detail panel's train
+    mutable std::array<float, 4> detail_box_{}; // where the panel was last drawn: x0, y0, x1, y1
+    void open_detail(DetailKind kind, std::uint32_t id);
+    // A train, else a station, else an industry under the cursor; false if none.
+    bool open_detail_under_cursor();
+    std::optional<sim::TrainId> detail_train() const;
+    void draw_detail_panel() const;
+
     std::size_t list_sel_ = 0;
     std::optional<sim::MapPoint> jump_{};
     std::size_t page_train_ = 0;   // PgUp/PgDn in Inspect: the train last jumped to
