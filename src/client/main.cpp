@@ -4,7 +4,8 @@
 // simple shapes (V switches to the old top-down view).
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
-//                   [--scenario=FILE] [--load=FILE] [--no-shaders] [--version]
+//                   [--scenario=FILE] [--load=FILE] [--no-shaders] [--look=X,Y] [--version]
+// --look starts the view over map tile (X, Y), close in.
 // The commit it was built from shows in the bottom-right corner, the window
 // title and --version.
 // Ctrl+S saves the game to railmaster.sav, Ctrl+L loads it back.
@@ -65,6 +66,7 @@ int main(int argc, char* argv[]) {
     bool empty = false;
     bool quick = false; // skip the founding dialog: found on the usual terms
     bool use_shaders = true; // --no-shaders: the fixed-function renderer
+    std::optional<std::pair<float, float>> look; // --look=X,Y: where the view starts
     int rivals = 3;
     sim::MapSize map_size = sim::MapSize::Small;
     int territories = 0;
@@ -77,6 +79,10 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         if (arg == "--no-shaders") use_shaders = false;
+        else if (arg.rfind("--look=", 0) == 0) {
+            const auto comma = arg.find(',');
+            if (comma != std::string::npos) look = {std::stof(arg.substr(7, comma - 7)), std::stof(arg.substr(comma + 1))};
+        }
         else if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
@@ -154,6 +160,11 @@ int main(int argc, char* argv[]) {
             cam.target_y = (static_cast<float>(eco.towns()[t].cy) + 0.5f) * k;
         }
         if (best >= 0) cam.distance = 14.0f;
+    }
+    if (look) {
+        cam.target_x = look->first;
+        cam.target_y = look->second;
+        cam.distance = 4.5f;
     }
     const std::string build_label = std::string("BUILD ") + client::kBuildCommit + "  " + client::kBuildDate;
     const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
@@ -398,7 +409,7 @@ int main(int argc, char* argv[]) {
                 std::printf("%s\n", sim::build_demo_network(world).c_str());
                 // Look at it: centre the view on its first station.
                 const auto& rw = world.railway();
-                if (!rw.stations().empty()) {
+                if (!rw.stations().empty() && !look) {
                     cam.center_on(rw.track().node(rw.stations().front().node).pos);
                 }
             } catch (const std::exception& e) {

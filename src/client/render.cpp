@@ -838,6 +838,126 @@ void field(float x, float y, float half, const float* colour, const Camera& cam)
         }
 }
 
+// A beam between two points (tiles), `w` thick: girders, legs, braces and
+// rails of lattice work. Inside GL_QUADS.
+void beam(float x0, float y0, float z0, float x1, float y1, float z1, float w, const float* colour) {
+    const float dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (len <= 0) return;
+    const float ax = dx / len, ay = dy / len, az = dz / len;
+    // Two directions square to the beam.
+    float ux = ay, uy = -ax, uz = 0;
+    float ul = std::sqrt(ux * ux + uy * uy);
+    if (ul < 1e-3f) {
+        ux = 1;
+        uy = 0;
+        ul = 1;
+    }
+    ux /= ul;
+    uy /= ul;
+    const float vx = ay * uz - az * uy, vy = az * ux - ax * uz, vz = ax * uy - ay * ux;
+    const float h = w / 2;
+    const float cu[4] = {1, 1, -1, -1}, cv[4] = {1, -1, -1, 1};
+    glColor3fv(colour);
+    for (int i = 0; i < 4; ++i) {
+        const int j = (i + 1) % 4;
+        const float nx = (cu[i] + cu[j]) * ux + (cv[i] + cv[j]) * vx, ny = (cu[i] + cu[j]) * uy + (cv[i] + cv[j]) * vy,
+                    nz = (cu[i] + cu[j]) * uz + (cv[i] + cv[j]) * vz;
+        glNormal3f(nx, ny, nz);
+        const auto corner = [&](int c, float bx, float by, float bz) {
+            glVertex3f(bx + (cu[c] * ux + cv[c] * vx) * h, by + (cu[c] * uy + cv[c] * vy) * h, bz + (cu[c] * uz + cv[c] * vz) * h);
+        };
+        corner(i, x0, y0, z0);
+        corner(j, x0, y0, z0);
+        corner(j, x1, y1, z1);
+        corner(i, x1, y1, z1);
+    }
+}
+
+// A barn with a gambrel roof (steep below, shallow above) over walls `h`
+// tall, `hl` long along (dx, dy) and `hw` wide. Inside GL_QUADS.
+void gambrel(float x, float y, float z, float dx, float dy, float hl, float hw, float h, const float* wall, const float* roof,
+             const float* trim) {
+    box(x, y, z, dx, dy, hl, hw, h, wall, wall);
+    const float px = -dy, py = dx;
+    const float eave = hw * 1.08f, knee = hw * 0.62f, kz = z + h + hw * 0.62f, rz = z + h + hw * 0.92f;
+    const auto pt = [&](float along, float across, float pz) { glVertex3f(x + dx * along + px * across, y + dy * along + py * across, pz); };
+    glColor3fv(roof);
+    for (const float sgn : {-1.0f, 1.0f}) {
+        glNormal3f(px * sgn, py * sgn, 0.35f);
+        pt(-hl * 1.04f, eave * sgn, z + h - 0.01f);
+        pt(hl * 1.04f, eave * sgn, z + h - 0.01f);
+        pt(hl * 1.04f, knee * sgn, kz);
+        pt(-hl * 1.04f, knee * sgn, kz);
+        glNormal3f(px * sgn * 0.4f, py * sgn * 0.4f, 1.0f);
+        pt(-hl * 1.04f, knee * sgn, kz);
+        pt(hl * 1.04f, knee * sgn, kz);
+        pt(hl * 1.04f, 0, rz);
+        pt(-hl * 1.04f, 0, rz);
+    }
+    // The gable ends, in the wall colour, with a white trim line.
+    for (const float end : {-1.0f, 1.0f}) {
+        const float a = hl * end;
+        glColor3fv(wall);
+        glNormal3f(dx * end, dy * end, 0);
+        for (const float sgn : {-1.0f, 1.0f}) {
+            pt(a, hw * sgn, z + h);
+            pt(a, 0, z + h);
+            pt(a, 0, kz);
+            pt(a, knee * sgn, kz);
+            pt(a, knee * sgn, kz);
+            pt(a, 0, kz);
+            pt(a, 0, rz);
+            pt(a, 0, rz);
+        }
+        // A hay door, white-framed.
+        glColor3fv(trim);
+        pt(a + end * 0.002f, -hw * 0.3f, z + h * 0.05f);
+        pt(a + end * 0.002f, hw * 0.3f, z + h * 0.05f);
+        pt(a + end * 0.002f, hw * 0.3f, z + h * 0.8f);
+        pt(a + end * 0.002f, -hw * 0.3f, z + h * 0.8f);
+    }
+}
+
+// A split-rail fence along the ground from one point to another. Inside GL_QUADS.
+void fence(float x0, float y0, float x1, float y1, const Camera& cam, const float* wood) {
+    const float len = std::hypot(x1 - x0, y1 - y0);
+    const int posts = std::max(2, static_cast<int>(len / 0.09f) + 1);
+    float px = x0, py = y0, pz = cam.ground_z(x0, y0);
+    for (int i = 0; i < posts; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(posts - 1);
+        const float x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t, z = cam.ground_z(x, y);
+        beam(x, y, z, x, y, z + 0.045f, 0.008f, wood);
+        if (i > 0) {
+            beam(px, py, pz + 0.02f, x, y, z + 0.02f, 0.005f, wood);
+            beam(px, py, pz + 0.038f, x, y, z + 0.038f, 0.005f, wood);
+        }
+        px = x;
+        py = y;
+        pz = z;
+    }
+}
+
+// A ploughed field: rows of crop, alternately lighter and darker, along x,
+// fenced round. Inside GL_QUADS.
+void furrowed_field(float x, float y, float half, const float* crop, const Camera& cam, const float* wood) {
+    const int rows = 24;
+    glNormal3f(0, 0, 1);
+    for (int r = 0; r < rows; ++r) {
+        const float k = r % 2 == 0 ? 1.0f : 0.72f;
+        glColor3f(crop[0] * k, crop[1] * k, crop[2] * k);
+        const float y0 = y - half + 2 * half * static_cast<float>(r) / rows, y1 = y - half + 2 * half * static_cast<float>(r + 1) / rows;
+        for (int c = 0; c < 4; ++c) {
+            const float x0 = x - half + half * 0.5f * static_cast<float>(c);
+            ground_quad(x0, y0, x0 + half * 0.5f, y1, cam);
+        }
+    }
+    fence(x - half, y - half, x + half, y - half, cam, wood);
+    fence(x + half, y - half, x + half, y + half, cam, wood);
+    fence(x + half, y + half, x - half, y + half, cam, wood);
+    fence(x - half, y + half, x - half, y - half, cam, wood);
+}
+
 bool ends_with(const std::string& s, const char* suffix) {
     const std::string tail(suffix);
     return s.size() >= tail.size() && s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
@@ -857,12 +977,33 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         if (key == "iron_mine") { spoil[0] = 0.45f; spoil[1] = 0.22f; spoil[2] = 0.15f; }
         else if (key == "bauxite_mine") { spoil[0] = 0.6f; spoil[1] = 0.3f; spoil[2] = 0.2f; }
         else if (key == "uranium_mine") { spoil[0] = 0.55f; spoil[1] = 0.55f; spoil[2] = 0.35f; }
-        barn(x - 0.12f * k, y + 0.1f * k, z, dx, dy, 0.14f * k, 0.08f * k, 0.12f, timber, slate);
-        // The headframe: two legs and a beam with its wheel.
-        box(x + 0.08f * k, y - 0.06f * k, z, dx, dy, 0.012f, 0.012f, 0.5f, dark, dark);
-        box(x + 0.08f * k, y + 0.06f * k, z, dx, dy, 0.012f, 0.012f, 0.5f, dark, dark);
-        box(x + 0.08f * k, y, z + 0.48f, dx, dy, 0.03f, 0.07f * k, 0.04f, dark, dark);
-        heap(x + 0.18f * k, y + 0.22f * k, z, 0.14f * k, 0.22f, spoil);
+        const float px = -dy, py = dx;
+        // The headframe: two legs over the shaft, raked back-stays, braces,
+        // and the winding wheel at the top.
+        const float hx = x + 0.1f * k, hy = y - 0.02f * k, top = z + 0.52f;
+        for (const float side : {-1.0f, 1.0f}) {
+            const float lx = hx + px * 0.05f * side, ly = hy + py * 0.05f * side;
+            beam(lx, ly, z, lx, ly, top, 0.014f, timber);
+            beam(lx - dx * 0.28f, ly - dy * 0.28f, z, lx, ly, top - 0.02f, 0.012f, timber); // back-stay
+            for (const float hz : {0.15f, 0.32f}) beam(lx, ly, z + hz, lx - dx * 0.28f * (1 - hz / 0.5f), ly - dy * 0.28f * (1 - hz / 0.5f), z + hz, 0.008f, timber);
+        }
+        for (const float hz : {0.12f, 0.3f, 0.48f}) {
+            beam(hx + px * 0.05f, hy + py * 0.05f, z + hz, hx - px * 0.05f, hy - py * 0.05f, z + hz, 0.008f, timber);
+        }
+        beam(hx + px * 0.05f, hy + py * 0.05f, z + 0.12f, hx - px * 0.05f, hy - py * 0.05f, z + 0.3f, 0.006f, timber);
+        beam(hx + px * 0.06f, hy + py * 0.06f, top, hx - px * 0.06f, hy - py * 0.06f, top, 0.016f, dark);
+        wheel(hx, hy, top - 0.005f, dx, dy, 0.045f, 0.012f, dark, metal);
+        // The winding engine house, brick with a slate roof, and its stack.
+        const float ex = x - 0.16f * k, ey = y - 0.02f * k;
+        barn(ex, ey, z, dx, dy, 0.11f * k, 0.07f * k, 0.13f, brick, slate);
+        cylinder(ex - dx * 0.1f * k + px * 0.06f * k, ey - dy * 0.1f * k + py * 0.06f * k, z, 0.025f, 0.38f, brick, dark, 0.02f);
+        add_smoke(ex - dx * 0.1f * k + px * 0.06f * k, ey - dy * 0.1f * k + py * 0.06f * k, z + 0.38f, 0.05f);
+        // The winding rope from the drum to the wheel.
+        const float rope[3] = {0.15f, 0.15f, 0.15f};
+        beam(ex + dx * 0.11f * k, ey + dy * 0.11f * k, z + 0.1f, hx, hy, top + 0.03f, 0.004f, rope);
+        // Spoil heaped behind.
+        heap(x + 0.2f * k, y + 0.24f * k, z, 0.18f * k, 0.26f, spoil);
+        heap(x + 0.34f * k, y + 0.1f * k, z, 0.1f * k, 0.14f, spoil);
         return;
     }
     if (key == "logging_camp") {
@@ -877,24 +1018,102 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         else if (key == "rice_farm") { crop[0] = 0.5f; crop[1] = 0.7f; crop[2] = 0.45f; }
         else if (key == "sugar_farm" || key == "coffee_farm" || key == "rubber_plantation") { crop[0] = 0.3f; crop[1] = 0.5f; crop[2] = 0.22f; }
         else if (key == "dairy_farm" || key == "cattle_ranch" || key == "sheep_farm") { crop[0] = 0.42f; crop[1] = 0.62f; crop[2] = 0.3f; }
-        field(x + 0.12f * k, y + 0.12f * k, 0.3f * k, crop, cam);
-        barn(x - 0.18f * k, y - 0.15f * k, z, dx, dy, 0.1f * k, 0.07f * k, 0.12f, red_barn, slate);
-        cylinder(x - 0.02f * k, y - 0.22f * k, z, 0.04f * k, 0.3f, white, metal);
-        if (key == "fruit_orchard" || key == "coffee_farm" || key == "rubber_plantation") {
-            const float leaf[3] = {0.18f, 0.42f, 0.16f};
-            for (int i = 0; i < 6; ++i) {
-                const float tx = x + 0.12f * k + (static_cast<float>(i % 3) - 1) * 0.12f * k;
-                const float ty = y + 0.12f * k + (static_cast<float>(i / 3) - 0.5f) * 0.14f * k;
-                cylinder(tx, ty, cam.ground_z(tx, ty), 0.035f, 0.1f, leaf, leaf, 0.01f);
+        const bool pasture = key == "dairy_farm" || key == "cattle_ranch" || key == "sheep_farm";
+        const bool trees = key == "fruit_orchard" || key == "coffee_farm" || key == "rubber_plantation";
+        const float fx = x + 0.12f * k, fy = y + 0.12f * k, half = 0.28f * k;
+        const float rail[3] = {0.45f, 0.36f, 0.26f};
+        if (pasture || trees) {
+            // Grass (or an orchard floor), fenced.
+            glColor3fv(crop);
+            glNormal3f(0, 0, 1);
+            field(fx, fy, half, crop, cam);
+            fence(fx - half, fy - half, fx + half, fy - half, cam, rail);
+            fence(fx + half, fy - half, fx + half, fy + half, cam, rail);
+            fence(fx + half, fy + half, fx - half, fy + half, cam, rail);
+            fence(fx - half, fy + half, fx - half, fy - half, cam, rail);
+        } else {
+            furrowed_field(fx, fy, half, crop, cam, rail);
+        }
+        if (trees) {
+            // Trees in planted rows.
+            const float leaf[3] = {0.2f, 0.42f, 0.17f}, bark[3] = {0.35f, 0.25f, 0.16f};
+            for (int r = 0; r < 4; ++r)
+                for (int c = 0; c < 4; ++c) {
+                    const float tx = fx - half * 0.75f + half * 0.5f * static_cast<float>(c);
+                    const float ty = fy - half * 0.75f + half * 0.5f * static_cast<float>(r);
+                    const float tz = cam.ground_z(tx, ty);
+                    beam(tx, ty, tz, tx, ty, tz + 0.05f, 0.012f, bark);
+                    cylinder(tx, ty, tz + 0.04f, 0.035f, 0.04f, leaf, leaf, 0.045f);
+                    cylinder(tx, ty, tz + 0.08f, 0.045f, 0.035f, leaf, leaf, 0.01f);
+                }
+        }
+        if (pasture) {
+            // The herd: cattle (black and white for dairy) or sheep.
+            const bool sheep = key == "sheep_farm";
+            for (int i = 0; i < 9; ++i) {
+                const std::uint32_t h = hash(seed, static_cast<std::uint32_t>(i), 21);
+                const float ax = fx + (unit(h) - 0.5f) * half * 1.6f, ay = fy + (unit(h >> 16) - 0.5f) * half * 1.6f;
+                const float az = cam.ground_z(ax, ay), turn = unit(h >> 8) * 6.2831853f;
+                const float cdx = std::cos(turn), cdy = std::sin(turn);
+                float coat[3] = {0.42f, 0.26f, 0.16f};
+                if (sheep) { coat[0] = 0.9f; coat[1] = 0.88f; coat[2] = 0.82f; }
+                else if (key == "dairy_farm") { const float v = unit(h >> 4) < 0.5f ? 0.92f : 0.12f; coat[0] = coat[1] = coat[2] = v; }
+                const float leg[3] = {0.15f, 0.12f, 0.1f};
+                const float sz = (sheep ? 0.8f : 1.0f) * 2.6f;
+                box(ax, ay, az + 0.012f * sz, cdx, cdy, 0.022f * sz, 0.011f * sz, 0.018f * sz, coat, coat);
+                box(ax + cdx * 0.026f * sz, ay + cdy * 0.026f * sz, az + 0.02f * sz, cdx, cdy, 0.008f * sz, 0.007f * sz, 0.012f * sz,
+                    sheep ? leg : coat, sheep ? leg : coat);
+                box(ax, ay, az, cdx, cdy, 0.016f * sz, 0.008f * sz, 0.012f * sz, leg, leg);
             }
         }
+        // The farmstead: a red gambrel barn and a domed silo.
+        const float bx = x - 0.2f * k, by = y - 0.16f * k;
+        const float shingle[3] = {0.5f, 0.46f, 0.42f};
+        gambrel(bx, by, cam.ground_z(bx, by), dx, dy, 0.1f * k, 0.06f * k, 0.13f, red_barn, shingle, white);
+        // The farmhouse, white clapboard, by the barn.
+        const float hx = x - 0.3f * k, hy = y + 0.05f * k;
+        barn(hx, hy, cam.ground_z(hx, hy), dy, -dx, 0.06f * k, 0.04f * k, 0.1f, white, slate);
+        const float sx = x - 0.04f * k, sy = y - 0.24f * k, sz = cam.ground_z(sx, sy);
+        cylinder(sx, sy, sz, 0.035f * k, 0.26f, white, metal);
+        cylinder(sx, sy, sz + 0.26f, 0.035f * k, 0.03f, metal, metal, 0.02f * k);
+        cylinder(sx, sy, sz + 0.29f, 0.02f * k, 0.015f, metal, metal, 0.002f);
         return;
     }
     if (key == "oil_well") {
-        // A derrick over a small pump house.
-        heap(x, y, z, 0.07f, 0.6f, dark);
-        box(x + 0.12f * k, y, z, dx, dy, 0.06f, 0.04f, 0.06f, grey, grey);
-        cylinder(x - 0.15f * k, y + 0.12f * k, z, 0.07f * k, 0.12f, metal, white);
+        // A lattice derrick tapering over the well: four legs, girts at
+        // each stage and braces across every face, a crown block on top.
+        const float base = 0.09f, crown = 0.018f, height = 0.62f;
+        const auto leg = [&](int i, float f, float& lx, float& ly) {
+            const float r = base + (crown - base) * f;
+            lx = x + (i == 0 || i == 3 ? -r : r);
+            ly = y + (i < 2 ? -r : r);
+        };
+        for (int i = 0; i < 4; ++i) {
+            float ax, ay, bx, by;
+            leg(i, 0, ax, ay);
+            leg(i, 1, bx, by);
+            beam(ax, ay, z, bx, by, z + height, 0.01f, timber);
+        }
+        constexpr int kStages = 5;
+        for (int st = 0; st < kStages; ++st) {
+            const float f0 = static_cast<float>(st) / kStages, f1 = static_cast<float>(st + 1) / kStages;
+            for (int i = 0; i < 4; ++i) {
+                const int j = (i + 1) % 4;
+                float ax, ay, bx, by, cx, cy, ex, ey;
+                leg(i, f1, ax, ay);
+                leg(j, f1, bx, by);
+                beam(ax, ay, z + height * f1, bx, by, z + height * f1, 0.006f, timber);
+                leg(i, f0, cx, cy);
+                leg(j, f0, ex, ey);
+                beam(cx, cy, z + height * f0, bx, by, z + height * f1, 0.004f, timber); // brace
+            }
+        }
+        box(x, y, z + height, 1, 0, crown * 1.4f, crown * 1.4f, 0.02f, dark, dark);
+        // The engine shed and the storage tanks.
+        barn(x + 0.17f * k, y - 0.04f * k, z, dx, dy, 0.07f, 0.045f, 0.06f, timber, slate);
+        const float tank[3] = {0.25f, 0.22f, 0.2f};
+        cylinder(x - 0.16f * k, y + 0.14f * k, z, 0.06f * k, 0.1f, tank, dark);
+        cylinder(x - 0.02f * k, y + 0.2f * k, z, 0.05f * k, 0.08f, tank, dark);
         return;
     }
     if (key == "nuclear_plant") {

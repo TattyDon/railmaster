@@ -263,6 +263,15 @@ with props beside them from Kenney's Survival Kit (log piles, ore heaps,
 barrels and crates). Water towers and engine sheds stand clear of other
 track, each building at a node in its own spot.
 
+Code-drawn industries in more detail: mines have a braced timber
+headframe with its winding wheel and rope, a brick engine house with a
+smoking stack, and spoil heaps; oil wells a tapering lattice derrick with
+girts and braces, an engine shed and storage tanks; farms ploughed fields
+in furrows (or pasture and orchards in planted rows) inside split-rail
+fences, a red gambrel barn, a domed silo and a farmhouse, and herds of
+cattle (black and white at dairies) or sheep. New primitives: beams
+between any two points, gambrel roofs, fences.
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into
