@@ -13,7 +13,7 @@ may and may not contain.
 Railmaster is a desktop game: you build it from source and run it. It takes
 a few minutes. The 3D client is in its first stage: lit terrain with
 rivers and trees, track, towns, industries and trains as simple shapes,
-and a camera you can turn and tilt. Proper models and textures come later
+smoke from steam engines and works chimneys, and a camera you can turn and tilt. Proper models and textures come later
 ([docs/ROADMAP.md](docs/ROADMAP.md)); V switches to the old flat map.
 
 **1. Get the code.** Until it is merged into `main`, the work is on the
@@ -125,7 +125,7 @@ Early development. Done so far:
   of trains, stations and companies
 - compressed saves with a command log that replays a game exactly
 - a first 3D client (lit terrain, trees, houses, industries, track and
-  trains as simple shapes; turn, tilt and zoom) with a demo network of
+  trains as simple shapes, chimney smoke; turn, tilt and zoom) with a demo network of
   three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
@@ -194,7 +194,7 @@ and checks the economy against the spec's targets
 | F11 | Lists of trains, stations and companies (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station (or the company's market entry) |
 | PgUp / PgDn (Inspect) | Go to your next or previous train |
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
-| Arrows, mouse wheel | Pan, zoom |
+| Arrows, mouse wheel, mouse at the window edge | Pan, zoom |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | V | Switch between the 3D view and the flat top-down map |
 | Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |

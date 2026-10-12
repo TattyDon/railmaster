@@ -19,6 +19,17 @@ constexpr float kLift = 0.04f;
 
 float tiles(std::int64_t mm, const Camera& cam) { return static_cast<float>(mm) / cam.mm_per_tile; }
 
+// Chimneys seen this frame (tiles): draw_smoke puffs from them, then forgets them.
+struct SmokeSource {
+    float x, y, z, size;
+    bool steam; // white steam rather than grey smoke
+    float seed;
+};
+std::vector<SmokeSource> g_smoke;
+void add_smoke(float x, float y, float z, float size, bool steam = false) {
+    g_smoke.push_back({x, y, z, size, steam, std::fmod(std::abs(x * 12.9898f + y * 78.233f), 1.0f)});
+}
+
 // A point on the ground (just above it in 3D).
 void vertex(sim::MapPoint p, const Camera& cam) {
     const float x = tiles(p.x_mm, cam), y = tiles(p.y_mm, cam);
@@ -621,6 +632,7 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
     }
     if (key == "nuclear_plant") {
         cylinder(x + 0.12f * k, y, z, 0.16f * k, 0.55f, white, grey, 0.11f * k);
+        add_smoke(x + 0.12f * k, y, z + 0.55f, 0.1f * k, true);
         box(x - 0.15f * k, y, z, dx, dy, 0.1f * k, 0.1f * k, 0.2f, grey, slate);
         cylinder(x - 0.15f * k, y + 0.2f * k, z, 0.07f * k, 0.18f, white, white, 0.04f * k);
         return;
@@ -629,6 +641,8 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         box(x, y, z, dx, dy, 0.2f * k, 0.12f * k, 0.22f, brick, slate);
         cylinder(x + 0.12f * k, y + 0.15f * k, z, 0.035f, 0.75f, brick, dark, 0.025f);
         cylinder(x - 0.04f * k, y + 0.15f * k, z, 0.035f, 0.75f, brick, dark, 0.025f);
+        add_smoke(x + 0.12f * k, y + 0.15f * k, z + 0.75f, 0.075f);
+        add_smoke(x - 0.04f * k, y + 0.15f * k, z + 0.75f, 0.075f);
         return;
     }
     if (key == "chemical_plant" || key == "refinery" || key == "plastics_factory" || key == "fertilizer_factory") {
@@ -637,12 +651,16 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
             cylinder(x + 0.12f * k, y - 0.2f * k + 0.17f * k * static_cast<float>(i), z, 0.065f * k, 0.18f, white, metal);
         }
         cylinder(x - 0.2f * k, y + 0.16f * k, z, 0.02f, 0.6f, metal, dark);
+        add_smoke(x - 0.2f * k, y + 0.16f * k, z + 0.6f, 0.06f);
         return;
     }
     if (key == "steel_mill" || key == "aluminum_mill") {
         box(x - 0.05f * k, y, z, dx, dy, 0.22f * k, 0.14f * k, 0.24f, dark, slate);
         cylinder(x + 0.2f * k, y - 0.15f * k, z, 0.07f * k, 0.4f, brick, dark, 0.05f * k); // furnace
-        for (int i = 0; i < 3; ++i) cylinder(x - 0.18f * k + 0.12f * k * static_cast<float>(i), y + 0.18f * k, z, 0.03f, 0.8f, brick, dark);
+        for (int i = 0; i < 3; ++i) {
+            cylinder(x - 0.18f * k + 0.12f * k * static_cast<float>(i), y + 0.18f * k, z, 0.03f, 0.8f, brick, dark);
+            add_smoke(x - 0.18f * k + 0.12f * k * static_cast<float>(i), y + 0.18f * k, z + 0.8f, 0.07f);
+        }
         return;
     }
     if (key == "barracks") {
@@ -682,6 +700,7 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         gable(x + dx * along, y + dy * along, z + 0.18f, -dy, dx, 0.15f * k, 0.08f * k, 0.07f, slate, wall);
     }
     cylinder(x + dx * 0.2f * k - dy * 0.1f * k, y + dy * 0.2f * k + dx * 0.1f * k, z, 0.03f, 0.55f, brick, dark, 0.022f);
+    add_smoke(x + dx * 0.2f * k - dy * 0.1f * k, y + dy * 0.2f * k + dx * 0.1f * k, z + 0.55f, 0.06f);
 }
 
 // Bridge decks by type: wood brown, stone grey, steel dark, suspension pale.
@@ -855,6 +874,78 @@ void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::Comp
     }
 }
 
+// The size buildings and trains are drawn at in 3D: never smaller than a
+// few pixels.
+float object_scale(const Camera& cam) { return std::max(1.5f, 8.0f / (cam.zoom * 0.2f)); }
+
+bool on_water(float x, float y, const Camera& cam) {
+    if (!cam.terrain) return false;
+    const auto tx = static_cast<std::int32_t>(std::floor(x)), ty = static_cast<std::int32_t>(std::floor(y));
+    if (tx < 0 || ty < 0 || tx >= cam.terrain->width() || ty >= cam.terrain->height()) return true;
+    return cam.terrain->ground(tx, ty) == sim::GroundType::Water;
+}
+
+// Where the railway stands, in quarter tiles, so houses keep off it.
+class Occupancy {
+public:
+    static constexpr float kCell = 0.25f;
+    Occupancy(const sim::Railway& rw, const Camera& cam, int width, int height)
+        : w_(static_cast<int>(static_cast<float>(width) / kCell) + 1), h_(static_cast<int>(static_cast<float>(height) / kCell) + 1),
+          cells_(static_cast<std::size_t>(w_) * static_cast<std::size_t>(h_), false) {
+        const sim::TrackNetwork& net = rw.track();
+        const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
+        const float s = object_scale(cam);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed || e.kind == sim::TrackKind::Tunnel) continue;
+            const sim::TrackNode& a = net.node(e.a);
+            const sim::TrackNode& b = net.node(e.b);
+            const float ax = tile(a.pos.x_mm), ay = tile(a.pos.y_mm), bx = tile(b.pos.x_mm), by = tile(b.pos.y_mm);
+            const int steps = std::max(1, static_cast<int>(std::hypot(bx - ax, by - ay) / 0.1f));
+            for (int i = 0; i <= steps; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(steps);
+                mark(ax + (bx - ax) * t, ay + (by - ay) * t, e.double_track ? 0.3f : 0.22f);
+            }
+        }
+        // Stations' platforms and houses reach about half their scale out.
+        for (const sim::Station& st : rw.stations()) {
+            const sim::TrackNode& n = net.node(st.node);
+            const float reach = (st.size == sim::StationSize::Large ? 0.5f : st.size == sim::StationSize::Small ? 0.3f : 0.4f) * s;
+            mark(tile(n.pos.x_mm), tile(n.pos.y_mm), reach);
+        }
+        for (const sim::StationBuilding& b : rw.station_buildings()) mark(tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s);
+        for (const sim::ServiceBuilding& b : rw.service_buildings()) {
+            const sim::TrackNode& n = net.node(b.node);
+            mark(tile(n.pos.x_mm), tile(n.pos.y_mm), 0.25f + 0.25f * s);
+        }
+    }
+    // Is any cell within `r` tiles of the point taken?
+    bool blocked(float x, float y, float r) const {
+        const int x0 = cell(x - r), x1 = cell(x + r), y0 = cell(y - r), y1 = cell(y + r);
+        for (int cy = std::max(0, y0); cy <= std::min(h_ - 1, y1); ++cy) {
+            for (int cx = std::max(0, x0); cx <= std::min(w_ - 1, x1); ++cx) {
+                if (cells_[static_cast<std::size_t>(cy) * static_cast<std::size_t>(w_) + static_cast<std::size_t>(cx)]) return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    static int cell(float v) { return static_cast<int>(std::floor(v / kCell)); }
+    void mark(float x, float y, float r) {
+        const int x0 = cell(x - r), x1 = cell(x + r), y0 = cell(y - r), y1 = cell(y + r);
+        for (int cy = std::max(0, y0); cy <= std::min(h_ - 1, y1); ++cy) {
+            for (int cx = std::max(0, x0); cx <= std::min(w_ - 1, x1); ++cx) {
+                const float mx = (static_cast<float>(cx) + 0.5f) * kCell, my = (static_cast<float>(cy) + 0.5f) * kCell;
+                if (std::hypot(mx - x, my - y) <= r + kCell * 0.5f) {
+                    cells_[static_cast<std::size_t>(cy) * static_cast<std::size_t>(w_) + static_cast<std::size_t>(cx)] = true;
+                }
+            }
+        }
+    }
+    int w_, h_;
+    std::vector<bool> cells_;
+};
+
 } // namespace
 
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
@@ -977,7 +1068,7 @@ void draw_railway(const sim::World& w, const Camera& cam) {
     const float px = 1.0f / cam.zoom;
     if (cam.three_d) {
         // Buildings and trains as solid boxes, never smaller than a few pixels.
-        const float s = std::max(1.5f, 8.0f / (cam.zoom * 0.2f));
+        const float s = object_scale(cam);
         begin_lit();
         glBegin(GL_QUADS);
         // The direction of the track at a node, for lining buildings up with it.
@@ -1092,6 +1183,9 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                                                                   : Stock::Electric;
             const float gap = 0.012f * s;
             float back = rolling_stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
+            if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
+                add_smoke(x - p.dx * 0.03f * s, y - p.dy * 0.03f * s, z + 0.115f * s, 0.028f * s);
+            }
             const auto behind = [&](Stock kind) {
                 back += rolling_stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
             };
@@ -1251,8 +1345,8 @@ void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& c
     }
 }
 
-void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Camera& cam,
-                std::optional<sim::CargoId> cargo) {
+void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
+                const Camera& cam, std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
     // Drawing is in map cells; a site sits at the centre of its economy node.
     const auto k = static_cast<float>(eco.cells_per_node());
@@ -1276,6 +1370,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glEnd();
     }
     if (cam.three_d) {
+        const int width = cam.terrain ? cam.terrain->width() : eco.width() * eco.cells_per_node();
+        const int height = cam.terrain ? cam.terrain->height() : eco.height() * eco.cells_per_node();
+        const Occupancy taken(rw, cam, width, height);
         begin_lit();
         glBegin(GL_QUADS);
         for (const sim::Site& s : eco.sites()) {
@@ -1285,11 +1382,18 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             if (t.kind == sim::IndustryKind::House) {
                 // A few houses round the spot, more as the level rises.
                 const int n = std::clamp(1 + s.level / 2, 1, 4);
+                // Each tries a few spots and is left out if the railway
+                // has them all.
                 for (int i = 0; i < n; ++i) {
-                    const std::uint32_t h = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy),
-                                                 static_cast<std::uint32_t>(i + 101));
-                    const float x = x0 + (unit(h) - 0.5f) * 0.8f * k, y = y0 + (unit(h >> 16) - 0.5f) * 0.8f * k;
-                    house(x, y, cam.ground_z(x, y), 0.13f + 0.04f * unit(h >> 8), cam);
+                    for (int attempt = 0; attempt < 6; ++attempt) {
+                        const std::uint32_t h = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy),
+                                                     static_cast<std::uint32_t>(i + 101 + attempt * 17));
+                        const float x = x0 + (unit(h) - 0.5f) * 0.8f * k, y = y0 + (unit(h >> 16) - 0.5f) * 0.8f * k;
+                        const float size = 0.13f + 0.04f * unit(h >> 8);
+                        if (taken.blocked(x, y, size) || on_water(x, y, cam)) continue;
+                        house(x, y, cam.ground_z(x, y), size, cam);
+                        break;
+                    }
                 }
                 continue;
             }
@@ -1547,6 +1651,45 @@ std::optional<sim::MapPoint> radar_point(const sim::World& w, const Camera& cam,
     const float cells_x = (sx - x0) / size * across, cells_y = (sy - y0) / size * across;
     if (cells_x > static_cast<float>(t.width()) || cells_y > static_cast<float>(t.height())) return std::nullopt;
     return sim::MapPoint{static_cast<std::int64_t>(cells_x * cam.mm_per_tile), static_cast<std::int64_t>(cells_y * cam.mm_per_tile)};
+}
+
+void draw_smoke(const Camera& cam, float seconds) {
+    if (!cam.three_d) {
+        g_smoke.clear();
+        return;
+    }
+    // Each chimney sends up a stream of puffs that rise, drift downwind,
+    // swell and fade; the puffs are little cubes, shaded by face.
+    constexpr int kPuffs = 6;
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    glBegin(GL_QUADS);
+    for (const SmokeSource& src : g_smoke) {
+        const float grey = src.steam ? 0.95f : 0.5f;
+        for (int i = 0; i < kPuffs; ++i) {
+            float age = seconds / 2.4f + (static_cast<float>(i) + src.seed) / kPuffs;
+            age -= std::floor(age);
+            const float r = src.size * (0.6f + 2.2f * age);
+            const float x = src.x + age * 6.0f * src.size, y = src.y - age * 3.0f * src.size;
+            const float z = src.z + r + age * 12.0f * src.size;
+            const float alpha = 0.75f * (1.0f - age) * std::min(1.0f, age * 8.0f);
+            const auto face = [&](float shade) { glColor4f(grey * shade, grey * shade, grey * shade, alpha); };
+            face(1.0f); // top
+            glVertex3f(x - r, y - r, z + r); glVertex3f(x + r, y - r, z + r); glVertex3f(x + r, y + r, z + r); glVertex3f(x - r, y + r, z + r);
+            face(0.85f); // north and south
+            glVertex3f(x - r, y - r, z - r); glVertex3f(x + r, y - r, z - r); glVertex3f(x + r, y - r, z + r); glVertex3f(x - r, y - r, z + r);
+            face(0.7f);
+            glVertex3f(x - r, y + r, z - r); glVertex3f(x + r, y + r, z - r); glVertex3f(x + r, y + r, z + r); glVertex3f(x - r, y + r, z + r);
+            face(0.9f); // west and east
+            glVertex3f(x - r, y - r, z - r); glVertex3f(x - r, y + r, z - r); glVertex3f(x - r, y + r, z + r); glVertex3f(x - r, y - r, z + r);
+            face(0.75f);
+            glVertex3f(x + r, y - r, z - r); glVertex3f(x + r, y + r, z - r); glVertex3f(x + r, y + r, z + r); glVertex3f(x + r, y - r, z + r);
+        }
+    }
+    glEnd();
+    glDepthMask(GL_TRUE);
+    g_smoke.clear();
 }
 
 } // namespace railmaster::client

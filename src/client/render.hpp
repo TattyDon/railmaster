@@ -22,6 +22,10 @@ void draw_terrain(const sim::Terrain& t, const Camera& cam);
 // `player` is the human's company, if any: its track keeps the structure
 // colours, and rivals are drawn in theirs.
 void draw_railway(const sim::World& w, const Camera& cam);
+// Smoke and steam from the chimneys drawn this frame (steam engines on the
+// move, works and power stations); `seconds` animates it. Call it after the
+// railway and sites, last in the world pass.
+void draw_smoke(const Camera& cam, float seconds);
 // The analysis overlays (rt3-clone-spec §15.3), drawn over the railway.
 enum class MapOverlay { None, Holdings, Profit, Grade, Traffic, Cargo };
 // Holdings: every company's track, stations and industries in its colour.
@@ -35,9 +39,10 @@ void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float
 
 // Industries and houses: in 3D buildings (houses cream with red roofs, raw
 // producers brown, processors purple, consumers grey), in 2D squares. With `cargo` set, producers of it
-// are ringed red and consumers green.
-void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Camera& cam,
-                std::optional<sim::CargoId> cargo);
+// are ringed red and consumers green. Houses keep off the railway's track
+// and stations.
+void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
+                const Camera& cam, std::optional<sim::CargoId> cargo);
 // RT3-style cargo map: red where the cargo is cheap, green where it is dear.
 void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo, const Camera& cam);
 // Town names, in screen space.

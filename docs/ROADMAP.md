@@ -184,8 +184,13 @@ mills, power stations and a nuclear cooling tower, ports with a quay and
 crane, warehouses, offices and factories with sawtooth roofs. Views can
 be bookmarked (Shift+0-9, 0-9), and a radar shows the whole map.
 
+Town houses keep clear of track, stations and water (each house tries a
+few spots and is left out if the railway has them all). Moving steam
+engines puff smoke, works and power-station chimneys smoke, and the
+nuclear cooling tower steams. Moving the mouse to the window edge scrolls
+the view.
+
 Next:
-- Keep town houses off track and stations.
 - Proper low-poly models for engines, cars, stations and buildings, with
   LOD; textures; a modern shader pipeline.
 - Edge scrolling; smoke and lights; day and night.

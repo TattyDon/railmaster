@@ -312,6 +312,18 @@ int main(int argc, char* argv[]) {
             if (keys[SDL_SCANCODE_UP]) cam.pan(0, -pan_speed);
             if (keys[SDL_SCANCODE_DOWN]) cam.pan(0, pan_speed);
         }
+        // The mouse at the window's edge scrolls the view, as in RT3 (not
+        // while a button is held, so drags and orbits stay put).
+        if (SDL_GetMouseFocus() == window) {
+            int mx = 0, my = 0;
+            if (SDL_GetMouseState(&mx, &my) == 0) {
+                constexpr int kEdge = 4;
+                if (mx < kEdge) cam.pan(-pan_speed, 0);
+                if (mx >= cam.width_px - kEdge) cam.pan(pan_speed, 0);
+                if (my < kEdge) cam.pan(0, -pan_speed);
+                if (my >= cam.height_px - kEdge) cam.pan(0, pan_speed);
+            }
+        }
 
         // Fixed-step simulation, decoupled from frame rate.
         tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
@@ -365,10 +377,11 @@ int main(int argc, char* argv[]) {
         }
         client::draw_terrain(world.terrain(), cam);
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
-        client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
+        client::draw_sites(world.economy(), world.data().industries, world.railway(), cam, tools.overlay());
         client::draw_territory_borders(world.territories(), cam);
         client::draw_railway(world, cam);
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
+        client::draw_smoke(cam, static_cast<float>(SDL_GetTicks()) / 1000.0f);
         tools.draw_world_overlay();
         glDisable(GL_DEPTH_TEST);
 
