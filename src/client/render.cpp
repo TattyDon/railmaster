@@ -186,6 +186,98 @@ void ground_rgb(sim::GroundType g, float vary, float& r, float& gr, float& b) {
     b *= k;
 }
 
+// Value noise that wraps at the texture's edge: `cells` across, `rows` down.
+float wrap_noise(float u, float v, int cells, int rows, std::uint32_t seed) {
+    const float fx = u * static_cast<float>(cells), fy = v * static_cast<float>(rows);
+    const int x0 = static_cast<int>(std::floor(fx)), y0 = static_cast<int>(std::floor(fy));
+    const float tx = fx - static_cast<float>(x0), ty = fy - static_cast<float>(y0);
+    const auto at = [&](int cx, int cy) {
+        return unit(hash(static_cast<std::uint32_t>((cx % cells + cells) % cells), static_cast<std::uint32_t>((cy % rows + rows) % rows), seed));
+    };
+    const float sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const float a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx;
+    const float b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx;
+    return a + (b - a) * sy;
+}
+
+// A tiling texture made in code: `texel` gives each texel's RGB (0 to 1).
+// Mipmaps are box-filtered here, so far ground fades to its plain colour
+// instead of shimmering.
+template <typename Texel> GLuint make_texture(Texel texel) {
+    constexpr int kSize = 256;
+    std::vector<unsigned char> level(static_cast<std::size_t>(kSize) * kSize * 3);
+    for (int y = 0; y < kSize; ++y) {
+        for (int x = 0; x < kSize; ++x) {
+            float rgb[3];
+            texel(x, y, static_cast<float>(x) / kSize, static_cast<float>(y) / kSize, rgb);
+            for (int c = 0; c < 3; ++c) {
+                level[(static_cast<std::size_t>(y) * kSize + static_cast<std::size_t>(x)) * 3 + static_cast<std::size_t>(c)] =
+                    static_cast<unsigned char>(std::clamp(rgb[c] * 255.0f, 0.0f, 255.0f));
+            }
+        }
+    }
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    int size = kSize;
+    for (int lod = 0;; ++lod) {
+        glTexImage2D(GL_TEXTURE_2D, lod, GL_RGB, size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, level.data());
+        if (size == 1) break;
+        const int half = size / 2;
+        std::vector<unsigned char> next(static_cast<std::size_t>(half) * static_cast<std::size_t>(half) * 3);
+        const auto px = [&](int sx, int sy, int c) {
+            return static_cast<int>(level[(static_cast<std::size_t>(sy) * static_cast<std::size_t>(size) + static_cast<std::size_t>(sx)) * 3 + static_cast<std::size_t>(c)]);
+        };
+        for (int y = 0; y < half; ++y)
+            for (int x = 0; x < half; ++x)
+                for (int c = 0; c < 3; ++c) {
+                    const int sum = px(2 * x, 2 * y, c) + px(2 * x + 1, 2 * y, c) + px(2 * x, 2 * y + 1, c) + px(2 * x + 1, 2 * y + 1, c);
+                    next[(static_cast<std::size_t>(y) * static_cast<std::size_t>(half) + static_cast<std::size_t>(x)) * 3 + static_cast<std::size_t>(c)] =
+                        static_cast<unsigned char>(sum / 4);
+                }
+        level = std::move(next);
+        size = half;
+    }
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return tex;
+}
+
+// The ground's detail: grey, about white, with soft blotches and fine
+// speckle like grass and earth, so lit colours multiplied by it read as
+// ground close up.
+GLuint ground_texture() {
+    static const GLuint tex = make_texture([](int x, int y, float u, float v, float* rgb) {
+        const float blotch = wrap_noise(u, v, 4, 4, 31) * 0.5f + wrap_noise(u, v, 9, 9, 32) * 0.3f + wrap_noise(u, v, 23, 23, 33) * 0.2f;
+        const float speck = unit(hash(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), 34));
+        float k = 0.78f + 0.2f * blotch + (speck - 0.5f) * 0.12f;
+        if (speck > 0.94f) k += 0.08f; // light blades
+        // A touch warmer in the dark patches, like earth showing through.
+        rgb[0] = k + (1 - blotch) * 0.025f;
+        rgb[1] = k;
+        rgb[2] = k * 0.98f - (1 - blotch) * 0.025f;
+    });
+    return tex;
+}
+
+// Water's: long soft ripples with glints.
+GLuint water_texture() {
+    static const GLuint tex = make_texture([](int x, int y, float u, float v, float* rgb) {
+        const float ripple = wrap_noise(u, v, 6, 24, 41) * 0.6f + wrap_noise(u, v, 13, 48, 42) * 0.4f;
+        float k = 0.8f + 0.25f * ripple;
+        if (ripple > 0.78f && unit(hash(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), 43)) < 0.5f) k += 0.12f;
+        rgb[0] = rgb[1] = rgb[2] = k;
+    });
+    return tex;
+}
+
+// How many tiles one copy of the ground texture covers.
+constexpr float kGroundTextureTiles = 2.0f;
+
 // The 3D ground as a display list, rebuilt when the terrain (or the height
 // scale) changes.
 struct TerrainMesh {
@@ -242,41 +334,57 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
                 for (int k = 0; k < 3; ++k) sum[k] += c[k];
                 ++n;
             }
-        if (n == 0) glColor3f(0.45f, 0.42f, 0.3f);
-        else glColor3f(sum[0] / static_cast<float>(n), sum[1] / static_cast<float>(n), sum[2] / static_cast<float>(n));
+        // A little brighter than the tile colours: the texture averages darker.
+        constexpr float kBright = 1.12f;
+        if (n == 0) glColor3f(0.45f * kBright, 0.42f * kBright, 0.3f * kBright);
+        else glColor3f(sum[0] * kBright / static_cast<float>(n), sum[1] * kBright / static_cast<float>(n), sum[2] * kBright / static_cast<float>(n));
     };
+    // Land, textured: the texture brightens and darkens the lit colours.
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, ground_texture());
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glBegin(GL_QUADS);
+    const auto land_corner = [&](int cx, int cy) {
+        corner_colour(cx, cy);
+        normal(cx, cy);
+        glTexCoord2f(static_cast<float>(cx) / kGroundTextureTiles, static_cast<float>(cy) / kGroundTextureTiles);
+        glVertex3f(static_cast<float>(cx), static_cast<float>(cy), z(cx, cy));
+    };
     for (int ty = 0; ty < hgt; ++ty) {
         for (int tx = 0; tx < w; ++tx) {
-            const sim::GroundType g = t.ground(tx, ty);
-            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
-            if (g == sim::GroundType::Water) {
-                // Water lies flat, at its lowest corner.
-                const float wz = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
-                const float* c = &tile_rgb[(static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)) * 3];
-                glColor3f(c[0], c[1], c[2]);
-                glNormal3f(0, 0, 1);
-                glVertex3f(fx, fy, wz);
-                glVertex3f(fx + 1, fy, wz);
-                glVertex3f(fx + 1, fy + 1, wz);
-                glVertex3f(fx, fy + 1, wz);
-                continue;
-            }
-            corner_colour(tx, ty);
-            normal(tx, ty);
-            glVertex3f(fx, fy, z(tx, ty));
-            corner_colour(tx + 1, ty);
-            normal(tx + 1, ty);
-            glVertex3f(fx + 1, fy, z(tx + 1, ty));
-            corner_colour(tx + 1, ty + 1);
-            normal(tx + 1, ty + 1);
-            glVertex3f(fx + 1, fy + 1, z(tx + 1, ty + 1));
-            corner_colour(tx, ty + 1);
-            normal(tx, ty + 1);
-            glVertex3f(fx, fy + 1, z(tx, ty + 1));
+            if (t.ground(tx, ty) == sim::GroundType::Water) continue;
+            land_corner(tx, ty);
+            land_corner(tx + 1, ty);
+            land_corner(tx + 1, ty + 1);
+            land_corner(tx, ty + 1);
         }
     }
     glEnd();
+    // Water lies flat, at its lowest corner.
+    glBindTexture(GL_TEXTURE_2D, water_texture());
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    for (int ty = 0; ty < hgt; ++ty) {
+        for (int tx = 0; tx < w; ++tx) {
+            if (t.ground(tx, ty) != sim::GroundType::Water) continue;
+            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
+            const float wz = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
+            const float* c = &tile_rgb[(static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)) * 3];
+            glColor3f(c[0], c[1], c[2]);
+            const float u = fx / kGroundTextureTiles, v = fy / kGroundTextureTiles, step = 1 / kGroundTextureTiles;
+            glTexCoord2f(u, v);
+            glVertex3f(fx, fy, wz);
+            glTexCoord2f(u + step, v);
+            glVertex3f(fx + 1, fy, wz);
+            glTexCoord2f(u + step, v + step);
+            glVertex3f(fx + 1, fy + 1, wz);
+            glTexCoord2f(u, v + step);
+            glVertex3f(fx, fy + 1, wz);
+        }
+    }
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_TEXTURE_2D);
     // A skirt round the edge of the map, down to below sea level.
     glBegin(GL_QUADS);
     glColor3f(0.35f, 0.3f, 0.24f);
@@ -967,6 +1075,9 @@ void draw_terrain(const sim::Terrain& t, const Camera& cam) {
     static TerrainMesh mesh;
     const std::uint64_t key = terrain_key(t, cam);
     if (mesh.list == 0 || mesh.key != key) {
+        // Made now: a texture upload inside the list would only be recorded.
+        ground_texture();
+        water_texture();
         if (mesh.list == 0) mesh.list = glGenLists(1);
         glNewList(mesh.list, GL_COMPILE);
         build_terrain_mesh(t, cam);

@@ -157,6 +157,7 @@ int main(int argc, char* argv[]) {
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     double tick_accumulator = 0.0;
+    float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
     int right_drag = 0; // pixels the mouse moved with the right button down
     // Camera bookmarks: Shift+0-9 stores the view, 0-9 returns to it (rt3-clone-spec §15.6).
     struct Bookmark {
@@ -325,6 +326,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Smoke drifts only while the game runs.
+        if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);
+
         // Fixed-step simulation, decoupled from frame rate.
         tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
                             1000.0 * sim::World::kTicksPerDay;
@@ -374,6 +378,14 @@ int main(int argc, char* argv[]) {
         if (cam.three_d) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
+            // Haze: the far land fades into the sky, as in RT3; zoomed out
+            // over the whole map it is too far to show.
+            const GLfloat sky[] = {0.55f, 0.70f, 0.85f, 1.0f};
+            glEnable(GL_FOG);
+            glFogi(GL_FOG_MODE, GL_LINEAR);
+            glFogfv(GL_FOG_COLOR, sky);
+            glFogf(GL_FOG_START, cam.distance * 1.6f);
+            glFogf(GL_FOG_END, cam.distance * 5.0f);
         }
         client::draw_terrain(world.terrain(), cam);
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
@@ -381,8 +393,9 @@ int main(int argc, char* argv[]) {
         client::draw_territory_borders(world.territories(), cam);
         client::draw_railway(world, cam);
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
-        client::draw_smoke(cam, static_cast<float>(SDL_GetTicks()) / 1000.0f);
+        client::draw_smoke(cam, smoke_clock);
         tools.draw_world_overlay();
+        glDisable(GL_FOG);
         glDisable(GL_DEPTH_TEST);
 
         cam.apply_screen();

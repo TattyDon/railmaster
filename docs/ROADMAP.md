@@ -190,6 +190,12 @@ engines puff smoke, works and power-station chimneys smoke, and the
 nuclear cooling tower steams. Moving the mouse to the window edge scrolls
 the view.
 
+The ground is textured (a detail texture made in code, no asset files:
+blotches and speckle like grass and earth, multiplied with the land's lit
+colours; ripples on water), with box-filtered mipmaps so far ground does
+not shimmer. Distant land fades into a sky-coloured haze. Smoke stops
+while the game is paused.
+
 Next:
 - Proper low-poly models for engines, cars, stations and buildings, with
   LOD; textures; a modern shader pipeline.

@@ -11,9 +11,10 @@ may and may not contain.
 ## Try it
 
 Railmaster is a desktop game: you build it from source and run it. It takes
-a few minutes. The 3D client is in its first stage: lit terrain with
-rivers and trees, track, towns, industries and trains as simple shapes,
-smoke from steam engines and works chimneys, and a camera you can turn and tilt. Proper models and textures come later
+a few minutes. The 3D client is in its first stage: lit, textured terrain
+with rivers, trees and distance haze; track, towns, industries and trains
+as simple shapes; smoke from steam engines and works chimneys; and a
+camera you can turn and tilt. Proper models come later
 ([docs/ROADMAP.md](docs/ROADMAP.md)); V switches to the old flat map.
 
 **1. Get the code.** Until it is merged into `main`, the work is on the
