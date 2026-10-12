@@ -211,6 +211,27 @@
     ],
     "engine_shed": [
       "prefab:engine-shed"
+    ],
+    "props:logging_camp": [
+      "prefab:props-logs"
+    ],
+    "props:coal_mine": [
+      "prefab:props-ore"
+    ],
+    "props:iron_mine": [
+      "prefab:props-ore"
+    ],
+    "props:bauxite_mine": [
+      "prefab:props-ore"
+    ],
+    "props:uranium_mine": [
+      "prefab:props-ore"
+    ],
+    "props:port": [
+      "prefab:props-goods"
+    ],
+    "props:warehouse": [
+      "prefab:props-goods"
     ]
   }
 }

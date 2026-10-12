@@ -12,8 +12,12 @@ With --industrial it recolours the City Kit (Industrial) palette instead,
 writing colormap-brick.png: pale lavender walls -> red brick, blue-grey
 roofs and trim -> dark slate and iron, orange bands -> rust.
 
+With --survival it recolours the Survival Kit palette, writing
+colormap-weathered.png: its bright orange wood -> weathered brown.
+
 Usage: period_palettes.py data/models/kenney-fantasy-town/Textures
        period_palettes.py --industrial data/models/kenney-industrial/Textures
+       period_palettes.py --survival data/models/kenney-survival/Textures
 """
 import colorsys
 import sys
@@ -63,7 +67,25 @@ def industrial(src: Image.Image) -> Image.Image:
     return out
 
 
+def survival(src: Image.Image) -> Image.Image:
+    out = src.copy()
+    px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+            if s > 0.35 and 5 <= h * 360 <= 45:  # bright orange wood
+                h, s, v = 26 / 360, s * 0.6, v * 0.62
+                nr, ng, nb = colorsys.hsv_to_rgb(h, s, v)
+                px[x, y] = (round(nr * 255), round(ng * 255), round(nb * 255), a)
+    return out
+
+
 def main() -> None:
+    if sys.argv[1] == "--survival":
+        folder = Path(sys.argv[2])
+        survival(Image.open(folder / "colormap.png").convert("RGBA")).save(folder / "colormap-weathered.png")
+        return
     if sys.argv[1] == "--industrial":
         folder = Path(sys.argv[2])
         industrial(Image.open(folder / "colormap.png").convert("RGBA")).save(folder / "colormap-brick.png")

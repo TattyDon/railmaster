@@ -258,13 +258,14 @@ locomotive, rivals' red or blue, and each flies a pennant in its owner's
 colour. Mills, factories, works, plants, warehouses and barracks come
 from Kenney's City Kit (Industrial) (CC0) on a brick recolouring of its
 palette, as do water towers and engine sheds; mines, farms, logging camps,
-oil wells and ports keep their code-drawn headframes, fields and derricks.
+oil wells and ports keep their code-drawn headframes, fields and derricks,
+with props beside them from Kenney's Survival Kit (log piles, ore heaps,
+barrels and crates). Water towers and engine sheds stand clear of other
+track, each building at a node in its own spot.
 
 Next:
-- Real art: props for mines, logging camps and ports (Kenney's Survival
-  Kit has logs, rocks, crates and barrels); a 2x2-cell house shape for
-  variety; LOD for model trees far off; sheds and towers placed clear of
-  other track.
+- Real art: a 2x2-cell house shape for variety; LOD for model trees far
+  off.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

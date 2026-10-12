@@ -1152,6 +1152,74 @@ bool on_water(float x, float y, const Camera& cam) {
     return cam.terrain->ground(tx, ty) == sim::GroundType::Water;
 }
 
+// How far a point (tiles) is from the nearest track, in tiles.
+float track_distance(const sim::TrackNetwork& net, const Camera& cam, float x, float y) {
+    float best = 1e9f;
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (e.removed) continue;
+        const sim::TrackNode& a = net.node(e.a);
+        const sim::TrackNode& b = net.node(e.b);
+        const float ax = tiles(a.pos.x_mm, cam), ay = tiles(a.pos.y_mm, cam), bx = tiles(b.pos.x_mm, cam), by = tiles(b.pos.y_mm, cam);
+        const float ex = bx - ax, ey = by - ay, len2 = ex * ex + ey * ey;
+        const float t = len2 > 0 ? std::clamp(((x - ax) * ex + (y - ay) * ey) / len2, 0.0f, 1.0f) : 0.0f;
+        best = std::min(best, std::hypot(x - ax - ex * t, y - ay - ey * t));
+    }
+    return best;
+}
+
+// Where a water tower or engine shed stands by its node (tiles): set back
+// from the track (direction (dx, dy)) on the side away from the station
+// house if that is clear of other track, else the other side, or along.
+// `slot` counts the buildings already placed at the node: each takes the
+// next clear spot, so a tower and a shed stand apart.
+void service_spot(const sim::TrackNetwork& net, const Camera& cam, sim::NodeId node, float dx, float dy, float s, int slot,
+                  float& x, float& y) {
+    const sim::TrackNode& n = net.node(node);
+    const float nx = tiles(n.pos.x_mm, cam), ny = tiles(n.pos.y_mm, cam);
+    const float back = 0.2f + 0.08f * s, clearance = 0.12f * s + 0.08f;
+    x = nx - dy * back + dx * 0.35f * s * static_cast<float>(slot);
+    y = ny + dx * back + dy * 0.35f * s * static_cast<float>(slot);
+    int skip = slot;
+    for (const float side : {1.0f, -1.0f}) {
+        for (const float shift : {0.0f, 0.35f, -0.35f, 0.7f, -0.7f}) {
+            const float cx = nx - dy * back * side + dx * shift * s, cy = ny + dx * back * side + dy * shift * s;
+            if (track_distance(net, cam, cx, cy) < clearance) continue;
+            if (skip-- > 0) continue;
+            x = cx;
+            y = cy;
+            return;
+        }
+    }
+}
+
+// Which of the buildings at its node a service building is (0 for the first).
+int service_slot(const sim::Railway& rw, const sim::ServiceBuilding& b) {
+    int slot = 0;
+    for (const sim::ServiceBuilding& other : rw.service_buildings()) {
+        if (&other == &b) break;
+        if (other.node == b.node) ++slot;
+    }
+    return slot;
+}
+
+// The direction of the track at a node, for lining buildings up with it.
+void track_along(const sim::TrackNetwork& net, sim::NodeId node, float& dx, float& dy) {
+    dx = 1;
+    dy = 0;
+    for (sim::EdgeId id : net.edges_at(node)) {
+        const sim::TrackEdge& e = net.edge(id);
+        if (e.removed) continue;
+        const sim::MapPoint a = net.node(e.a).pos, b = net.node(e.b).pos;
+        const auto ex = static_cast<float>(b.x_mm - a.x_mm), ey = static_cast<float>(b.y_mm - a.y_mm);
+        const float l = std::hypot(ex, ey);
+        if (l > 0) {
+            dx = ex / l;
+            dy = ey / l;
+        }
+        return;
+    }
+}
+
 // Where the railway and industries stand, in quarter tiles, so houses keep
 // off them.
 class Occupancy {
@@ -1182,8 +1250,10 @@ public:
         }
         for (const sim::StationBuilding& b : rw.station_buildings()) mark(tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s);
         for (const sim::ServiceBuilding& b : rw.service_buildings()) {
-            const sim::TrackNode& n = net.node(b.node);
-            mark(tile(n.pos.x_mm), tile(n.pos.y_mm), 0.25f + 0.25f * s);
+            float dx, dy, x, y;
+            track_along(net, b.node, dx, dy);
+            service_spot(net, cam, b.node, dx, dy, s, service_slot(rw, b), x, y);
+            mark(x, y, 0.1f + 0.2f * s);
         }
     }
     // A disc `r` tiles round a point (towns, for the trees).
@@ -2022,16 +2092,19 @@ void draw_railway(const sim::World& w, const Camera& cam) {
             const sim::TrackNode& n = net.node(b.node);
             float dx, dy;
             along(b.node, dx, dy);
-            // Set back from the track, on the side away from the station house.
-            const float back = 0.2f + 0.08f * s;
-            const float x = tiles(n.pos.x_mm, cam) - dy * back, y = tiles(n.pos.y_mm, cam) + dx * back;
+            const float nx = tiles(n.pos.x_mm, cam), ny = tiles(n.pos.y_mm, cam);
+            float x, y;
+            service_spot(net, cam, b.node, dx, dy, s, service_slot(rw, b), x, y);
             const float z = cam.ground_z(x, y);
             // From the art where there is some, facing the track.
             const bool tower = b.type == sim::ServiceType::ServiceTower;
             if (const models::Model* m = models::pick(tower ? "service_tower" : "engine_shed", b.node)) {
+                // Facing the track it serves.
+                const float tl = std::max(1e-4f, std::hypot(nx - x, ny - y));
+                const float fx = (nx - x) / tl, fy = (ny - y) / tl;
                 glEnd();
-                if (tower) models::draw_to_height(*m, x, y, z - 0.005f, dy, -dx, 0.26f * s);
-                else models::draw(*m, x + dx * 0.15f * s, y + dy * 0.15f * s, z - 0.005f, dy, -dx, 0.34f * s);
+                if (tower) models::draw_to_height(*m, x, y, z - 0.005f, fx, fy, 0.26f * s);
+                else models::draw(*m, x, y, z - 0.005f, fx, fy, 0.34f * s);
                 glBegin(GL_QUADS);
             } else if (tower) {
                 // A water tank on legs.
@@ -2313,6 +2386,13 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
                 glBegin(GL_QUADS);
             } else {
                 industry_3d(t, x0, y0, k, seed, cam);
+            }
+            if (const models::Model* m = models::pick("props:" + t.key, seed)) {
+                // Props in the opposite corner (log piles, ore heaps, crates).
+                const float bx = x0 - 0.28f * k, by = y0 + 0.28f * k;
+                glEnd();
+                models::draw(*m, bx, by, cam.ground_z(bx, by) - 0.005f, 0, 1, 0.45f * k);
+                glBegin(GL_QUADS);
             }
             if (const models::Model* m = models::pick("beside:" + t.key, seed)) {
                 // Beside them (a windmill by the fields).

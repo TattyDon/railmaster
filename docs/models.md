@@ -34,6 +34,7 @@ every time), so a town gets a mix of houses.
 | `tree_broadleaf`, `tree_conifer` | The woods' trees | To each tree's height, turned at random |
 | `industry:<key>` (e.g. `industry:coal_mine`, `industry:steel_mill`; keys in `data/industries.json`) | That industry's buildings | To 70% of its site, in proportion |
 | `service_tower`, `engine_shed` | Water towers and engine sheds by the track | The tower to its height, the shed along the track, facing it |
+| `props:<key>` | Nothing: a cluster of props in the corner of the industry's site (log piles, ore heaps, crates) | About half a site across |
 | `beside:<key>` | Nothing: stands beside the industry's own shapes (a windmill by the fields) | To about half a site tall |
 
 Models are scaled to fit: buildings across their plot and along it, with
@@ -120,8 +121,14 @@ lumber mill) are assembled from the same kit.
   cooling tower, warehouses and barracks, plus the water tower and engine
   shed by the track.
 
-Mines, farms, logging camps, oil wells and ports are still drawn in code
-(their headframes, fields and derricks say what they are).
+- `kenney-survival/`: props from Kenney's Survival Kit (CC0) on a
+  weathered recolouring: log piles, stumps and a tent at logging camps,
+  stone and ore heaps with crates at mines, barrels and crates at ports
+  and warehouses.
+
+Mines, farms, logging camps, oil wells and ports keep their code-drawn
+headframes, fields and derricks, which say what they are; the props stand
+beside them.
 
 ## Where to get art
 
