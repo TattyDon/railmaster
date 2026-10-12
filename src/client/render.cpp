@@ -6,6 +6,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace railmaster::client {
 
@@ -195,6 +196,74 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
         square(rw.train_position(t.id), cam, 4 * px);
     }
     glEnd();
+}
+
+void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& cam) {
+    const sim::Railway& rw = w.railway();
+    const sim::TrackNetwork& net = rw.track();
+    const sim::Balance& b = w.data().balance;
+    const auto rating_rgb = [](sim::Rating r) {
+        switch (r) {
+        case sim::Rating::Loss: glColor3f(0.95f, 0.2f, 0.15f); break;
+        case sim::Rating::Low: glColor3f(0.95f, 0.85f, 0.2f); break;
+        case sim::Rating::Good: glColor3f(0.2f, 0.9f, 0.3f); break;
+        }
+    };
+    switch (mode) {
+    case MapOverlay::None:
+    case MapOverlay::Cargo: return;
+    case MapOverlay::Grade: {
+        const std::int64_t limit = std::max<std::int32_t>(1, b.track.default_max_grade_bp);
+        glLineWidth(4.0f);
+        glBegin(GL_LINES);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed) continue;
+            const std::int64_t grade = std::abs(net.grade_bp({e.id, true}));
+            const float k = static_cast<float>(std::min<std::int64_t>(grade, limit)) / static_cast<float>(limit);
+            glColor3f(0.2f + 0.75f * k, 0.9f - 0.7f * k, 0.2f);
+            vertex(net.node(e.a).pos, cam);
+            vertex(net.node(e.b).pos, cam);
+        }
+        glEnd();
+        return;
+    }
+    case MapOverlay::Traffic: {
+        std::uint32_t busiest = 1;
+        for (const sim::TrackEdge& e : net.edges())
+            if (!e.removed) busiest = std::max(busiest, rw.traffic_last_month(e.id));
+        glLineWidth(4.0f);
+        glBegin(GL_LINES);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed) continue;
+            if (rw.needs_double_track(e.id)) {
+                glColor3f(1.0f, 0.1f, 0.1f);
+            } else {
+                const float k = static_cast<float>(rw.traffic_last_month(e.id)) / static_cast<float>(busiest);
+                if (k <= 0) glColor3f(0.25f, 0.25f, 0.3f);
+                else glColor3f(0.4f + 0.6f * k, 0.4f + 0.45f * k, 0.4f - 0.3f * k);
+            }
+            vertex(net.node(e.a).pos, cam);
+            vertex(net.node(e.b).pos, cam);
+        }
+        glEnd();
+        return;
+    }
+    case MapOverlay::Profit: {
+        const float px = 1.0f / cam.zoom;
+        glBegin(GL_QUADS);
+        for (const sim::Station& s : rw.stations()) {
+            rating_rgb(sim::rate(s.income_last_year(), s.income_months.size(), sim::station_cost(s.size, b), b));
+            square(net.node(s.node).pos, cam, 9 * px);
+        }
+        for (const sim::Train& t : rw.trains()) {
+            if (!t.in_service()) continue;
+            rating_rgb(sim::rate(t.profit_last_year(), t.profit_months.size(), w.data().locomotives.get(t.loco).cost, b));
+            square(rw.train_position(t.id), cam, 7 * px);
+        }
+        glEnd();
+        return;
+    }
+    }
 }
 
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Camera& cam,

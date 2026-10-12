@@ -284,6 +284,7 @@ int main(int argc, char* argv[]) {
         client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
         client::draw_territory_borders(world.territories());
         client::draw_railway(world.railway(), cam, world.player_company());
+        client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         tools.draw_world_overlay();
 
         cam.apply_screen();

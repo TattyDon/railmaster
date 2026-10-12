@@ -6,6 +6,7 @@
 #include "railmaster/sim/terrain.hpp"
 #include "railmaster/sim/territory.hpp"
 #include "railmaster/sim/track_builder.hpp"
+#include "railmaster/sim/world.hpp"
 
 #include <optional>
 #include <vector>
@@ -35,6 +36,13 @@ void draw_terrain(const sim::Terrain& t);
 // `player` is the human's company, if any: its track keeps the structure
 // colours, and rivals are drawn in theirs.
 void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player);
+// The analysis overlays (rt3-clone-spec §15.3), drawn over the railway.
+enum class MapOverlay { None, Profit, Grade, Traffic, Cargo };
+// Profit: trains and stations green, yellow or red by sim::rate. Grade:
+// track green on the level to red at the grade limit. Traffic: track by
+// last month's trains, brighter the busier, red where single track held
+// trains waiting at meets (it needs a second track).
+void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& cam);
 // Each company's colour: the player's is pale; rivals get distinct hues.
 void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float& r, float& g, float& b);
 

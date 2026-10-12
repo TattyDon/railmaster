@@ -54,6 +54,7 @@ Each key's name carries its unit:
 | `towns` | town growth and star ratings | m2 |
 | `industries` | owning industries: labour, overhead, prices, building, upgrading, closure | m2 |
 | `economic_states` | the business cycle: output, costs, prime rate, share prices | m2 |
+| `overlays` | thresholds for the profitability and traffic overlays | README (O / P) |
 | `demo` | the opening demo network: the share of cash its track may cost | [calibration.md](calibration.md) |
 | `ai` | rivals' line planning, train buying and share trading | [rivals-model.md](rivals-model.md) |
 | `corporate` | takeover and merger votes, retry wait, investor sentiment | [rivals-model.md](rivals-model.md) |

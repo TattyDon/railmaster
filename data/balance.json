@@ -282,6 +282,10 @@
     "town_spread_cells": 3,
     "towns_per_map": 8
   },
+  "overlays": {
+    "good_return_percent": 10,
+    "held_days_for_double": 1
+  },
   "servicing": {
     "maintenance_facility_cost": 100000,
     "no_sand_grade_drop_percent": 300,

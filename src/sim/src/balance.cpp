@@ -77,6 +77,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_hal
                                                 speed_factor_min_permille, speed_factor_max_permille, reference_speeds,
                                                 era_volume_percent)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Demo, track_budget_percent)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Overlays, good_return_percent, held_days_for_double)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Ai, min_route_km, max_route_km, build_interval_months_min,
                                                 build_interval_months_max, cash_reserve, candidates_previewed,
                                                 cars_per_train, max_trains_per_route, waiting_carloads_for_train,
@@ -133,6 +134,7 @@ nlohmann::json to_tree(const Balance& b) {
     j["economic_states"] = b.economic_states;
     j["ai"] = b.ai;
     j["demo"] = b.demo;
+    j["overlays"] = b.overlays;
     j["finance"] = b.finance;
     j["stock"] = b.stock;
     j["corporate"] = b.corporate;
@@ -188,6 +190,7 @@ Balance Balance::from_json(std::string_view json_text) {
         read_section(j, "economic_states", b.economic_states);
         read_section(j, "ai", b.ai);
         read_section(j, "demo", b.demo);
+        read_section(j, "overlays", b.overlays);
         read_section(j, "finance", b.finance);
         read_section(j, "stock", b.stock);
         read_section(j, "corporate", b.corporate);

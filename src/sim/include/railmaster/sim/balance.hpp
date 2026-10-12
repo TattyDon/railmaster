@@ -399,6 +399,17 @@ struct Balance {
         std::int32_t recession_cut_percent = 50;
     } ai;
 
+    // The profitability and traffic overlays (rt3-clone-spec §15.3 [I]): a
+    // train is green when its last 12 months' profit is at least this share
+    // of its engine's price, yellow when above nothing, red at a loss; a
+    // station likewise by its income against its building cost. Single
+    // track is red, needing a second track, when trains were held on it
+    // waiting for others this many days last month.
+    struct Overlays {
+        std::int32_t good_return_percent = 10;
+        std::int32_t held_days_for_double = 1;
+    } overlays;
+
     // The demo network the client opens with and calibration measures
     // (demo.hpp, [I]): the share of the company's cash its track may cost.
     struct Demo {

@@ -350,6 +350,7 @@ void Railway::plan_to_current_stop(Train& t, bool electric) {
         return;
     }
     t.path = std::move(*path);
+    count_traffic(t.path.front().edge);
     t.step = 0;
     t.offset_mm = 0;
     t.speed_mm_per_tick = 0;
@@ -620,6 +621,51 @@ bool Railway::break_down(TrainId id, std::int32_t days) {
     return true;
 }
 
+namespace {
+Money last_year(const std::vector<Money>& months) {
+    Money sum;
+    for (const Money& m : months) sum += m;
+    return sum;
+}
+void file_month(Money& now, std::vector<Money>& months) {
+    months.push_back(now);
+    if (months.size() > 12) months.erase(months.begin());
+    now = Money{};
+}
+} // namespace
+
+Money Train::profit_last_year() const { return last_year(profit_months); }
+
+Rating rate(Money earned, std::size_t months, Money price, const Balance& b) {
+    if (months == 0) return Rating::Low;
+    if (earned < Money{}) return Rating::Loss;
+    // A good year's return, for the months on record.
+    const Money good = price.scaled(std::int64_t{b.overlays.good_return_percent} * static_cast<std::int64_t>(months), 100 * 12);
+    return earned >= good ? Rating::Good : Rating::Low;
+}
+
+bool Railway::needs_double_track(EdgeId e) const {
+    return !track_.edge(e).double_track &&
+           held_last_month(e) >= static_cast<std::uint32_t>(balance_.overlays.held_days_for_double * kTrainTicksPerDay);
+}
+Money Station::income_last_year() const { return last_year(income_months); }
+
+void Railway::count_traffic(EdgeId e) {
+    if (traffic_.size() <= e) traffic_.resize(std::size_t{e} + 1, 0);
+    ++traffic_[e];
+}
+
+void Railway::close_month() {
+    for (Train& t : trains_) {
+        if (t.in_service()) file_month(t.profit_this_month, t.profit_months);
+    }
+    for (Station& s : stations_) file_month(s.income_this_month, s.income_months);
+    traffic_last_ = std::move(traffic_);
+    traffic_.assign(track_.edges().size(), 0);
+    held_last_ = std::move(held_);
+    held_.assign(track_.edges().size(), 0);
+}
+
 std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
     std::vector<std::pair<TrainId, StationId>> out;
     out.swap(arrivals_);
@@ -662,6 +708,9 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
     }
 
     if (must_yield(t)) {
+        const EdgeId e = t.path[t.step].edge;
+        if (held_.size() <= e) held_.resize(std::size_t{e} + 1, 0);
+        ++held_[e];
         t.yielding = true;
         t.speed_mm_per_tick = 0;
         return;
@@ -731,6 +780,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
             return;
         }
         ++t.step;
+        count_traffic(t.path[t.step].edge);
         t.offset_mm = 0;
         if (service_at(t, node, loco)) {
             t.state = TrainState::Servicing;

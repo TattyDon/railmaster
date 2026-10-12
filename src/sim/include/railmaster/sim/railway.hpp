@@ -59,7 +59,20 @@ struct Station {
     std::int64_t passengers_boarded_milli = 0;
     std::int64_t passengers_arrived_milli = 0;
     std::int64_t passengers_waiting_milli_days = 0;
+    // Income from trains arriving here: this month, and the last 12 months
+    // (newest last), for the profitability overlay (rt3-clone-spec §15.3).
+    Money income_this_month{};
+    std::vector<Money> income_months{};
+    Money income_last_year() const;
 };
+
+// How a train or station is doing, for the profitability overlay
+// (rt3-clone-spec §15.3: green, yellow, red) by Balance::overlays: over the
+// months on record (up to 12), a loss is red; a return of at least the good
+// share a year green (a train against its engine's price, a station its
+// building cost); anything between yellow. Nothing on record yet is yellow.
+enum class Rating : std::uint8_t { Loss, Low, Good };
+Rating rate(Money earned, std::size_t months, Money price, const Balance& b);
 
 // Buildings placed near stations (rt3-clone-spec §7.2): a post office keeps
 // mail waiting longer; a hotel keeps passengers longer and earns from those
@@ -186,6 +199,12 @@ struct Train {
     std::vector<std::int64_t> leg_mm_by_owner{};
 
     Money revenue;                    // lifetime earnings
+    // Earnings less its running costs (maintenance, fuel, repairs): this
+    // month, and the last 12 months (newest last), for the profitability
+    // overlay (rt3-clone-spec §15.3).
+    Money profit_this_month{};
+    std::vector<Money> profit_months{};
+    Money profit_last_year() const;
     Money last_income;                // from the most recent stop
     std::uint64_t last_income_tick = 0;
 
@@ -280,6 +299,17 @@ public:
     // as before; otherwise it makes for the first stop, from the end of the
     // piece of track it is on.
     void set_route(TrainId id, std::vector<StationId> route, std::vector<std::uint8_t> service_stop);
+    // Trains that ran onto each piece of track (by EdgeId): this month and
+    // last month, for the traffic overlay (rt3-clone-spec §15.3).
+    std::uint32_t traffic_last_month(EdgeId e) const { return e < traffic_last_.size() ? traffic_last_[e] : 0; }
+    // Ticks trains spent held on each piece last month, waiting for another
+    // to pass on single track: where a second track would help.
+    std::uint32_t held_last_month(EdgeId e) const { return e < held_last_.size() ? held_last_[e] : 0; }
+    // Single track where trains were held waiting for others at least
+    // Balance::overlays.held_days_for_double last month.
+    bool needs_double_track(EdgeId e) const;
+    // At a month end: file this month's profits, income and traffic.
+    void close_month();
     // Stop a train out on the line for `days`, as a breakdown (with the
     // repair bill); false if it is not on the line.
     bool break_down(TrainId id, std::int32_t days);
@@ -370,6 +400,9 @@ private:
     std::vector<std::pair<TrainId, StationId>> arrivals_;
     std::vector<TrainId> crashes_;
     std::vector<TrainId> breakdowns_;
+    std::vector<std::uint32_t> traffic_, traffic_last_; // by EdgeId
+    std::vector<std::uint32_t> held_, held_last_;       // by EdgeId
+    void count_traffic(EdgeId e);
     std::vector<Crossing> crossings_;
     // How far t may go before the first level crossing it must wait at, if any.
     std::optional<std::int64_t> crossing_stop(const Train& t) const;

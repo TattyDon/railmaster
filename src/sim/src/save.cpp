@@ -25,10 +25,11 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 11; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 12; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
-                                           // 11: compressed, with the world's config and command log
+                                           // 11: compressed, with the world's config and command log;
+                                           // 12: train profits, station income and track traffic by month
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -294,7 +295,8 @@ void io(Ar& ar, ExpressWaiting& e) {
 template <class Ar>
 void io(Ar& ar, Station& s) {
     fields(ar, s.id, s.name, s.node, s.size, s.owner, s.waiting, s.express, s.received_this_month, s.town, s.built_day,
-           s.passengers_boarded_milli, s.passengers_arrived_milli, s.passengers_waiting_milli_days);
+           s.passengers_boarded_milli, s.passengers_arrived_milli, s.passengers_waiting_milli_days, s.income_this_month,
+           s.income_months);
 }
 template <class Ar>
 void io(Ar& ar, Crossing& c) {
@@ -324,7 +326,7 @@ void io(Ar& ar, Train& t) {
            t.replan);
     fields(ar, t.water, t.sand, t.oil, t.water_used_mm, t.sand_used_climb_mm, t.oil_used_mm);
     fields(ar, t.stops_made, t.service_stops, t.breakdowns, t.road_ticks, t.built_day, t.distance_mm, t.fuel_kg_km, t.leg_mm_by_owner);
-    fields(ar, t.revenue, t.last_income, t.last_income_tick);
+    fields(ar, t.revenue, t.last_income, t.last_income_tick, t.profit_this_month, t.profit_months);
 }
 
 // --- Economy ---
@@ -468,7 +470,7 @@ void io(Ar& ar, TrackNetwork& n) {
 template <class Ar>
 void io(Ar& ar, Railway& r) {
     fields(ar, r.track_, r.stations_, r.service_buildings_, r.station_buildings_, r.trains_, r.arrivals_, r.crashes_,
-           r.breakdowns_, r.crossings_,
+           r.breakdowns_, r.crossings_, r.traffic_, r.traffic_last_, r.held_, r.held_last_,
            r.today_, r.year_, r.rules_.breakdowns, r.rng_);
 }
 

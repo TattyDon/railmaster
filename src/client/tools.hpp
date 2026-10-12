@@ -23,7 +23,11 @@ public:
 
     Tool tool() const { return tool_; }
     // The cargo whose price map is shown, if any (O / P cycle through them).
-    std::optional<sim::CargoId> overlay() const { return overlay_; }
+    // The cargo whose price map is shown, if that overlay is on.
+    std::optional<sim::CargoId> overlay() const {
+        return map_overlay_ == MapOverlay::Cargo ? overlay_ : std::nullopt;
+    }
+    MapOverlay map_overlay() const { return map_overlay_; }
     void select(Tool t);
 
     void on_mouse_move(float sx, float sy);
@@ -104,6 +108,7 @@ private:
     std::size_t loco_choice_ = 0;
 
     std::optional<sim::CargoId> overlay_;
+    MapOverlay map_overlay_ = MapOverlay::None;
 
     sim::CompanyId market_choice_ = 0; // the company selected on the market screen
     std::size_t build_choice_ = 0;      // the plant to build, among those buildable now

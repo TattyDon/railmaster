@@ -1145,24 +1145,26 @@ void Tools::draw_market_panel() const {
 }
 
 void Tools::cycle_overlay(int direction) {
-    // Off, then each cargo the economy is trading this year, then off again.
-    std::vector<sim::CargoId> choices;
+    // Off; profitability, grade and traffic (rt3-clone-spec §15.3); then
+    // each cargo the economy is trading this year; then off again.
+    struct Choice {
+        MapOverlay mode;
+        sim::CargoId cargo;
+    };
+    std::vector<Choice> choices{{MapOverlay::None, 0}, {MapOverlay::Profit, 0}, {MapOverlay::Grade, 0}, {MapOverlay::Traffic, 0}};
     for (const auto& c : world_.data().cargo.all()) {
-        if (world_.economy().active(c.id)) choices.push_back(c.id);
-    }
-    if (choices.empty()) {
-        overlay_.reset();
-        return;
+        if (world_.economy().active(c.id)) choices.push_back({MapOverlay::Cargo, c.id});
     }
     const auto n = static_cast<int>(choices.size());
-    int at = n; // "off" sits between the last and the first
-    if (overlay_) {
-        const auto it = std::find(choices.begin(), choices.end(), *overlay_);
-        if (it != choices.end()) at = static_cast<int>(it - choices.begin());
+    int at = 0;
+    for (int i = 0; i < n; ++i) {
+        const Choice& c = choices[static_cast<std::size_t>(i)];
+        if (c.mode == map_overlay_ && (c.mode != MapOverlay::Cargo || (overlay_ && c.cargo == *overlay_))) at = i;
     }
-    at = ((at + direction) % (n + 1) + (n + 1)) % (n + 1);
-    if (at == n) overlay_.reset();
-    else overlay_ = choices[static_cast<std::size_t>(at)];
+    at = ((at + direction) % n + n) % n;
+    map_overlay_ = choices[static_cast<std::size_t>(at)].mode;
+    if (map_overlay_ == MapOverlay::Cargo) overlay_ = choices[static_cast<std::size_t>(at)].cargo;
+    else overlay_.reset();
 }
 
 std::string Tools::cell_text() const {
@@ -1192,6 +1194,21 @@ std::string Tools::cell_text() const {
         if (t.overhead_percent != 100) s += ", OVERHEAD +" + std::to_string(t.overhead_percent - 100) + "%";
         if (t.credit_grades != 0) s += std::string(", CREDIT ") + (t.credit_grades > 0 ? "+" : "") + std::to_string(t.credit_grades);
         if (t.closed_border) s += ", BORDERS CLOSED";
+    }
+    if (map_overlay_ == MapOverlay::Grade || map_overlay_ == MapOverlay::Traffic) {
+        const sim::Railway& rw = world_.railway();
+        if (const auto p = rw.track().nearest_edge_point(hover_, snap_mm())) {
+            if (!s.empty()) s += ".  ";
+            if (map_overlay_ == MapOverlay::Grade) {
+                const std::int32_t bp = std::abs(rw.track().grade_bp({p->edge, true}));
+                s += "GRADE " + std::to_string(bp / 100) + "." + std::to_string(bp % 100 / 10) + "%";
+            } else {
+                s += "TRACK: " + std::to_string(rw.traffic_last_month(p->edge)) + " TRAINS LAST MONTH";
+                const std::uint32_t held = rw.held_last_month(p->edge);
+                if (held > 0) s += ", HELD AT MEETS " + std::to_string(held * 24 / sim::World::kTicksPerDay) + " HOURS";
+                if (rw.needs_double_track(p->edge)) s += ", NEEDS DOUBLE TRACK";
+            }
+        }
     }
     if (overlay_) {
         const sim::CargoType& c = world_.data().cargo.get(*overlay_);
@@ -1404,8 +1421,14 @@ std::string Tools::hint() const {
     switch (tool_) {
     case Tool::Inspect: {
         std::string cargo_map = "O/P MAP: ";
-        cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "OFF";
-        return "TRAIN: E ROUTE H PRIORITY F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
+        switch (map_overlay_) {
+        case MapOverlay::None: cargo_map += "OFF"; break;
+        case MapOverlay::Profit: cargo_map += "PROFIT"; break;
+        case MapOverlay::Grade: cargo_map += "GRADE"; break;
+        case MapOverlay::Traffic: cargo_map += "TRAFFIC"; break;
+        case MapOverlay::Cargo: cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "OFF"; break;
+        }
+        return cargo_map + "   TRAIN: E ROUTE H PRIORITY F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE";
     }
     case Tool::Track:
         return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
@@ -1483,7 +1506,8 @@ std::string Tools::inspect_text() const {
             s += (i ? ", " : "") + std::to_string(load[i].second) + " " + load[i].first;
         }
         const std::int32_t age = (world_.date().days_since_epoch() - t.built_day) / 365;
-        s += ". ENGINE " + std::to_string(age) + (age == 1 ? " YEAR" : " YEARS") + " OLD. EARNED " + format_money(t.revenue) + ".";
+        s += ". ENGINE " + std::to_string(age) + (age == 1 ? " YEAR" : " YEARS") + " OLD. EARNED " + format_money(t.revenue) +
+             ", PROFIT " + format_money(t.profit_last_year()) + " IN " + std::to_string(t.profit_months.size()) + " MONTHS.";
         if (!t.rules.empty()) {
             const sim::ConsistRule& r = t.rules.front();
             std::string what = r.custom ? std::string("CUSTOM") : std::string(sim::cargo_filter_name(r.filter));
