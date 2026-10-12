@@ -1,0 +1,5 @@
+{
+  "about": "Art for the 3D client. For each role it draws, list the glTF models (.glb or .gltf, paths relative to this folder) that can play it; one is picked per object. Roles left empty are drawn in code. See docs/models.md for the roles and how to add art.",
+  "roles": {
+  }
+}

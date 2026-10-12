@@ -131,6 +131,7 @@ void Camera::apply() {
     flip[15] = 1;
     const Mat view = multiply(look_at(eye, at, {0, 0, 1}), flip);
     view_proj_ = multiply(proj, view);
+    invert(view, view_inverse_);
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(proj.data());
     glMatrixMode(GL_MODELVIEW);

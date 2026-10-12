@@ -82,12 +82,16 @@ varying vec3 v_normal;
 varying vec4 v_color;
 varying vec2 v_uv;
 varying float v_depth;
+uniform mat4 u_view_inv;
 void main() {
-    v_world = gl_Vertex.xyz;
-    v_normal = gl_Normal;
+    // Back from eye space to the map, so models drawn with their own
+    // transforms are lit and shadowed where they stand.
+    vec4 eye = gl_ModelViewMatrix * gl_Vertex;
+    v_world = (u_view_inv * eye).xyz;
+    v_normal = mat3(u_view_inv) * (gl_NormalMatrix * gl_Normal);
     v_color = gl_Color;
     v_uv = gl_MultiTexCoord0.xy;
-    v_depth = -(gl_ModelViewMatrix * gl_Vertex).z;
+    v_depth = -eye.z;
     gl_Position = ftransform();
 }
 )";
@@ -139,7 +143,7 @@ void main() {
 bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
-GLint u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1;
+GLint u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
 
@@ -200,6 +204,7 @@ bool init(bool wanted) {
         std::fprintf(stderr, "shader link failed: %s\n", log);
         return false;
     }
+    u_view_inv = p_get_uniform_location(g_program, "u_view_inv");
     u_tex = p_get_uniform_location(g_program, "u_tex");
     u_shadow = p_get_uniform_location(g_program, "u_shadow");
     u_light = p_get_uniform_location(g_program, "u_light");
@@ -315,9 +320,9 @@ void draw_sky(Camera& cam) {
 }
 
 void begin_world(const Camera& cam) {
-    (void)cam;
     if (!g_active) return;
     p_use_program(g_program);
+    p_uniform_matrix4fv(u_view_inv, 1, GL_FALSE, cam.view_inverse().data());
     g_in_world = true;
     p_active_texture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, g_shadow_tex);

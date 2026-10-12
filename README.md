@@ -73,6 +73,9 @@ there):
   `BUILD <commit> <date>`: compare the commit with the latest one on the
   branch (`git log -1 --oneline`, or the branch page on GitHub). A `+`
   after it means the build had local changes. `--version` prints the same.
+- Art: any building, engine, car or industry can come from a glTF model
+  instead of the shapes drawn in code; see [docs/models.md](docs/models.md)
+  for the roles and how to add a pack.
 - The game draws with shaders and shadows where the graphics card allows
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.

@@ -237,9 +237,21 @@ camera (wider as it pulls back, fading out at its edge). A gradient sky
 replaces the flat colour. `--no-shaders`, or a system without shaders or
 framebuffers, keeps the fixed-function lighting.
 
+Art pipeline: glTF models (`.glb`/`.gltf`, read with cgltf, textures with
+stb_image) listed by role in `data/models/models.json` replace the shapes
+drawn in code for town houses, terraces, shops, churches, station
+buildings, engines, cars and each industry; empty roles keep the code's
+shapes (docs/models.md). Models are fitted to their plot, track or site,
+turned to face the street or track, and lit and shadowed by the shaders
+(which recover map positions through the inverse view, so models keep
+their own transforms). No art ships yet: the CC0 sites are out of reach
+from the build environment, and the CC0 city models that were reachable
+were modern blocks, wrong for 1830.
+
 Next:
-- Real art: load low-poly models and textures (glTF), starting with CC0
-  packs for engines, cars, buildings and trees; textures on buildings.
+- Real art: period-appropriate CC0 packs for engines, cars, buildings and
+  industries, mapped in data/models/models.json; models for trees, with
+  LOD (code-drawn trees far off).
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

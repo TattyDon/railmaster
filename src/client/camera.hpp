@@ -61,8 +61,13 @@ struct Camera {
     void apply();
     void apply_screen() const;
 
+    // The inverse of the 3D view matrix: eye space back to map tiles, for
+    // shaders that light models drawn with their own transforms.
+    const std::array<float, 16>& view_inverse() const { return view_inverse_; }
+
 private:
     std::array<float, 16> view_proj_{}; // column-major, map tiles to clip space
+    std::array<float, 16> view_inverse_{};
     void project(float x, float y, float z, float& sx, float& sy, float& w) const;
 };
 

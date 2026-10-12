@@ -5,10 +5,21 @@ add_executable(railmaster
     camera.cpp
     font.cpp
     main.cpp
+    model.cpp
     render.cpp
     shading.cpp
+    third_party_impl.cpp
     tools.cpp
 )
+
+# Single-header libraries for loading art: cgltf (glTF, MIT) and stb_image
+# (PNG/JPEG, public domain). As system headers, the project's warnings do
+# not apply to them; their implementations are compiled quietly.
+target_include_directories(railmaster SYSTEM PRIVATE
+    ${PROJECT_SOURCE_DIR}/third_party/cgltf
+    ${PROJECT_SOURCE_DIR}/third_party/stb)
+set_source_files_properties(third_party_impl.cpp PROPERTIES COMPILE_OPTIONS
+    "$<IF:$<CXX_COMPILER_ID:MSVC>,/w,-w>")
 
 # Which commit this is, shown in the corner of the screen: refreshed on
 # every build, so it is never stale.

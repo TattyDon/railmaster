@@ -13,6 +13,7 @@
 
 #include "build_info.hpp"
 #include "font.hpp"
+#include "model.hpp"
 #include "render.hpp"
 #include "shading.hpp"
 #include "tools.hpp"
@@ -190,6 +191,7 @@ int main(int argc, char* argv[]) {
     }
     SDL_GL_SetSwapInterval(1);
     std::printf("renderer: %s\n", client::shading::init(use_shaders) ? "shaders and shadows" : "fixed-function");
+    client::models::init(data_dir);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

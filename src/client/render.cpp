@@ -1,6 +1,7 @@
 #include "render.hpp"
 
 #include "font.hpp"
+#include "model.hpp"
 #include "shading.hpp"
 #include "tools.hpp"
 
@@ -776,6 +777,51 @@ float rolling_stock(Stock kind, float x, float y, float z, float dx, float dy, f
     return 0.0f;
 }
 
+// Each kind's length, as drawn in code, so trains space the same whether
+// their stock comes from code or art.
+float stock_length(Stock kind, float s) {
+    switch (kind) {
+    case Stock::Steam: return 0.31f * s;
+    case Stock::Diesel:
+    case Stock::Electric: return 0.27f * s;
+    case Stock::Coach:
+    case Stock::Mail:
+    case Stock::Diner: return 0.23f * s;
+    case Stock::Boxcar:
+    case Stock::Hopper: return 0.19f * s;
+    case Stock::Caboose: return 0.13f * s;
+    }
+    return 0.2f * s;
+}
+
+const char* stock_role(Stock kind) {
+    switch (kind) {
+    case Stock::Steam: return "engine_steam";
+    case Stock::Diesel: return "engine_diesel";
+    case Stock::Electric: return "engine_electric";
+    case Stock::Coach: return "car_coach";
+    case Stock::Mail: return "car_mail";
+    case Stock::Diner: return "car_diner";
+    case Stock::Boxcar: return "car_boxcar";
+    case Stock::Hopper: return "car_hopper";
+    case Stock::Caboose: return "car_caboose";
+    }
+    return "";
+}
+
+// Rolling stock from the art where its role has a model, else drawn in
+// code; returns its length. Inside GL_QUADS (a model briefly leaves it).
+float stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery, const float* load = nullptr) {
+    if (const models::Model* m = models::pick(stock_role(kind), 0)) {
+        const float len = stock_length(kind, s);
+        glEnd();
+        models::draw(*m, x - dx * len / 2, y - dy * len / 2, z, dx, dy, 0.1f * s, len);
+        glBegin(GL_QUADS);
+        return len;
+    }
+    return rolling_stock(kind, x, y, z, dx, dy, s, livery, load);
+}
+
 // A patch of crop or pasture on the ground. Inside GL_QUADS.
 void field(float x, float y, float half, const float* colour, const Camera& cam) {
     glColor3fv(colour);
@@ -1503,6 +1549,19 @@ void draw_station(sim::StationSize size, float x, float y, float z, float dx, fl
         gable(cx, cy, z + ph + 0.081f * s, dx, dy, half_len, pw * 1.3f, 0.012f * s, slate, trim);
     };
     const float back = off + pw + 0.012f * s; // the platform's far edge, where the house starts
+    // A station building from the art, facing the track, in place of the
+    // one drawn in code (platforms and canopies stay).
+    const char* role = small ? "station_small" : large ? "station_large" : "station_medium";
+    if (const models::Model* m = models::pick(role, seed)) {
+        if (!small) canopy(1.0f, len * 0.8f);
+        if (large) canopy(-1.0f, len * 0.8f);
+        const float depth = (large ? 0.12f : small ? 0.08f : 0.1f) * s;
+        at(0, -(back + depth / 2), cx, cy);
+        glEnd();
+        models::draw(*m, cx, cy, z, qx, qy, len * (large ? 1.6f : 1.1f), depth);
+        glBegin(GL_QUADS);
+        return;
+    }
     if (small) {
         // A wooden depot, a lean-to canopy out over the platform.
         const float timber[3] = {0.6f, 0.45f, 0.3f};
@@ -1981,12 +2040,12 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                                  : loco.fuel == sim::Fuel::Diesel ? Stock::Diesel
                                                                   : Stock::Electric;
             const float gap = 0.012f * s;
-            float back = rolling_stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
+            float back = stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
             if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
                 add_smoke(x - p.dx * 0.02f * s, y - p.dy * 0.02f * s, z + 0.155f * s, 0.016f * s);
             }
             const auto behind = [&](Stock kind) {
-                back += rolling_stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
+                back += stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
             };
             for (const sim::Car& car : t.cars) {
                 if (!car.cargo) continue; // empty cars are left behind
@@ -1996,7 +2055,7 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                     static constexpr float kCoal[3] = {0.07f, 0.07f, 0.08f}, kIron[3] = {0.45f, 0.24f, 0.16f},
                                            kBauxite[3] = {0.62f, 0.3f, 0.2f};
                     const float* load = cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite;
-                    back += rolling_stock(Stock::Hopper, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c, load) + gap;
+                    back += stock(Stock::Hopper, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c, load) + gap;
                 } else behind(Stock::Boxcar);
             }
             if (t.diner) behind(Stock::Diner);
@@ -2179,15 +2238,46 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         begin_lit();
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
-        for (const Plot& p : towns.plots) draw_building(p, cam);
+        // Houses come from the art where there is some (drawn after this
+        // batch); the rest are drawn in code.
+        const auto role = [](const Plot& p) {
+            switch (p.kind) {
+            case Building::Cottage:
+            case Building::TwoStorey: return "house";
+            case Building::Terrace: return "terrace";
+            case Building::Shop: return "shop";
+            case Building::Church: return "church";
+            }
+            return "";
+        };
+        const auto modelled = [&](const Plot& p) { return models::has(role(p)); };
+        for (const Plot& p : towns.plots) {
+            if (!modelled(p)) draw_building(p, cam);
+        }
         for (const sim::Site& s : eco.sites()) {
             if (s.closed) continue;
             const sim::IndustryType& t = industries.get(s.type);
             const float x0 = (static_cast<float>(s.cx) + 0.5f) * k, y0 = (static_cast<float>(s.cy) + 0.5f) * k;
             if (t.kind == sim::IndustryKind::House) continue; // laid out by town, above
-            industry_3d(t, x0, y0, k, hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3), cam);
+            const std::uint32_t seed = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3);
+            if (const models::Model* m = models::pick("industry:" + t.key, seed)) {
+                glEnd();
+                models::draw(*m, x0, y0, cam.ground_z(x0, y0) - 0.01f, 0, 1, 0.8f * k, 0.8f * k);
+                glBegin(GL_QUADS);
+            } else {
+                industry_3d(t, x0, y0, k, seed, cam);
+            }
         }
         glEnd();
+        for (const Plot& p : towns.plots) {
+            if (!modelled(p)) continue;
+            const models::Model* m = models::pick(role(p), p.seed >> 5);
+            const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
+            const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
+                                      cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
+            // Its front to the street; the plot along the street is its width.
+            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, p.hw * 2.1f);
+        }
         if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();
         return;
