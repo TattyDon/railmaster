@@ -3,6 +3,7 @@
 #include "font.hpp"
 #include "model.hpp"
 #include "shading.hpp"
+#include "ui.hpp"
 #include "tools.hpp"
 
 #include <SDL.h>
@@ -3192,10 +3193,15 @@ void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo, co
 
 void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Balance::Towns& towns) {
     const float cell_mm = cam.mm_per_tile;
+    // Nearest towns first; a label that would overlap one already placed
+    // is left out, and far ones fade, so the horizon does not fill up.
+    struct Label {
+        std::size_t town;
+        float sx, sy, dist;
+    };
+    std::vector<Label> labels;
     for (std::size_t i = 0; i < eco.towns().size(); ++i) {
         const sim::Town& t = eco.towns()[i];
-        const std::string& label = t.name;
-        const int stars = sim::town_stars(eco.town_houses(i), towns);
         float sx = 0, sy = 0;
         const sim::MapPoint c = eco.node_centre(t.cx, t.cy);
         // Over the town: above it in 3D, north of it in 2D.
@@ -3203,22 +3209,37 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
                                        : cam.to_screen({c.x_mm, c.y_mm - static_cast<std::int64_t>(3.0f * cell_mm)}, sx, sy);
         if (!shown) continue;
         if (cam.three_d) sy -= 30;
+        const float tx = static_cast<float>(c.x_mm) / cell_mm, ty = static_cast<float>(c.y_mm) / cell_mm;
+        labels.push_back({i, sx, sy, std::hypot(tx - cam.target_x, ty - cam.target_y)});
+    }
+    std::sort(labels.begin(), labels.end(), [](const Label& l, const Label& r) { return l.dist < r.dist; });
+    struct Box {
+        float x0, y0, x1, y1;
+    };
+    std::vector<Box> placed;
+    const float fade_from = cam.distance * 2.0f, fade_to = cam.distance * 5.0f;
+    for (const Label& l : labels) {
+        const sim::Town& t = eco.towns()[l.town];
+        const float alpha = cam.three_d ? std::clamp((fade_to - l.dist) / std::max(1.0f, fade_to - fade_from), 0.0f, 1.0f) : 1.0f;
+        if (alpha <= 0.02f) continue;
+        const std::string& label = t.name;
+        const int stars = sim::town_stars(eco.town_houses(l.town), towns);
         // The name, then its rating as gold stars.
         constexpr float kStar = 12.0f;
         const auto tw = static_cast<float>(text_width(label, 2));
         const float w = tw + (stars > 0 ? 4.0f + kStar * static_cast<float>(stars) : 0.0f);
-        glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
-        glBegin(GL_QUADS);
-        glVertex2f(sx - w / 2 - 5, sy - 4);
-        glVertex2f(sx + w / 2 + 5, sy - 4);
-        glVertex2f(sx + w / 2 + 5, sy + 18);
-        glVertex2f(sx - w / 2 - 5, sy + 18);
-        glEnd();
-        glColor3f(1.0f, 1.0f, 0.95f);
-        draw_text(sx - w / 2, sy, label, 2);
-        glColor3f(0.98f, 0.8f, 0.25f);
+        const Box box{l.sx - w / 2 - 7, l.sy - 5, l.sx + w / 2 + 7, l.sy + 19};
+        const bool clash = std::any_of(placed.begin(), placed.end(), [&](const Box& o) {
+            return box.x0 < o.x1 + 4 && box.x1 > o.x0 - 4 && box.y0 < o.y1 + 2 && box.y1 > o.y0 - 2;
+        });
+        if (clash) continue;
+        placed.push_back(box);
+        ui::chip(box.x0, box.y0, box.x1, box.y1, 0.62f * alpha);
+        glColor4f(1.0f, 1.0f, 0.95f, alpha);
+        draw_text(l.sx - w / 2, l.sy, label, 2);
+        glColor4f(0.98f, 0.8f, 0.25f, alpha);
         for (int k = 0; k < stars; ++k) {
-            const float cx = sx - w / 2 + tw + 4.0f + kStar * (static_cast<float>(k) + 0.5f), cy = sy + 7.0f;
+            const float cx = l.sx - w / 2 + tw + 4.0f + kStar * (static_cast<float>(k) + 0.5f), cy = l.sy + 7.0f;
             glBegin(GL_TRIANGLE_FAN);
             glVertex2f(cx, cy);
             for (int j = 0; j <= 10; ++j) {
@@ -3318,12 +3339,8 @@ void draw_radar(const sim::World& w, const Camera& cam, float x0, float y0, floa
     const sim::Terrain& t = w.terrain();
     const float across = static_cast<float>(std::max(t.width(), t.height()));
     const float k = size / across; // pixels per map cell
-    glColor4f(0.05f, 0.05f, 0.07f, 0.9f);
+    ui::panel(x0 - 7, y0 - 7, x0 + size + 7, y0 + size + 7);
     glBegin(GL_QUADS);
-    glVertex2f(x0 - 3, y0 - 3);
-    glVertex2f(x0 + size + 3, y0 - 3);
-    glVertex2f(x0 + size + 3, y0 + size + 3);
-    glVertex2f(x0 - 3, y0 + size + 3);
     // The land, a sample every few cells, lighter higher up.
     const int step = std::max(1, static_cast<int>(across / 110.0f));
     for (int ty = 0; ty < t.height(); ty += step) {

@@ -10,6 +10,7 @@ add_executable(railmaster
     shading.cpp
     third_party_impl.cpp
     tools.cpp
+    ui.cpp
 )
 
 # Single-header libraries for loading art: cgltf (glTF, MIT) and stb_image

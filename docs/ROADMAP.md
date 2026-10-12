@@ -290,7 +290,11 @@ round-arched mouth, a ring of voussoirs, a coping and splayed wing walls.
 Interface: text is set in Source Sans 3 (OFL), baked with stb_truetype
 into a glyph atlas per size at the screen's pixel density (the old 5x7
 pixel font remains as a fallback), in sentence case rather than capitals;
-town ratings show as gold stars. Zoom by wheel, smooth trackpad scrolling,
+town ratings show as gold stars. Panels, bars, toolbar tabs, labels and
+the radar share one look (src/client/ui.cpp): warm dark gradients framed in
+brass with soft shadows, raised brass tabs for the chosen tool; town names
+are placed nearest first, left out where they would overlap, and fade with
+distance. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Speed: woods keep two display lists a chunk, model trees near the camera

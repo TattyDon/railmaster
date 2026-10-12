@@ -1,4 +1,5 @@
 #include "tools.hpp"
+#include "ui.hpp"
 
 #include "font.hpp"
 
@@ -82,7 +83,7 @@ void Tools::draw_finance_panel() const {
     std::size_t ledger_rows = 0;
     for (std::size_t i = 0; i < sim::kLedgerLines; ++i) ledger_rows += shown(i);
     const float h = kRow * static_cast<float>(37 + ledger_rows);
-    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
                          float bl) {
@@ -425,7 +426,7 @@ void Tools::draw_choice_dialog() const {
     width = std::max(width, static_cast<float>(text_width(as_written(q.text), kScale)) + 40);
     const float x0 = std::max(10.0f, w / 2 - width / 2), y0 = 90;
     const float rows = static_cast<float>(q.options.size()) + 3.5f;
-    fill_rect(x0, y0, x0 + width, y0 + kRow * rows, 0.08f, 0.07f, 0.04f, 0.95f);
+    ui::panel(x0, y0, x0 + width, y0 + kRow * rows);
     float y = y0 + 14;
     glColor3f(1.0f, 0.9f, 0.5f);
     draw_text(x0 + 20, y, as_written(q.text), kScale);
@@ -448,7 +449,7 @@ void Tools::draw_founding_dialog() const {
     constexpr float kRow = 20.0f;
     const auto w = static_cast<float>(cam_.width_px);
     const float x0 = std::max(20.0f, w / 2 - 470), y0 = 90;
-    fill_rect(x0, y0, x0 + 940, y0 + kRow * 15, 0.06f, 0.06f, 0.09f, 0.96f);
+    ui::panel(x0, y0, x0 + 940, y0 + kRow * 11);
     float y = y0 + 14;
     const auto line = [&](const std::string& s, float r, float g, float bl) {
         glColor3f(r, g, bl);
@@ -463,9 +464,9 @@ void Tools::draw_founding_dialog() const {
     line("Found your railroad", 1.0f, 0.9f, 0.5f);
     y += kRow / 2;
     line("Your fortune " + format_money(world_.investor().cash), 0.9f, 0.9f, 0.9f);
-    line("You invest " + format_money(mine) + "   (left/right, Shift for $1,000,000)", 1, 1, 1);
+    line("You invest " + format_money(mine) + "   (Left/Right, Shift for $1,000,000)", 1, 1, 1);
     line("Outside investors put in " + format_money(outside) + " of " +
-             format_money(sim::Money::dollars(b.outside_investment)) + " offered   (up/down)",
+             format_money(sim::Money::dollars(b.outside_investment)) + " offered   (Up/Down)",
          1, 1, 1);
     y += kRow / 2;
     line("Capital " + format_money(mine + outside) + "   " + format_count(shares) + " shares at " +
@@ -1054,7 +1055,7 @@ void Tools::draw_status_panel() const {
         if (res.finished) rows.push_back({res.medal ? "The scenario is over." : "The scenario is over: no medal.", 0});
     }
     const float h = kRow * static_cast<float>(rows.size()) + 20;
-    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     for (const auto& [text, colour] : rows) {
         switch (colour) {
@@ -1075,7 +1076,7 @@ void Tools::draw_market_panel() const {
     const auto& companies = world_.companies();
     const float x0 = 40, y0 = 56, w = 1100;
     const float h = kRow * static_cast<float>(companies.size() + world_.investors().size() + 12);
-    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     // Name, then right-aligned columns ending at each later position.
     const float cols[] = {x0 + 14, 0, x0 + 600, x0 + 780, x0 + 950, x0 + 1090};
@@ -1421,7 +1422,7 @@ void Tools::draw_lists_panel() const {
     const std::size_t n = list_size();
     const std::size_t first = list_sel_ >= kShown / 2 ? std::min(list_sel_ - kShown / 2, n > kShown ? n - kShown : 0) : 0;
     const float h = kRow * static_cast<float>(std::min(n, kShown) + 3);
-    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     // First column left-aligned; the rest right-aligned at these edges.
     std::vector<float> cols;
@@ -1435,7 +1436,7 @@ void Tools::draw_lists_panel() const {
     };
     const auto row_colour = [&](std::size_t i, bool mine, const std::vector<std::string>& v) {
         const bool sel = i == list_sel_;
-        if (sel) fill_rect(x0 + 4, y - 2, x0 + w - 4, y + kRow - 3, 0.25f, 0.22f, 0.1f, 0.9f);
+        if (sel) ui::selection(x0 + 6, y - 2, x0 + w - 6, y + kRow - 3);
         cells(v, sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 0.7f : (mine ? 0.9f : 0.7f));
     };
     const auto owner_name = [&](sim::CompanyId c) { return as_written(world_.company(c).name()); };
@@ -1618,12 +1619,12 @@ std::string Tools::hint() const {
                format_money(world_.construction_cost(sim::industry_build_cost(world_.data().balance.industries)));
     }
     case Tool::Market:
-        return "Up/down choose  A/S buy/sell, below 0 is short  T takeover  M merge +20% (Shift +50%)  qq resign  N new "
+        return "Up/Down choose  A/S buy/sell, below 0 is short  T takeover  M merge +20% (Shift +50%)  QQ resign  N new "
                "Company";
     case Tool::Status:
         return world_.scenario() ? "Scenario goals, checked at each month end" : "No scenario: a free game";
     case Tool::Lists:
-        return "Tab trains/stations/companies   up/down, pgup/pgdn choose   Enter go to it";
+        return "Tab trains/stations/companies   Up/Down, PgUp/PgDn choose   Enter go to it";
     case Tool::Finance:
         return "B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   [ ] "
                "dividend   KK bankruptcy";
@@ -1704,7 +1705,7 @@ void Tools::draw_ui(const std::string& status) const {
     const auto w = static_cast<float>(cam_.width_px);
     const auto h = static_cast<float>(cam_.height_px);
     if (founding_) {
-        fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
+        ui::bar(0, 0, w, kTopBarH, true);
         glColor3f(0.95f, 0.95f, 0.9f);
         draw_text(8, 4, status, kScale);
         draw_founding_dialog();
@@ -1717,7 +1718,7 @@ void Tools::draw_ui(const std::string& status) const {
     }
 
     // Top bar: status on the left, money spent on the right.
-    fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
+    ui::bar(0, 0, w, kTopBarH, true);
     glColor3f(0.95f, 0.95f, 0.9f);
     draw_text(8, 4, status, kScale);
     const std::string spent = (world_.sandbox() ? std::string("Sandbox   ") : std::string()) + "Company " +
@@ -1727,14 +1728,14 @@ void Tools::draw_ui(const std::string& status) const {
 
     for (const Button& b : layout_buttons()) {
         const bool on = b.tool == tool_;
-        fill_rect(b.x0, b.y0, b.x1, b.y1, on ? 0.85f : 0.15f, on ? 0.7f : 0.15f, on ? 0.25f : 0.18f, 0.9f);
-        if (on) glColor3f(0.05f, 0.05f, 0.05f);
-        else glColor3f(0.9f, 0.9f, 0.9f);
+        ui::tab(b.x0, b.y0, b.x1, b.y1, on);
+        if (on) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
         draw_text(b.x0 + 4, b.y0 + 4, b.label, kScale);
     }
 
     // Bottom bar: what the tool does, and the last result or what is under the cursor.
-    fill_rect(0, h - kBottomBarH, w, h, 0.08f, 0.08f, 0.1f, 0.85f);
+    ui::bar(0, h - kBottomBarH, w, h, false);
     glColor3f(0.85f, 0.85f, 0.85f);
     draw_text(8, h - kBottomBarH + 6, hint(), kScale);
     std::string line2;
@@ -1748,7 +1749,7 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = industry_text();
     } else if (tool_ == Tool::Train && !stops_.empty()) {
         const auto& cargo = world_.data().cargo.all();
-        line2 = "Up/down stop  F kind  W full  [ ] cars  K custom  < > " +
+        line2 = "Up/Down stop  F kind  W full  [ ] cars  K custom  < > " +
                 (cargo.empty() ? std::string() : as_written(cargo[cargo_choice_ % cargo.size()].name)) +
                 "  S service  bksp drop  L engine";
     } else if (tool_ == Tool::Train) {

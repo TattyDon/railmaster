@@ -17,6 +17,7 @@
 #include "model.hpp"
 #include "render.hpp"
 #include "shading.hpp"
+#include "ui.hpp"
 #include "tools.hpp"
 
 #include "railmaster/sim/demo.hpp"
@@ -523,13 +524,7 @@ int main(int argc, char* argv[]) {
         {
             const auto w = static_cast<float>(client::text_width(build_label, 2));
             const float x = static_cast<float>(cam.width_px) - w - 10, y = static_cast<float>(cam.height_px) - 44.0f - 22.0f;
-            glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
-            glBegin(GL_QUADS);
-            glVertex2f(x - 5, y - 4);
-            glVertex2f(x + w + 5, y - 4);
-            glVertex2f(x + w + 5, y + 18);
-            glVertex2f(x - 5, y + 18);
-            glEnd();
+            client::ui::chip(x - 7, y - 5, x + w + 7, y + 19);
             glColor3f(0.85f, 0.85f, 0.8f);
             client::draw_text(x, y, build_label, 2);
             if (show_fps) {
@@ -537,13 +532,7 @@ int main(int argc, char* argv[]) {
                 std::snprintf(fps, sizeof fps, "%.0f fps  %.1f ms", 1000.0 / std::max(0.1, frame_ms), frame_ms);
                 const auto fw = static_cast<float>(client::text_width(fps, 2));
                 const float fx = static_cast<float>(cam.width_px) - fw - 10, fy = y - 26;
-                glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
-                glBegin(GL_QUADS);
-                glVertex2f(fx - 5, fy - 4);
-                glVertex2f(fx + fw + 5, fy - 4);
-                glVertex2f(fx + fw + 5, fy + 18);
-                glVertex2f(fx - 5, fy + 18);
-                glEnd();
+                client::ui::chip(fx - 7, fy - 5, fx + fw + 7, fy + 19);
                 glColor3f(0.6f, 1.0f, 0.6f);
                 client::draw_text(fx, fy, fps, 2);
             }
