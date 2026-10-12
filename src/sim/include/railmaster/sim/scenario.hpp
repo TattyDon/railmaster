@@ -97,7 +97,7 @@ struct EventEffect {
     std::int32_t months = 0;
     Money amount{};
     std::int64_t value = 0;
-    std::vector<ChoiceOption> options{}; // Choice only
+    std::vector<ChoiceOption> options; // Choice only (no initializer: ChoiceOption is not complete yet)
 };
 // One answer to a Choice, and what it does (no further choices).
 struct ChoiceOption {
