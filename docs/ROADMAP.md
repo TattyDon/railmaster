@@ -247,12 +247,16 @@ turned to face the street or track, and lit and shadowed by the shaders
 their own transforms). Engines and cars come from Kenney's Train Kit
 (CC0), freight cars by cargo (coal, ore, logs, lumber, tank wagons), and
 the woods from Kenney's Nature Kit (CC0), recoloured by material name to
-the game's greens. Town buildings, stations and industries are still drawn
-in code until period-appropriate art is found.
+the game's greens. Town buildings are assembled from Kenney's Fantasy
+Town Kit (CC0) walls and roofs as prefabs (tools/models/town_prefabs.py):
+timber and stone cottages, houses, terraces, shops and a church with a
+spire, on period recolourings of the kit's palette. Stations and
+industries are still drawn in code.
 
 Next:
-- Real art: period-appropriate CC0 buildings, stations and industries
-  (or assembled from modular kits); LOD for model trees far off.
+- Real art: stations and industries assembled from kits (the town kit's
+  windmill and watermill, the factory kits); a 2x2-cell house shape for
+  variety; LOD for model trees far off.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

@@ -12,11 +12,12 @@ may and may not contain.
 
 Railmaster is a desktop game: you build it from source and run it. It takes
 a few minutes. The 3D client is in its first stage: lit, textured terrain
-with rivers, woods, shadows and distance haze; towns laid out along streets, with
-houses, terraces, shops and a church; engines, cars and trees from
-Kenney's CC0 kits; stations, track and industries drawn in code; smoke from steam engines and works chimneys; and a
-camera you can turn and tilt. Proper models come later
-([docs/ROADMAP.md](docs/ROADMAP.md)); V switches to the old flat map.
+with rivers, woods, shadows and distance haze; towns of timber and stone
+houses, terraces, shops and churches along streets; engines, cars and
+trees from Kenney's CC0 kits; stations, track and industries drawn in
+code; smoke from engines and chimneys; and a camera you can turn and tilt
+([docs/ROADMAP.md](docs/ROADMAP.md) has what comes next). V switches to
+the old flat map.
 
 **1. Get the code.** Until it is merged into `main`, the work is on the
 `claude/project-scaffold` branch:

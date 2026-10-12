@@ -2297,8 +2297,13 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
             const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
                                       cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
-            // Its front to the street; the plot along the street is its width.
-            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, p.hw * 2.1f);
+            // Its front to the street; the plot along the street is its
+            // width. It may be stretched deeper (up to 1.8 times) to fill
+            // the plot, but never squeezed.
+            const float width = p.hl * 2.1f, sx = width / std::max(1e-4f, m->max[0] - m->min[0]);
+            const float natural = sx * (m->max[1] - m->min[1]);
+            const float depth = std::clamp(p.hw * 2.1f, natural, natural * 1.8f);
+            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, width, depth);
         }
         if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();

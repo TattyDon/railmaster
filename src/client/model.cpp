@@ -42,6 +42,20 @@ GLuint upload(unsigned char* pixels, int w, int h) {
     return tex;
 }
 
+// A texture file, read once.
+GLuint texture_file(const std::string& path) {
+    if (const auto it = g_textures.find(path); it != g_textures.end()) return it->second;
+    int w = 0, h = 0, n = 0;
+    unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &n, 4);
+    if (!pixels) {
+        std::fprintf(stderr, "models: cannot read texture %s\n", path.c_str());
+        return g_textures[path] = 0;
+    }
+    const GLuint tex = upload(pixels, w, h);
+    stbi_image_free(pixels);
+    return g_textures[path] = tex;
+}
+
 // A material's base colour texture: a file beside the model, or embedded.
 GLuint texture_of(const cgltf_image* image, const std::filesystem::path& dir) {
     if (!image) return 0;
@@ -49,17 +63,7 @@ GLuint texture_of(const cgltf_image* image, const std::filesystem::path& dir) {
         std::string uri = image->uri;
         cgltf_decode_uri(uri.data());
         uri.resize(std::char_traits<char>::length(uri.c_str()));
-        const std::string path = (dir / uri).string();
-        if (const auto it = g_textures.find(path); it != g_textures.end()) return it->second;
-        int w = 0, h = 0, n = 0;
-        unsigned char* pixels = stbi_load(path.c_str(), &w, &h, &n, 4);
-        if (!pixels) {
-            std::fprintf(stderr, "models: cannot read texture %s\n", path.c_str());
-            return g_textures[path] = 0;
-        }
-        const GLuint tex = upload(pixels, w, h);
-        stbi_image_free(pixels);
-        return g_textures[path] = tex;
+        return texture_file((dir / uri).string());
     }
     if (image->buffer_view && image->buffer_view->buffer->data) {
         const auto* bytes = static_cast<const unsigned char*>(image->buffer_view->buffer->data) + image->buffer_view->offset;
@@ -77,7 +81,9 @@ GLuint texture_of(const cgltf_image* image, const std::filesystem::path& dir) {
 // screen (sRGB) colours, as textures are stored.
 float to_srgb(float c) { return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f; }
 
-std::optional<Model> load(const std::filesystem::path& path) {
+// `texture`, when given, replaces every textured material's texture (a
+// recoloured palette, say).
+std::optional<Model> load(const std::filesystem::path& path, const std::string& texture = {}) {
     cgltf_options options{};
     cgltf_data* data = nullptr;
     if (cgltf_parse_file(&options, path.string().c_str(), &data) != cgltf_result_success) {
@@ -97,7 +103,8 @@ std::optional<Model> load(const std::filesystem::path& path) {
     for (cgltf_size i = 0; i < data->materials_count; ++i) {
         const cgltf_material& mat = data->materials[i];
         if (mat.has_pbr_metallic_roughness && mat.pbr_metallic_roughness.base_color_texture.texture) {
-            textures[i] = texture_of(mat.pbr_metallic_roughness.base_color_texture.texture->image, path.parent_path());
+            textures[i] = texture.empty() ? texture_of(mat.pbr_metallic_roughness.base_color_texture.texture->image, path.parent_path())
+                                          : texture_file(texture);
         }
     }
     m.list = glGenLists(1);
@@ -190,6 +197,78 @@ std::optional<Model> load(const std::filesystem::path& path) {
     return m;
 }
 
+// Models used as pieces of prefabs, read once each (per texture).
+std::map<std::string, std::optional<Model>> g_pieces;
+
+const Model* piece(const std::filesystem::path& path, const std::string& texture) {
+    const std::string key = path.string() + "|" + texture;
+    auto it = g_pieces.find(key);
+    if (it == g_pieces.end()) it = g_pieces.emplace(key, load(path, texture)).first;
+    return it->second ? &*it->second : nullptr;
+}
+
+// A prefab: pieces placed and turned (about the up axis, degrees) in map
+// axes, compiled into one model. In the manifest:
+//   "prefabs": { "cottage": { "texture": "pack/Textures/palette.png",
+//                             "pieces": [ { "file": "pack/wall.glb", "at": [x, y, z], "turn": 90,
+//                                           "scale": [1, 1, 1.5] }, ... ] } }
+// (scale is optional, applied before the turn).
+std::optional<Model> assemble(const std::filesystem::path& root, const std::string& name, const nlohmann::json& spec) {
+    const std::string texture = spec.contains("texture") ? (root / spec["texture"].get<std::string>()).string() : std::string();
+    struct Placed {
+        const Model* model;
+        float at[3];
+        float turn;
+        float scale[3];
+    };
+    std::vector<Placed> placed;
+    for (const auto& p : spec.value("pieces", nlohmann::json::array())) {
+        const Model* m = piece(root / p.value("file", ""), texture);
+        if (!m) continue;
+        Placed pl{m, {0, 0, 0}, p.value("turn", 0.0f), {1, 1, 1}};
+        if (p.contains("at") && p["at"].is_array() && p["at"].size() == 3) {
+            for (std::size_t k = 0; k < 3; ++k) pl.at[k] = p["at"][k].get<float>();
+        }
+        if (p.contains("scale") && p["scale"].is_array() && p["scale"].size() == 3) {
+            for (std::size_t k = 0; k < 3; ++k) pl.scale[k] = p["scale"][k].get<float>();
+        }
+        placed.push_back(pl);
+    }
+    if (placed.empty()) {
+        std::fprintf(stderr, "models: prefab %s has no pieces it could read\n", name.c_str());
+        return std::nullopt;
+    }
+    Model m;
+    m.min[0] = m.min[1] = m.min[2] = 1e30f;
+    m.max[0] = m.max[1] = m.max[2] = -1e30f;
+    m.list = glGenLists(1);
+    glNewList(m.list, GL_COMPILE);
+    for (const Placed& pl : placed) {
+        glPushMatrix();
+        glTranslatef(pl.at[0], pl.at[1], pl.at[2]);
+        glRotatef(pl.turn, 0, 0, 1);
+        glScalef(pl.scale[0], pl.scale[1], pl.scale[2]);
+        glCallList(pl.model->list);
+        glPopMatrix();
+        // The piece's bounds, scaled, turned and moved.
+        const float c = std::cos(pl.turn * 0.0174532925f), sn = std::sin(pl.turn * 0.0174532925f);
+        for (int corner = 0; corner < 4; ++corner) {
+            const float px = (corner & 1 ? pl.model->max[0] : pl.model->min[0]) * pl.scale[0];
+            const float py = (corner & 2 ? pl.model->max[1] : pl.model->min[1]) * pl.scale[1];
+            const float wx = pl.at[0] + px * c - py * sn, wy = pl.at[1] + px * sn + py * c;
+            m.min[0] = std::min(m.min[0], wx);
+            m.max[0] = std::max(m.max[0], wx);
+            m.min[1] = std::min(m.min[1], wy);
+            m.max[1] = std::max(m.max[1], wy);
+        }
+        m.min[2] = std::min(m.min[2], pl.at[2] + pl.model->min[2] * pl.scale[2]);
+        m.max[2] = std::max(m.max[2], pl.at[2] + pl.model->max[2] * pl.scale[2]);
+        m.triangles += pl.model->triangles;
+    }
+    glEndList();
+    return m;
+}
+
 } // namespace
 
 void init(const std::string& data_dir) {
@@ -209,12 +288,40 @@ void init(const std::string& data_dir) {
             if (rgb.is_array() && rgb.size() == 3) g_material_colors[name] = {rgb[0].get<float>(), rgb[1].get<float>(), rgb[2].get<float>()};
         }
     }
+    // Prefabs, from the manifest and from prefabs.json beside it (which a
+    // generator may write).
+    std::map<std::string, Model> prefabs;
+    const auto read_prefabs = [&](const nlohmann::json& doc) {
+        if (!doc.contains("prefabs") || !doc["prefabs"].is_object()) return;
+        for (const auto& [name, spec] : doc["prefabs"].items()) {
+            if (auto m = assemble(root, name, spec)) prefabs[name] = *m;
+        }
+    };
+    read_prefabs(manifest);
+    if (std::ifstream more(root / "prefabs.json"); more) {
+        try {
+            nlohmann::json doc;
+            more >> doc;
+            read_prefabs(doc);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "models: prefabs.json: %s\n", e.what());
+        }
+    }
     if (!manifest.contains("roles") || !manifest["roles"].is_object()) return;
     const nlohmann::json& roles = manifest["roles"];
     for (const auto& [role, entries] : roles.items()) {
         for (const auto& entry : entries) {
             const std::string file = entry.is_string() ? entry.get<std::string>() : entry.value("file", "");
             if (file.empty()) continue;
+            if (file.rfind("prefab:", 0) == 0) {
+                if (const auto it = prefabs.find(file.substr(7)); it != prefabs.end()) {
+                    g_roles[role].push_back(it->second);
+                    ++loaded;
+                } else {
+                    std::fprintf(stderr, "models: no prefab %s\n", file.c_str());
+                }
+                continue;
+            }
             if (auto m = load(root / file)) {
                 g_roles[role].push_back(*m);
                 ++loaded;

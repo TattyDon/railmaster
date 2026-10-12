@@ -40,6 +40,35 @@ their proportions; trees to their height. They stand on their lowest
 point. Engines and cars pick a model by train, so a railroad's trains
 vary.
 
+## Prefabs: models assembled from pieces
+
+Modular kits (walls, roofs, chimneys that fill a one-unit cell) can be
+assembled into buildings. A prefab lists pieces with their position in
+map axes (x east, y south, z up), a turn about the up axis in degrees (+x
+towards +y) and an optional scale, plus an optional `texture` replacing
+every piece's palette:
+
+```json
+"prefabs": {
+  "cottage": {
+    "texture": "my-kit/Textures/palette.png",
+    "pieces": [
+      { "file": "my-kit/wall.glb", "at": [0, 0, 0], "turn": 90 },
+      { "file": "my-kit/roof.glb", "at": [0, 0, 1], "turn": 0, "scale": [1, 1, 1.6] }
+    ]
+  }
+}
+```
+
+Prefabs can sit in `models.json` or in `prefabs.json` beside it, and roles
+name them as `"prefab:cottage"`. The town's houses, terraces, shops and
+church are prefabs written by `tools/models/town_prefabs.py` (edit the
+script and rerun it from the repository root rather than editing
+`prefabs.json`).
+
+Town buildings are fitted along their plot's street front and may be
+stretched up to 1.8 times deeper to fill the plot.
+
 ## Fitting colours
 
 A pack's palette may not suit the game. `material_colors` sets any
@@ -72,8 +101,12 @@ material's colour by its name, for every model that uses it, as a screen
   corrected (the exporter listed a child node as a root, which cgltf
   rejects); nothing else was changed.
 
-Town buildings, stations and industries are still drawn in code: no
-period-appropriate CC0 models for them have been found yet.
+- `kenney-fantasy-town/`: timber and stone walls, gable roofs, spires and
+  chimneys from Kenney's Fantasy Town Kit (CC0), assembled into the town's
+  cottages, houses, terraces, shops and church, with period recolourings
+  of its palette (slate and terracotta roofs, grey stone).
+
+Stations and industries are still drawn in code.
 
 ## Where to get art
 
