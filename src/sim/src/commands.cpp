@@ -492,6 +492,30 @@ CommandResult World::run(const SetSpecialCars& cmd) {
     return success(Money{}, cmd.train);
 }
 
+CommandResult World::run(const SetRoute& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    if (cmd.route.size() < 2) return fail("a route needs at least two stops");
+    if (cmd.service_stops.size() > cmd.route.size()) return fail("more service stops than stops");
+    for (std::size_t i = 0; i < cmd.route.size(); ++i) {
+        if (cmd.route[i] >= railway_.stations().size()) return fail("unknown station in route");
+        if (cmd.route[i] == cmd.route[(i + 1) % cmd.route.size()]) return fail("a route cannot call at the same station twice running");
+    }
+    const Train& t = railway_.train(cmd.train);
+    if (data_.locomotives.get(t.loco).fuel == Fuel::Electric) {
+        if (auto why = railway_.electric_route_problem(cmd.route)) return fail(*why);
+    }
+    std::vector<std::uint8_t> service(cmd.route.size(), 0);
+    for (std::size_t i = 0; i < cmd.service_stops.size(); ++i) service[i] = cmd.service_stops[i] ? 1 : 0;
+    railway_.set_route(cmd.train, cmd.route, std::move(service));
+    return success(Money{}, cmd.train);
+}
+
+CommandResult World::run(const SetPriority& cmd) {
+    if (auto why = own_train_problem(cmd.train)) return fail(*why);
+    railway_.train_mut(cmd.train).priority = cmd.priority;
+    return success(Money{}, cmd.train);
+}
+
 CommandResult World::run(const CopyTrain& cmd) {
     if (scenario_ && scenario_->restrictions.no_trains) return fail("this scenario does not allow buying trains");
     if (auto why = own_train_problem(cmd.train)) return fail(*why);
@@ -503,6 +527,7 @@ CommandResult World::run(const CopyTrain& cmd) {
     if (!bought.ok) return bought;
     Train& copy = railway_.train_mut(bought.created_id);
     copy.rules = original.rules;
+    copy.service_stop = original.service_stop;
     copy.caboose = original.caboose;
     copy.diner = original.diner;
     return bought;

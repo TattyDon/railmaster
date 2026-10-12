@@ -143,6 +143,9 @@ struct Train {
     std::int32_t priority = 0; // higher wins meets on single track; then more valuable cargo [D]
     std::vector<StationId> route;
     std::vector<ConsistRule> rules; // one per route stop
+    // One per route stop: 1 if the player made it a service stop, where the
+    // train fills up at the station's service buildings even when not low.
+    std::vector<std::uint8_t> service_stop;
     bool caboose = false;
     bool diner = false;
     bool holding = false; // waiting at a stop for its minimum load
@@ -270,6 +273,12 @@ public:
     // over them find another at the end of the piece they are on; callers
     // must not remove a piece a train is on (see train_on).
     void remove_edges(const std::vector<EdgeId>& edges);
+    // Give a train new stops. Stops at stations the old route called at keep
+    // their consist rules; new ones take the old first stop's. A train
+    // heading for (or standing at) a station still on the route carries on
+    // as before; otherwise it makes for the first stop, from the end of the
+    // piece of track it is on.
+    void set_route(TrainId id, std::vector<StationId> route, std::vector<std::uint8_t> service_stop);
     void add_crossing(Crossing c) { crossings_.push_back(c); }
     const std::vector<Crossing>& crossings() const { return crossings_; }
     // The train standing or running on a piece of track, if any.
@@ -346,7 +355,7 @@ private:
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);
     bool roll_crash(const Train& t, const LocomotiveType& loco);
     // Refill at any support buildings at `node` the train needs. True if it stopped.
-    bool service_at(Train& t, NodeId node, const LocomotiveType& loco);
+    bool service_at(Train& t, NodeId node, const LocomotiveType& loco, bool always = false);
     void arrive_at_stop(Train& t);
 
     TrackNetwork track_;

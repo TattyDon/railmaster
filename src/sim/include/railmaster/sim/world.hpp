@@ -309,6 +309,8 @@ private:
     CommandResult run(const ReplaceLocomotive& cmd);
     CommandResult run(const SetConsist& cmd);
     CommandResult run(const SetSpecialCars& cmd);
+    CommandResult run(const SetRoute& cmd);
+    CommandResult run(const SetPriority& cmd);
     CommandResult run(const CopyTrain& cmd);
     CommandResult run(const RetireTrain& cmd);
     CommandResult run(const ElectrifyTrack& cmd);

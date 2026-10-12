@@ -49,6 +49,7 @@ Format versions:
 - **6:** express loads changing trains.
 - **7:** luxury demand and the cost index's start year.
 - **8:** warehouse conversion.
+- **9:** service stops on train routes.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

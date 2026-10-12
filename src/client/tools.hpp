@@ -83,6 +83,8 @@ private:
     std::optional<sim::StationBuildingType> station_building_{};
 
     std::vector<sim::StationId> route_;
+    std::vector<bool> route_service_;          // one per stop in route_
+    std::optional<sim::TrainId> editing_{};    // the train whose route the Train tool is changing
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
 

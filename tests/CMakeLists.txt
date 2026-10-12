@@ -39,6 +39,7 @@ add_executable(railmaster_tests
     test_track_removal.cpp
     test_save.cpp
     test_demo.cpp
+    test_routes.cpp
     test_stock.cpp
     test_terrain.cpp
     test_track.cpp

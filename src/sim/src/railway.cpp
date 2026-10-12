@@ -323,6 +323,7 @@ TrainId Railway::add_train(LocoTypeId loco, std::size_t car_count, std::vector<S
     t.priority = priority;
     t.route = std::move(route);
     t.rules.assign(t.route.size(), ConsistRule{.max = static_cast<std::uint8_t>(car_count)});
+    t.service_stop.assign(t.route.size(), 0);
     t.state = TrainState::Dwelling;
     t.at_node = stations_[t.route.front()].node;
     t.wait_ticks_left = 0; // depart on the first tick
@@ -441,10 +442,10 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
     return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < ppb;
 }
 
-bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco) {
+bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco, bool always) {
     bool stopped = false;
     for (const ServiceBuilding& b : service_buildings_) {
-        if (b.node != node || !needs(t, b.type, loco, balance_)) continue;
+        if (b.node != node || (!always && !needs(t, b.type, loco, balance_))) continue;
         refill(t, b.type);
         stopped = true;
     }
@@ -577,6 +578,37 @@ bool Railway::roll_crash(const Train& t, const LocomotiveType& loco) {
     return static_cast<std::int64_t>(rng_.below(1'000'000'000u)) < ppb;
 }
 
+void Railway::set_route(TrainId id, std::vector<StationId> route, std::vector<std::uint8_t> service_stop) {
+    if (route.empty()) throw std::invalid_argument("train route must have at least one stop");
+    Train& t = trains_.at(id);
+    service_stop.resize(route.size(), 0);
+    std::vector<ConsistRule> rules;
+    for (StationId s : route) {
+        const auto old = std::find(t.route.begin(), t.route.end(), s);
+        rules.push_back(old != t.route.end() ? t.rules[static_cast<std::size_t>(old - t.route.begin())] : t.rules.front());
+    }
+    const StationId current = t.route[t.stop_index];
+    const auto kept = std::find(route.begin(), route.end(), current);
+    t.route = std::move(route);
+    t.rules = std::move(rules);
+    t.service_stop = std::move(service_stop);
+    if (kept != t.route.end()) {
+        t.stop_index = static_cast<std::size_t>(kept - t.route.begin());
+        return;
+    }
+    if (t.state == TrainState::Dwelling) {
+        // Leaves for the first stop when it is done here.
+        t.stop_index = t.route.size() - 1;
+        t.holding = false;
+        return;
+    }
+    t.stop_index = 0;
+    if (on_path(t.state) && !t.path.empty()) {
+        t.path.resize(t.step + 1);
+        t.replan = true;
+    }
+}
+
 std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
     std::vector<std::pair<TrainId, StationId>> out;
     out.swap(arrivals_);
@@ -678,7 +710,12 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         }
         if (t.step + 1 == t.path.size()) {
             arrive_at_stop(t);
-            service_at(t, node, loco); // serviced during the station stop, no extra time
+            // Serviced during the station stop, no extra time; a service
+            // stop fills up whatever the gauges say and takes the time.
+            const bool service_stop = t.stop_index < t.service_stop.size() && t.service_stop[t.stop_index] != 0;
+            if (service_at(t, node, loco, service_stop) && service_stop) {
+                t.wait_ticks_left += balance_.servicing.service_ticks;
+            }
             return;
         }
         ++t.step;

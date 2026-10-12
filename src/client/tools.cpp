@@ -206,6 +206,8 @@ void Tools::select(Tool t) {
 void Tools::cancel() {
     track_start_.reset();
     route_.clear();
+    route_service_.clear();
+    editing_.reset();
 }
 
 void Tools::show(std::string message, bool good) {
@@ -347,7 +349,10 @@ void Tools::on_click(float sx, float sy, bool right_button) {
             show("CLICK A STATION TO ADD IT TO THE ROUTE", false);
             return;
         }
-        if (route_.empty() || route_.back() != *s) route_.push_back(*s);
+        if (route_.empty() || route_.back() != *s) {
+            route_.push_back(*s);
+            route_service_.push_back(false);
+        }
         return;
     }
     }
@@ -453,7 +458,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
-        if (track_start_ || !route_.empty()) cancel();
+        if (track_start_ || !route_.empty() || editing_) cancel();
         else select(Tool::Inspect);
         return true;
     default: break;
@@ -495,6 +500,24 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             return report(world_.execute(sim::SetConsist{.train = *id, .rule = rule}), done);
         };
         switch (key) {
+        case SDLK_e:
+            if (t.owner != world_.company().id()) {
+                show("CANNOT: you can only change your own trains", false);
+                return true;
+            }
+            // Edit the route in the Train tool, starting from the current one.
+            select(Tool::Train);
+            editing_ = *id;
+            route_ = t.route;
+            route_service_.assign(t.route.size(), false);
+            for (std::size_t i = 0; i < t.service_stop.size() && i < route_service_.size(); ++i) route_service_[i] = t.service_stop[i] != 0;
+            show("EDITING THE ROUTE OF " + name, true);
+            return true;
+        case SDLK_h: {
+            const std::int32_t priority = t.priority + ((mod & KMOD_SHIFT) != 0 ? -1 : 1);
+            return report(world_.execute(sim::SetPriority{.train = *id, .priority = priority}),
+                          name + " PRIORITY " + std::to_string(priority));
+        }
         case SDLK_r: {
             const auto locos = available_locos();
             if (locos.empty()) {
@@ -640,8 +663,23 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         if (key == SDLK_LEFTBRACKET && cars_ > 0) --cars_;
         else if (key == SDLK_RIGHTBRACKET && cars_ < sim::kMaxCarsPerTrain) ++cars_;
         else if (key == SDLK_l && !locos.empty()) loco_choice_ = (loco_choice_ + 1) % locos.size();
-        else if (key == SDLK_BACKSPACE && !route_.empty()) route_.pop_back();
-        else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+        else if (key == SDLK_BACKSPACE && !route_.empty()) {
+            route_.pop_back();
+            route_service_.resize(route_.size());
+        } else if (key == SDLK_s && !route_.empty()) {
+            // Make the last stop a service stop, or an ordinary one again.
+            route_service_.resize(route_.size());
+            route_service_.back() = !route_service_.back();
+        } else if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) && editing_) {
+            const sim::TrainId id = *editing_;
+            const sim::CommandResult r = world_.execute(sim::SetRoute{.train = id, .route = route_, .service_stops = route_service_});
+            if (r.ok) {
+                show("TRAIN " + std::to_string(id + 1) + " NOW CALLS AT " + std::to_string(route_.size()) + " STOPS", true);
+                select(Tool::Inspect);
+            } else {
+                show("CANNOT CHANGE THE ROUTE: " + r.error, false);
+            }
+        } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
             if (locos.empty()) {
                 show("NO LOCOMOTIVES AVAILABLE THIS YEAR", false);
                 return true;
@@ -651,7 +689,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                 world_.execute(sim::BuyTrain{.loco = loco, .cars = cars_, .route = route_});
             if (r.ok) {
                 show("BOUGHT " + world_.data().locomotives.get(loco).name + " FOR " + format_money(r.cost), true);
+                if (!std::all_of(route_service_.begin(), route_service_.end(), [](bool b) { return !b; })) {
+                    world_.execute(sim::SetRoute{.train = r.created_id, .route = route_, .service_stops = route_service_});
+                }
                 route_.clear();
+                route_service_.clear();
             } else {
                 show("CANNOT BUY: " + r.error, false);
             }
@@ -1097,7 +1139,8 @@ void Tools::draw_world_overlay() const {
     case Tool::Train: {
         for (std::size_t i = 0; i < route_.size(); ++i) {
             const sim::MapPoint p = net.node(world_.railway().station(route_[i]).node).pos;
-            draw_marker(p, cam_, 7, 1.0f, 0.85f, 0.2f);
+            if (i < route_service_.size() && route_service_[i]) draw_marker(p, cam_, 7, 0.3f, 0.9f, 1.0f);
+            else draw_marker(p, cam_, 7, 1.0f, 0.85f, 0.2f);
             if (i + 1 < route_.size()) {
                 draw_line(p, net.node(world_.railway().station(route_[i + 1]).node).pos, cam_, 1.0f, 0.85f, 0.2f, 0.8f);
             }
@@ -1223,7 +1266,7 @@ std::string Tools::hint() const {
     case Tool::Inspect: {
         std::string cargo_map = "O/P MAP: ";
         cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "OFF";
-        return "TRAIN: F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
+        return "TRAIN: E ROUTE H PRIORITY F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
     }
     case Tool::Track:
         return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP" : "CLICK TO START A LINE") +
@@ -1250,7 +1293,12 @@ std::string Tools::hint() const {
             const auto& l = world_.data().locomotives.get(locos[loco_choice_ % locos.size()]);
             loco = l.name + " " + std::to_string(l.top_speed_mph) + "MPH " + format_money(l.cost);
         }
-        return "CLICK STATIONS IN ORDER, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
+        if (editing_) {
+            return "TRAIN " + std::to_string(*editing_ + 1) +
+                   ": CLICK STATIONS IN ORDER, BACKSPACE DROPS, S SERVICE STOP, ENTER SAVES, ESC CANCELS.  STOPS: " +
+                   std::to_string(route_.size());
+        }
+        return "CLICK STATIONS IN ORDER, S SERVICE STOP, ENTER TO BUY.  L ENGINE: " + loco + "  [ ] CARS: " +
                std::to_string(cars_) + "  STOPS: " + std::to_string(route_.size());
     }
     case Tool::Industry: {
@@ -1279,6 +1327,10 @@ std::string Tools::inspect_text() const {
         if (sim::distance_mm(rw.train_position(t.id), hover_) > snap) continue;
         const auto& loco = world_.data().locomotives.get(t.loco);
         std::string s = "TRAIN " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ". ";
+        const auto service = std::count(t.service_stop.begin(), t.service_stop.end(), std::uint8_t{1});
+        s += std::to_string(t.route.size()) + " STOPS";
+        if (service > 0) s += " (" + std::to_string(service) + " SERVICE)";
+        s += ", PRIORITY " + std::to_string(t.priority) + ". ";
         if (t.owner != world_.company().id()) s = world_.company(t.owner).name() + " " + s;
         // Load, grouped by cargo: "2 COAL, 1 STEEL, 1 EMPTY".
         std::vector<std::pair<std::string, int>> load;

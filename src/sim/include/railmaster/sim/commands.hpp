@@ -93,6 +93,24 @@ struct SetSpecialCars {
     bool caboose = false;
     bool diner = false;
 };
+// Give one of your trains a new list of stops (rt3-clone-spec §9.3 [D]:
+// add and remove stops). A stop at a station the old route also called at
+// keeps that stop's consist; a new one takes the first stop's. With
+// `service_stops` (one per stop), a marked stop is a service stop: the train
+// takes on water, sand and oil there from the station's own service
+// buildings whether it needs them or not (§9.4 [D]). An electric engine
+// still needs electrified track all the way round.
+struct SetRoute {
+    TrainId train = 0;
+    std::vector<StationId> route{};
+    std::vector<bool> service_stops{};
+};
+// Change which of your trains goes first where two meet on single track
+// (rt3-clone-spec §10.3 [D]).
+struct SetPriority {
+    TrainId train = 0;
+    std::int32_t priority = 0;
+};
 // Buy a copy of one of your trains: the same engine type, route, consist
 // rules and special cars [D], at the engine's price.
 struct CopyTrain {
@@ -219,6 +237,7 @@ struct SetPortMode {
 struct DeclareBankruptcy {};
 
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
+                             SetRoute, SetPriority,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,

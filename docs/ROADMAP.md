@@ -28,14 +28,15 @@ several cells (about 15,000 a map) and catchment radii of 2/3/4 cells.
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
 numbers are in `data/balance.json`.
 
+Done since: track removal and double-track upgrades with refunds, crashes,
+yielding on a rival's track, and route editing: changing a train's stops,
+manual service stops and priority (rt3-clone-spec §9.3), from Inspect
+(E, H) and the Train tool.
+
 Still to do:
-- Track removal and upgrading single to double track, with refunds.
-  (Electrification is done: rt3-clone-spec §10.2, §11.2.)
-- Charging track costs to a company (needs M3 ledgers).
-- Crashes (needs research on what happens), and scheduled service stops in routes.
-- Track rights: trains on another company's track always yield.
-- Train management: edit routes; per-stop consists and custom cars in the
-  client (the simulation has them: rt3-clone-spec §9.3).
+- Per-stop consists and custom cars in the client (the simulation has them:
+  rt3-clone-spec §9.3).
+- Bridge, tunnel and overpass frequency settings (§11.2).
 
 ## M2: The economy (in progress)
 Done in the first slice: the economy-node grid and cargo price field, with
@@ -97,8 +98,9 @@ minimum and maximum cars, waiting for full loads, caboose and dining car,
 copying and retiring trains; empty cars are no longer hauled.
 
 Still to do:
-- Transfers of express loads between trains.
-- Warehouse cargo conversion.
+- Express units with homes and destinations, more than one change of
+  trains, and travellers who give up avoiding rail for a while (§8.3).
+- Industry footprints of 4 × 4 cells (§3.1).
 
 Later eras are calibrated too: the demo network started in 1900 and 1950
 runs the era's fastest steam or diesel engine and returns about what it

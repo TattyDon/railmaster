@@ -150,6 +150,8 @@ and plain freight engines score low (the Shay −15%).
 | Oil | Lasts 1,500 km. | Observation. |
 | Service threshold | A train stops at a support building when the relevant gauge is below half. | Observation. |
 | Service stop | A quarter of a day; at a station it happens during the station stop. | Observation. |
+| Manual service stop | A route stop the player marks as a service stop (rt3-clone-spec §9.3 `serviceStop`, §9.4 [D]: "service stops can also be added manually") fills water, sand and oil from the service buildings at that station's node whatever the gauges read, and adds a quarter of a day to the stop. Buildings elsewhere are not visited [I]. | How RT3's route editor offers them. |
+| Changing a route | Stops at stations the old route called at keep their consist; new stops take the old first stop's [I]. A train heading for, or standing at, a station still on the route carries on; otherwise it makes for the first stop from the end of the piece it is on (or leaves for it when its stop is done). A route needs two stops and cannot call at one station twice running; an electric engine's route must be wired throughout [D]. | — |
 | Out of water | Steam engines drop to 25% of top speed. | "Greatly reduced" [M]. |
 | Out of sand | Three times the speed lost on grades (rt3-clone-spec §9.4 [I]). | "Much of its grade performance" [M]. |
 | Breakdown rate | One per 6,400 km on average at reliability 100 with full oil (RT2's Near Perfect engines run about 24,000 cells, 19,300 km, between breakdowns [RL]; ours would be reliability 300 [I]); up to 4× with empty oil; inversely proportional to reliability; × (1 + age/15 years) (rt3-clone-spec §9.4 [I]). Every engine is reliability 100 for now. | Per-engine ratings and observed rates. |
