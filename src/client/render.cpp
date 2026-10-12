@@ -373,6 +373,284 @@ Pose train_pose(const sim::Railway& rw, const sim::Train& t) {
     return p;
 }
 
+// A prism of eight sides along (dx, dy), centred at height zc: a boiler.
+void prism(float x, float y, float zc, float dx, float dy, float hl, float r, const float* colour) {
+    const float px = -dy, py = dx; // across
+    glColor3fv(colour);
+    constexpr int kSides = 8;
+    for (int i = 0; i < kSides; ++i) {
+        const float a0 = 6.2831853f * static_cast<float>(i) / kSides, a1 = 6.2831853f * static_cast<float>(i + 1) / kSides;
+        const float c0 = std::cos(a0), s0 = std::sin(a0), c1 = std::cos(a1), s1 = std::sin(a1);
+        const float cm = std::cos((a0 + a1) / 2), sm = std::sin((a0 + a1) / 2);
+        glNormal3f(px * cm, py * cm, sm);
+        glVertex3f(x - dx * hl + px * r * c0, y - dy * hl + py * r * c0, zc + r * s0);
+        glVertex3f(x + dx * hl + px * r * c0, y + dy * hl + py * r * c0, zc + r * s0);
+        glVertex3f(x + dx * hl + px * r * c1, y + dy * hl + py * r * c1, zc + r * s1);
+        glVertex3f(x - dx * hl + px * r * c1, y - dy * hl + py * r * c1, zc + r * s1);
+    }
+}
+
+// One piece of rolling stock: its kind decides the shape and colours.
+enum class Stock { Steam, Diesel, Electric, Coach, Mail, Diner, Boxcar, Hopper, Caboose };
+
+// Draw it with its front at `front` tiles along (dx, dy) from (x, y); returns its length.
+float rolling_stock(Stock kind, float x, float y, float z, float dx, float dy, float s, const float* livery) {
+    const float wide = 0.05f * s;
+    const float frame[3] = {0.12f, 0.11f, 0.11f};
+    const auto at = [&](float along, float& ox, float& oy) {
+        ox = x - dx * along;
+        oy = y - dy * along;
+    };
+    float cx, cy;
+    switch (kind) {
+    case Stock::Steam: {
+        const float len = 0.30f * s;
+        const float black[3] = {0.14f, 0.14f, 0.15f};
+        at(len / 2, cx, cy);
+        box(cx, cy, z, dx, dy, len / 2, wide * 0.9f, 0.03f * s, frame, frame); // running gear
+        at(0.10f * s, cx, cy);
+        prism(cx, cy, z + 0.065f * s, dx, dy, 0.09f * s, 0.036f * s, black); // boiler
+        at(0.03f * s, cx, cy);
+        box(cx, cy, z + 0.03f * s, dx, dy, 0.012f * s, 0.012f * s, 0.085f * s, black, black); // chimney
+        at(0.215f * s, cx, cy);
+        box(cx, cy, z + 0.03f * s, dx, dy, 0.035f * s, wide, 0.085f * s, livery, black); // cab
+        at(0.275f * s, cx, cy);
+        box(cx, cy, z + 0.03f * s, dx, dy, 0.025f * s, wide * 0.9f, 0.05f * s, black, black); // tender
+        return len;
+    }
+    case Stock::Diesel:
+    case Stock::Electric: {
+        const float len = 0.26f * s;
+        const float roof[3] = {livery[0] * 0.6f, livery[1] * 0.6f, livery[2] * 0.6f};
+        at(len / 2, cx, cy);
+        box(cx, cy, z, dx, dy, len / 2, wide * 0.9f, 0.03f * s, frame, frame);
+        box(cx, cy, z + 0.03f * s, dx, dy, len / 2 * 0.95f, wide, 0.065f * s, livery, roof);
+        // A dark band of cab windows at the front.
+        const float glass[3] = {0.15f, 0.2f, 0.25f};
+        at(0.025f * s, cx, cy);
+        box(cx, cy, z + 0.07f * s, dx, dy, 0.018f * s, wide * 1.02f, 0.022f * s, glass, roof);
+        if (kind == Stock::Electric) {
+            // A pantograph up to the wires.
+            at(0.08f * s, cx, cy);
+            const float bar[3] = {0.3f, 0.3f, 0.3f};
+            box(cx, cy, z + 0.095f * s, dx, dy, 0.004f * s, wide * 0.6f, 0.05f * s, bar, bar);
+        }
+        return len;
+    }
+    case Stock::Coach:
+    case Stock::Mail:
+    case Stock::Diner: {
+        const float len = 0.22f * s;
+        const float body[3] = {kind == Stock::Mail ? 0.45f : 0.38f, kind == Stock::Mail ? 0.12f : 0.18f,
+                               kind == Stock::Mail ? 0.1f : 0.12f};
+        const float roof[3] = {0.32f, 0.32f, 0.34f};
+        const float band[3] = {kind == Stock::Diner ? 0.85f : 0.8f, kind == Stock::Diner ? 0.7f : 0.72f,
+                               kind == Stock::Diner ? 0.3f : 0.55f};
+        at(len / 2, cx, cy);
+        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
+        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.97f, wide, 0.065f * s, body, roof);
+        if (kind != Stock::Mail) {
+            // A line of windows.
+            box(cx, cy, z + 0.06f * s, dx, dy, len / 2 * 0.9f, wide * 1.02f, 0.016f * s, band, roof);
+        }
+        return len;
+    }
+    case Stock::Boxcar:
+    case Stock::Hopper: {
+        const float len = 0.18f * s;
+        const float body[3] = {kind == Stock::Hopper ? 0.25f : 0.5f, kind == Stock::Hopper ? 0.24f : 0.32f,
+                               kind == Stock::Hopper ? 0.23f : 0.2f};
+        const float top[3] = {kind == Stock::Hopper ? 0.08f : 0.42f, kind == Stock::Hopper ? 0.08f : 0.27f,
+                              kind == Stock::Hopper ? 0.08f : 0.17f};
+        at(len / 2, cx, cy);
+        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
+        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.97f, wide, (kind == Stock::Hopper ? 0.045f : 0.06f) * s, body, top);
+        return len;
+    }
+    case Stock::Caboose: {
+        const float len = 0.12f * s;
+        const float red[3] = {0.7f, 0.15f, 0.1f}, roof[3] = {0.3f, 0.1f, 0.08f};
+        at(len / 2, cx, cy);
+        box(cx, cy, z, dx, dy, len / 2, wide * 0.85f, 0.025f * s, frame, frame);
+        box(cx, cy, z + 0.025f * s, dx, dy, len / 2 * 0.95f, wide, 0.055f * s, red, roof);
+        box(cx, cy, z + 0.08f * s, dx, dy, len / 6, wide * 0.6f, 0.025f * s, red, roof); // cupola
+        return len;
+    }
+    }
+    return 0.0f;
+}
+
+// Bridge decks by type: wood brown, stone grey, steel dark, suspension pale.
+void bridge_rgb(sim::BridgeType b, float* c) {
+    switch (b) {
+    case sim::BridgeType::Wood: c[0] = 0.45f; c[1] = 0.32f; c[2] = 0.2f; break;
+    case sim::BridgeType::Stone: c[0] = 0.62f; c[1] = 0.6f; c[2] = 0.56f; break;
+    case sim::BridgeType::Steel: c[0] = 0.3f; c[1] = 0.33f; c[2] = 0.38f; break;
+    case sim::BridgeType::Suspension: c[0] = 0.85f; c[1] = 0.85f; c[2] = 0.82f; break;
+    case sim::BridgeType::None: c[0] = c[1] = c[2] = 0.5f; break;
+    }
+}
+
+// Track close up (rt3-clone-spec §15.6 views): a ballast bed with sleepers
+// and two rails on each track, following the ground in cuttings; bridges as
+// decks on piers; tunnels unseen but for their mouths.
+void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
+    const sim::TrackNetwork& net = rw.track();
+    const bool sleepers = cam.zoom >= 26.0f;
+    const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
+    struct Strip {
+        float x0, y0, z0, x1, y1, z1; // a straight bit of one edge
+    };
+    begin_lit();
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (e.removed || e.kind == sim::TrackKind::Tunnel) continue;
+        const sim::TrackNode& a = net.node(e.a);
+        const sim::TrackNode& b = net.node(e.b);
+        const float ax = tile(a.pos.x_mm), ay = tile(a.pos.y_mm), bx = tile(b.pos.x_mm), by = tile(b.pos.y_mm);
+        const float len = std::hypot(bx - ax, by - ay);
+        if (len <= 0) continue;
+        const float dx = (bx - ax) / len, dy = (by - ay) / len, px = -dy, py = dx;
+        float ballast[3] = {0.47f, 0.43f, 0.38f};
+        if (e.kind == sim::TrackKind::Bridge) bridge_rgb(e.bridge, ballast);
+        if (e.owner != player) {
+            float r, g, bl;
+            owner_rgb(e.owner, player, r, g, bl);
+            ballast[0] = ballast[0] * 0.55f + r * 0.45f;
+            ballast[1] = ballast[1] * 0.55f + g * 0.45f;
+            ballast[2] = ballast[2] * 0.55f + bl * 0.45f;
+        }
+        const float sleeper[3] = {0.28f, 0.2f, 0.13f};
+        const int pieces = std::max(1, static_cast<int>(std::ceil(len / 0.25f)));
+        const float za = cam.z_of(a.z_mm), zb = cam.z_of(b.z_mm);
+        const auto z_at = [&](float t) {
+            const float rail = za + (zb - za) * t;
+            if (e.kind != sim::TrackKind::Ground) return rail;
+            // In a cutting the ground stands above the rail profile: follow it.
+            return std::max(rail, cam.ground_z(ax + (bx - ax) * t, ay + (by - ay) * t));
+        };
+        const float offsets[2] = {-0.07f, 0.07f};
+        const int tracks = e.double_track ? 2 : 1;
+        for (int k = 0; k < tracks; ++k) {
+            const float off = e.double_track ? offsets[k] : 0.0f;
+            const float hw = 0.065f; // half the ballast width
+            for (int i = 0; i < pieces; ++i) {
+                const float t0 = static_cast<float>(i) / static_cast<float>(pieces), t1 = static_cast<float>(i + 1) / static_cast<float>(pieces);
+                const Strip st{ax + (bx - ax) * t0 + px * off, ay + (by - ay) * t0 + py * off, z_at(t0) + 0.02f,
+                               ax + (bx - ax) * t1 + px * off, ay + (by - ay) * t1 + py * off, z_at(t1) + 0.02f};
+                glColor3fv(ballast);
+                glVertex3f(st.x0 - px * hw, st.y0 - py * hw, st.z0);
+                glVertex3f(st.x1 - px * hw, st.y1 - py * hw, st.z1);
+                glVertex3f(st.x1 + px * hw, st.y1 + py * hw, st.z1);
+                glVertex3f(st.x0 + px * hw, st.y0 + py * hw, st.z0);
+                if (e.kind == sim::TrackKind::Bridge) {
+                    // The deck's sides.
+                    const float side[3] = {ballast[0] * 0.7f, ballast[1] * 0.7f, ballast[2] * 0.7f};
+                    glColor3fv(side);
+                    for (const float sgn : {-1.0f, 1.0f}) {
+                        glNormal3f(px * sgn, py * sgn, 0);
+                        glVertex3f(st.x0 + px * hw * sgn, st.y0 + py * hw * sgn, st.z0);
+                        glVertex3f(st.x1 + px * hw * sgn, st.y1 + py * hw * sgn, st.z1);
+                        glVertex3f(st.x1 + px * hw * sgn, st.y1 + py * hw * sgn, st.z1 - 0.07f);
+                        glVertex3f(st.x0 + px * hw * sgn, st.y0 + py * hw * sgn, st.z0 - 0.07f);
+                    }
+                    glNormal3f(0, 0, 1);
+                }
+                if (sleepers) {
+                    glColor3fv(sleeper);
+                    const float seg = len / static_cast<float>(pieces);
+                    const int n = std::max(1, static_cast<int>(seg / 0.05f));
+                    for (int j = 0; j < n; ++j) {
+                        const float u = (static_cast<float>(j) + 0.5f) / static_cast<float>(n);
+                        const float sx = st.x0 + (st.x1 - st.x0) * u, sy = st.y0 + (st.y1 - st.y0) * u;
+                        const float sz = st.z0 + (st.z1 - st.z0) * u + 0.004f;
+                        const float hl = 0.009f, sw = 0.045f;
+                        glVertex3f(sx - dx * hl - px * sw, sy - dy * hl - py * sw, sz);
+                        glVertex3f(sx + dx * hl - px * sw, sy + dy * hl - py * sw, sz);
+                        glVertex3f(sx + dx * hl + px * sw, sy + dy * hl + py * sw, sz);
+                        glVertex3f(sx - dx * hl + px * sw, sy - dy * hl + py * sw, sz);
+                    }
+                }
+            }
+        }
+        // Piers under bridges, from the deck down to the ground.
+        if (e.kind == sim::TrackKind::Bridge) {
+            const float pier[3] = {ballast[0] * 0.8f, ballast[1] * 0.8f, ballast[2] * 0.8f};
+            const int n = std::max(1, static_cast<int>(len / 0.6f));
+            for (int i = 0; i <= n; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(n);
+                const float x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+                const float top = za + (zb - za) * t, ground = cam.ground_z(x, y) - 0.2f;
+                if (top - ground > 0.05f) box(x, y, ground, dx, dy, 0.03f, 0.05f, top - ground, pier, pier);
+            }
+            glNormal3f(0, 0, 1);
+        }
+    }
+    // Tunnel mouths, where a tunnel meets track in the open.
+    const float stone[3] = {0.4f, 0.38f, 0.36f}, dark[3] = {0.05f, 0.05f, 0.05f};
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (e.removed || e.kind != sim::TrackKind::Tunnel) continue;
+        for (const sim::NodeId n : {e.a, e.b}) {
+            bool open = false;
+            for (sim::EdgeId other : net.edges_at(n)) {
+                const sim::TrackEdge& o = net.edge(other);
+                open = open || (!o.removed && o.kind != sim::TrackKind::Tunnel);
+            }
+            if (!open) continue;
+            const sim::TrackNode& here = net.node(n);
+            const sim::TrackNode& there = net.node(n == e.a ? e.b : e.a);
+            const float hx = tile(here.pos.x_mm), hy = tile(here.pos.y_mm);
+            const float l = std::hypot(tile(there.pos.x_mm) - hx, tile(there.pos.y_mm) - hy);
+            if (l <= 0) continue;
+            const float dx = (tile(there.pos.x_mm) - hx) / l, dy = (tile(there.pos.y_mm) - hy) / l;
+            const float z = cam.z_of(here.z_mm);
+            box(hx + dx * 0.03f, hy + dy * 0.03f, z, dx, dy, 0.03f, e.double_track ? 0.2f : 0.12f, 0.16f, stone, stone);
+            box(hx + dx * 0.031f, hy + dy * 0.031f, z, dx, dy, 0.031f, e.double_track ? 0.15f : 0.07f, 0.11f, dark, stone);
+        }
+    }
+    glEnd();
+    end_lit();
+    // The rails themselves: thin steel lines on each track.
+    if (cam.zoom >= 14.0f) {
+        glLineWidth(cam.zoom >= 40.0f ? 2.0f : 1.0f);
+        glBegin(GL_LINES);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed || e.kind == sim::TrackKind::Tunnel) continue;
+            const sim::TrackNode& a = net.node(e.a);
+            const sim::TrackNode& b = net.node(e.b);
+            const float ax = tile(a.pos.x_mm), ay = tile(a.pos.y_mm), bx = tile(b.pos.x_mm), by = tile(b.pos.y_mm);
+            const float len = std::hypot(bx - ax, by - ay);
+            if (len <= 0) continue;
+            const float px = -(by - ay) / len, py = (bx - ax) / len;
+            if (e.owner == player) glColor3f(0.62f, 0.62f, 0.66f);
+            else {
+                float r, g, bl;
+                owner_rgb(e.owner, player, r, g, bl);
+                glColor3f(r, g, bl);
+            }
+            const int pieces = std::max(1, static_cast<int>(std::ceil(len / 0.25f)));
+            const float za = cam.z_of(a.z_mm), zb = cam.z_of(b.z_mm);
+            const float offsets[2] = {e.double_track ? -0.07f : 0.0f, 0.07f};
+            for (int k = 0; k < (e.double_track ? 2 : 1); ++k) {
+                const float off = offsets[k];
+                for (const float rail : {-0.026f, 0.026f}) {
+                    for (int i = 0; i < pieces; ++i) {
+                        for (const int end : {i, i + 1}) {
+                            const float t = static_cast<float>(end) / static_cast<float>(pieces);
+                            const float x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+                            float z = za + (zb - za) * t;
+                            if (e.kind == sim::TrackKind::Ground) z = std::max(z, cam.ground_z(x, y));
+                            glVertex3f(x + px * (off + rail), y + py * (off + rail), z + 0.035f);
+                        }
+                    }
+                }
+            }
+        }
+        glEnd();
+    }
+}
+
 } // namespace
 
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
@@ -417,10 +695,15 @@ void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float
     b = c[2];
 }
 
-void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
+void draw_railway(const sim::World& w, const Camera& cam) {
+    const sim::Railway& rw = w.railway();
+    const std::optional<sim::CompanyId> player = w.player_company();
     const sim::TrackNetwork& net = rw.track();
+    // Close enough in 3D, track is drawn as ballast, sleepers and rails.
+    const bool detailed = cam.three_d && cam.zoom >= 9.0f;
+    if (detailed) track_3d(rw, cam, player);
     for (const sim::TrackEdge& e : net.edges()) {
-        if (e.removed) continue;
+        if (e.removed || detailed) continue;
         // Wider as the view closes in, in 3D.
         const float width = cam.three_d ? std::clamp(cam.zoom * 0.12f, 2.0f, 8.0f) : 2.0f;
         glLineWidth(e.double_track ? width * 2 : width);
@@ -438,8 +721,8 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
         vertex_at(net.node(e.b).pos, net.node(e.b).z_mm, cam);
         glEnd();
     }
-    // Bridges stand on piers down to the ground (3D).
-    if (cam.three_d) {
+    // Bridges stand on piers down to the ground (3D, from afar).
+    if (cam.three_d && !detailed) {
         glLineWidth(2.0f);
         glBegin(GL_LINES);
         glColor3f(0.55f, 0.52f, 0.48f);
@@ -523,26 +806,35 @@ void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::
         for (const sim::Train& t : rw.trains()) {
             if (!t.in_service()) continue;
             const Pose p = train_pose(rw, t);
+            // The engine in its owner's livery, or flagged by its state.
             float c[3];
+            owner_rgb(t.owner, player, c[0], c[1], c[2]);
+            if (t.owner == player) {
+                c[0] = 0.15f; c[1] = 0.42f; c[2] = 0.22f; // the player's in green
+            }
             if (t.state == sim::TrainState::BrokenDown) {
                 c[0] = 1.0f; c[1] = 0.55f; c[2] = 0.0f;
             } else if (t.yielding) {
                 c[0] = 0.9f; c[1] = 0.15f; c[2] = 0.1f;
-            } else if (t.owner == player) {
-                c[0] = 0.12f; c[1] = 0.12f; c[2] = 0.14f;
-            } else {
-                owner_rgb(t.owner, player, c[0], c[1], c[2]);
             }
-            const float car[3] = {0.55f, 0.38f, 0.22f}, roof[3] = {0.35f, 0.25f, 0.15f};
-            const float x = tiles(p.pos.x_mm, cam), y = tiles(p.pos.y_mm, cam), z = cam.z_of(p.z_mm) + 0.01f;
-            const float loco = 0.14f * s, wagon = 0.11f * s, gap = 0.015f * s, wide = 0.05f * s;
-            box(x - p.dx * loco, y - p.dy * loco, z, p.dx, p.dy, loco, wide, 0.09f * s, c, c);
-            float back = 2 * loco + gap;
-            for (std::size_t i = 0; i < t.hauled_cars(); ++i) {
-                const float mid = back + wagon;
-                box(x - p.dx * mid, y - p.dy * mid, z, p.dx, p.dy, wagon, wide, 0.07f * s, car, roof);
-                back += 2 * wagon + gap;
+            const float x = tiles(p.pos.x_mm, cam), y = tiles(p.pos.y_mm, cam), z = cam.z_of(p.z_mm) + 0.03f;
+            const sim::LocomotiveType& loco = w.data().locomotives.get(t.loco);
+            const Stock engine = loco.fuel == sim::Fuel::Steam ? Stock::Steam
+                                 : loco.fuel == sim::Fuel::Diesel ? Stock::Diesel
+                                                                  : Stock::Electric;
+            const float gap = 0.012f * s;
+            float back = rolling_stock(engine, x, y, z, p.dx, p.dy, s, c) + gap;
+            const auto behind = [&](Stock kind) {
+                back += rolling_stock(kind, x - p.dx * back, y - p.dy * back, z, p.dx, p.dy, s, c) + gap;
+            };
+            for (const sim::Car& car : t.cars) {
+                if (!car.cargo) continue; // empty cars are left behind
+                const sim::CargoType& cargo = w.data().cargo.get(*car.cargo);
+                if (cargo.cargo_class == sim::CargoClass::Express) behind(cargo.key == "mail" ? Stock::Mail : Stock::Coach);
+                else behind(cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite" ? Stock::Hopper : Stock::Boxcar);
             }
+            if (t.diner) behind(Stock::Diner);
+            if (t.caboose) behind(Stock::Caboose);
         }
         glEnd();
         end_lit();

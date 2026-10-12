@@ -328,7 +328,7 @@ int main(int argc, char* argv[]) {
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
         client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
         client::draw_territory_borders(world.territories(), cam);
-        client::draw_railway(world.railway(), cam, world.player_company());
+        client::draw_railway(world, cam);
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         tools.draw_world_overlay();
         glDisable(GL_DEPTH_TEST);

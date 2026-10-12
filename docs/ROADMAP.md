@@ -167,8 +167,14 @@ camera orbits a point on the ground (turn, tilt, zoom; rt3-clone-spec
 §15.6) and the mouse picks by casting its ray onto the terrain, so every
 tool works as before. V switches to the old top-down map.
 
+Close up, track is ballast with sleepers and two rails (following the
+ground through cuttings), bridges are decks on piers coloured by type, and
+tunnels show their mouths. Trains are built from shapes: steam engines
+with boiler, chimney, cab and tender; diesel and electric hoods (with a
+pantograph); coaches, mail vans, dining cars, boxcars, hoppers for coal,
+iron and bauxite, and a caboose.
+
 Next:
-- Track as ballast and rails rather than lines; sleepers; tunnel mouths.
 - Proper low-poly models for engines, cars, stations and buildings, with
   LOD; textures; a modern shader pipeline.
 - Camera bookmarks (Shift+0-9 store, 0-9 recall), edge scrolling, a radar.

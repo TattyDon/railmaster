@@ -21,7 +21,7 @@ namespace railmaster::client {
 void draw_terrain(const sim::Terrain& t, const Camera& cam);
 // `player` is the human's company, if any: its track keeps the structure
 // colours, and rivals are drawn in theirs.
-void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player);
+void draw_railway(const sim::World& w, const Camera& cam);
 // The analysis overlays (rt3-clone-spec §15.3), drawn over the railway.
 enum class MapOverlay { None, Holdings, Profit, Grade, Traffic, Cargo };
 // Holdings: every company's track, stations and industries in its colour.
