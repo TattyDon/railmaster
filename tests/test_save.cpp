@@ -116,3 +116,41 @@ TEST_CASE("bad save files are refused with a reason") {
          "maintenance_per_year": 1}]})");
     CHECK(error(saved, other).find("different game data") != std::string::npos);
 }
+
+TEST_CASE("a save replays from its command log to the same game, byte for byte (§16)") {
+    World w = busy_world(); // the demo network is built with logged commands
+    run_days(w, 40);
+    REQUIRE(w.execute(IssueBond{}).ok);
+    const auto& stations = w.railway().stations();
+    REQUIRE(stations.size() >= 2);
+    REQUIRE(w.execute(CopyTrain{.train = 0}).ok);
+    run_days(w, 70);
+    REQUIRE(w.execute(SetPriority{.train = 0, .priority = 3}).ok);
+    run_days(w, 20);
+
+    // Only commands from outside the simulation are logged, not the rivals'.
+    const auto& log = w.command_log();
+    REQUIRE(log.size() > 5);
+    for (const auto& c : log) CHECK(c.who == kHumanPlayer);
+    CHECK(std::holds_alternative<SetPriority>(log.back().cmd));
+
+    const std::string saved = w.save();
+    const World again = World::replay(saved, shipped());
+    CHECK(again.total_ticks() == w.total_ticks());
+    CHECK(again.save() == saved);
+
+    // A loaded game keeps its log and config, and carries on logging.
+    World loaded = World::load(saved, shipped());
+    CHECK(loaded.command_log().size() == log.size());
+    REQUIRE(loaded.execute(SetPriority{.train = 0, .priority = 1}).ok);
+    run_days(loaded, 5);
+    CHECK(World::replay(loaded.save(), shipped()).save() == loaded.save());
+}
+
+TEST_CASE("saves are compressed") {
+    const World w = busy_world();
+    const std::string saved = w.save();
+    CHECK(saved.substr(0, 7) == "RMSAVEZ");
+    MESSAGE("a 96 x 96 game saves to " << saved.size() / 1024 << " KB");
+    CHECK(saved.size() < 1'000'000);
+}

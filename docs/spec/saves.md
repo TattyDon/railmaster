@@ -36,7 +36,33 @@ type lists its members once, in one function, and that one list is used
 both to write and to read (`io(Ar&, T&)`, with `Ar` a writer or a reader).
 Writing and reading cannot drift apart.
 
-A Small map saves to about 6 MB in about 15 ms, and loads in under 10 ms.
+The bytes are then compressed with zlib at its fastest level, behind a
+short header: the magic string `RMSAVEZ`, the format version and the size
+uncompressed. Loading still reads an uncompressed save. A Small map a year
+and a half in saves to about 860 KB (6 MB uncompressed) in about 55 ms, and
+loads in about 25 ms.
+
+## Command log and replays
+
+A save also keeps the config the game was made with (`WorldConfig`: seed,
+map size, rivals, scenario and the rest) and a log of every command given
+from outside the simulation, with the tick it was given at (rt3-clone-spec
+§16: "command log (for replay/debug)"). Commands the simulation gives
+itself, such as rivals' building and trading, are not logged, because a
+replay makes them again. Failed commands are not logged either, as they
+change nothing.
+
+`World::replay(save, data)` makes a new world from the config, gives the
+logged commands at their ticks, and runs to the tick the save was made at.
+The simulation is deterministic, so the result should save to exactly the
+same bytes. `railmaster_replay GAME.sav [DATA_DIR]` (built from
+`tools/replay/`) does this and says whether they match. It exits 0 on a
+match and 1 when the replay differs, which means something in the
+simulation is not deterministic. It exits 2 when the save cannot be read.
+A test replays a busy game with rivals this way.
+
+Games changed outside commands (tests that edit the terrain directly, for
+example) do not replay; the client changes the game only through commands.
 
 ## Compatibility
 
@@ -51,6 +77,7 @@ Format versions:
 - **8:** warehouse conversion.
 - **9:** service stops on train routes.
 - **10:** scenario questions waiting for an answer, average-speed samples, train running time.
+- **11:** compressed; the game's config and command log.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

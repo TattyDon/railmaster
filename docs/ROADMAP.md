@@ -179,9 +179,10 @@ value (the share price's anchor) does not fall with age.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.
-- Save/load: done ([spec/saves.md](spec/saves.md)); compression and a
-  command log still to come.
-- Replays, localisation, packaging for Windows/macOS/Linux.
+- Save/load: done ([spec/saves.md](spec/saves.md)), compressed, with the
+  game's config and a command log that replays it exactly
+  (`railmaster_replay`).
+- Replay viewing in the client, localisation, packaging for Windows/macOS/Linux.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

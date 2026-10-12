@@ -158,6 +158,8 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
         cmd);
     actor_ = kHumanPlayer;
     if (r.ok && who == kHumanPlayer) spent_ += r.cost;
+    // Commands from outside the simulation, for replays; failed ones change nothing.
+    if (r.ok && !ticking_) command_log_.push_back({total_ticks_, who, cmd});
     return r;
 }
 

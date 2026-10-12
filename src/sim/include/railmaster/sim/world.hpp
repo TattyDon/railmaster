@@ -213,8 +213,28 @@ public:
     // the game data from data/ (cargo, engines, industries, tycoons, which
     // must match the save's by key) but uses the balance the game was
     // played with, kept in the save. Throws std::runtime_error on a bad file.
+    // Saves are compressed (zlib); load also reads uncompressed ones.
     std::string save() const;
     static World load(std::string_view bytes, GameData data);
+
+    // Every command given from outside the simulation (the player's, the
+    // client's), with the tick it was given at, in order. Commands the
+    // simulation gives itself (rivals') are not logged: a replay makes them
+    // again. With the config the game was made with, the log replays the
+    // game from its start (rt3-clone-spec §16: a command log for replay and
+    // debugging).
+    struct LoggedCommand {
+        std::uint64_t tick = 0; // total_ticks() when it was given
+        PlayerId who = kHumanPlayer;
+        Command cmd;
+    };
+    const std::vector<LoggedCommand>& command_log() const { return command_log_; }
+    const WorldConfig& config() const { return config_; }
+    // Play a saved game again from its start: a new world from the save's
+    // config and game data, given the logged commands at their ticks, run
+    // to the tick the save was made at. A deterministic simulation ends
+    // exactly as the save; compare their save() to check. `data` as for load.
+    static World replay(std::string_view save_bytes, GameData data);
     template <class Ar>
     friend void io(Ar& ar, World& v);
 
@@ -255,6 +275,10 @@ private:
     std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
     bool rival_ai_ = true;
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
+    WorldConfig config_;                  // as made, for replays
+    std::vector<LoggedCommand> command_log_;
+    bool ticking_ = false;                // inside tick(): commands are the simulation's own
+    void tick_inner();
     std::int64_t last_forced_sale_ = 0;
     bool business_cycle_ = true;
     std::optional<EconomicState> economy_news_;

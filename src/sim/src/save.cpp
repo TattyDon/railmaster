@@ -8,6 +8,8 @@
 
 #include "railmaster/sim/world.hpp"
 
+#include <zlib.h>
+
 #include <array>
 #include <cstring>
 #include <map>
@@ -15,18 +17,70 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace railmaster::sim {
 
 namespace {
 
-constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 10; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 11; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
-                                           // 9: service stops; 10: scenario choices, disasters, average speed
+                                           // 9: service stops; 10: scenario choices, disasters, average speed;
+                                           // 11: compressed, with the world's config and command log
+constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
+// A compressed save: this, the format version (4 bytes), the uncompressed
+// size (8 bytes), then the plain save deflated with zlib.
+constexpr char kZipMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', 'Z', '\0'};
+constexpr std::size_t kZipHeader = sizeof kZipMagic + 4 + 8;
 
+std::uint64_t little_endian(std::string_view bytes, std::size_t at, std::size_t n) {
+    std::uint64_t v = 0;
+    for (std::size_t i = 0; i < n; ++i) v |= std::uint64_t{static_cast<unsigned char>(bytes[at + i])} << (8 * i);
+    return v;
+}
+
+std::string compress(const std::string& raw, std::uint32_t version) {
+    uLongf size = compressBound(static_cast<uLong>(raw.size()));
+    std::string out(kZipHeader + size, '\0');
+    std::memcpy(out.data(), kZipMagic, sizeof kZipMagic);
+    for (std::size_t i = 0; i < 4; ++i) out[sizeof kZipMagic + i] = static_cast<char>((version >> (8 * i)) & 0xff);
+    for (std::size_t i = 0; i < 8; ++i) out[sizeof kZipMagic + 4 + i] = static_cast<char>((raw.size() >> (8 * i)) & 0xff);
+    auto* dest = reinterpret_cast<Bytef*>(out.data() + kZipHeader);
+    if (compress2(dest, &size, reinterpret_cast<const Bytef*>(raw.data()), static_cast<uLong>(raw.size()), Z_BEST_SPEED) != Z_OK) {
+        throw std::runtime_error("save: cannot compress");
+    }
+    out.resize(kZipHeader + size);
+    return out;
+}
+
+std::string version_error(std::uint64_t version);
+
+// The plain save inside a compressed one, or the bytes as they are.
+std::string uncompress_save(std::string_view bytes) {
+    if (bytes.size() < kZipHeader || std::memcmp(bytes.data(), kZipMagic, sizeof kZipMagic) != 0) {
+        return std::string(bytes);
+    }
+    const std::uint64_t version = little_endian(bytes, sizeof kZipMagic, 4);
+    if (version != kSaveVersion) throw std::runtime_error(version_error(version));
+    const std::uint64_t size = little_endian(bytes, sizeof kZipMagic + 4, 8);
+    if (size > (std::uint64_t{1} << 32)) throw std::runtime_error("save: damaged (size)");
+    std::string raw(static_cast<std::size_t>(size), '\0');
+    uLongf got = static_cast<uLongf>(size);
+    uLong used = static_cast<uLong>(bytes.size() - kZipHeader);
+    const auto* src = reinterpret_cast<const Bytef*>(bytes.data() + kZipHeader);
+    if (uncompress2(reinterpret_cast<Bytef*>(raw.data()), &got, src, &used) != Z_OK || got != size) {
+        throw std::runtime_error("save: damaged (cannot uncompress)");
+    }
+    if (used != bytes.size() - kZipHeader) throw std::runtime_error("save: unexpected data at the end of the file");
+    return raw;
+}
+
+std::string version_error(std::uint64_t version) {
+    return "save: version " + std::to_string(version) + " is not supported (this game reads " +
+           std::to_string(kSaveVersion) + ")";
+}
 class Writer {
 public:
     static constexpr bool loading = false;
@@ -100,6 +154,18 @@ inline constexpr bool kArray = false;
 template <class T, std::size_t N>
 inline constexpr bool kArray<std::array<T, N>> = true;
 template <class>
+inline constexpr bool kVariant = false;
+template <class... T>
+inline constexpr bool kVariant<std::variant<T...>> = true;
+
+// Read a variant's alternative by its index.
+template <class Ar, class V, std::size_t... I>
+void load_alternative(Ar& ar, V& v, std::size_t index, std::index_sequence<I...>) {
+    const bool found = ((index == I ? (v.template emplace<I>(), io(ar, std::get<I>(v)), true) : false) || ...);
+    if (!found) throw std::runtime_error("save: unknown kind of command");
+}
+
+template <class>
 inline constexpr bool kMap = false;
 template <class K, class V, class C, class A>
 inline constexpr bool kMap<std::map<K, V, C, A>> = true;
@@ -151,6 +217,14 @@ void io(Ar& ar, T& v) {
             else v.reset();
         }
         if (has) io(ar, *v);
+    } else if constexpr (kVariant<T>) {
+        if constexpr (Ar::loading) {
+            const auto index = static_cast<std::size_t>(ar.get(1));
+            load_alternative(ar, v, index, std::make_index_sequence<std::variant_size_v<T>>{});
+        } else {
+            ar.put(v.index(), 1);
+            std::visit([&](auto& alt) { io(ar, alt); }, v);
+        }
     } else if constexpr (kPair<T>) {
         fields(ar, v.first, v.second);
     } else if constexpr (kMap<T>) {
@@ -431,6 +505,92 @@ void io(Ar& ar, Company& c) {
     }
 }
 
+// --- Commands, for the command log ---
+
+template <class Ar>
+void io(Ar& ar, TrackEnd& e) { fields(ar, e.kind, e.node, e.edge, e.pos); }
+template <class Ar>
+void io(Ar& ar, BuildTrack& c) {
+    fields(ar, c.start, c.end, c.curve_control, c.double_track, c.tunnels, c.bridges, c.overpasses, c.bridge_type);
+}
+template <class Ar>
+void io(Ar& ar, BuildStation& c) { fields(ar, c.at, c.size, c.name); }
+template <class Ar>
+void io(Ar& ar, BuildServiceBuilding& c) { fields(ar, c.at, c.type); }
+template <class Ar>
+void io(Ar& ar, BuyTrain& c) { fields(ar, c.loco, c.cars, c.route, c.priority); }
+template <class Ar>
+void io(Ar& ar, ReplaceLocomotive& c) { fields(ar, c.train, c.loco); }
+template <class Ar>
+void io(Ar& ar, SetConsist& c) { fields(ar, c.train, c.stop, c.rule); }
+template <class Ar>
+void io(Ar& ar, SetSpecialCars& c) { fields(ar, c.train, c.caboose, c.diner); }
+template <class Ar>
+void io(Ar& ar, SetRoute& c) { fields(ar, c.train, c.route, c.service_stops); }
+template <class Ar>
+void io(Ar& ar, SetPriority& c) { fields(ar, c.train, c.priority); }
+template <class Ar>
+void io(Ar& ar, CopyTrain& c) { fields(ar, c.train); }
+template <class Ar>
+void io(Ar& ar, RetireTrain& c) { fields(ar, c.train); }
+template <class Ar>
+void io(Ar& ar, ElectrifyTrack& c) { fields(ar, c.edges); }
+template <class Ar>
+void io(Ar& ar, RemoveTrack& c) { fields(ar, c.edges); }
+template <class Ar>
+void io(Ar& ar, UpgradeTrack& c) { fields(ar, c.edges); }
+template <class Ar>
+void io(Ar& ar, BuyTerritoryAccess& c) { fields(ar, c.territory); }
+template <class Ar>
+void io(Ar& ar, BuyShares& c) { fields(ar, c.blocks, c.company); }
+template <class Ar>
+void io(Ar& ar, SellShares& c) { fields(ar, c.blocks, c.company); }
+template <class Ar>
+void io(Ar& ar, SetDividend& c) { fields(ar, c.per_share); }
+template <class Ar>
+void io(Ar& ar, AttemptTakeover& c) { fields(ar, c.target); }
+template <class Ar>
+void io(Ar& ar, AttemptMerger& c) { fields(ar, c.target, c.offer_per_share); }
+template <class Ar>
+void io(Ar& ar, FoundCompany& c) { fields(ar, c.name, c.personal_investment, c.outside_investment); }
+template <class Ar>
+void io(Ar& ar, BuyIndustry& c) { fields(ar, c.site); }
+template <class Ar>
+void io(Ar& ar, BuildIndustry& c) { fields(ar, c.type, c.cx, c.cy); }
+template <class Ar>
+void io(Ar& ar, UpgradeIndustry& c) { fields(ar, c.site); }
+template <class Ar>
+void io(Ar& ar, BuildStationBuilding& c) { fields(ar, c.type, c.pos); }
+template <class Ar>
+void io(Ar& ar, SetPortMode& c) { fields(ar, c.site, c.mode, c.convert_from, c.convert_to); }
+template <class Ar>
+void io(Ar& ar, AnswerChoice& c) { fields(ar, c.choice, c.option); }
+// Commands with nothing to say.
+template <class Ar>
+void io(Ar&, UndoTrack&) {}
+template <class Ar>
+void io(Ar&, EndTrackUndo&) {}
+template <class Ar>
+void io(Ar&, IssueBond&) {}
+template <class Ar>
+void io(Ar&, RepayBond&) {}
+template <class Ar>
+void io(Ar&, IssueStock&) {}
+template <class Ar>
+void io(Ar&, BuyBackStock&) {}
+template <class Ar>
+void io(Ar&, Resign&) {}
+template <class Ar>
+void io(Ar&, DeclareBankruptcy&) {}
+
+template <class Ar>
+void io(Ar& ar, WorldConfig& c) {
+    fields(ar, c.seed, c.start_date, c.width_tiles, c.height_tiles, c.tile_size_m, c.cells_per_node, c.sandbox,
+           c.found_player_company, c.founding, c.starting_cash, c.populate, c.difficulty, c.business_cycle, c.rivals);
+    fields(ar, c.chairman_can_be_fired, c.chairman_can_resign, c.town_growth, c.industries_appear, c.territories,
+           c.rival_ai, c.scenario);
+}
+
 template <class Ar>
 void io(Ar& ar, World& w) {
     fields(ar, w.rng_, w.date_, w.tick_of_day_, w.total_ticks_, w.terrain_, w.economy_, w.territories_, w.railway_);
@@ -453,6 +613,10 @@ void io(Ar& ar, World& w) {
     else ar.put(w.pending_choices_.size(), 8);
     for (auto& c : w.pending_choices_) fields(ar, c.event, c.effect, c.until_month);
     fields(ar, w.road_samples_);
+    fields(ar, w.config_);
+    if constexpr (Ar::loading) w.command_log_.assign(ar.count(1), {});
+    else ar.put(w.command_log_.size(), 8);
+    for (auto& c : w.command_log_) fields(ar, c.tick, c.who, c.cmd);
 }
 
 World::World(LoadTag, GameData data)
@@ -466,19 +630,18 @@ std::string World::save() const {
     std::string fingerprint = data_fingerprint(data_);
     fields(ar, balance, fingerprint);
     io(ar, const_cast<World&>(*this)); // the writer only reads
-    return ar.take();
+    return compress(ar.take(), kSaveVersion);
 }
 
-World World::load(std::string_view bytes, GameData data) {
+World World::load(std::string_view compressed, GameData data) {
+    const std::string raw = uncompress_save(compressed);
+    const std::string_view bytes = raw;
     Reader ar(bytes);
     if (ar.get_bytes(sizeof kMagic) != std::string(kMagic, sizeof kMagic)) {
         throw std::runtime_error("save: not a Railmaster save");
     }
     const auto version = static_cast<std::uint32_t>(ar.get(4));
-    if (version != kSaveVersion) {
-        throw std::runtime_error("save: version " + std::to_string(version) + " is not supported (this game reads " +
-                                 std::to_string(kSaveVersion) + ")");
-    }
+    if (version != kSaveVersion) throw std::runtime_error(version_error(version));
     std::string balance, fingerprint;
     fields(ar, balance, fingerprint);
     data.balance = Balance::from_json(balance);
@@ -495,6 +658,21 @@ World World::load(std::string_view bytes, GameData data) {
     w.base_industries_ = w.data_.industries;
     w.base_locos_ = w.data_.locomotives;
     w.apply_modifiers();
+    return w;
+}
+
+World World::replay(std::string_view save_bytes, GameData data) {
+    const World saved = load(save_bytes, data);
+    data.balance = saved.data_.balance; // played with the save's balance, as load does
+    World w(saved.config_, std::move(data));
+    for (const LoggedCommand& c : saved.command_log_) {
+        while (w.total_ticks_ < c.tick) w.tick();
+        const CommandResult r = w.execute(c.cmd, c.who);
+        if (!r.ok) {
+            throw std::runtime_error("replay: a command logged at tick " + std::to_string(c.tick) + " failed: " + r.error);
+        }
+    }
+    while (w.total_ticks_ < saved.total_ticks_) w.tick();
     return w;
 }
 

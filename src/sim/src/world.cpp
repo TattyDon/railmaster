@@ -146,6 +146,8 @@ World::World(const WorldConfig& config, GameData data)
         const Tycoon& t = data_.tycoons.all()[pool[i]];
         rivals_.push_back({add_player_company(t.company, t.name), pool[i], -1'000'000, {}});
     }
+    config_ = config;
+    command_log_.clear(); // the log starts with the game
 }
 
 PlayerId World::add_player_company(std::string company_name, std::string chairman) {
@@ -197,6 +199,12 @@ CompanyId World::found_for(PlayerId who, const FoundCompany& t) {
 }
 
 void World::tick() {
+    ticking_ = true;
+    tick_inner();
+    ticking_ = false;
+}
+
+void World::tick_inner() {
     ++total_ticks_;
     railway_.set_today(date_.days_since_epoch());
     railway_.tick(data_.locomotives);

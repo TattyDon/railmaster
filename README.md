@@ -55,13 +55,14 @@ Game rules are written up in `docs/spec/` before they are implemented.
 
 ## Building
 
-Dependencies: CMake 3.20+, a C++20 compiler, SDL2, OpenGL, nlohmann-json and
-doctest (doctest is fetched automatically if not installed).
+Dependencies: CMake 3.20+, a C++20 compiler, SDL2, OpenGL, nlohmann-json,
+zlib (for compressed saves) and doctest (doctest is fetched automatically if
+not installed).
 
 On Debian/Ubuntu:
 
 ```sh
-sudo apt install cmake ninja-build libsdl2-dev libgl-dev nlohmann-json3-dev doctest-dev
+sudo apt install cmake ninja-build libsdl2-dev libgl-dev nlohmann-json3-dev zlib1g-dev doctest-dev
 cmake -S . -B build -G Ninja
 cmake --build build
 ctest --test-dir build --output-on-failure
@@ -80,6 +81,10 @@ before you can build there (T in Inspect buys them).
 `--scenario=data/scenarios/lowland_junction.json` plays a scenario: it sets
 the map, rivals and goals itself, and F10 shows the briefing and the medal
 goals ([docs/spec/scenarios.md](docs/spec/scenarios.md)).
+
+`./build/tools/replay/railmaster_replay railmaster.sav` replays a saved game
+from its start using the command log in the save, and checks it ends
+exactly as saved ([docs/spec/saves.md](docs/spec/saves.md)).
 
 `./build/tools/calibrate/railmaster_calibrate` plays a few headless games
 and checks the economy against the spec's targets

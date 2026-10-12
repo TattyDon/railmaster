@@ -39,6 +39,7 @@ add_subdirectory(src/sim)
 
 if(RAILMASTER_BUILD_TOOLS)
     add_subdirectory(tools/calibrate)
+    add_subdirectory(tools/replay)
 endif()
 
 if(RAILMASTER_BUILD_CLIENT)
