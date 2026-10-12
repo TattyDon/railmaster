@@ -163,8 +163,9 @@ value (the share price's anchor) does not fall with age.
 - Discrete LOD with up to six variants per model, as the original used
   (e.g. 931 to 55 polygons), so the art spec should ask for LOD chains.
 - Game UI: build tools, train manager, station and cargo overlays, finance screens.
-  (Placeholder client so far: the profitability, grade, traffic and cargo
-  overlays of rt3-clone-spec §15.3 are on O/P.)
+  (Placeholder client so far: the holdings, profitability, grade, traffic
+  and cargo overlays of rt3-clone-spec §15.3 are on O/P, and lists of
+  trains, stations and companies on F11.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios

@@ -37,7 +37,8 @@ void draw_terrain(const sim::Terrain& t);
 // colours, and rivals are drawn in theirs.
 void draw_railway(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player);
 // The analysis overlays (rt3-clone-spec §15.3), drawn over the railway.
-enum class MapOverlay { None, Profit, Grade, Traffic, Cargo };
+enum class MapOverlay { None, Holdings, Profit, Grade, Traffic, Cargo };
+// Holdings: every company's track, stations and industries in its colour.
 // Profit: trains and stations green, yellow or red by sim::rate. Grade:
 // track green on the level to red at the grade limit. Traffic: track by
 // last month's trains, brighter the busier, red where single track held

@@ -94,7 +94,7 @@ and checks the economy against the spec's targets
 
 | Key or action | Does |
 |---|---|
-| F1 to F10, or click the toolbar | Inspect, Track, Station, Service tower, Maintenance facility, Train, Finance, Market, Industry, Status |
+| F1 to F11, or click the toolbar | Inspect (LOOK), Track, Station, Service tower, Maintenance facility (SHED), Train, Finance (BOOKS), Market, Industry, Status, Lists |
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Train tool | Click stations in order (Backspace drops the last); L chooses the engine. Up/Down selects a stop, and the keys then set what the train takes on there: F kind of cargo (Any, Freight, Express), W wait for a full load, [ ] number of cars, K custom cars ([ ] then removes or adds a car of the cargo chosen with < >). S makes the selected stop a service stop (the train fills up there with the station's service buildings even when not low). Enter buys the train |
@@ -114,7 +114,9 @@ and checks the economy against the spec's targets
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
 | Ctrl+S, Ctrl+L | Save the game to `railmaster.sav`, load it back (`--load=FILE` starts from a save) |
-| O / P | Cycle the map overlays (rt3-clone-spec §15.3): profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
+| F11 | Lists of trains, stations and companies (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station (or the company's market entry) |
+| PgUp / PgDn (Inspect) | Go to your next or previous train |
+| O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
 | Arrows, mouse wheel | Pan, zoom |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |
 

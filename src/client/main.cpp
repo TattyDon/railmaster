@@ -264,6 +264,11 @@ int main(int argc, char* argv[]) {
             const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
             tools.show("THE ECONOMY IS NOW IN " + name, better);
         }
+        // The lists and train paging move the view.
+        if (const auto p = tools.take_jump()) {
+            cam.pan_x = static_cast<float>(p->x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
+            cam.pan_y = static_cast<float>(p->y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
+        }
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
         if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();

@@ -8,11 +8,12 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace railmaster::client {
 
-enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry, Status };
+enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry, Status, Lists };
 
 // The player's build tools. Every change to the game is sent to the world
 // as a command; the tools only hold in-progress choices (where a run of
@@ -28,6 +29,9 @@ public:
         return map_overlay_ == MapOverlay::Cargo ? overlay_ : std::nullopt;
     }
     MapOverlay map_overlay() const { return map_overlay_; }
+    // A map point the view should centre on (from the lists, or paging
+    // through trains), once.
+    std::optional<sim::MapPoint> take_jump() { return std::exchange(jump_, std::nullopt); }
     void select(Tool t);
 
     void on_mouse_move(float sx, float sy);
@@ -67,6 +71,14 @@ private:
     void draw_finance_panel() const;
     void draw_market_panel() const;
     void draw_status_panel() const;
+    // Lists of trains, stations and companies (rt3-clone-spec §15.4).
+    void draw_lists_panel() const;
+    bool lists_key(SDL_Keycode key);
+    std::size_t list_size() const;
+    int list_kind_ = 0;            // 0 trains, 1 stations, 2 companies
+    std::size_t list_sel_ = 0;
+    std::optional<sim::MapPoint> jump_{};
+    std::size_t page_train_ = 0;   // PgUp/PgDn in Inspect: the train last jumped to
 
     sim::World& world_;
     const Camera& cam_;

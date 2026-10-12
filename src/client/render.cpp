@@ -212,6 +212,38 @@ void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& c
     switch (mode) {
     case MapOverlay::None:
     case MapOverlay::Cargo: return;
+    case MapOverlay::Holdings: {
+        const auto player = w.player_company();
+        glLineWidth(4.0f);
+        glBegin(GL_LINES);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed) continue;
+            float r, g, bl;
+            owner_rgb(e.owner, player, r, g, bl);
+            glColor3f(r, g, bl);
+            vertex(net.node(e.a).pos, cam);
+            vertex(net.node(e.b).pos, cam);
+        }
+        glEnd();
+        const float px = 1.0f / cam.zoom;
+        glBegin(GL_QUADS);
+        for (const sim::Station& s : rw.stations()) {
+            float r, g, bl;
+            owner_rgb(s.owner, player, r, g, bl);
+            glColor3f(r, g, bl);
+            square(net.node(s.node).pos, cam, 9 * px);
+        }
+        const sim::Economy& eco = w.economy();
+        for (const sim::Site& s : eco.sites()) {
+            if (!s.owner || s.closed) continue;
+            float r, g, bl;
+            owner_rgb(*s.owner, player, r, g, bl);
+            glColor3f(r, g, bl);
+            square(eco.node_centre(s.cx, s.cy), cam, 8 * px);
+        }
+        glEnd();
+        return;
+    }
     case MapOverlay::Grade: {
         const std::int64_t limit = std::max<std::int32_t>(1, b.track.default_max_grade_bp);
         glLineWidth(4.0f);

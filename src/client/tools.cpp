@@ -287,6 +287,7 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     switch (tool_) {
     case Tool::Inspect:
     case Tool::Status:
+    case Tool::Lists:
     case Tool::Finance:
     case Tool::Market: return;
     case Tool::Industry: {
@@ -507,6 +508,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_F8: select(Tool::Market); return true;
     case SDLK_F9: select(Tool::Industry); return true;
     case SDLK_F10: select(Tool::Status); return true;
+    case SDLK_F11: select(Tool::Lists); return true;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -518,6 +520,21 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
 
     switch (tool_) {
     case Tool::Inspect: {
+        if (key == SDLK_PAGEUP || key == SDLK_PAGEDOWN) {
+            // Through your trains in turn (rt3-clone-spec §15.4), the view following.
+            std::vector<sim::TrainId> mine;
+            for (const sim::Train& t : world_.railway().trains())
+                if (t.in_service() && world_.player_company() && t.owner == *world_.player_company()) mine.push_back(t.id);
+            if (mine.empty()) return true;
+            page_train_ = (page_train_ + (key == SDLK_PAGEDOWN ? 1 : mine.size() - 1)) % mine.size();
+            const sim::TrainId id = mine[page_train_];
+            jump_ = world_.railway().train_position(id);
+            hover_ = *jump_;
+            show("TRAIN " + std::to_string(id + 1) + " (" + std::to_string(page_train_ + 1) + " OF " +
+                     std::to_string(mine.size()) + ")",
+                 true);
+            return true;
+        }
         if (key == SDLK_t) {
             // Buy access rights to the territory under the cursor (rt3-clone-spec §3.3).
             const sim::TerritoryId terr = world_.territory_at(hover_);
@@ -964,6 +981,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else show("CANNOT: " + r.error, false);
         return true;
     }
+    case Tool::Lists: return lists_key(key);
     default: return false;
     }
 }
@@ -1151,7 +1169,11 @@ void Tools::cycle_overlay(int direction) {
         MapOverlay mode;
         sim::CargoId cargo;
     };
-    std::vector<Choice> choices{{MapOverlay::None, 0}, {MapOverlay::Profit, 0}, {MapOverlay::Grade, 0}, {MapOverlay::Traffic, 0}};
+    std::vector<Choice> choices{{MapOverlay::None, 0},
+                                {MapOverlay::Holdings, 0},
+                                {MapOverlay::Profit, 0},
+                                {MapOverlay::Grade, 0},
+                                {MapOverlay::Traffic, 0}};
     for (const auto& c : world_.data().cargo.all()) {
         if (world_.economy().active(c.id)) choices.push_back({MapOverlay::Cargo, c.id});
     }
@@ -1264,6 +1286,7 @@ void Tools::draw_world_overlay() const {
     }
     case Tool::Inspect:
     case Tool::Status:
+    case Tool::Lists:
     case Tool::Finance:
     case Tool::Market: return;
     case Tool::Industry: {
@@ -1338,6 +1361,129 @@ std::string Tools::industry_text() const {
 // The speed-vs-grade chart of the Add Train window [D], as text: the
 // chosen engine's speed with the chosen number of freight and of express
 // cars, on the flat and up 1%, 2% and 3%.
+std::size_t Tools::list_size() const {
+    switch (list_kind_) {
+    case 0: {
+        std::size_t n = 0;
+        for (const sim::Train& t : world_.railway().trains()) n += t.in_service();
+        return n;
+    }
+    case 1: return world_.railway().stations().size();
+    default: return world_.companies().size();
+    }
+}
+
+bool Tools::lists_key(SDL_Keycode key) {
+    const std::size_t n = list_size();
+    switch (key) {
+    case SDLK_TAB:
+        list_kind_ = (list_kind_ + 1) % 3;
+        list_sel_ = 0;
+        return true;
+    case SDLK_UP:
+        if (n > 0) list_sel_ = (list_sel_ + n - 1) % n;
+        return true;
+    case SDLK_DOWN:
+        if (n > 0) list_sel_ = (list_sel_ + 1) % n;
+        return true;
+    case SDLK_PAGEUP: list_sel_ = list_sel_ > 20 ? list_sel_ - 20 : 0; return true;
+    case SDLK_PAGEDOWN: list_sel_ = n == 0 ? 0 : std::min(n - 1, list_sel_ + 20); return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER: {
+        if (n == 0) return true;
+        const sim::Railway& rw = world_.railway();
+        if (list_kind_ == 0) {
+            std::size_t i = 0;
+            for (const sim::Train& t : rw.trains()) {
+                if (!t.in_service()) continue;
+                if (i++ == list_sel_) jump_ = rw.train_position(t.id);
+            }
+        } else if (list_kind_ == 1) {
+            jump_ = rw.track().node(rw.stations()[list_sel_].node).pos;
+        } else {
+            // A company: its market entry.
+            market_choice_ = static_cast<sim::CompanyId>(list_sel_);
+            select(Tool::Market);
+            return true;
+        }
+        if (jump_) hover_ = *jump_;
+        select(Tool::Inspect);
+        return true;
+    }
+    default: return false;
+    }
+}
+
+void Tools::draw_lists_panel() const {
+    constexpr float kRow = 16.0f;
+    constexpr std::size_t kShown = 36;
+    const float x0 = 40, y0 = 56, w = 1180;
+    const std::size_t n = list_size();
+    const std::size_t first = list_sel_ >= kShown / 2 ? std::min(list_sel_ - kShown / 2, n > kShown ? n - kShown : 0) : 0;
+    const float h = kRow * static_cast<float>(std::min(n, kShown) + 3);
+    fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
+    float y = y0 + 10;
+    // First column left-aligned; the rest right-aligned at these edges.
+    std::vector<float> cols;
+    const auto cells = [&](const std::vector<std::string>& v, float r, float g, float b) {
+        glColor3f(r, g, b);
+        draw_text(cols[0], y, v[0], kScale);
+        for (std::size_t i = 1; i < v.size() && i < cols.size(); ++i) {
+            draw_text(cols[i] - static_cast<float>(text_width(v[i], kScale)), y, v[i], kScale);
+        }
+        y += kRow;
+    };
+    const auto row_colour = [&](std::size_t i, bool mine, const std::vector<std::string>& v) {
+        const bool sel = i == list_sel_;
+        if (sel) fill_rect(x0 + 4, y - 2, x0 + w - 4, y + kRow - 3, 0.25f, 0.22f, 0.1f, 0.9f);
+        cells(v, sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 0.7f : (mine ? 0.9f : 0.7f));
+    };
+    const auto owner_name = [&](sim::CompanyId c) { return upper(world_.company(c).name()); };
+    const auto mine = [&](sim::CompanyId c) { return world_.player_company() && c == *world_.player_company(); };
+    const sim::Railway& rw = world_.railway();
+    if (list_kind_ == 0) {
+        cols = {x0 + 14, x0 + 90, x0 + 500, x0 + 720, x0 + 880, x0 + 960, x0 + 1160};
+        cells({"TRAINS", "", "OWNER", "ENGINE", "STATE", "STOPS", "PROFIT 12M"}, 1.0f, 0.9f, 0.5f);
+        std::size_t i = 0;
+        for (const sim::Train& t : rw.trains()) {
+            if (!t.in_service()) continue;
+            if (i >= first && i < first + kShown) {
+                row_colour(i, mine(t.owner),
+                           {std::to_string(t.id + 1), "", owner_name(t.owner), upper(world_.data().locomotives.get(t.loco).name),
+                            state_name(t.state), std::to_string(t.route.size()), format_money(t.profit_last_year())});
+            }
+            ++i;
+        }
+    } else if (list_kind_ == 1) {
+        cols = {x0 + 14, x0 + 500, x0 + 640, x0 + 900, x0 + 1160};
+        cells({"STATIONS", "OWNER", "SIZE", "TOWN", "INCOME 12M"}, 1.0f, 0.9f, 0.5f);
+        const char* sizes[] = {"SMALL", "MEDIUM", "LARGE"};
+        for (std::size_t i = first; i < n && i < first + kShown; ++i) {
+            const sim::Station& s = rw.stations()[i];
+            row_colour(i, mine(s.owner),
+                       {upper(s.name), owner_name(s.owner), sizes[static_cast<int>(s.size)],
+                        s.town ? upper(world_.economy().towns()[*s.town].name) : "", format_money(s.income_last_year())});
+        }
+    } else {
+        cols = {x0 + 14, x0 + 600, x0 + 790, x0 + 960, x0 + 1060, x0 + 1160};
+        cells({"COMPANIES", "CASH", "REVENUE 12M", "BOOK VALUE", "TRAINS", "STATIONS"}, 1.0f, 0.9f, 0.5f);
+        for (std::size_t i = first; i < n && i < first + kShown; ++i) {
+            const sim::Company& c = world_.companies()[i];
+            std::size_t trains = 0, stations = 0;
+            for (const sim::Train& t : rw.trains()) trains += t.in_service() && t.owner == c.id();
+            for (const sim::Station& s : rw.stations()) stations += s.owner == c.id();
+            if (c.defunct()) {
+                row_colour(i, false, {upper(c.name()) + " (GONE)", "", "", "", "", ""});
+                continue;
+            }
+            row_colour(i, mine(c.id()),
+                       {upper(c.name()), format_money(c.cash()), format_money(c.trailing_revenue().value_or(sim::Money{})),
+                        format_money(c.book_value()), std::to_string(trains), std::to_string(stations)});
+        }
+    }
+    if (n == 0) cells({"NONE YET"}, 0.7f, 0.7f, 0.7f);
+}
+
 std::vector<sim::StationId> Tools::pending_route() const {
     std::vector<sim::StationId> out;
     for (const PendingStop& p : stops_) out.push_back(p.station);
@@ -1402,10 +1548,10 @@ std::string Tools::speed_chart_text() const {
 
 std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
-        {Tool::Inspect, "F1 INSPECT"},    {Tool::Track, "F2 TRACK"},           {Tool::Station, "F3 STATION"},
-        {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 MAINTAIN"}, {Tool::Train, "F6 TRAIN"},
-        {Tool::Finance, "F7 FINANCES"}, {Tool::Market, "F8 MARKET"}, {Tool::Industry, "F9 INDUSTRY"},
-        {Tool::Status, "F10 STATUS"},
+        {Tool::Inspect, "F1 LOOK"},       {Tool::Track, "F2 TRACK"},       {Tool::Station, "F3 STATION"},
+        {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 SHED"},  {Tool::Train, "F6 TRAIN"},
+        {Tool::Finance, "F7 BOOKS"},      {Tool::Market, "F8 MARKET"},     {Tool::Industry, "F9 INDUSTRY"},
+        {Tool::Status, "F10 STATUS"},     {Tool::Lists, "F11 LISTS"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -1423,6 +1569,7 @@ std::string Tools::hint() const {
         std::string cargo_map = "O/P MAP: ";
         switch (map_overlay_) {
         case MapOverlay::None: cargo_map += "OFF"; break;
+        case MapOverlay::Holdings: cargo_map += "HOLDINGS"; break;
         case MapOverlay::Profit: cargo_map += "PROFIT"; break;
         case MapOverlay::Grade: cargo_map += "GRADE"; break;
         case MapOverlay::Traffic: cargo_map += "TRAFFIC"; break;
@@ -1475,6 +1622,8 @@ std::string Tools::hint() const {
                "COMPANY";
     case Tool::Status:
         return world_.scenario() ? "SCENARIO GOALS, CHECKED AT EACH MONTH END" : "NO SCENARIO: A FREE GAME";
+    case Tool::Lists:
+        return "TAB TRAINS/STATIONS/COMPANIES   UP/DOWN, PGUP/PGDN CHOOSE   ENTER GO TO IT";
     case Tool::Finance:
         return "B/R BOND ISSUE/REPAY   A/S BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
                "DIVIDEND   KK BANKRUPTCY";
@@ -1645,6 +1794,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
     if (tool_ == Tool::Market) draw_market_panel();
     if (tool_ == Tool::Status) draw_status_panel();
+    if (tool_ == Tool::Lists) draw_lists_panel();
     draw_choice_dialog();
 
     // Price or problem next to the cursor while laying track.
