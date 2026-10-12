@@ -14,7 +14,7 @@
 
 namespace railmaster::client {
 
-enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry, Status, Lists };
+enum class Tool { Inspect, Track, Station, ServiceTower, Maintenance, Train, Finance, Market, Industry, Status, Lists, Ledger };
 
 // The player's build tools. Every change to the game is sent to the world
 // as a command; the tools only hold in-progress choices (where a run of
@@ -35,6 +35,8 @@ public:
     // While following a train from its detail panel, its position every frame.
     std::optional<sim::MapPoint> take_jump();
     void select(Tool t);
+    // The ledger, opened on its income statement (at the year's end).
+    void open_ledger();
 
     void on_mouse_move(float sx, float sy);
     void on_click(float sx, float sy, bool right_button);
@@ -70,7 +72,21 @@ private:
     void cycle_overlay(int direction);
     std::string cell_text() const;
     std::string speed_chart_text() const;
+    // The Company Detail screen (F7; rt3-clone-spec §15.4): Overview, Bonds,
+    // Stock and Territories tabs. The finance keys work on every tab.
     void draw_finance_panel() const;
+    int company_tab_ = 0;
+    std::size_t territory_sel_ = 0;
+    // The Ledger (L; §12.7): overview, ten years' income statements, every
+    // company's balance sheet, haulage by cargo, and the players.
+    void draw_ledger_panel() const;
+    int ledger_tab_ = 0;
+    // Tabs along the top of a screen; their places are kept for clicks.
+    struct TabBox {
+        float x0, y0, x1, y1;
+    };
+    mutable std::vector<TabBox> tab_boxes_;
+    float draw_tabs(float x, float y, const std::vector<std::string>& labels, int chosen) const;
     void draw_market_panel() const;
     void draw_status_panel() const;
     // Lists of trains, stations and companies (rt3-clone-spec §15.4).

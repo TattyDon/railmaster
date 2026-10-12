@@ -324,9 +324,12 @@ Still to do:
   (Placeholder client so far: the holdings, profitability, grade, traffic
   and cargo overlays of rt3-clone-spec §15.3 are on O/P, lists of
   trains, stations and companies on F11, and detail panels for trains,
-  stations and industries (§15.4) on a click in the Look tool. Still to
-  come from §15.4: the company detail's four tabs, the ledger on L, and
-  a train panel's cost window.)
+  stations and industries (§15.4) on a click in the Look tool, the
+  Company Detail's four tabs on F7, and the ledger on L (§12.7: overview,
+  ten years of income statements, balance sheets, haulage, players),
+  opening by itself at each year's end. Still to come: a train panel's
+  cost window, and the ledger's train, station, industry and cargo
+  sub-reports.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios

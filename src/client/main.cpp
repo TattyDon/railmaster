@@ -222,6 +222,7 @@ int main(int argc, char* argv[]) {
     if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
+    std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
     double tick_accumulator = 0.0;
     float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
     bool show_fps = false;    // F12: frames a second, bottom right
@@ -463,6 +464,14 @@ int main(int argc, char* argv[]) {
         // as RT3's event dialogs do.
         if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
         choices_seen = world.pending_choices().size();
+        // The year's books are closed: show the ledger, paused, as RT3 does.
+        if (world.date().year() != ledger_year) {
+            ledger_year = world.date().year();
+            if (world.player_company() && !tools.founding_open()) {
+                tools.open_ledger();
+                if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+            }
+        }
         // Corporate news: splits, grumbling investors, chairmen fired or appointed.
         if (const auto news = world.take_news(); !news.empty()) {
             std::string text;

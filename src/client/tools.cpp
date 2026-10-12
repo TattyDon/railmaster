@@ -69,112 +69,348 @@ void fill_rect(float x0, float y0, float x1, float y1, float r, float g, float b
 
 } // namespace
 
+float Tools::draw_tabs(float x, float y, const std::vector<std::string>& labels, int chosen) const {
+    for (std::size_t i = 0; i < labels.size(); ++i) {
+        const float w = static_cast<float>(text_width(labels[i], kScale)) + 18.0f;
+        const bool on = static_cast<int>(i) == chosen;
+        ui::tab(x, y, x + w, y + kButtonH, on);
+        if (on) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(x + 9, y + 4, labels[i], kScale);
+        tab_boxes_.push_back({x, y, x + w, y + kButtonH});
+        x += w + 4.0f;
+    }
+    return y + kButtonH + 8.0f;
+}
+
+void Tools::open_ledger() {
+    select(Tool::Ledger);
+    ledger_tab_ = 1;
+}
+
+namespace {
+
+std::string rate_text(std::int32_t bp) { return std::to_string(bp / 100) + "." + std::to_string(bp % 100 / 10) + "%"; }
+
+// Rows of label and figures, the figures right-aligned at column edges.
+struct Table {
+    float x0, y;
+    std::vector<float> edges; // right edges of the figure columns, from x0
+    float row = 17.0f;
+
+    void line(const std::string& label, const std::vector<std::string>& cells, float r = 0.9f, float g = 0.88f,
+              float b = 0.82f) {
+        glColor3f(r, g, b);
+        draw_text(x0 + 14, y, label, kScale);
+        for (std::size_t i = 0; i < cells.size() && i < edges.size(); ++i) {
+            draw_text(x0 + edges[i] - static_cast<float>(text_width(cells[i], kScale)), y, cells[i], kScale);
+        }
+        y += row;
+    }
+    void heading(const std::string& label, const std::vector<std::string>& cells = {}) {
+        y += 4;
+        line(label, cells, 1.0f, 0.86f, 0.5f);
+    }
+    void gap() { y += row / 2; }
+};
+
+void money_line(Table& t, const std::string& label, const std::vector<sim::Money>& values, bool expense = false) {
+    std::vector<std::string> cells;
+    bool any = false;
+    for (const sim::Money& m : values) {
+        cells.push_back((expense && m != sim::Money{} ? "-" : "") + format_money(m));
+        any |= m != sim::Money{};
+    }
+    if (expense && any) t.line(label, cells, 0.95f, 0.66f, 0.6f);
+    else t.line(label, cells);
+}
+
+} // namespace
+
 void Tools::draw_finance_panel() const {
     const sim::Company& co = world_.company();
     const auto& years = co.history();
     const sim::YearAccounts& now = years.back();
     const sim::YearAccounts* last = years.size() > 1 ? &years[years.size() - 2] : nullptr;
 
-    constexpr float kRow = 16.0f;
-    const float x0 = 40, y0 = 56, w = 760;
-    // Ledger lines with nothing on them this year or last are left out, so
-    // the screen fits the window; the rest of the panel is a fixed 37 rows.
-    const auto shown = [&](std::size_t i) {
-        return now.lines[i] != sim::Money{} || (last && last->lines[i] != sim::Money{});
-    };
-    std::size_t ledger_rows = 0;
-    for (std::size_t i = 0; i < sim::kLedgerLines; ++i) ledger_rows += shown(i);
-    const float h = kRow * static_cast<float>(37 + ledger_rows);
+    const float x0 = 40, y0 = 56, w = 820;
+    const float h = static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 12;
     ui::panel(x0, y0, x0 + w, y0 + h);
-    float y = y0 + 10;
-    const auto row = [&](const std::string& label, const std::string& a, const std::string& b, float r, float g,
-                         float bl) {
-        glColor3f(r, g, bl);
-        draw_text(x0 + 14, y, label, kScale);
-        draw_text(x0 + 500 - static_cast<float>(text_width(a, kScale)), y, a, kScale);
-        draw_text(x0 + 720 - static_cast<float>(text_width(b, kScale)), y, b, kScale);
-        y += kRow;
-    };
-    row(co.name() + (world_.player_company() ? "" : "   (you no longer run it)"), "", "", 1.0f, 0.9f, 0.5f);
-    row("Income statement", std::to_string(now.year) + " so far", last ? std::to_string(last->year) : "", 1.0f, 0.9f,
-        0.5f);
-    y += 4;
-    for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
-        if (!shown(i)) continue;
-        const auto line = static_cast<sim::Ledger>(i);
-        const bool rev = sim::is_revenue(line);
-        const auto cell = [&](const sim::YearAccounts& ya) {
-            const sim::Money m = ya.lines[i];
-            return (rev || m == sim::Money{} ? "" : "-") + format_money(m);
-        };
-        row(sim::ledger_name(line), cell(now), last ? cell(*last) : "", rev ? 0.6f : 0.95f, rev ? 0.95f : 0.65f,
-            rev ? 0.6f : 0.6f);
-    }
-    row("Profit", format_money(now.profit()), last ? format_money(last->profit()) : "", 1, 1, 1);
-    y += kRow / 2;
-    row("Invested in track", format_money(now.track_built), last ? format_money(last->track_built) : "", 0.8f, 0.8f,
-        0.8f);
-    row("Invested in buildings", format_money(now.buildings_built), last ? format_money(last->buildings_built) : "",
-        0.8f, 0.8f, 0.8f);
-    row("Invested in trains", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
-        0.8f, 0.8f);
-    row("Invested in industries", format_money(now.industries_bought), last ? format_money(last->industries_bought) : "",
-        0.8f, 0.8f, 0.8f);
-    row("Spent on mergers", format_money(now.acquisitions), last ? format_money(last->acquisitions) : "", 0.8f, 0.8f,
-        0.8f);
-    y += kRow / 2;
-    row("Balance sheet", "", "", 1.0f, 0.9f, 0.5f);
-    row("Cash", format_money(co.cash()), "", 0.9f, 0.9f, 0.9f);
-    row("Track", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
-    row("Stations and buildings", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
-    row("Trains", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
-    row("Industries", format_money(co.industry_value()), "", 0.9f, 0.9f, 0.9f);
-    row("Bonds", (co.debt() > sim::Money{} ? "-" : "") + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
-    row("Book value", format_money(co.book_value()), "", 1, 1, 1);
-    y += kRow / 2;
-    std::string bonds;
-    for (const sim::Bond& b : co.bonds()) {
-        bonds += (bonds.empty() ? "" : ", ") + std::to_string(b.rate_bp / 100) + "." +
-                 std::to_string(b.rate_bp % 100 / 10) + "%";
-    }
-    row("Prime rate " + std::to_string(co.prime_rate_bp() / 100) + "." +
-            std::to_string(co.prime_rate_bp() % 100 / 10) + "%   costs " + std::to_string(world_.cost_percent()) +
-            "% of normal",
-        "", "", 0.9f, 0.9f, 0.9f);
-    row(std::string("Credit rating ") + sim::rating_name(co.credit_rating()) + "   new bonds at " +
-            std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
-        "", "", 1.0f, 0.9f, 0.5f);
-    row("Bonds outstanding: " + (bonds.empty() ? std::string("None") : bonds), "", "", 0.9f, 0.9f, 0.9f);
-    {
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y0 + 8, as_written(co.name()) + (world_.player_company() ? "" : "   (you no longer run it)"), kScale + 1);
+    float y = draw_tabs(x0 + 14, y0 + 36, {"Overview", "Bonds", "Stock", "Territories"}, company_tab_);
+    ui::rule(x0 + 10, x0 + w - 10, y - 4);
+    Table t{x0, y + 4, {560, 780}};
+
+    switch (company_tab_) {
+    case 0: {
+        // Ledger lines with nothing on them this year or last are left out.
+        t.heading("Income statement", {std::to_string(now.year) + " so far", last ? std::to_string(last->year) : ""});
+        for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
+            if (now.lines[i] == sim::Money{} && (!last || last->lines[i] == sim::Money{})) continue;
+            const auto line = static_cast<sim::Ledger>(i);
+            std::vector<sim::Money> v = {now.lines[i]};
+            if (last) v.push_back(last->lines[i]);
+            money_line(t, sim::ledger_name(line), v, !sim::is_revenue(line));
+        }
+        t.line("Revenue", {format_money(now.revenue()), last ? format_money(last->revenue()) : ""});
+        t.line("Expenses", {format_money(now.expenses()), last ? format_money(last->expenses()) : ""}, 0.95f, 0.66f, 0.6f);
+        t.line("Profit", {format_money(now.profit()), last ? format_money(last->profit()) : ""}, 1, 1, 1);
+        t.line("Dividends paid", {format_money(now.dividends_paid), last ? format_money(last->dividends_paid) : ""});
+        t.gap();
+        t.heading("Invested");
+        t.line("Track", {format_money(now.track_built), last ? format_money(last->track_built) : ""});
+        t.line("Stations and buildings", {format_money(now.buildings_built), last ? format_money(last->buildings_built) : ""});
+        t.line("Trains", {format_money(now.trains_bought), last ? format_money(last->trains_bought) : ""});
+        t.line("Industries", {format_money(now.industries_bought), last ? format_money(last->industries_bought) : ""});
+        if (now.acquisitions != sim::Money{} || (last && last->acquisitions != sim::Money{})) {
+            t.line("Mergers", {format_money(now.acquisitions), last ? format_money(last->acquisitions) : ""});
+        }
+        t.gap();
+        t.heading("Running the railroad");
         const sim::Sentiment mood = co.sentiment();
         const bool worried = mood == sim::Sentiment::Grumbling || mood == sim::Sentiment::Hostile;
-        row(std::string("Investors: ") + sim::sentiment_name(mood) + "   5-year return " +
-                format_permille(co.weighted_return_permille()) + "   bad years in a row " +
-                std::to_string(co.bad_year_streak()) + "   salary " + format_money(sim::chairman_salary(co)),
-            "", "", worried ? 0.95f : 0.9f, worried ? 0.65f : 0.9f, worried ? 0.6f : 0.9f);
+        t.line("Investors", {sim::sentiment_name(mood)}, worried ? 0.95f : 0.9f, worried ? 0.66f : 0.88f, worried ? 0.6f : 0.82f);
+        t.line("Five-year return to shareholders", {format_permille(co.weighted_return_permille())});
+        t.line("Bad years in a row", {std::to_string(co.bad_year_streak())});
+        t.line("Your salary", {format_money(sim::chairman_salary(co)) + " a year"});
+        t.line("Average train speed", {std::to_string(world_.average_speed_mph(co.id())) + " mph"});
+        t.line("Costs against normal", {std::to_string(world_.cost_percent()) + "%"});
+        break;
     }
+    case 1: {
+        t.heading("Debt");
+        t.line("Bonds outstanding", {format_money(co.debt())});
+        t.line("Credit rating", {sim::rating_name(co.credit_rating())}, 1.0f, 0.95f, 0.75f);
+        t.line("Prime rate", {rate_text(co.prime_rate_bp())});
+        t.line("A new bond would pay", {rate_text(co.bond_rate_bp())});
+        t.line("A bond's face value", {format_money(sim::Money::dollars(co.finance_balance().bond_face_value))});
+        t.line("Interest this year", {format_money(now.lines[static_cast<std::size_t>(sim::Ledger::Interest)])});
+        t.gap();
+        t.heading("Bonds", {"Rate", "Issued"});
+        t.edges = {560, 780};
+        for (const sim::Bond& b : co.bonds()) t.line(format_money(b.principal), {rate_text(b.rate_bp), std::to_string(b.issued_year)});
+        if (co.bonds().empty()) t.line("None", {}, 0.68f, 0.66f, 0.62f);
+        t.gap();
+        t.line("B issues a bond, R repays the dearest. K twice declares bankruptcy:", {}, 0.68f, 0.66f, 0.62f);
+        t.line("half the bond debt is written off, and so is your credit.", {}, 0.68f, 0.66f, 0.62f);
+        break;
+    }
+    case 2: {
+        const sim::Investor& me = world_.investor();
+        const auto pct = [](std::int64_t part, std::int64_t whole) {
+            return whole > 0 ? std::to_string(part * 100 / whole) + "%" : std::string("-");
+        };
+        t.heading("Stock");
+        t.line("Share price", {format_cents(co.share_price())}, 1, 1, 1);
+        t.line("Shares outstanding", {format_count(co.shares_outstanding())});
+        t.line("Market value", {format_money(co.share_price() * co.shares_outstanding())});
+        t.line("Book value per share", {format_cents(co.book_value_per_share())});
+        t.line("Dividend per share, a year", {format_cents(co.dividend_per_share())});
+        t.line("Dividends paid this year", {format_money(now.dividends_paid)});
+        t.line("Stock issues this year", {std::to_string(co.stock_issues_this_year()) + " of 2"});
+        t.gap();
+        t.heading("You");
+        const bool short_cash = me.cash < sim::Money{};
+        t.line("Personal cash", {format_money(me.cash)}, short_cash ? 0.95f : 0.9f, short_cash ? 0.66f : 0.88f, short_cash ? 0.6f : 0.82f);
+        const std::int64_t mine = me.shares_in(co.id());
+        t.line("Shares held", {format_count(mine) + " (" + pct(mine, co.shares_outstanding()) + ")", format_money(co.share_price() * mine)});
+        t.line("Purchasing power", {format_money(sim::purchasing_power(me, world_.market()))});
+        t.line("Net worth", {format_money(sim::net_worth(me, world_.market()))}, 1, 1, 1);
+        t.gap();
+        t.line("A / S buy or sell shares, I issues new stock, Y buys it back, [ ] sets the dividend.", {}, 0.68f, 0.66f, 0.62f);
+        break;
+    }
+    default: {
+        const auto& terrs = world_.territories().territories;
+        t.edges = {330, 450, 560, 660, 780};
+        if (!terrs.empty()) t.heading("Territory", {"Access", "Stations", "Upkeep", "Credit", "Borders"});
+        for (std::size_t i = 0; i < terrs.size(); ++i) {
+            const sim::Territory& tr = terrs[i];
+            const bool yours = world_.player_company() && co.has_access(static_cast<sim::TerritoryId>(i));
+            const std::string access = tr.open() ? "open" : yours ? "yours" : format_money(tr.access_cost);
+            const auto percent_text = [](std::int32_t p) {
+                return p == 100 ? std::string("normal") : (p > 100 ? "+" : "") + std::to_string(p - 100) + "%";
+            };
+            if (i == territory_sel_) ui::selection(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3);
+            const float bright = i == territory_sel_ ? 1.0f : 0.9f;
+            t.line(tr.name,
+                   {access, percent_text(tr.station_cost_percent), percent_text(tr.overhead_percent),
+                    tr.credit_grades == 0 ? std::string("-") : (tr.credit_grades > 0 ? "+" : "") + std::to_string(tr.credit_grades),
+                    tr.closed_border ? "closed" : "open"},
+                   bright, bright * (tr.open() || yours ? 0.98f : 0.85f), bright * (tr.open() || yours ? 0.9f : 0.7f));
+        }
+        if (terrs.empty()) t.line("This map has no territories: you may build anywhere.", {}, 0.68f, 0.66f, 0.62f);
+        break;
+    }
+    }
+}
 
-    y += kRow / 2;
-    const sim::Investor& me = world_.investor();
-    const auto pct = [](std::int64_t part, std::int64_t whole) {
-        return whole > 0 ? std::to_string(part * 100 / whole) + "%" : std::string("-");
-    };
-    row("Stock", "", "", 1.0f, 0.9f, 0.5f);
-    row("Share price", format_cents(co.share_price()), "", 0.9f, 0.9f, 0.9f);
-    row("Shares outstanding", format_count(co.shares_outstanding()), "", 0.9f, 0.9f, 0.9f);
-    row("Book value per share", format_cents(co.book_value_per_share()), "", 0.9f, 0.9f, 0.9f);
-    row("Dividend per share (a year)", format_cents(co.dividend_per_share()),
-        "Paid " + format_money(now.dividends_paid), 0.9f, 0.9f, 0.9f);
-    row("Stock issues this year", std::to_string(co.stock_issues_this_year()) + " of 2", "", 0.9f, 0.9f, 0.9f);
-    y += kRow / 2;
-    row("You", "", "", 1.0f, 0.9f, 0.5f);
-    row("Personal cash", format_money(me.cash), "", me.cash < sim::Money{} ? 0.95f : 0.9f,
-        me.cash < sim::Money{} ? 0.65f : 0.9f, me.cash < sim::Money{} ? 0.6f : 0.9f);
-    const std::int64_t mine = me.shares_in(co.id());
-    row("Shares held", format_count(mine) + " (" + pct(mine, co.shares_outstanding()) + ")",
-        format_money(co.share_price() * mine), 0.9f, 0.9f, 0.9f);
-    row("Purchasing power", format_money(sim::purchasing_power(me, world_.market())), "", 0.9f, 0.9f, 0.9f);
-    row("Net worth", format_money(sim::net_worth(me, world_.market())), "", 1, 1, 1);
+void Tools::draw_ledger_panel() const {
+    const sim::Company& co = world_.company();
+    const auto& years = co.history();
+    const float x0 = 40, y0 = 56, w = std::min(1180.0f, static_cast<float>(cam_.width_px) - 80);
+    const float h = static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 12;
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y0 + 8, "Ledger: " + as_written(co.name()), kScale + 1);
+    float y = draw_tabs(x0 + 14, y0 + 36, {"Overview", "Income statement", "Balance sheets", "Haulage", "Players"}, ledger_tab_);
+    ui::rule(x0 + 10, x0 + w - 10, y - 4);
+    Table t{x0, y + 4, {}};
+    const auto& cargo = world_.data().cargo.all();
+
+    switch (ledger_tab_) {
+    case 0: {
+        // RT3's Company Overview: revenue and profit, haulage, speed, and
+        // how the investors and the chairman are doing.
+        const sim::YearAccounts& now = years.back();
+        const sim::YearAccounts* last = years.size() > 1 ? &years[years.size() - 2] : nullptr;
+        t.edges = {560, 760};
+        t.heading("", {std::to_string(now.year) + " so far", last ? std::to_string(last->year) : ""});
+        t.line("Revenue", {format_money(now.revenue()), last ? format_money(last->revenue()) : ""});
+        t.line("Profit", {format_money(now.profit()), last ? format_money(last->profit()) : ""}, 1, 1, 1);
+        t.gap();
+        std::int64_t loads_milli = 0;
+        for (const sim::CargoType& c : cargo) loads_milli += co.delivered_milli(c.id);
+        sim::Money haul_revenue;
+        for (const sim::YearAccounts& ya : years) {
+            for (const sim::Ledger l : {sim::Ledger::FreightRevenue, sim::Ledger::PassengerRevenue, sim::Ledger::MailRevenue,
+                                        sim::Ledger::TroopRevenue}) {
+                haul_revenue += ya.lines[static_cast<std::size_t>(l)];
+            }
+        }
+        t.edges = {560};
+        t.line("Loads delivered since founding", {format_count(loads_milli / sim::kMilli)});
+        t.line("Revenue a load", {loads_milli > 0 ? format_money(haul_revenue.scaled(sim::kMilli, loads_milli)) : "-"});
+        t.line("Average train speed, last 12 months", {std::to_string(world_.average_speed_mph(co.id())) + " mph"});
+        std::size_t trains = 0, stations = 0;
+        for (const sim::Train& tr : world_.railway().trains()) trains += tr.in_service() && tr.owner == co.id();
+        for (const sim::Station& s : world_.railway().stations()) stations += s.owner == co.id();
+        t.line("Trains", {std::to_string(trains)});
+        t.line("Stations", {std::to_string(stations)});
+        t.gap();
+        t.line("Investors", {sim::sentiment_name(co.sentiment())});
+        t.line("Chairman's salary", {format_money(sim::chairman_salary(co)) + " a year"});
+        t.line("Credit rating", {sim::rating_name(co.credit_rating())});
+        t.line("Share price", {format_cents(co.share_price())});
+        t.line("Book value", {format_money(co.book_value())});
+        break;
+    }
+    case 1: {
+        // Ten years side by side, the latest on the right (§12.7 [C]).
+        const std::size_t shown = std::min<std::size_t>(years.size(), static_cast<std::size_t>(std::max(1.0f, (w - 300) / 86)));
+        const std::size_t first = std::min<std::size_t>(years.size() - shown, years.size() > 10 ? years.size() - 10 : 0);
+        const std::size_t count = std::min<std::size_t>(shown, 10);
+        std::vector<std::string> head;
+        for (std::size_t i = 0; i < count; ++i) {
+            t.edges.push_back(300 + 86.0f * static_cast<float>(i + 1));
+            head.push_back(std::to_string(years[first + i].year) + (first + i + 1 == years.size() ? "*" : ""));
+        }
+        t.heading("", head);
+        const auto row = [&](const std::string& label, auto&& value, bool expense) {
+            std::vector<sim::Money> v;
+            bool any = false;
+            for (std::size_t i = 0; i < count; ++i) {
+                v.push_back(value(years[first + i]));
+                any |= v.back() != sim::Money{};
+            }
+            if (any) money_line(t, label, v, expense);
+        };
+        for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
+            const auto line = static_cast<sim::Ledger>(i);
+            row(sim::ledger_name(line), [&](const sim::YearAccounts& ya) { return ya.lines[i]; }, !sim::is_revenue(line));
+        }
+        std::vector<std::string> profit;
+        for (std::size_t i = 0; i < count; ++i) profit.push_back(format_money(years[first + i].profit()));
+        t.line("Net profit", profit, 1, 1, 1);
+        row("Dividends", [](const sim::YearAccounts& ya) { return ya.dividends_paid; }, false);
+        t.gap();
+        row("Invested in track", [](const sim::YearAccounts& ya) { return ya.track_built; }, false);
+        row("Invested in buildings", [](const sim::YearAccounts& ya) { return ya.buildings_built; }, false);
+        row("Invested in trains", [](const sim::YearAccounts& ya) { return ya.trains_bought; }, false);
+        row("Invested in industries", [](const sim::YearAccounts& ya) { return ya.industries_bought; }, false);
+        row("Spent on mergers", [](const sim::YearAccounts& ya) { return ya.acquisitions; }, false);
+        t.gap();
+        t.line("* this year so far", {}, 0.68f, 0.66f, 0.62f);
+        break;
+    }
+    case 2: {
+        // Every company's balance sheet, side by side.
+        std::vector<const sim::Company*> cos;
+        for (const sim::Company& c : world_.companies()) {
+            if (!c.defunct()) cos.push_back(&c);
+        }
+        const std::size_t n = std::min<std::size_t>(cos.size(), static_cast<std::size_t>((w - 260) / 150));
+        std::vector<std::string> head;
+        for (std::size_t i = 0; i < n; ++i) {
+            t.edges.push_back(260 + 150.0f * static_cast<float>(i + 1));
+            std::string name = as_written(cos[i]->name());
+            while (name.size() > 3 && text_width(name, kScale) > 140) name = name.substr(0, name.size() - 4) + "...";
+            head.push_back(name);
+        }
+        t.heading("", head);
+        const auto row = [&](const std::string& label, auto&& value, bool expense = false) {
+            std::vector<sim::Money> v;
+            for (std::size_t i = 0; i < n; ++i) v.push_back(value(*cos[i]));
+            money_line(t, label, v, expense);
+        };
+        row("Cash", [](const sim::Company& c) { return c.cash(); });
+        row("Track", [](const sim::Company& c) { return c.track_value(); });
+        row("Stations and buildings", [](const sim::Company& c) { return c.building_value(); });
+        row("Trains", [](const sim::Company& c) { return c.rolling_stock_value(); });
+        row("Industries", [](const sim::Company& c) { return c.industry_value(); });
+        row("Bonds", [](const sim::Company& c) { return c.debt(); }, true);
+        std::vector<std::string> book;
+        for (std::size_t i = 0; i < n; ++i) book.push_back(format_money(cos[i]->book_value()));
+        t.line("Book value", book, 1, 1, 1);
+        t.gap();
+        std::vector<std::string> per_share, price, rating;
+        for (std::size_t i = 0; i < n; ++i) {
+            per_share.push_back(format_cents(cos[i]->book_value_per_share()));
+            price.push_back(format_cents(cos[i]->share_price()));
+            rating.push_back(sim::rating_name(cos[i]->credit_rating()));
+        }
+        t.line("Book value per share", per_share);
+        t.line("Share price", price);
+        t.line("Credit rating", rating);
+        break;
+    }
+    case 3: {
+        // What the company has hauled, by cargo, since it was founded.
+        t.edges = {380, 470};
+        t.heading("Cargo", {"Loads delivered", "Share"});
+        std::int64_t total = 0;
+        for (const sim::CargoType& c : cargo) total += co.delivered_milli(c.id);
+        std::vector<std::pair<std::int64_t, const sim::CargoType*>> hauled;
+        for (const sim::CargoType& c : cargo) {
+            if (co.delivered_milli(c.id) > 0) hauled.emplace_back(co.delivered_milli(c.id), &c);
+        }
+        std::sort(hauled.begin(), hauled.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (const auto& [milli, c] : hauled) {
+            t.line(c->name, {format_count((milli + sim::kMilli / 2) / sim::kMilli), std::to_string(milli * 100 / total) + "%"});
+            // A bar for the share.
+            const float bx = x0 + 490, bw = std::max(2.0f, 300.0f * static_cast<float>(milli) / static_cast<float>(total));
+            fill_rect(bx, t.y - t.row + 4, bx + bw, t.y - t.row + 12, 0.85f, 0.7f, 0.35f, 0.85f);
+        }
+        if (hauled.empty()) t.line("Nothing delivered yet", {}, 0.68f, 0.66f, 0.62f);
+        else t.line("All cargo", {format_count((total + sim::kMilli / 2) / sim::kMilli), "100%"}, 1, 1, 1);
+        break;
+    }
+    default: {
+        // Every player: cash, shares at market, net worth, and the company they run.
+        t.edges = {560, 720, 880, 1040};
+        t.heading("Player", {"Cash", "Shares", "Net worth", "Runs"});
+        for (const sim::Investor& inv : world_.investors()) {
+            const bool you = &inv == &world_.investor();
+            t.line(as_written(inv.name) + (you && inv.name != "You" ? " (you)" : ""),
+                   {format_money(inv.cash), format_money(sim::holdings_value(inv, world_.market())),
+                    format_money(sim::net_worth(inv, world_.market())),
+                    inv.chairs ? as_written(world_.company(*inv.chairs).name()) : std::string("-")},
+                   you ? 1.0f : 0.9f, you ? 0.95f : 0.88f, you ? 0.7f : 0.82f);
+        }
+        break;
+    }
+    }
 }
 
 std::string format_permille(std::int32_t p) {
@@ -300,9 +536,15 @@ void Tools::on_click(float sx, float sy, bool right_button) {
             follow_ = false;
         }
         return;
+    case Tool::Finance:
+    case Tool::Ledger:
+        for (std::size_t i = 0; i < tab_boxes_.size(); ++i) {
+            const TabBox& b = tab_boxes_[i];
+            if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) (tool_ == Tool::Finance ? company_tab_ : ledger_tab_) = static_cast<int>(i);
+        }
+        return;
     case Tool::Status:
     case Tool::Lists:
-    case Tool::Finance:
     case Tool::Market: return;
     case Tool::Industry: {
         if (const auto id = site_under_cursor()) {
@@ -523,6 +765,18 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_F9: select(Tool::Industry); return true;
     case SDLK_F10: select(Tool::Status); return true;
     case SDLK_F11: select(Tool::Lists); return true;
+    case SDLK_l:
+        if (tool_ == Tool::Train || (mod & (KMOD_CTRL | KMOD_GUI)) != 0) break; // L picks the engine there
+        select(tool_ == Tool::Ledger ? Tool::Inspect : Tool::Ledger);
+        return true;
+    case SDLK_TAB:
+        if (tool_ == Tool::Finance || tool_ == Tool::Ledger) {
+            int& tab = tool_ == Tool::Finance ? company_tab_ : ledger_tab_;
+            const int n = tool_ == Tool::Finance ? 4 : 5;
+            tab = (tab + ((mod & KMOD_SHIFT) != 0 ? n - 1 : 1)) % n;
+            return true;
+        }
+        break;
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
@@ -839,6 +1093,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     case Tool::Finance: {
+        if (company_tab_ == 3 && (key == SDLK_UP || key == SDLK_DOWN || key == SDLK_t)) {
+            const auto& terrs = world_.territories().territories;
+            if (terrs.empty()) return true;
+            if (key == SDLK_UP) territory_sel_ = (territory_sel_ + terrs.size() - 1) % terrs.size();
+            else if (key == SDLK_DOWN) territory_sel_ = (territory_sel_ + 1) % terrs.size();
+            else if (territory_sel_ < terrs.size()) {
+                const sim::CommandResult r =
+                    world_.execute(sim::BuyTerritoryAccess{.territory = static_cast<sim::TerritoryId>(territory_sel_)});
+                if (r.ok) show("Bought access to " + terrs[territory_sel_].name + " for " + format_money(r.cost), true);
+                else show("Cannot: " + r.error, false);
+            }
+            return true;
+        }
         if (key == SDLK_k) {
             // A last resort: ask for a second press.
             if (SDL_GetTicks() > bankrupt_armed_until_) {
@@ -1327,6 +1594,7 @@ void Tools::draw_world_overlay() const {
     case Tool::Status:
     case Tool::Lists:
     case Tool::Finance:
+    case Tool::Ledger:
     case Tool::Market: return;
     case Tool::Industry: {
         // Owned industries in their owner's colour; the cell under the cursor in white.
@@ -1595,8 +1863,8 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
         {Tool::Inspect, "F1 Look"},       {Tool::Track, "F2 Track"},       {Tool::Station, "F3 Station"},
         {Tool::ServiceTower, "F4 Tower"}, {Tool::Maintenance, "F5 Shed"},  {Tool::Train, "F6 Train"},
-        {Tool::Finance, "F7 Books"},      {Tool::Market, "F8 Market"},     {Tool::Industry, "F9 Industry"},
-        {Tool::Status, "F10 Status"},     {Tool::Lists, "F11 Lists"},
+        {Tool::Finance, "F7 Company"},      {Tool::Market, "F8 Market"},     {Tool::Industry, "F9 Industry"},
+        {Tool::Status, "F10 Status"},     {Tool::Lists, "F11 Lists"},      {Tool::Ledger, "L Ledger"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -1675,8 +1943,10 @@ std::string Tools::hint() const {
     case Tool::Lists:
         return "Tab trains/stations/companies   Up/Down, PgUp/PgDn choose   Enter go to it";
     case Tool::Finance:
-        return "B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   [ ] "
-               "dividend   KK bankruptcy";
+        if (company_tab_ == 3) return "Tab next page   Up/Down choose a territory   T buy access to it";
+        return "Tab next page   B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   "
+               "[ ] dividend   KK bankruptcy";
+    case Tool::Ledger: return "Tab (or click) next page   L or Esc close";
     }
     return {};
 }
@@ -2188,7 +2458,9 @@ void Tools::draw_ui(const std::string& status) const {
         draw_text(sx - static_cast<float>(text_width(label, kScale)) / 2, sy - 26, label, kScale);
     }
 
+    tab_boxes_.clear();
     if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
+    if (tool_ == Tool::Ledger) draw_ledger_panel();
     if (tool_ == Tool::Market) draw_market_panel();
     if (tool_ == Tool::Status) draw_status_panel();
     if (tool_ == Tool::Lists) draw_lists_panel();

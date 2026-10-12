@@ -185,7 +185,7 @@ and checks the economy against the spec's targets
 
 | Key or action | Does |
 |---|---|
-| F1 to F11, or click the toolbar | Inspect (LOOK), Track, Station, Service tower, Maintenance facility (SHED), Train, Finance (BOOKS), Market, Industry, Status, Lists |
+| F1 to F11 and L, or click the toolbar | Inspect (Look), Track, Station, Service tower, Maintenance facility (Shed), Train, Company, Market, Industry, Status, Lists, Ledger |
 | Left click | Use the tool. Track: first click starts a line, each further click builds to the cursor and carries on from there |
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Train tool | Click stations in order (Backspace drops the last); L chooses the engine. Up/Down selects a stop, and the keys then set what the train takes on there: F kind of cargo (Any, Freight, Express), W wait for a full load, [ ] number of cars, K custom cars ([ ] then removes or adds a car of the cargo chosen with < >). S makes the selected stop a service stop (the train fills up there with the station's service buildings even when not low). Enter buys the train |
@@ -201,7 +201,8 @@ and checks the economy against the spec's targets
 | E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
 | [ ] (Station) | Station size; B cycles to post office, hotel, restaurant and tavern, built by clicking near any station |
 | L, [ ], Backspace, Enter (Train) | Next engine, car count, remove last stop, buy. The second line shows the engine's speed chart (speed with that many freight or express cars on the flat and up 1%, 2% and 3%) and its passenger appeal |
-| F7 | Finance screen. Then: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
+| F7 | Company Detail (rt3-clone-spec §15.4), in four tabs (Tab or click to switch): Overview (this year's and last year's income statement, investment, investors, salary, average speed), Bonds (debt, credit rating, prime rate, each bond), Stock (price, shares, market value, dividend, your holding) and Territories (each one's access price and modifiers; Up/Down choose, T buys access). On every tab: B / R issue or repay a bond; A / S buy or sell 1,000 shares (Shift: 5,000); I / Y issue or buy back stock; [ ] dividend; K twice to declare bankruptcy |
+| L | Ledger (rt3-clone-spec §12.7), in five tabs: Overview (revenue, profit, loads delivered, revenue a load, average speed, investors), Income statement (up to ten years side by side), Balance sheets (every company's, side by side), Haulage (loads delivered by cargo) and Players (cash, shares, net worth, company run). It opens by itself, paused, when a year ends |
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse or port does (exports, imports or both); C sets a warehouse to convert one cargo into another, at a quarter yield. Ports can be bought too |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
