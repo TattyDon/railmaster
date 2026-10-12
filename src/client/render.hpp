@@ -26,7 +26,10 @@ void draw_railway(const sim::World& w, const Camera& cam);
 // move, works and power stations); `seconds` animates it. Call it after the
 // railway and sites, last in the world pass.
 void draw_smoke(const Camera& cam, float seconds);
-// Forget the chimneys seen so far this frame (after the shadow pass, which
+// Lights after dark (lit windows, station lamps, headlamps), registered
+// as the town, stations and trains are drawn; after the world pass.
+void draw_lights(const Camera& cam);
+// Forget the chimneys and lights seen so far this frame (after the shadow pass, which
 // draws the same things).
 void clear_smoke();
 // The analysis overlays (rt3-clone-spec §15.3), drawn over the railway.

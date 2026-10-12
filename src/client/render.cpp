@@ -32,6 +32,18 @@ struct SmokeSource {
     float seed;
 };
 std::vector<SmokeSource> g_smoke;
+
+// Lights seen this frame (tiles), shown after dark: a glow at each, and
+// for headlamps a pool of light on the ground ahead.
+struct LightSource {
+    float x, y, z, size;
+    float r, g, b;
+    float ahead_x = 0, ahead_y = 0; // a headlamp's beam direction, else 0
+};
+std::vector<LightSource> g_lights;
+void add_light(float x, float y, float z, float size, float r, float g, float b, float ahead_x = 0, float ahead_y = 0) {
+    if (shading::night() > 0.05f) g_lights.push_back({x, y, z, size, r, g, b, ahead_x, ahead_y});
+}
 void add_smoke(float x, float y, float z, float size, bool steam = false) {
     g_smoke.push_back({x, y, z, size, steam, std::fmod(std::abs(x * 12.9898f + y * 78.233f), 1.0f)});
 }
@@ -73,9 +85,13 @@ void begin_lit() {
     glEnable(GL_COLOR_MATERIAL);
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_NORMALIZE);
-    const GLfloat dir[] = {-0.45f, -0.55f, 0.75f, 0.0f}; // in map axes (x east, y south, z up)
-    const GLfloat ambient[] = {0.42f, 0.42f, 0.45f, 1.0f};
-    const GLfloat diffuse[] = {0.70f, 0.68f, 0.62f, 1.0f};
+    // The time of day's light, in map axes (x east, y south, z up).
+    GLfloat dir[4] = {0, 0, 1, 0}, ambient[4] = {0, 0, 0, 1}, diffuse[4] = {0, 0, 0, 1};
+    shading::light_params(dir, diffuse, ambient);
+    for (int k = 0; k < 3; ++k) {
+        ambient[k] *= 1.1f;
+        diffuse[k] *= 0.9f;
+    }
     glLightfv(GL_LIGHT0, GL_POSITION, dir);
     glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
@@ -1814,7 +1830,11 @@ void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::Comp
             rails.key = key;
         }
         glLineWidth(cam.zoom >= 40.0f ? 2.0f : 1.0f);
+        // Lit from above like the ground, so they darken after dark.
+        begin_lit();
+        glNormal3f(0, 0, 1);
         glCallList(rails.list);
+        end_lit();
     }
 }
 
@@ -2282,6 +2302,7 @@ void draw_station(sim::StationSize size, float x, float y, float z, float dx, fl
             at(len * t, (off - pw * 0.4f) * side, cx, cy);
             box(cx, cy, z + ph, dx, dy, 0.003f * s, 0.003f * s, 0.07f * s, post, post);
             box(cx, cy, z + ph + 0.07f * s, dx, dy, 0.007f * s, 0.007f * s, 0.01f * s, lamp, lamp);
+            add_light(cx, cy, z + ph + 0.075f * s, 0.05f * s, 1.0f, 0.78f, 0.4f);
         }
     }
     // A name board in the owner's colours at the near platform's end.
@@ -2601,6 +2622,25 @@ void draw_trees(const sim::Terrain& t, const Scene& sc, const Camera& cam) {
     }
 }
 
+// After dark, lit windows on the street fronts of the town's buildings:
+// a few on each, by the plot, warm yellow.
+void town_lights(const TownLayout& towns, const Camera& cam) {
+    if (shading::night() <= 0.05f) return;
+    for (const Plot& p : towns.plots) {
+        const float fx = -p.dy * p.front, fy = p.dx * p.front;
+        const float cell = p.hl * 0.7f;
+        const float z = cam.ground_z(p.x, p.y);
+        const int floors = std::max(1, p.floors);
+        for (int f = 0; f < floors; ++f)
+            for (const float along : {-0.6f, 0.0f, 0.6f}) {
+                const std::uint32_t h = hash(p.seed, static_cast<std::uint32_t>(f * 3 + static_cast<int>(along * 10 + 10)), 41);
+                if (unit(h) < 0.45f) continue; // a dark room
+                const float wx = p.x + fx * (p.hw * 1.1f) + p.dx * p.hl * along, wy = p.y + fy * (p.hw * 1.1f) + p.dy * p.hl * along;
+                add_light(wx, wy, z + cell * (static_cast<float>(f) + 0.5f), cell * 0.35f, 1.0f, 0.72f, 0.35f);
+            }
+    }
+}
+
 } // namespace
 
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
@@ -2655,6 +2695,11 @@ void draw_railway(const sim::World& w, const Camera& cam) {
     // Close enough in 3D, track is drawn as ballast, sleepers and rails.
     const bool detailed = cam.three_d && cam.zoom >= 9.0f;
     if (detailed) track_3d(rw, cam, player);
+    // From afar, track lines lit from above (they darken after dark).
+    if (cam.three_d && !detailed) {
+        begin_lit();
+        glNormal3f(0, 0, 1);
+    }
     for (const sim::TrackEdge& e : net.edges()) {
         if (e.removed || detailed) continue;
         // Wider as the view closes in, in 3D.
@@ -2674,6 +2719,7 @@ void draw_railway(const sim::World& w, const Camera& cam) {
         vertex_at(net.node(e.b).pos, net.node(e.b).z_mm, cam);
         glEnd();
     }
+    if (cam.three_d && !detailed) end_lit();
     // Bridges stand on piers down to the ground (3D, from afar).
     if (cam.three_d && !detailed) {
         glLineWidth(2.0f);
@@ -2849,6 +2895,7 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                 box(fx - p.dx * 0.02f * s, fy - p.dy * 0.02f * s, top + 0.01f * s, p.dx, p.dy, 0.02f * s, 0.002f * s, 0.018f * s,
                     flag, flag);
             }
+            add_light(x + p.dx * 0.01f * s, y + p.dy * 0.01f * s, z + 0.1f * s, 0.06f * s, 1.0f, 0.9f, 0.6f, p.dx, p.dy);
             if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
                 add_smoke(x - p.dx * 0.02f * s, y - p.dy * 0.02f * s, z + 0.155f * s, 0.016f * s);
             }
@@ -3058,6 +3105,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         if (list != 0 && list_key == key) {
             glCallList(list);
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
+            town_lights(towns, cam);
             if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
             end_lit();
             return;
@@ -3130,6 +3178,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glEndList();
         list_key = key;
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
+        town_lights(towns, cam);
         if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();
         return;
@@ -3415,7 +3464,60 @@ std::optional<sim::MapPoint> radar_point(const sim::World& w, const Camera& cam,
     return sim::MapPoint{static_cast<std::int64_t>(cells_x * cam.mm_per_tile), static_cast<std::int64_t>(cells_y * cam.mm_per_tile)};
 }
 
-void clear_smoke() { g_smoke.clear(); }
+void clear_smoke() {
+    g_smoke.clear();
+    g_lights.clear();
+}
+
+void draw_lights(const Camera& cam) {
+    const float night = shading::night();
+    if (!cam.three_d || night <= 0.05f || g_lights.empty()) {
+        g_lights.clear();
+        return;
+    }
+    // Glows face the camera: its right and up, in map axes.
+    const auto& vi = cam.view_inverse();
+    const float rx = vi[0], ry = vi[1], rz = vi[2], ux = vi[4], uy = vi[5], uz = vi[6];
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // light adds
+    glDepthMask(GL_FALSE);
+    constexpr int kRim = 12;
+    for (const LightSource& l : g_lights) {
+        const float a = night;
+        // The halo, fading to nothing at its rim, and a bright core.
+        for (const float scale : {1.0f, 0.35f}) {
+            const float rad = l.size * scale, core = scale < 1.0f ? 0.9f : 0.45f;
+            glBegin(GL_TRIANGLE_FAN);
+            glColor4f(l.r, l.g, l.b, a * core);
+            glVertex3f(l.x, l.y, l.z);
+            glColor4f(l.r, l.g, l.b, 0.0f);
+            for (int i = 0; i <= kRim; ++i) {
+                const float an = 6.2831853f * static_cast<float>(i) / kRim, c = std::cos(an) * rad, sn = std::sin(an) * rad;
+                glVertex3f(l.x + rx * c + ux * sn, l.y + ry * c + uy * sn, l.z + rz * c + uz * sn);
+            }
+            glEnd();
+        }
+        // A headlamp lights the track ahead: a soft oval on the ground.
+        if (l.ahead_x != 0 || l.ahead_y != 0) {
+            const float dist = l.size * 3.5f, cx = l.x + l.ahead_x * dist, cy = l.y + l.ahead_y * dist;
+            const float px = -l.ahead_y, py = l.ahead_x;
+            glBegin(GL_TRIANGLE_FAN);
+            glColor4f(l.r, l.g, l.b, a * 0.35f);
+            glVertex3f(cx, cy, cam.ground_z(cx, cy) + 0.05f);
+            glColor4f(l.r, l.g, l.b, 0.0f);
+            for (int i = 0; i <= kRim; ++i) {
+                const float an = 6.2831853f * static_cast<float>(i) / kRim;
+                const float ex = l.ahead_x * std::cos(an) * dist * 1.1f + px * std::sin(an) * l.size * 1.4f;
+                const float ey = l.ahead_y * std::cos(an) * dist * 1.1f + py * std::sin(an) * l.size * 1.4f;
+                glVertex3f(cx + ex, cy + ey, cam.ground_z(cx + ex, cy + ey) + 0.05f);
+            }
+            glEnd();
+        }
+    }
+    glDepthMask(GL_TRUE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    g_lights.clear();
+}
 
 void draw_smoke(const Camera& cam, float seconds) {
     if (!cam.three_d) {
@@ -3430,7 +3532,7 @@ void draw_smoke(const Camera& cam, float seconds) {
     glDepthMask(GL_FALSE);
     glBegin(GL_QUADS);
     for (const SmokeSource& src : g_smoke) {
-        const float grey = src.steam ? 0.95f : 0.5f;
+        const float grey = (src.steam ? 0.95f : 0.5f) * (1.0f - 0.75f * shading::night()); // darker after dark
         for (int i = 0; i < kPuffs; ++i) {
             float age = seconds / 2.4f + (static_cast<float>(i) + src.seed) / kPuffs;
             age -= std::floor(age);

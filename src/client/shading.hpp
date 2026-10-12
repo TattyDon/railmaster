@@ -27,6 +27,15 @@ unsigned white_texture();
 void begin_shadow_pass(Camera& cam);
 void end_shadow_pass(Camera& cam);
 
+// The time of day, 0 to 1 round the clock: 0 day, 0.25 dusk, 0.5 night,
+// 0.75 dawn, easing between. Sets the sun (or moon), its colour, the
+// ambient light and the sky, for the shaders and the fixed-function path.
+void set_time_of_day(float phase);
+// How dark it is: 0 in daylight, 1 at night (lights come on).
+float night();
+// The light for fixed-function drawing: towards the sun, its colour, ambient.
+void light_params(float* towards_sun, float* diffuse, float* ambient);
+
 // The sky, behind everything: deep blue overhead to haze at the horizon.
 // Leaves the camera's world matrices in place.
 void draw_sky(Camera& cam);

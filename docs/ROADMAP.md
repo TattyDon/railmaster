@@ -297,6 +297,14 @@ are placed nearest first, left out where they would overlap, and fade with
 distance. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
+Time of day (N): day, dusk, night and dawn, or a slow round of all four
+(six minutes while the game runs). The sun (or moon), its colour, the sky
+and ground ambient, the sky gradient and the haze change with it, in the
+shaders and the fixed-function path alike; shadows follow the light.
+After dark, windows light up along the town's streets, station lamps
+glow, and engines carry headlamps with a pool of light on the track
+ahead; smoke and track darken with the rest.
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into
@@ -307,7 +315,6 @@ frames a second.
 Next:
 - Real art: a 2x2-cell house shape for variety.
 - More shading: ambient occlusion, water reflections, day and night.
-- Night lights (lit windows, headlamps).
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

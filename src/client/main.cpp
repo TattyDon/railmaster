@@ -225,6 +225,11 @@ int main(int argc, char* argv[]) {
     double tick_accumulator = 0.0;
     float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
     bool show_fps = false;    // F12: frames a second, bottom right
+    // The time of day: N cycles day, dusk, night, dawn and a slow round of
+    // all four while the game runs (one every six minutes).
+    int time_mode = 0;
+    float time_phase = 0.0f;
+    static constexpr const char* kTimeNames[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
     double frame_ms = 16.7;   // smoothed time a frame takes
     int right_drag = 0; // pixels the mouse moved with the right button down
     // Camera bookmarks: Shift+0-9 stores the view, 0-9 returns to it (rt3-clone-spec §15.6).
@@ -357,6 +362,11 @@ int main(int argc, char* argv[]) {
                     break;
                 }
                 case SDLK_F12: show_fps = !show_fps; break;
+                case SDLK_n:
+                    time_mode = (time_mode + 1) % 5;
+                    if (time_mode < 4) time_phase = 0.25f * static_cast<float>(time_mode);
+                    tools.show(std::string("Time of day: ") + kTimeNames[time_mode] + "  (N to change)", true);
+                    break;
                 case SDLK_v: {
                     // 3D or the top-down map, looking at the same place.
                     const sim::MapPoint at{static_cast<std::int64_t>(cam.target_x * cam.mm_per_tile),
@@ -416,6 +426,8 @@ int main(int argc, char* argv[]) {
         }
 
         frame_ms += (dt * 1000.0 - frame_ms) * 0.05;
+        if (time_mode == 4 && speed.speed() != sim::GameSpeed::Paused) time_phase += static_cast<float>(dt) / 360.0f;
+        client::shading::set_time_of_day(time_phase);
         // Smoke drifts only while the game runs.
         if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);
 
@@ -476,7 +488,11 @@ int main(int argc, char* argv[]) {
             client::shading::end_shadow_pass(cam);
             client::clear_smoke();
         }
-        if (cam.three_d) glClearColor(0.55f, 0.70f, 0.85f, 1.0f); // sky
+        if (cam.three_d) {
+            float hr = 0, hg = 0, hb = 0;
+            client::shading::horizon_rgb(hr, hg, hb);
+            glClearColor(hr, hg, hb, 1.0f); // sky
+        }
         else glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (shaded) client::shading::draw_sky(cam);
@@ -486,7 +502,7 @@ int main(int argc, char* argv[]) {
             // Haze: the far land fades into the sky, as in RT3; zoomed out
             // over the whole map it is too far to show.
             GLfloat sky[] = {0.55f, 0.70f, 0.85f, 1.0f};
-            if (shaded) client::shading::horizon_rgb(sky[0], sky[1], sky[2]);
+            client::shading::horizon_rgb(sky[0], sky[1], sky[2]);
             glEnable(GL_FOG);
             glFogi(GL_FOG_MODE, GL_LINEAR);
             glFogfv(GL_FOG_COLOR, sky);
@@ -501,6 +517,7 @@ int main(int argc, char* argv[]) {
         client::draw_railway(world, cam);
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         client::draw_smoke(cam, smoke_clock);
+        client::draw_lights(cam);
         tools.draw_world_overlay();
         if (shaded) client::shading::end_world();
         glDisable(GL_FOG);

@@ -212,6 +212,7 @@ and checks the economy against the spec's targets
 | Mouse wheel, two-finger scroll, pinch, Option (Alt) + Up/Down | Zoom in and out |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | V | Switch between the 3D view and the flat top-down map |
+| N | Time of day: day, dusk, night, dawn, or a slow round of all four while the game runs |
 | F12 | Show frames a second and the time a frame takes (bottom right) |
 | `--look=X,Y` | Start with the view close over map tile (X, Y) |
 | Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |

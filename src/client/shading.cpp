@@ -71,9 +71,23 @@ bool load_all() {
 
 // Sunlight from high in the north-west, as the fixed-function light (map
 // axes: x east, y south, z up), pointing towards the sun.
-constexpr float kSun[3] = {-0.45f, -0.55f, 0.75f};
-constexpr float kHorizon[3] = {0.74f, 0.82f, 0.9f};
-constexpr float kZenith[3] = {0.3f, 0.5f, 0.8f};
+// The light of the time of day (see set_time_of_day): the sun (or moon)
+// towards it, its colour, the sky and ground ambient, and the sky's colours.
+struct Light {
+    float sun[3], colour[3], sky[3], ground[3], zenith[3], horizon[3];
+};
+// Day, dusk, night, dawn.
+constexpr Light kKeys[4] = {
+    {{-0.45f, -0.55f, 0.75f}, {0.78f, 0.74f, 0.64f}, {0.4f, 0.44f, 0.52f}, {0.26f, 0.25f, 0.21f}, {0.3f, 0.5f, 0.8f}, {0.74f, 0.82f, 0.9f}},
+    {{0.75f, -0.45f, 0.2f}, {0.78f, 0.45f, 0.26f}, {0.3f, 0.27f, 0.36f}, {0.2f, 0.15f, 0.13f}, {0.22f, 0.27f, 0.5f}, {0.93f, 0.58f, 0.38f}},
+    {{-0.3f, 0.4f, 0.65f}, {0.13f, 0.16f, 0.24f}, {0.08f, 0.1f, 0.18f}, {0.04f, 0.04f, 0.06f}, {0.02f, 0.03f, 0.08f}, {0.07f, 0.09f, 0.17f}},
+    {{-0.75f, 0.45f, 0.22f}, {0.75f, 0.55f, 0.4f}, {0.33f, 0.31f, 0.4f}, {0.21f, 0.19f, 0.17f}, {0.32f, 0.42f, 0.66f}, {0.93f, 0.72f, 0.58f}},
+};
+Light g_light_now = kKeys[0];
+float g_night = 0.0f;
+float kSun[3] = {-0.45f, -0.55f, 0.75f};
+float kHorizon[3] = {0.74f, 0.82f, 0.9f};
+float kZenith[3] = {0.3f, 0.5f, 0.8f};
 constexpr int kShadowSize = 2048;
 
 const char* const kVertex = R"(#version 120
@@ -101,6 +115,9 @@ uniform sampler2D u_tex;
 uniform sampler2D u_shadow;
 uniform mat4 u_light;
 uniform vec3 u_sun;
+uniform vec3 u_sun_colour;
+uniform vec3 u_sky;
+uniform vec3 u_ground;
 uniform int u_lit;
 uniform int u_shadows;
 uniform float u_texel;
@@ -132,8 +149,8 @@ void main() {
         float ndl = max(dot(n, u_sun), 0.0);
         float sun = (u_shadows == 1 && ndl > 0.0) ? sunlit(n) : 1.0;
         // Sky light from above, warmer light bounced off the ground below.
-        vec3 ambient = mix(vec3(0.26, 0.25, 0.21), vec3(0.4, 0.44, 0.52), n.z * 0.5 + 0.5);
-        rgb = base.rgb * (ambient + vec3(0.98, 0.92, 0.8) * 0.8 * ndl * sun);
+        vec3 ambient = mix(u_ground, u_sky, n.z * 0.5 + 0.5);
+        rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
     }
     float haze = clamp((gl_Fog.end - v_depth) / (gl_Fog.end - gl_Fog.start), 0.0, 1.0);
     gl_FragColor = vec4(mix(gl_Fog.color.rgb, rgb, haze), base.a);
@@ -143,7 +160,7 @@ void main() {
 bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
-GLint u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1;
+GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
 
@@ -209,6 +226,9 @@ bool init(bool wanted) {
     u_shadow = p_get_uniform_location(g_program, "u_shadow");
     u_light = p_get_uniform_location(g_program, "u_light");
     u_sun = p_get_uniform_location(g_program, "u_sun");
+    u_sun_colour = p_get_uniform_location(g_program, "u_sun_colour");
+    u_sky = p_get_uniform_location(g_program, "u_sky");
+    u_ground = p_get_uniform_location(g_program, "u_ground");
     u_lit = p_get_uniform_location(g_program, "u_lit");
     u_shadows = p_get_uniform_location(g_program, "u_shadows");
     u_texel = p_get_uniform_location(g_program, "u_texel");
@@ -333,6 +353,10 @@ void begin_world(const Camera& cam) {
     p_uniform_matrix4fv(u_light, 1, GL_FALSE, g_light.data());
     const float len = std::sqrt(kSun[0] * kSun[0] + kSun[1] * kSun[1] + kSun[2] * kSun[2]);
     p_uniform3f(u_sun, kSun[0] / len, kSun[1] / len, kSun[2] / len);
+    const Light& l = g_light_now;
+    p_uniform3f(u_sun_colour, l.colour[0], l.colour[1], l.colour[2]);
+    p_uniform3f(u_sky, l.sky[0], l.sky[1], l.sky[2]);
+    p_uniform3f(u_ground, l.ground[0], l.ground[1], l.ground[2]);
     p_uniform1i(u_lit, 0);
     p_uniform1i(u_shadows, g_shadows_ready ? 1 : 0);
     p_uniform1f(u_texel, 1.0f / kShadowSize);
@@ -346,6 +370,43 @@ void end_world() {
     if (!g_active) return;
     p_use_program(0);
     g_in_world = false;
+}
+
+void set_time_of_day(float phase) {
+    phase -= std::floor(phase);
+    const float f = phase * 4.0f;
+    const int a = static_cast<int>(f) % 4, b = (a + 1) % 4;
+    // Ease between the keys, lingering on each.
+    float t = f - std::floor(f);
+    t = t * t * (3 - 2 * t);
+    const auto mix3 = [&](const float* x, const float* y, float* out) {
+        for (int k = 0; k < 3; ++k) out[k] = x[k] + (y[k] - x[k]) * t;
+    };
+    Light& l = g_light_now;
+    mix3(kKeys[a].sun, kKeys[b].sun, l.sun);
+    mix3(kKeys[a].colour, kKeys[b].colour, l.colour);
+    mix3(kKeys[a].sky, kKeys[b].sky, l.sky);
+    mix3(kKeys[a].ground, kKeys[b].ground, l.ground);
+    mix3(kKeys[a].zenith, kKeys[b].zenith, l.zenith);
+    mix3(kKeys[a].horizon, kKeys[b].horizon, l.horizon);
+    for (int k = 0; k < 3; ++k) {
+        kSun[k] = l.sun[k];
+        kHorizon[k] = l.horizon[k];
+        kZenith[k] = l.zenith[k];
+    }
+    // How dark it is, by the light falling on level ground.
+    const float day = 0.299f * (l.colour[0] + l.sky[0]) + 0.587f * (l.colour[1] + l.sky[1]) + 0.114f * (l.colour[2] + l.sky[2]);
+    g_night = std::clamp((1.05f - day) / 0.8f, 0.0f, 1.0f);
+}
+
+float night() { return g_night; }
+
+void light_params(float* towards_sun, float* diffuse, float* ambient) {
+    for (int k = 0; k < 3; ++k) {
+        towards_sun[k] = g_light_now.sun[k];
+        diffuse[k] = g_light_now.colour[k];
+        ambient[k] = (g_light_now.sky[k] + g_light_now.ground[k]) * 0.5f;
+    }
 }
 
 } // namespace railmaster::client::shading
