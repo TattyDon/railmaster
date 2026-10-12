@@ -1145,7 +1145,7 @@ public:
         // Stations' platforms and houses reach about half their scale out.
         for (const sim::Station& st : rw.stations()) {
             const sim::TrackNode& n = net.node(st.node);
-            const float reach = (st.size == sim::StationSize::Large ? 0.5f : st.size == sim::StationSize::Small ? 0.3f : 0.4f) * s;
+            const float reach = 0.25f + (st.size == sim::StationSize::Large ? 0.55f : st.size == sim::StationSize::Small ? 0.3f : 0.4f) * s;
             mark(tile(n.pos.x_mm), tile(n.pos.y_mm), reach);
         }
         for (const sim::StationBuilding& b : rw.station_buildings()) mark(tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s);
@@ -1469,6 +1469,141 @@ void draw_building(const Plot& p, const Camera& cam) {
     }
 }
 
+// A station (rt3-clone-spec §15.6 views) at (x, y), rail height z, its
+// track along (dx, dy), `s` times life size, trimmed in its owner's colour.
+// Small: one platform and a wooden depot with a lean-to canopy. Medium:
+// platforms both sides, a brick two-storey house and a canopy on posts.
+// Large: longer platforms with canopies, a stone hall with wings and a clock
+// tower, and a footbridge over the tracks. The house stands on the -across
+// side, (dy, -dx). Inside GL_QUADS.
+void draw_station(sim::StationSize size, float x, float y, float z, float dx, float dy, float s, const float* trim,
+                  std::uint32_t seed) {
+    const float qx = -dy, qy = dx;
+    const float stone[3] = {0.72f, 0.7f, 0.64f}, edge[3] = {0.92f, 0.86f, 0.45f}, post[3] = {0.25f, 0.25f, 0.27f};
+    const float slate[3] = {0.33f, 0.34f, 0.38f}, lamp[3] = {1.0f, 0.9f, 0.55f}, white[3] = {0.95f, 0.95f, 0.92f};
+    const bool small = size == sim::StationSize::Small, large = size == sim::StationSize::Large;
+    const float len = (large ? 0.5f : small ? 0.24f : 0.34f) * s; // half the platforms' length
+    const float pw = 0.03f * s, ph = 0.03f;                         // half width, height
+    const float off = 0.15f + pw;                                   // track centre to platform centre
+    const auto at = [&](float along, float across, float& ox, float& oy) {
+        ox = x + dx * along + qx * across;
+        oy = y + dy * along + qy * across;
+    };
+    float cx, cy;
+    // Platforms, a painted edge on the track side, and lamps.
+    for (const float side : {-1.0f, 1.0f}) {
+        if (small && side > 0) continue;
+        at(0, off * side, cx, cy);
+        box(cx, cy, z, dx, dy, len, pw, ph, stone, stone);
+        at(0, (off - pw * 0.85f) * side, cx, cy);
+        box(cx, cy, z, dx, dy, len, pw * 0.12f, ph + 0.001f, stone, edge);
+        for (const float t : {-0.8f, -0.27f, 0.27f, 0.8f}) {
+            at(len * t, (off - pw * 0.4f) * side, cx, cy);
+            box(cx, cy, z + ph, dx, dy, 0.003f * s, 0.003f * s, 0.07f * s, post, post);
+            box(cx, cy, z + ph + 0.07f * s, dx, dy, 0.007f * s, 0.007f * s, 0.01f * s, lamp, lamp);
+        }
+    }
+    // A name board in the owner's colours at the near platform's end.
+    at(-len * 0.92f, -(off + pw * 0.3f), cx, cy);
+    for (const float d : {-0.025f, 0.025f}) {
+        box(cx + dx * d * s, cy + dy * d * s, z + ph, dx, dy, 0.003f * s, 0.003f * s, 0.05f * s, post, post);
+    }
+    box(cx, cy, z + ph + 0.04f * s, dx, dy, 0.035f * s, 0.004f * s, 0.022f * s, trim, trim);
+    // A canopy over a platform: posts along its middle and a shallow roof.
+    const auto canopy = [&](float side, float half_len) {
+        for (float t = -0.85f; t <= 0.86f; t += 0.425f) {
+            at(half_len * t, off * side, cx, cy);
+            box(cx, cy, z + ph, dx, dy, 0.004f * s, 0.004f * s, 0.075f * s, post, post);
+        }
+        at(0, off * side, cx, cy);
+        box(cx, cy, z + ph + 0.075f * s, dx, dy, half_len, pw * 1.25f, 0.006f * s, trim, trim);
+        gable(cx, cy, z + ph + 0.081f * s, dx, dy, half_len, pw * 1.3f, 0.012f * s, slate, trim);
+    };
+    const float back = off + pw + 0.012f * s; // the platform's far edge, where the house starts
+    if (small) {
+        // A wooden depot, a lean-to canopy out over the platform.
+        const float timber[3] = {0.6f, 0.45f, 0.3f};
+        Plot p{};
+        p.hl = len * 0.55f;
+        p.hw = 0.04f * s;
+        at(-len * 0.1f, -(back + p.hw), p.x, p.y);
+        p.dx = dx; p.dy = dy; p.front = 1.0f; p.floors = 1; p.seed = seed;
+        const float h = 0.07f * s;
+        box(p.x, p.y, z, dx, dy, p.hl, p.hw, h, timber, timber);
+        gable(p.x, p.y, z + h, dx, dy, p.hl * 1.05f, p.hw * 1.15f, p.hw * 0.7f, trim, timber);
+        windows(p, z + ph * 0.5f, h * 0.85f, h);
+        // The lean-to: from the wall's top down to posts at the platform's edge.
+        float fx, fy;
+        at(-len * 0.1f, -(back - 0.002f), fx, fy);
+        float ex, ey;
+        at(-len * 0.1f, -(off - pw * 0.5f), ex, ey);
+        for (const float t : {-0.9f, 0.0f, 0.9f}) {
+            box(ex + dx * p.hl * t, ey + dy * p.hl * t, z + ph, dx, dy, 0.003f * s, 0.003f * s, 0.05f * s, post, post);
+        }
+        glColor3fv(trim);
+        glNormal3f(qx * 0.3f, qy * 0.3f, 1.0f);
+        glVertex3f(fx - dx * p.hl, fy - dy * p.hl, z + h * 0.95f);
+        glVertex3f(ex - dx * p.hl, ey - dy * p.hl, z + ph + 0.05f * s);
+        glVertex3f(ex + dx * p.hl, ey + dy * p.hl, z + ph + 0.05f * s);
+        glVertex3f(fx + dx * p.hl, fy + dy * p.hl, z + h * 0.95f);
+        return;
+    }
+    canopy(1.0f, len * 0.8f);
+    if (!large) {
+        // A two-storey brick station house.
+        const float brick[3] = {0.66f, 0.37f, 0.28f};
+        Plot p{};
+        p.hl = len * 0.55f;
+        p.hw = 0.05f * s;
+        at(0, -(back + p.hw), p.x, p.y);
+        p.dx = dx; p.dy = dy; p.front = 1.0f; p.floors = 2; p.seed = seed;
+        const float floor_h = 0.055f * s, h = floor_h * 2 + 0.01f * s;
+        box(p.x, p.y, z, dx, dy, p.hl, p.hw, h, brick, brick);
+        gable(p.x, p.y, z + h, dx, dy, p.hl * 1.04f, p.hw * 1.12f, p.hw * 0.8f, slate, brick);
+        box(p.x, p.y, z + h - 0.008f * s, dx, dy, p.hl * 1.01f, p.hw * 1.01f, 0.008f * s, trim, trim); // a band under the eaves
+        windows(p, z + ph * 0.5f, floor_h, h);
+        return;
+    }
+    canopy(-1.0f, len * 0.8f);
+    // A stone hall with two wings and a clock tower.
+    const float hall[3] = {0.8f, 0.76f, 0.66f};
+    const float floor_h = 0.055f * s;
+    Plot p{};
+    p.hl = len * 0.3f;
+    p.hw = 0.06f * s;
+    at(0, -(back + p.hw), p.x, p.y);
+    p.dx = dx; p.dy = dy; p.front = 1.0f; p.floors = 3; p.seed = seed;
+    const float h = floor_h * 3 + 0.012f * s;
+    box(p.x, p.y, z, dx, dy, p.hl, p.hw, h, hall, slate);
+    box(p.x, p.y, z + h, dx, dy, p.hl, p.hw, 0.01f * s, trim, trim); // cornice
+    windows(p, z + ph * 0.5f, floor_h, h);
+    for (const float side : {-1.0f, 1.0f}) {
+        Plot w = p;
+        w.hl = len * 0.3f;
+        w.hw = 0.05f * s;
+        w.floors = 2;
+        at(side * len * 0.6f, -(back + w.hw), w.x, w.y);
+        const float wh = floor_h * 2 + 0.01f * s;
+        box(w.x, w.y, z, dx, dy, w.hl, w.hw, wh, hall, hall);
+        gable(w.x, w.y, z + wh, dx, dy, w.hl, w.hw * 1.1f, w.hw * 0.7f, slate, hall);
+        windows(w, z + ph * 0.5f, floor_h, wh);
+    }
+    // The clock tower, faces on its sides, and a pyramid roof.
+    const float tw = 0.035f * s, th = h + 0.1f * s;
+    box(p.x, p.y, z, dx, dy, tw, tw, th, hall, hall);
+    side_marks(p.x, p.y, -qx, -qy, tw, tw, 1, 0.016f * s, z + th - 0.045f * s, z + th - 0.013f * s, white);
+    side_marks(p.x, p.y, dx, dy, tw, tw, 1, 0.016f * s, z + th - 0.045f * s, z + th - 0.013f * s, white);
+    heap(p.x, p.y, z + th, tw * 1.15f, 0.05f * s, trim);
+    // A footbridge: stair towers on both platforms and a deck between them.
+    const float deck_z = z + ph + 0.12f * s;
+    for (const float side : {-1.0f, 1.0f}) {
+        at(len * 0.55f, off * side, cx, cy);
+        box(cx, cy, z + ph, dx, dy, 0.018f * s, pw * 0.8f, deck_z - z - ph + 0.03f * s, trim, slate);
+    }
+    at(len * 0.55f, 0, cx, cy);
+    box(cx, cy, deck_z, qx, qy, off, 0.014f * s, 0.03f * s, trim, slate);
+}
+
 } // namespace
 
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
@@ -1614,35 +1749,15 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                 return;
             }
         };
-        const float stone[3] = {0.7f, 0.68f, 0.62f}, slate[3] = {0.35f, 0.36f, 0.4f}, post[3] = {0.3f, 0.3f, 0.32f};
+        const float slate[3] = {0.35f, 0.36f, 0.4f}, post[3] = {0.3f, 0.3f, 0.32f};
         for (const sim::Station& st : rw.stations()) {
-            // A platform each side of the track, the station house beside one
-            // (in the owner's colours), and a canopy; bigger stations are longer.
             float trim[3];
             owner_rgb(st.owner, player, trim[0], trim[1], trim[2]);
-            const float wall[3] = {0.82f, 0.74f, 0.6f};
             const sim::TrackNode& n = net.node(st.node);
             const float x = tiles(n.pos.x_mm, cam), y = tiles(n.pos.y_mm, cam), z = cam.z_of(n.z_mm);
             float dx, dy;
             along(st.node, dx, dy);
-            const float qx = -dy, qy = dx;
-            const float len = (st.size == sim::StationSize::Large ? 0.45f : st.size == sim::StationSize::Small ? 0.22f : 0.32f) * s;
-            const float off = 0.1f + 0.03f * s;
-            for (const float side : {-1.0f, 1.0f}) {
-                box(x + qx * off * side, y + qy * off * side, z, dx, dy, len, 0.03f * s, 0.03f, stone, stone);
-            }
-            // Canoqy over the far platform, on posts.
-            for (const float t : {-0.7f, 0.0f, 0.7f}) {
-                box(x + qx * off + dx * len * t, y + qy * off + dy * len * t, z, dx, dy, 0.006f * s, 0.006f * s, 0.09f * s, post, post);
-            }
-            box(x + qx * off, y + qy * off, z + 0.09f * s, dx, dy, len * 0.85f, 0.045f * s, 0.012f * s, trim, trim);
-            // The station house behind the near platform.
-            const float house_off = off + 0.03f * s + 0.07f * s;
-            barn(x - qx * house_off, y - qy * house_off, z, dx, dy, len * 0.55f, 0.06f * s, 0.08f * s, wall, trim);
-            if (st.size == sim::StationSize::Large) {
-                barn(x - qx * house_off + dx * len * 0.75f, y - qy * house_off + dy * len * 0.75f, z, dx, dy, 0.07f * s,
-                     0.06f * s, 0.13f * s, wall, trim);
-            }
+            draw_station(st.size, x, y, z, dx, dy, s, trim, hash(st.id, 3, 9));
         }
         for (const sim::StationBuilding& b : rw.station_buildings()) {
             const float x = tiles(b.pos.x_mm, cam), y = tiles(b.pos.y_mm, cam), z = cam.ground_z(x, y);

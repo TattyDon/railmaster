@@ -212,8 +212,15 @@ pantograph, on bogies; coaches with rows of lit windows and a clerestory,
 mail vans with doors, ribbed boxcars with a door, open hoppers showing
 their load (coal, iron or bauxite), and a caboose with its cupola.
 
+Stations are modelled by size: a small one is a wooden depot with a lean-to
+canopy over its one platform; a medium one has platforms both sides, a
+two-storey brick house and a canopy on posts; a large one has long
+canopied platforms, a stone hall with wings and a clock tower, and a
+footbridge. Platforms have painted edges and lamps, and a name board in
+the owner's colours stands at the end.
+
 Next:
-- Proper low-poly models for stations and industries, with LOD; textures
+- Proper low-poly models for industries, with LOD; textures
   on buildings; a modern shader pipeline.
 - Edge scrolling; smoke and lights; day and night.
 
