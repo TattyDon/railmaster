@@ -2,6 +2,7 @@ find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
 
 add_executable(railmaster
+    camera.cpp
     font.cpp
     main.cpp
     render.cpp

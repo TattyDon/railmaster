@@ -159,6 +159,21 @@ buildings and trains at their value and names no depreciation, so book
 value (the share price's anchor) does not fall with age.
 
 ## M4: Real 3D client
+Started: the client draws the map in 3D (fixed-function OpenGL): a lit
+terrain mesh with smooth ground colours, rocky slopes, flat water, trees,
+houses with roofs, industries with chimneys, track at rail height with
+bridges on piers, stations, and trains as boxes following the track. The
+camera orbits a point on the ground (turn, tilt, zoom; rt3-clone-spec
+§15.6) and the mouse picks by casting its ray onto the terrain, so every
+tool works as before. V switches to the old top-down map.
+
+Next:
+- Track as ballast and rails rather than lines; sleepers; tunnel mouths.
+- Proper low-poly models for engines, cars, stations and buildings, with
+  LOD; textures; a modern shader pipeline.
+- Camera bookmarks (Shift+0-9 store, 0-9 recall), edge scrolling, a radar.
+
+Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
 - Discrete LOD with up to six variants per model, as the original used
   (e.g. 931 to 55 polygons), so the art spec should ask for LOD chains.

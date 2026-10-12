@@ -1,7 +1,7 @@
 // Railmaster client: opens a window, runs the simulation at a fixed rate,
-// draws the map, and offers the build tools. Rendering is deliberately
-// throwaway (fixed-function OpenGL, top-down view); the real 3D renderer
-// replaces it later.
+// draws the map, and offers the build tools. The map is drawn in 3D with
+// fixed-function OpenGL: a lit terrain mesh, track, trains and buildings as
+// simple shapes (V switches to the old top-down view).
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
 //                   [--scenario=FILE] [--load=FILE]
@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -118,9 +119,13 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     client::Camera cam;
     cam.mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
+    cam.terrain = &world.terrain();
+    cam.target_x = static_cast<float>(world.terrain().width()) / 2;
+    cam.target_y = static_cast<float>(world.terrain().height()) / 2;
     SDL_Window* window = SDL_CreateWindow("Railmaster", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           cam.width_px, cam.height_px, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!window) {
@@ -145,15 +150,14 @@ int main(int argc, char* argv[]) {
         tools.select(client::Tool::Status);
         if (!world.economy().towns().empty()) {
             const sim::Town& t = world.economy().towns().front();
-            const sim::MapPoint p = world.economy().node_centre(t.cx, t.cy);
-            cam.pan_x = static_cast<float>(p.x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
-            cam.pan_y = static_cast<float>(p.y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
+            cam.center_on(world.economy().node_centre(t.cx, t.cy));
         }
     }
     if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     double tick_accumulator = 0.0;
+    int right_drag = 0; // pixels the mouse moved with the right button down
     Uint64 last = SDL_GetPerformanceCounter();
 
     for (bool running = true; running;) {
@@ -175,11 +179,25 @@ int main(int argc, char* argv[]) {
                 break;
             }
             case SDL_MOUSEMOTION:
+                // Right-drag turns and tilts the view.
+                if ((ev.motion.state & SDL_BUTTON_RMASK) != 0 && cam.three_d) {
+                    right_drag += std::abs(ev.motion.xrel) + std::abs(ev.motion.yrel);
+                    if (right_drag > 4) cam.orbit(static_cast<float>(ev.motion.xrel) * 0.008f, static_cast<float>(ev.motion.yrel) * 0.005f);
+                }
                 tools.on_mouse_move(static_cast<float>(ev.motion.x), static_cast<float>(ev.motion.y));
                 break;
             case SDL_MOUSEBUTTONDOWN:
-                tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y),
-                               ev.button.button == SDL_BUTTON_RIGHT);
+                if (ev.button.button == SDL_BUTTON_RIGHT) {
+                    right_drag = 0;
+                    break;
+                }
+                tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
+                break;
+            case SDL_MOUSEBUTTONUP:
+                // A right click that did not turn the view: stop the line or route.
+                if (ev.button.button == SDL_BUTTON_RIGHT && right_drag <= 4) {
+                    tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), true);
+                }
                 break;
             case SDL_KEYDOWN:
                 // Ctrl+S saves the game, Ctrl+L loads the last save.
@@ -217,6 +235,16 @@ int main(int argc, char* argv[]) {
                 case SDLK_KP_MINUS: speed.slower(); break;
                 case SDLK_PAUSE:
                 case SDLK_SPACE: speed.toggle_pause(); break;
+                case SDLK_v: {
+                    // 3D or the top-down map, looking at the same place.
+                    const sim::MapPoint at{static_cast<std::int64_t>(cam.target_x * cam.mm_per_tile),
+                                           static_cast<std::int64_t>(cam.target_y * cam.mm_per_tile)};
+                    const sim::MapPoint centre = cam.to_map(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2);
+                    cam.three_d = !cam.three_d;
+                    if (!cam.three_d) cam.zoom = 6.0f;
+                    cam.center_on(cam.three_d ? centre : at);
+                    break;
+                }
                 default: break;
                 }
                 break;
@@ -228,12 +256,23 @@ int main(int argc, char* argv[]) {
         const double dt = static_cast<double>(now - last) / static_cast<double>(SDL_GetPerformanceFrequency());
         last = now;
 
+        // Arrows pan; with Shift, left and right turn the view and up and
+        // down tilt it (rt3-clone-spec §15.6).
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         const float pan_speed = static_cast<float>(dt) * 400.0f / cam.zoom;
-        if (keys[SDL_SCANCODE_LEFT]) cam.pan_x -= pan_speed;
-        if (keys[SDL_SCANCODE_RIGHT]) cam.pan_x += pan_speed;
-        if (keys[SDL_SCANCODE_UP]) cam.pan_y -= pan_speed;
-        if (keys[SDL_SCANCODE_DOWN]) cam.pan_y += pan_speed;
+        const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+        const float turn = static_cast<float>(dt) * 1.5f;
+        if (shift && cam.three_d) {
+            if (keys[SDL_SCANCODE_LEFT]) cam.orbit(-turn, 0);
+            if (keys[SDL_SCANCODE_RIGHT]) cam.orbit(turn, 0);
+            if (keys[SDL_SCANCODE_UP]) cam.orbit(0, turn * 0.6f);
+            if (keys[SDL_SCANCODE_DOWN]) cam.orbit(0, -turn * 0.6f);
+        } else {
+            if (keys[SDL_SCANCODE_LEFT]) cam.pan(-pan_speed, 0);
+            if (keys[SDL_SCANCODE_RIGHT]) cam.pan(pan_speed, 0);
+            if (keys[SDL_SCANCODE_UP]) cam.pan(0, -pan_speed);
+            if (keys[SDL_SCANCODE_DOWN]) cam.pan(0, pan_speed);
+        }
 
         // Fixed-step simulation, decoupled from frame rate.
         tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
@@ -249,9 +288,7 @@ int main(int argc, char* argv[]) {
                 // Look at it: centre the view on its first station.
                 const auto& rw = world.railway();
                 if (!rw.stations().empty()) {
-                    const sim::MapPoint p = rw.track().node(rw.stations().front().node).pos;
-                    cam.pan_x = static_cast<float>(p.x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
-                    cam.pan_y = static_cast<float>(p.y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
+                    cam.center_on(rw.track().node(rw.stations().front().node).pos);
                 }
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
@@ -265,10 +302,7 @@ int main(int argc, char* argv[]) {
             tools.show("THE ECONOMY IS NOW IN " + name, better);
         }
         // The lists and train paging move the view.
-        if (const auto p = tools.take_jump()) {
-            cam.pan_x = static_cast<float>(p->x_mm) / cam.mm_per_tile - static_cast<float>(cam.width_px) / (2 * cam.zoom);
-            cam.pan_y = static_cast<float>(p->y_mm) / cam.mm_per_tile - static_cast<float>(cam.height_px) / (2 * cam.zoom);
-        }
+        if (const auto p = tools.take_jump()) cam.center_on(*p);
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
         if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
@@ -281,16 +315,23 @@ int main(int argc, char* argv[]) {
             tools.show(text, !bad);
         }
 
+        cam.terrain = &world.terrain();
         cam.apply();
-        glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        client::draw_terrain(world.terrain());
-        if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()));
+        if (cam.three_d) glClearColor(0.55f, 0.70f, 0.85f, 1.0f); // sky
+        else glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (cam.three_d) {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+        }
+        client::draw_terrain(world.terrain(), cam);
+        if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
         client::draw_sites(world.economy(), world.data().industries, cam, tools.overlay());
-        client::draw_territory_borders(world.territories());
+        client::draw_territory_borders(world.territories(), cam);
         client::draw_railway(world.railway(), cam, world.player_company());
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         tools.draw_world_overlay();
+        glDisable(GL_DEPTH_TEST);
 
         cam.apply_screen();
         client::draw_town_names(world.economy(), cam, world.data().balance.towns);

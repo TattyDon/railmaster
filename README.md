@@ -11,9 +11,10 @@ may and may not contain.
 ## Try it
 
 Railmaster is a desktop game: you build it from source and run it. It takes
-a few minutes. The client is still a placeholder, a flat top-down map drawn
-with lines and squares; the 3D client comes later
-([docs/ROADMAP.md](docs/ROADMAP.md)).
+a few minutes. The 3D client is in its first stage: lit terrain with
+rivers and trees, track, towns, industries and trains as simple shapes,
+and a camera you can turn and tilt. Proper models and textures come later
+([docs/ROADMAP.md](docs/ROADMAP.md)); V switches to the old flat map.
 
 **1. Get the code.** Until it is merged into `main`, the work is on the
 `claude/project-scaffold` branch:
@@ -66,7 +67,8 @@ there):
   always says what the current tool does.
 - O and P cycle the map overlays: holdings, profit, grade, traffic and
   cargo prices.
-- Mouse wheel zooms, arrow keys pan. Ctrl+S saves, Ctrl+L loads.
+- Mouse wheel zooms, arrow keys pan; Shift+arrows or dragging with the
+  right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 
 Other ways to start:
 - a scenario with Bronze, Silver and Gold goals:
@@ -122,7 +124,9 @@ Early development. Done so far:
 - map overlays (holdings, profit, grade, traffic, cargo prices) and lists
   of trains, stations and companies
 - compressed saves with a command log that replays a game exactly
-- a placeholder top-down client with a demo network of three towns
+- a first 3D client (lit terrain, trees, houses, industries, track and
+  trains as simple shapes; turn, tilt and zoom) with a demo network of
+  three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
 
@@ -191,6 +195,8 @@ and checks the economy against the spec's targets
 | PgUp / PgDn (Inspect) | Go to your next or previous train |
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
 | Arrows, mouse wheel | Pan, zoom |
+| Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
+| V | Switch between the 3D view and the flat top-down map |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |
 
 The bottom bar always shows what the current tool does and its options. While
