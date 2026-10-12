@@ -8,6 +8,76 @@ Railmaster is not affiliated with Take-Two Interactive, 2K or PopTop
 Software. See [docs/CLEAN_ROOM.md](docs/CLEAN_ROOM.md) for what the project
 may and may not contain.
 
+## Try it
+
+Railmaster is a desktop game: you build it from source and run it. It takes
+a few minutes. The client is still a placeholder, a flat top-down map drawn
+with lines and squares; the 3D client comes later
+([docs/ROADMAP.md](docs/ROADMAP.md)).
+
+**1. Get the code.** Until it is merged into `main`, the work is on the
+`claude/project-scaffold` branch:
+
+```sh
+git clone https://github.com/TattyDon/railmaster.git
+cd railmaster
+git checkout claude/project-scaffold
+```
+
+**2. Install the dependencies and build.**
+
+Linux (Debian/Ubuntu):
+
+```sh
+sudo apt install cmake ninja-build g++ libsdl2-dev libgl-dev nlohmann-json3-dev zlib1g-dev
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_BUILD_TESTS=OFF
+cmake --build build
+```
+
+macOS (with Homebrew and the Xcode command-line tools):
+
+```sh
+brew install cmake ninja sdl2 nlohmann-json
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_BUILD_TESTS=OFF
+cmake --build build
+```
+
+Windows: the easiest way is WSL2 with Ubuntu, following the Linux steps;
+on Windows 11 the game window appears on the desktop. A native build with
+Visual Studio and vcpkg (`sdl2`, `nlohmann-json`, `zlib`) should also work.
+
+Only the Linux build is tested so far (CI runs gcc and clang on Ubuntu).
+If the macOS or Windows steps fail, please open an issue with the error.
+
+**3. Play.** From the `railmaster` folder (the game reads `data/` from
+there):
+
+```sh
+./build/src/client/railmaster
+```
+
+- The game opens with the founding dialog: Enter founds your railroad on
+  the usual terms (`--quick` skips the dialog).
+- A starter network of three towns, their stations and two trains is
+  built for you.
+- Every game starts paused: Space starts the clock, + and - change the
+  speed.
+- F1 to F11 pick the tools (or click the toolbar), and the bottom bar
+  always says what the current tool does.
+- O and P cycle the map overlays: holdings, profit, grade, traffic and
+  cargo prices.
+- Mouse wheel zooms, arrow keys pan. Ctrl+S saves, Ctrl+L loads.
+
+Other ways to start:
+- a scenario with Bronze, Silver and Gold goals:
+  `./build/src/client/railmaster --scenario=data/scenarios/lowland_junction.json`
+  (F10 shows the goals);
+- `--rivals=0` to `--rivals=7` for fewer or more AI companies (3 by
+  default);
+- `--empty` for a blank map without the starter network.
+
+Every key is listed under [Playing](#playing) below.
+
 ## Status
 
 Early development. Done so far:
@@ -49,6 +119,9 @@ Early development. Done so far:
   Silver and Gold goals and deadlines (three original ones in
   `data/scenarios/`)
 - saved games that load and play on exactly as the original
+- map overlays (holdings, profit, grade, traffic, cargo prices) and lists
+  of trains, stations and companies
+- compressed saves with a command log that replays a game exactly
 - a placeholder top-down client with a demo network of three towns
 
 Game rules are written up in `docs/spec/` before they are implemented.
@@ -132,6 +205,7 @@ dark tunnels), with its price next to the cursor.
 | `src/client/` | SDL2/OpenGL front end |
 | `tests/` | Unit tests for the simulation |
 | `tools/calibrate/` | Headless balance check against the spec's targets |
+| `tools/replay/` | Replays a saved game from its command log and checks it ends as saved |
 | `data/` | Game data in original JSON formats; `balance.json` holds every tunable number ([docs/spec/balance.md](docs/spec/balance.md)) |
 | `docs/spec/` | Sourced specification of the original game's rules |
 | `docs/ROADMAP.md` | Milestones and research backlog |
