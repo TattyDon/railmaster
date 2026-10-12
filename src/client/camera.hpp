@@ -23,6 +23,10 @@ struct Camera {
     float mm_per_tile = 1'000'000.0f;
     int width_px = 1280;
     int height_px = 800;
+    // The drawing surface in real pixels: on a Retina or other high-DPI
+    // screen, twice (or more) the window's size above, which stays in the
+    // points that mouse positions and the interface use. 0: the same.
+    int drawable_w = 0, drawable_h = 0;
 
     bool three_d = true;
     float target_x = 128.0f, target_y = 128.0f; // tiles: the point on the ground looked at

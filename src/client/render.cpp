@@ -3,6 +3,7 @@
 #include "font.hpp"
 #include "tools.hpp"
 
+#include <SDL.h>
 #include <SDL_opengl.h>
 
 #include <algorithm>
@@ -207,6 +208,13 @@ template <typename Texel> GLuint make_texture(Texel texel) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    // Sharp ground towards the horizon, where the card supports it.
+    if (SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
+        constexpr GLenum kMaxAnisotropy = 0x84FE, kMaxAnisotropyLimit = 0x84FF;
+        GLfloat limit = 1.0f;
+        glGetFloatv(kMaxAnisotropyLimit, &limit);
+        glTexParameterf(GL_TEXTURE_2D, kMaxAnisotropy, std::min(8.0f, limit));
+    }
     glBindTexture(GL_TEXTURE_2D, 0);
     return tex;
 }

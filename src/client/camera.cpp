@@ -105,7 +105,7 @@ float Camera::ground_z(float tx, float ty) const {
 }
 
 void Camera::apply() {
-    glViewport(0, 0, width_px, height_px);
+    glViewport(0, 0, drawable_w > 0 ? drawable_w : width_px, drawable_h > 0 ? drawable_h : height_px);
     if (!three_d) {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();

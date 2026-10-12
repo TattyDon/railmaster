@@ -128,6 +128,9 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    // Smooth edges: 4x multisampling, if the system offers it (else plain).
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
     client::Camera cam;
     cam.mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
@@ -136,8 +139,17 @@ int main(int argc, char* argv[]) {
     cam.target_y = static_cast<float>(world.terrain().height()) / 2;
     const std::string build_label = std::string("BUILD ") + client::kBuildCommit + "  " + client::kBuildDate;
     const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
+    // High-DPI: draw at the screen's full resolution on Retina displays.
+    const Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
     SDL_Window* window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                          cam.width_px, cam.height_px, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                                          cam.width_px, cam.height_px, window_flags);
+    if (!window) {
+        // No multisampling to be had: try again without it.
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
+                                  cam.height_px, window_flags);
+    }
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -145,12 +157,22 @@ int main(int argc, char* argv[]) {
     }
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
+        // Some drivers refuse a multisampled context: fall back to a plain one.
+        SDL_DestroyWindow(window);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
+                                  cam.height_px, window_flags);
+        gl = window ? SDL_GL_CreateContext(window) : nullptr;
+    }
+    if (!gl) {
         std::fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
     SDL_GL_SetSwapInterval(1);
+    glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -381,6 +403,7 @@ int main(int argc, char* argv[]) {
         }
 
         cam.terrain = &world.terrain();
+        SDL_GL_GetDrawableSize(window, &cam.drawable_w, &cam.drawable_h);
         cam.apply();
         if (cam.three_d) glClearColor(0.55f, 0.70f, 0.85f, 1.0f); // sky
         else glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
