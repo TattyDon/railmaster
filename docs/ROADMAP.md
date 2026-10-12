@@ -255,12 +255,16 @@ assembled the same way (a timber depot, a two-storey station, a hall with
 a clock tower), as are a windmill beside grain and corn farms and a
 watermill for the lumber mill. The player's engines are always the green
 locomotive, rivals' red or blue, and each flies a pennant in its owner's
-colour. Other industries are still drawn in code.
+colour. Mills, factories, works, plants, warehouses and barracks come
+from Kenney's City Kit (Industrial) (CC0) on a brick recolouring of its
+palette, as do water towers and engine sheds; mines, farms, logging camps,
+oil wells and ports keep their code-drawn headframes, fields and derricks.
 
 Next:
-- Real art: the remaining industries (Kenney's factory and industrial
-  city kits are reachable); a 2x2-cell house shape for variety; LOD for
-  model trees far off.
+- Real art: props for mines, logging camps and ports (Kenney's Survival
+  Kit has logs, rocks, crates and barrels); a 2x2-cell house shape for
+  variety; LOD for model trees far off; sheds and towers placed clear of
+  other track.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

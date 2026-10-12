@@ -14,8 +14,8 @@ Railmaster is a desktop game: you build it from source and run it. It takes
 a few minutes. The 3D client is in its first stage: lit, textured terrain
 with rivers, woods, shadows and distance haze; towns of timber and stone
 houses, terraces, shops and churches along streets, and stations to
-match; engines, cars and trees from Kenney's CC0 kits; track and most
-industries drawn in code; smoke from engines and chimneys; and a camera you can turn and tilt
+match; brick mills and works; engines, cars and trees, all from Kenney's
+CC0 kits; track, mines, farms and ports drawn in code; smoke from engines and chimneys; and a camera you can turn and tilt
 ([docs/ROADMAP.md](docs/ROADMAP.md) has what comes next). V switches to
 the old flat map.
 

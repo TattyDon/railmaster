@@ -2026,7 +2026,14 @@ void draw_railway(const sim::World& w, const Camera& cam) {
             const float back = 0.2f + 0.08f * s;
             const float x = tiles(n.pos.x_mm, cam) - dy * back, y = tiles(n.pos.y_mm, cam) + dx * back;
             const float z = cam.ground_z(x, y);
-            if (b.type == sim::ServiceType::ServiceTower) {
+            // From the art where there is some, facing the track.
+            const bool tower = b.type == sim::ServiceType::ServiceTower;
+            if (const models::Model* m = models::pick(tower ? "service_tower" : "engine_shed", b.node)) {
+                glEnd();
+                if (tower) models::draw_to_height(*m, x, y, z - 0.005f, dy, -dx, 0.26f * s);
+                else models::draw(*m, x + dx * 0.15f * s, y + dy * 0.15f * s, z - 0.005f, dy, -dx, 0.34f * s);
+                glBegin(GL_QUADS);
+            } else if (tower) {
                 // A water tank on legs.
                 const float tank[3] = {0.3f, 0.35f, 0.42f};
                 box(x, y, z, dx, dy, 0.012f * s, 0.012f * s, 0.16f * s, post, post);

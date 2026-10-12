@@ -33,6 +33,7 @@ every time), so a town gets a mix of houses.
 | `car_coach`, `car_mail`, `car_diner`, `car_boxcar`, `car_hopper`, `car_caboose` | Cars with no model for their cargo | Its length to the car's |
 | `tree_broadleaf`, `tree_conifer` | The woods' trees | To each tree's height, turned at random |
 | `industry:<key>` (e.g. `industry:coal_mine`, `industry:steel_mill`; keys in `data/industries.json`) | That industry's buildings | To 70% of its site, in proportion |
+| `service_tower`, `engine_shed` | Water towers and engine sheds by the track | The tower to its height, the shed along the track, facing it |
 | `beside:<key>` | Nothing: stands beside the industry's own shapes (a windmill by the fields) | To about half a site tall |
 
 Models are scaled to fit: buildings across their plot and along it, with
@@ -111,8 +112,16 @@ material's colour by its name, for every model that uses it, as a screen
 
 Stations (a timber depot, a two-storey station, a hall with a clock
 tower), a windmill (beside grain and corn farms) and a watermill (the
-lumber mill) are assembled from the same kit. Other industries are still
-drawn in code.
+lumber mill) are assembled from the same kit.
+- `kenney-industrial/`: works from Kenney's City Kit (Industrial) (CC0) on
+  a brick recolouring of its palette: sawtooth-roofed mills and factories,
+  a works with three stacks (steel and aluminium), gabled works (breweries,
+  packing plants), tank works (chemicals, refineries), a power station and
+  cooling tower, warehouses and barracks, plus the water tower and engine
+  shed by the track.
+
+Mines, farms, logging camps, oil wells and ports are still drawn in code
+(their headframes, fields and derricks say what they are).
 
 ## Where to get art
 
