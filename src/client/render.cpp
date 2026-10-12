@@ -388,36 +388,6 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
         glVertex3f(static_cast<float>(w), fy, floor_z);
     }
     glEnd();
-    // Trees: thick in forest, a few in the grass.
-    glBegin(GL_TRIANGLES);
-    for (int ty = 0; ty < hgt; ++ty) {
-        for (int tx = 0; tx < w; ++tx) {
-            const sim::GroundType g = t.ground(tx, ty);
-            int n = 0;
-            if (g == sim::GroundType::Forest) n = 4;
-            else if (g == sim::GroundType::Grass && unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 7)) < 0.06f) n = 1;
-            for (int i = 0; i < n; ++i) {
-                const std::uint32_t hh = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 11));
-                const float x = static_cast<float>(tx) + 0.15f + 0.7f * unit(hh);
-                const float y = static_cast<float>(ty) + 0.15f + 0.7f * unit(hh >> 16);
-                const float base = cam.ground_z(x, y);
-                const float hgt_t = 0.30f + 0.18f * unit(hh >> 8), half = 0.11f;
-                const float shade_k = 0.85f + 0.3f * unit(hh >> 4);
-                glColor3f(0.13f * shade_k, 0.33f * shade_k, 0.12f * shade_k);
-                const float cx[4] = {x - half, x + half, x + half, x - half};
-                const float cy[4] = {y - half, y - half, y + half, y + half};
-                for (int k = 0; k < 4; ++k) {
-                    const int j = (k + 1) % 4;
-                    const float ex = cx[j] - cx[k], ey = cy[j] - cy[k];
-                    glNormal3f(ey, -ex, half * 0.8f);
-                    glVertex3f(cx[k], cy[k], base);
-                    glVertex3f(cx[j], cy[j], base);
-                    glVertex3f(x, y, base + hgt_t);
-                }
-            }
-        }
-    }
-    glEnd();
 }
 
 // Where a train is, which way it faces, and its rail height.
@@ -1162,6 +1132,8 @@ public:
             mark(tile(n.pos.x_mm), tile(n.pos.y_mm), 0.25f + 0.25f * s);
         }
     }
+    // A disc `r` tiles round a point (towns, for the trees).
+    void mark_disc(float x, float y, float r) { mark(x, y, r); }
     // Industries' spots, `half` tiles each way from their centres.
     void mark_square(float x, float y, float half) {
         for (float yy = y - half; yy <= y + half; yy += kCell)
@@ -1612,6 +1584,181 @@ void draw_station(sim::StationSize size, float x, float y, float z, float dx, fl
     box(cx, cy, deck_z, qx, qy, off, 0.014f * s, 0.03f * s, trim, slate);
 }
 
+// What stands where (railway, industries, towns) and how the towns are laid
+// out, kept between frames: rebuilt only when the railway, the sites, the
+// towns or the drawing scale change. `version` counts rebuilds.
+struct Scene {
+    std::uint64_t key = 0;
+    std::uint64_t version = 0;
+    std::optional<Occupancy> taken;     // railway and industries: houses keep off
+    std::optional<Occupancy> wooded;    // that and the towns: trees keep off
+    TownLayout towns;
+};
+
+std::uint64_t scene_key(const sim::Economy& eco, const sim::Railway& rw, const Camera& cam) {
+    std::uint64_t h = 1469598103934665603ull;
+    const auto mix = [&](std::uint64_t v) { h = (h ^ v) * 1099511628211ull; };
+    for (const sim::TrackEdge& e : rw.track().edges()) mix((e.removed ? 1u : 0u) | (e.double_track ? 2u : 0u) | (static_cast<unsigned>(e.kind) << 2));
+    for (const sim::Station& st : rw.stations()) mix((static_cast<std::uint64_t>(st.node) << 4) | static_cast<std::uint64_t>(st.size));
+    mix(rw.station_buildings().size());
+    mix(rw.service_buildings().size());
+    for (const sim::Site& site : eco.sites()) mix((static_cast<std::uint64_t>(site.level) << 1) | (site.closed ? 1u : 0u));
+    mix(static_cast<std::uint64_t>(std::lround(object_scale(cam) * 4)));
+    mix(cam.terrain ? static_cast<std::uint64_t>(cam.terrain->width()) : 0);
+    return h;
+}
+
+const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw, const Camera& cam) {
+    static Scene sc;
+    const std::uint64_t key = scene_key(eco, rw, cam);
+    if (sc.taken && sc.key == key) return sc;
+    const auto k = static_cast<float>(eco.cells_per_node());
+    const int width = cam.terrain ? cam.terrain->width() : eco.width() * eco.cells_per_node();
+    const int height = cam.terrain ? cam.terrain->height() : eco.height() * eco.cells_per_node();
+    sc.taken.emplace(rw, cam, width, height);
+    for (const sim::Site& site : eco.sites()) {
+        if (site.closed || industries.get(site.type).kind == sim::IndustryKind::House) continue;
+        sc.taken->mark_square((static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k, 0.4f * k);
+    }
+    sc.towns = layout_towns(eco, industries, *sc.taken, cam);
+    sc.wooded = sc.taken;
+    for (const Plot& p : sc.towns.plots) sc.wooded->mark_disc(p.x, p.y, 0.35f);
+    for (std::size_t i = 0; i + 3 < sc.towns.streets.size(); i += 4) {
+        const float x0 = sc.towns.streets[i], y0 = sc.towns.streets[i + 1], x1 = sc.towns.streets[i + 2], y1 = sc.towns.streets[i + 3];
+        const int steps = std::max(1, static_cast<int>(std::hypot(x1 - x0, y1 - y0) / 0.2f));
+        for (int j = 0; j <= steps; ++j) {
+            const float t = static_cast<float>(j) / static_cast<float>(steps);
+            sc.wooded->mark_disc(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0.12f);
+        }
+    }
+    sc.key = key;
+    ++sc.version;
+    return sc;
+}
+
+// Smooth noise over the map (not wrapping), `cells` tiles to a cell.
+float map_noise(float x, float y, float cells, std::uint32_t seed) {
+    const float fx = x / cells, fy = y / cells;
+    const int x0 = static_cast<int>(std::floor(fx)), y0 = static_cast<int>(std::floor(fy));
+    const float tx = fx - static_cast<float>(x0), ty = fy - static_cast<float>(y0);
+    const auto at = [&](int cx, int cy) { return unit(hash(static_cast<std::uint32_t>(cx + 4096), static_cast<std::uint32_t>(cy + 4096), seed)); };
+    const float sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const float a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx;
+    const float b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx;
+    return a + (b - a) * sy;
+}
+
+// A cone or frustum of six sides without a base, from radius r0 at z0 to r1
+// at z1. Inside GL_QUADS.
+void frustum(float x, float y, float z0, float r0, float z1, float r1, const float* colour) {
+    constexpr int kSides = 6;
+    glColor3fv(colour);
+    for (int i = 0; i < kSides; ++i) {
+        const float a0 = 6.2831853f * static_cast<float>(i) / kSides, a1 = 6.2831853f * static_cast<float>(i + 1) / kSides;
+        const float am = (a0 + a1) / 2;
+        glNormal3f(std::cos(am), std::sin(am), (r0 - r1) / std::max(0.001f, z1 - z0));
+        glVertex3f(x + r0 * std::cos(a0), y + r0 * std::sin(a0), z0);
+        glVertex3f(x + r0 * std::cos(a1), y + r0 * std::sin(a1), z0);
+        glVertex3f(x + r1 * std::cos(a1), y + r1 * std::sin(a1), z1);
+        glVertex3f(x + r1 * std::cos(a0), y + r1 * std::sin(a0), z1);
+    }
+}
+
+// The trees of one 32x32-tile chunk: woods where the noise runs high, the
+// odd tree elsewhere; conifers (more of them higher up) and broadleaves.
+constexpr int kTreeChunk = 32;
+
+void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Camera& cam, int cx0, int cy0) {
+    const float trunk[3] = {0.36f, 0.26f, 0.17f};
+    glBegin(GL_QUADS);
+    for (int ty = cy0; ty < std::min(cy0 + kTreeChunk, t.height()); ++ty) {
+        for (int tx = cx0; tx < std::min(cx0 + kTreeChunk, t.width()); ++tx) {
+            const sim::GroundType g = t.ground(tx, ty);
+            if (g == sim::GroundType::Water || g == sim::GroundType::Desert) continue;
+            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
+            const float wood = map_noise(fx, fy, 14.0f, 61) * 0.7f + map_noise(fx, fy, 5.0f, 62) * 0.3f;
+            const std::uint32_t th = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 7);
+            int n = 0;
+            if (g == sim::GroundType::Forest) n = 5;
+            else if (g == sim::GroundType::Rock || g == sim::GroundType::Snow) n = unit(th) < 0.12f ? 1 : 0;
+            else if (wood > 0.66f) n = 4;
+            else if (wood > 0.58f) n = 2;
+            else if (unit(th) < 0.035f) n = 1;
+            for (int i = 0; i < n; ++i) {
+                const std::uint32_t hh = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 11));
+                const float x = fx + 0.1f + 0.8f * unit(hh), y = fy + 0.1f + 0.8f * unit(hh >> 16);
+                if (wooded.blocked(x, y, 0.08f)) continue;
+                const float base = cam.ground_z(x, y) - 0.01f;
+                const float size = 0.65f + 0.4f * unit(hh >> 8);
+                const float shade = 0.82f + 0.3f * unit(hh >> 4);
+                // Stands of conifers among broadleaf woods, and the odd one mixed in.
+                const float pick = unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 211)));
+                const bool conifer = map_noise(x, y, 18.0f, 63) > 0.58f ? pick < 0.85f : pick < 0.12f;
+                box(x, y, base, 1, 0, 0.012f * size, 0.012f * size, 0.1f * size, trunk, trunk);
+                if (conifer) {
+                    const float green[3] = {0.1f * shade, 0.27f * shade, 0.13f * shade};
+                    const float tip[3] = {0.12f * shade, 0.31f * shade, 0.15f * shade};
+                    frustum(x, y, base + 0.05f * size, 0.12f * size, base + 0.3f * size, 0.0f, green);
+                    frustum(x, y, base + 0.2f * size, 0.09f * size, base + 0.45f * size, 0.0f, tip);
+                } else {
+                    const float tint = unit(hh >> 12);
+                    const float leaf[3] = {(0.2f + 0.12f * tint) * shade, (0.4f + 0.08f * tint) * shade, 0.14f * shade};
+                    const float top[3] = {leaf[0] * 1.1f, leaf[1] * 1.1f, leaf[2] * 1.1f};
+                    const float r = 0.12f * size;
+                    frustum(x, y, base + 0.09f * size, r * 0.45f, base + 0.2f * size, r, leaf);
+                    frustum(x, y, base + 0.2f * size, r, base + 0.3f * size, r * 0.85f, leaf);
+                    frustum(x, y, base + 0.3f * size, r * 0.85f, base + 0.38f * size, 0.0f, top);
+                }
+            }
+        }
+    }
+    glEnd();
+}
+
+// The chunks near the camera, each a display list built when first seen or
+// after the scene changes (a few a frame, so building track never stalls).
+void draw_trees(const sim::Terrain& t, const Scene& sc, const Camera& cam) {
+    struct Chunk {
+        GLuint list = 0;
+        std::uint64_t version = 0;
+        std::uint64_t terrain = 0;
+    };
+    static std::vector<Chunk> chunks;
+    static int across = 0, down = 0;
+    across = (t.width() + kTreeChunk - 1) / kTreeChunk;
+    down = (t.height() + kTreeChunk - 1) / kTreeChunk;
+    if (chunks.size() != static_cast<std::size_t>(across * down)) {
+        for (Chunk& c : chunks) if (c.list != 0) glDeleteLists(c.list, 1);
+        chunks.assign(static_cast<std::size_t>(across * down), Chunk{});
+    }
+    static std::uint64_t terrain = 0;
+    static const sim::Terrain* terrain_of = nullptr;
+    if (terrain_of != &t || terrain == 0) {
+        terrain = terrain_key(t, cam);
+        terrain_of = &t;
+    }
+    const float reach = std::min(cam.distance * 3.0f + 30.0f, 220.0f);
+    int builds = 0;
+    for (int cy = 0; cy < down; ++cy) {
+        for (int cx = 0; cx < across; ++cx) {
+            const float mx = (static_cast<float>(cx) + 0.5f) * kTreeChunk, my = (static_cast<float>(cy) + 0.5f) * kTreeChunk;
+            if (std::hypot(mx - cam.target_x, my - cam.target_y) > reach + kTreeChunk) continue;
+            Chunk& c = chunks[static_cast<std::size_t>(cy * across + cx)];
+            const bool stale = c.list == 0 || c.version != sc.version || c.terrain != terrain;
+            if (stale && (builds < 6 || c.list == 0)) {
+                if (c.list == 0) c.list = glGenLists(1);
+                glNewList(c.list, GL_COMPILE);
+                build_tree_chunk(t, *sc.wooded, cam, cx * kTreeChunk, cy * kTreeChunk);
+                glEndList();
+                c.version = sc.version;
+                c.terrain = terrain;
+                ++builds;
+            }
+            glCallList(c.list);
+        }
+    }
+}
+
 } // namespace
 
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
@@ -2024,14 +2171,8 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glEnd();
     }
     if (cam.three_d) {
-        const int width = cam.terrain ? cam.terrain->width() : eco.width() * eco.cells_per_node();
-        const int height = cam.terrain ? cam.terrain->height() : eco.height() * eco.cells_per_node();
-        Occupancy taken(rw, cam, width, height);
-        for (const sim::Site& s : eco.sites()) {
-            if (s.closed || industries.get(s.type).kind == sim::IndustryKind::House) continue;
-            taken.mark_square((static_cast<float>(s.cx) + 0.5f) * k, (static_cast<float>(s.cy) + 0.5f) * k, 0.4f * k);
-        }
-        const TownLayout towns = layout_towns(eco, industries, taken, cam);
+        const Scene& sc = scene(eco, industries, rw, cam);
+        const TownLayout& towns = sc.towns;
         begin_lit();
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
@@ -2044,6 +2185,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             industry_3d(t, x0, y0, k, hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3), cam);
         }
         glEnd();
+        if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();
         return;
     }

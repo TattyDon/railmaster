@@ -219,6 +219,16 @@ canopied platforms, a stone hall with wings and a clock tower, and a
 footbridge. Platforms have painted edges and lamps, and a name board in
 the owner's colours stands at the end.
 
+The countryside is wooded: groves and woods spread by noise over the grass
+(the generator places no forest of its own yet), single trees between,
+broadleaves with rounded crowns and stands of two-tier conifers, all clear
+of the railway, industries, towns and water. Trees are built in 32x32-tile
+chunks as they come into view and drawn only near the camera; what stands
+where and the town layouts are cached and rebuilt only when the railway or
+the towns change. The view opens on the biggest town. The client draws at
+full resolution on Retina screens, with 4x anti-aliasing, and follows the
+window's real size (a Mac may open it smaller than asked).
+
 Next:
 - Proper low-poly models for industries, with LOD; textures
   on buildings; a modern shader pipeline.

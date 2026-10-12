@@ -137,6 +137,20 @@ int main(int argc, char* argv[]) {
     cam.terrain = &world.terrain();
     cam.target_x = static_cast<float>(world.terrain().width()) / 2;
     cam.target_y = static_cast<float>(world.terrain().height()) / 2;
+    // Open on the biggest town, close enough to see its streets.
+    {
+        const sim::Economy& eco = world.economy();
+        std::int64_t best = -1;
+        for (std::size_t t = 0; t < eco.towns().size(); ++t) {
+            const std::int64_t houses = eco.town_houses(t);
+            if (houses <= best) continue;
+            best = houses;
+            const auto k = static_cast<float>(eco.cells_per_node());
+            cam.target_x = (static_cast<float>(eco.towns()[t].cx) + 0.5f) * k;
+            cam.target_y = (static_cast<float>(eco.towns()[t].cy) + 0.5f) * k;
+        }
+        if (best >= 0) cam.distance = 14.0f;
+    }
     const std::string build_label = std::string("BUILD ") + client::kBuildCommit + "  " + client::kBuildDate;
     const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
     // High-DPI: draw at the screen's full resolution on Retina displays.
@@ -403,6 +417,9 @@ int main(int argc, char* argv[]) {
         }
 
         cam.terrain = &world.terrain();
+        // The window's real size: the system may have made it smaller than
+        // asked (to fit a laptop screen) without a resize event.
+        SDL_GetWindowSize(window, &cam.width_px, &cam.height_px);
         SDL_GL_GetDrawableSize(window, &cam.drawable_w, &cam.drawable_h);
         cam.apply();
         if (cam.three_d) glClearColor(0.55f, 0.70f, 0.85f, 1.0f); // sky
