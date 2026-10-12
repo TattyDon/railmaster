@@ -2057,8 +2057,25 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                                  : loco.fuel == sim::Fuel::Diesel ? Stock::Diesel
                                                                   : Stock::Electric;
             const float gap = 0.012f * s;
+            // Engines from the art are told apart by their paint: the
+            // player's always the first model, rivals' the others; a
+            // pennant in the owner's colour flies over the cab.
             const std::uint32_t seed = hash(t.id, 17, 5);
-            float back = stock(engine, x, y, z, p.dx, p.dy, s, c, seed) + gap;
+            const std::uint32_t engine_seed = t.owner == player ? 0u : 1u + t.owner % 2u;
+            const bool art_engine = models::has(stock_role(engine));
+            float back = stock(engine, x, y, z, p.dx, p.dy, s, c, engine_seed) + gap;
+            if (art_engine) {
+                float flag[3];
+                owner_rgb(t.owner, player, flag[0], flag[1], flag[2]);
+                if (t.owner == player) {
+                    flag[0] = 0.95f; flag[1] = 0.85f; flag[2] = 0.2f; // the player's in gold
+                }
+                const float pole[3] = {0.2f, 0.2f, 0.2f};
+                const float fx = x - p.dx * back * 0.75f, fy = y - p.dy * back * 0.75f, top = z + 0.2f * s;
+                box(fx, fy, top - 0.04f * s, p.dx, p.dy, 0.003f * s, 0.003f * s, 0.07f * s, pole, pole);
+                box(fx - p.dx * 0.02f * s, fy - p.dy * 0.02f * s, top + 0.01f * s, p.dx, p.dy, 0.02f * s, 0.002f * s, 0.018f * s,
+                    flag, flag);
+            }
             if (engine == Stock::Steam && t.speed_mm_per_tick > 0) {
                 add_smoke(x - p.dx * 0.02f * s, y - p.dy * 0.02f * s, z + 0.155f * s, 0.016f * s);
             }
@@ -2283,11 +2300,19 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             if (t.kind == sim::IndustryKind::House) continue; // laid out by town, above
             const std::uint32_t seed = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3);
             if (const models::Model* m = models::pick("industry:" + t.key, seed)) {
+                // In place of the shapes drawn in code, in proportion.
                 glEnd();
-                models::draw(*m, x0, y0, cam.ground_z(x0, y0) - 0.01f, 0, 1, 0.8f * k, 0.8f * k);
+                models::draw(*m, x0, y0, cam.ground_z(x0, y0) - 0.01f, 0, 1, 0.7f * k);
                 glBegin(GL_QUADS);
             } else {
                 industry_3d(t, x0, y0, k, seed, cam);
+            }
+            if (const models::Model* m = models::pick("beside:" + t.key, seed)) {
+                // Beside them (a windmill by the fields).
+                const float bx = x0 + 0.3f * k, by = y0 - 0.3f * k;
+                glEnd();
+                models::draw_to_height(*m, bx, by, cam.ground_z(bx, by) - 0.01f, 1, 0, 0.55f * k);
+                glBegin(GL_QUADS);
             }
         }
         glEnd();

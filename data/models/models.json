@@ -16,6 +16,12 @@
     "terrace": ["prefab:terrace-stone", "prefab:terrace-wood"],
     "shop": ["prefab:shop-stone", "prefab:shop-wood"],
     "church": ["prefab:church"],
+    "station_small": ["prefab:station-small"],
+    "station_medium": ["prefab:station-medium"],
+    "station_large": ["prefab:station-large"],
+    "industry:lumber_mill": ["prefab:watermill"],
+    "beside:grain_farm": ["prefab:windmill"],
+    "beside:corn_farm": ["prefab:windmill"],
     "engine_steam": [
       "kenney-train-kit/train-locomotive-a.glb",
       "kenney-train-kit/train-locomotive-b.glb",

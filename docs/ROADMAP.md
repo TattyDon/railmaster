@@ -250,13 +250,17 @@ the woods from Kenney's Nature Kit (CC0), recoloured by material name to
 the game's greens. Town buildings are assembled from Kenney's Fantasy
 Town Kit (CC0) walls and roofs as prefabs (tools/models/town_prefabs.py):
 timber and stone cottages, houses, terraces, shops and a church with a
-spire, on period recolourings of the kit's palette. Stations and
-industries are still drawn in code.
+spire, on period recolourings of the kit's palette. Stations are
+assembled the same way (a timber depot, a two-storey station, a hall with
+a clock tower), as are a windmill beside grain and corn farms and a
+watermill for the lumber mill. The player's engines are always the green
+locomotive, rivals' red or blue, and each flies a pennant in its owner's
+colour. Other industries are still drawn in code.
 
 Next:
-- Real art: stations and industries assembled from kits (the town kit's
-  windmill and watermill, the factory kits); a 2x2-cell house shape for
-  variety; LOD for model trees far off.
+- Real art: the remaining industries (Kenney's factory and industrial
+  city kits are reachable); a 2x2-cell house shape for variety; LOD for
+  model trees far off.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

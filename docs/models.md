@@ -32,13 +32,16 @@ every time), so a town gets a mix of houses.
 | `car:<cargo>` (e.g. `car:coal`, `car:lumber`, `car:oil`; keys in `data/cargo.json`) | A car carrying that cargo | Its length to the car's |
 | `car_coach`, `car_mail`, `car_diner`, `car_boxcar`, `car_hopper`, `car_caboose` | Cars with no model for their cargo | Its length to the car's |
 | `tree_broadleaf`, `tree_conifer` | The woods' trees | To each tree's height, turned at random |
-| `industry:<key>` (e.g. `industry:coal_mine`, `industry:steel_mill`; keys in `data/industries.json`) | That industry's buildings | To 80% of its site |
+| `industry:<key>` (e.g. `industry:coal_mine`, `industry:steel_mill`; keys in `data/industries.json`) | That industry's buildings | To 70% of its site, in proportion |
+| `beside:<key>` | Nothing: stands beside the industry's own shapes (a windmill by the fields) | To about half a site tall |
 
 Models are scaled to fit: buildings across their plot and along it, with
 height scaling with the width; engines and cars to their length, keeping
 their proportions; trees to their height. They stand on their lowest
-point. Engines and cars pick a model by train, so a railroad's trains
-vary.
+point. Cars pick a model by train, so a railroad's freight varies. Engines are
+picked by owner: the player's always get the role's first model, rivals'
+the others, and an engine from the art flies a pennant in its owner's
+colour (the player's gold).
 
 ## Prefabs: models assembled from pieces
 
@@ -106,7 +109,10 @@ material's colour by its name, for every model that uses it, as a screen
   cottages, houses, terraces, shops and church, with period recolourings
   of its palette (slate and terracotta roofs, grey stone).
 
-Stations and industries are still drawn in code.
+Stations (a timber depot, a two-storey station, a hall with a clock
+tower), a windmill (beside grain and corn farms) and a watermill (the
+lumber mill) are assembled from the same kit. Other industries are still
+drawn in code.
 
 ## Where to get art
 
