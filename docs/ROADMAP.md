@@ -280,6 +280,13 @@ on end piers) and suspension bridges (towers at the ends of the whole
 crossing, main cables sagging between them, hangers to a stiffening
 girder).
 
+Ports find the water and build out to it: a stone quay, a warehouse, a
+timber wharf on piles, a crane with its jib, rope and load, and a
+two-masted schooner moored alongside. Logging camps have a log cabin with
+a smoking chimney, an open saw shed over its pit, a log deck stacked in a
+pyramid and stumps all round. Tunnel mouths have a stone headwall with a
+round-arched mouth, a ring of voussoirs, a coping and splayed wing walls.
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into

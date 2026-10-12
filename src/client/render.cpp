@@ -1007,8 +1007,42 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         return;
     }
     if (key == "logging_camp") {
-        barn(x, y - 0.12f * k, z, dx, dy, 0.1f * k, 0.07f * k, 0.1f, timber, dark);
-        for (int i = 0; i < 3; ++i) prism(x - 0.1f * k + 0.1f * k * static_cast<float>(i), y + 0.15f * k, z + 0.03f, 0, 1, 0.12f * k, 0.03f, timber);
+        const float px = -dy, py = dx;
+        const float bark[3] = {0.36f, 0.26f, 0.17f}, cut[3] = {0.78f, 0.62f, 0.42f}, roof[3] = {0.32f, 0.28f, 0.24f};
+        // A log cabin with a stone chimney.
+        const float hx = x - 0.22f * k, hy = y - 0.18f * k;
+        barn(hx, hy, cam.ground_z(hx, hy), dx, dy, 0.08f * k, 0.06f * k, 0.08f, timber, roof);
+        const float chimney[3] = {0.5f, 0.48f, 0.45f};
+        box(hx + dx * 0.08f * k, hy + dy * 0.08f * k, cam.ground_z(hx, hy), dx, dy, 0.012f, 0.012f, 0.17f, chimney, chimney);
+        add_smoke(hx + dx * 0.08f * k, hy + dy * 0.08f * k, cam.ground_z(hx, hy) + 0.17f, 0.025f);
+        // The saw shed: open sides, posts and a pitched roof over the saw pit.
+        const float sx = x + 0.1f * k, sy = y - 0.15f * k, sz = cam.ground_z(sx, sy);
+        for (const float a2 : {-1.0f, 1.0f})
+            for (const float b2 : {-1.0f, 1.0f}) {
+                beam(sx + dx * 0.12f * k * a2 + px * 0.06f * k * b2, sy + dy * 0.12f * k * a2 + py * 0.06f * k * b2, sz,
+                     sx + dx * 0.12f * k * a2 + px * 0.06f * k * b2, sy + dy * 0.12f * k * a2 + py * 0.06f * k * b2, sz + 0.1f, 0.012f, timber);
+            }
+        gable(sx, sy, sz + 0.1f, dx, dy, 0.13f * k, 0.075f * k, 0.05f, roof, timber);
+        const float pit[3] = {0.18f, 0.14f, 0.1f};
+        box(sx, sy, sz - 0.005f, dx, dy, 0.1f * k, 0.02f * k, 0.01f, pit, pit);
+        prism(sx, sy, sz + 0.035f, dx, dy, 0.1f * k, 0.018f, bark); // a log on the trestles
+        // A log deck: logs stacked in a pyramid, cut ends showing.
+        const float lx = x + 0.12f * k, ly = y + 0.16f * k, lz = cam.ground_z(lx, ly);
+        for (int row = 0; row < 3; ++row)
+            for (int i = 0; i < 4 - row; ++i) {
+                const float off = (static_cast<float>(i) - static_cast<float>(3 - row) / 2.0f) * 0.042f;
+                const float cx = lx + px * off, cy = ly + py * off, cz = lz + 0.02f + static_cast<float>(row) * 0.036f;
+                prism(cx, cy, cz, dx, dy, 0.16f * k, 0.02f, bark);
+                for (const float end : {-1.0f, 1.0f}) {
+                    prism_cap(cx + dx * 0.16f * k * end, cy + dy * 0.16f * k * end, cz, dx, dy, 0.02f, end, cut);
+                }
+            }
+        // Stumps where the trees came down.
+        for (int i = 0; i < 8; ++i) {
+            const std::uint32_t h = hash(seed, static_cast<std::uint32_t>(i), 31);
+            const float tx = x + (unit(h) - 0.5f) * 0.8f * k, ty = y + (unit(h >> 16) - 0.5f) * 0.8f * k;
+            cylinder(tx, ty, cam.ground_z(tx, ty), 0.02f, 0.025f, bark, cut);
+        }
         return;
     }
     if (ends_with(key, "_farm") || key == "fruit_orchard" || key == "cattle_ranch" || key == "rubber_plantation") {
@@ -1166,12 +1200,74 @@ void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uin
         return;
     }
     if (t.kind == sim::IndustryKind::Port) {
-        const float quay[3] = {0.5f, 0.48f, 0.44f};
-        box(x, y, z, dx, dy, 0.32f * k, 0.22f * k, 0.05f, quay, quay);
-        barn(x - 0.12f * k, y - 0.08f * k, z + 0.05f, dx, dy, 0.14f * k, 0.07f * k, 0.12f, timber, slate);
-        // A crane: a tower and its jib.
-        box(x + 0.18f * k, y + 0.1f * k, z + 0.05f, dx, dy, 0.02f, 0.02f, 0.45f, dark, dark);
-        box(x + 0.18f * k + dx * 0.12f, y + 0.1f * k + dy * 0.12f, z + 0.45f, dx, dy, 0.14f, 0.015f, 0.025f, dark, dark);
+        // Which way the water lies: the wharf runs out that way.
+        const auto wet = [&](float wx, float wy) {
+            if (!cam.terrain) return false;
+            const auto tx = static_cast<std::int32_t>(std::floor(wx)), ty = static_cast<std::int32_t>(std::floor(wy));
+            if (tx < 0 || ty < 0 || tx >= cam.terrain->width() || ty >= cam.terrain->height()) return false;
+            return cam.terrain->ground(tx, ty) == sim::GroundType::Water;
+        };
+        float wx = 1, wy = 0;
+        int best = -1;
+        for (int i = 0; i < 8; ++i) {
+            const float an = 0.7853982f * static_cast<float>(i), cx = std::cos(an), cy = std::sin(an);
+            int n = 0;
+            for (const float r : {0.4f, 0.7f, 1.0f, 1.4f}) n += wet(x + cx * r * k, y + cy * r * k) ? 1 : 0;
+            if (n > best) {
+                best = n;
+                wx = cx;
+                wy = cy;
+            }
+        }
+        const float qx = -wy, qy = wx; // along the shore
+        const float stone[3] = {0.58f, 0.56f, 0.52f}, plank[3] = {0.5f, 0.38f, 0.25f}, pile[3] = {0.3f, 0.22f, 0.15f};
+        const float water_z = std::min(z, cam.ground_z(x + wx * 0.8f * k, y + wy * 0.8f * k));
+        const float deck = z + 0.04f;
+        // A stone quay along the shore and a timber wharf out over the water on piles.
+        box(x, y, z - 0.1f, wx, wy, 0.12f * k, 0.4f * k, deck - z + 0.1f, stone, stone);
+        const float ox = x + wx * 0.42f * k, oy = y + wy * 0.42f * k;
+        box(ox, oy, deck - 0.015f, wx, wy, 0.3f * k, 0.13f * k, 0.015f, plank, plank);
+        for (float a2 = -0.25f; a2 <= 0.26f; a2 += 0.125f)
+            for (const float side : {-1.0f, 1.0f}) {
+                const float pxp = ox + wx * a2 * k + qx * 0.12f * k * side, pyp = oy + wy * a2 * k + qy * 0.12f * k * side;
+                beam(pxp, pyp, water_z - 0.15f, pxp, pyp, deck + 0.02f, 0.016f, pile);
+            }
+        // A warehouse on the quay, crates and a capstan.
+        barn(x - wx * 0.22f * k, y - wy * 0.22f * k, z, qx, qy, 0.28f * k, 0.09f * k, 0.14f, timber, slate);
+        // A crane on the wharf: mast, raking jib, its rope and a hanging load.
+        const float cx0 = ox + wx * 0.1f * k + qx * 0.08f * k, cy0 = oy + wy * 0.1f * k + qy * 0.08f * k;
+        beam(cx0, cy0, deck, cx0, cy0, deck + 0.38f, 0.024f, dark);
+        const float jx = cx0 + wx * 0.3f * k, jy = cy0 + wy * 0.3f * k;
+        beam(cx0, cy0, deck + 0.1f, jx, jy, deck + 0.4f, 0.016f, dark);
+        beam(cx0, cy0, deck + 0.38f, jx, jy, deck + 0.4f, 0.006f, dark);
+        beam(jx, jy, deck + 0.4f, jx, jy, deck + 0.18f, 0.003f, dark);
+        box(jx, jy, deck + 0.13f, qx, qy, 0.025f, 0.025f, 0.05f, plank, plank);
+        // A schooner moored alongside: hull, deck, two masts with sails.
+        const float sx = ox + wx * 0.05f * k - qx * 0.32f * k, sy = oy + wy * 0.05f * k - qy * 0.32f * k;
+        const float hull[3] = {0.22f, 0.16f, 0.12f}, deck_c[3] = {0.62f, 0.5f, 0.34f}, sail[3] = {0.92f, 0.9f, 0.82f};
+        const float hl = 0.36f * k, hw = 0.07f * k;
+        box(sx, sy, water_z - 0.02f, wx, wy, hl, hw, 0.07f, hull, deck_c);
+        // A pointed bow.
+        glColor3fv(hull);
+        for (const float side : {-1.0f, 1.0f}) {
+            glNormal3f(qx * side + wx, qy * side + wy, 0);
+            const float bx0 = sx + wx * hl, by0 = sy + wy * hl;
+            glVertex3f(bx0 + qx * hw * side, by0 + qy * hw * side, water_z - 0.02f);
+            glVertex3f(bx0 + wx * 0.12f * k, by0 + wy * 0.12f * k, water_z - 0.02f);
+            glVertex3f(bx0 + wx * 0.14f * k, by0 + wy * 0.14f * k, water_z + 0.06f);
+            glVertex3f(bx0 + qx * hw * side, by0 + qy * hw * side, water_z + 0.05f);
+        }
+        for (const float m : {-0.4f, 0.35f}) {
+            const float mx = sx + wx * hl * m, my = sy + wy * hl * m, mz = water_z + 0.05f;
+            beam(mx, my, mz, mx, my, mz + 0.55f, 0.012f, pile);
+            // A gaff sail aft of the mast.
+            glColor3fv(sail);
+            glNormal3f(qx * 0.3f, qy * 0.3f, 1.0f); // canvas catches the light from either side
+            glVertex3f(mx - wx * 0.01f, my - wy * 0.01f, mz + 0.08f);
+            glVertex3f(mx - wx * 0.26f * k, my - wy * 0.26f * k, mz + 0.08f);
+            glVertex3f(mx - wx * 0.24f * k, my - wy * 0.24f * k, mz + 0.42f);
+            glVertex3f(mx - wx * 0.01f, my - wy * 0.01f, mz + 0.5f);
+        }
         return;
     }
     if (t.kind == sim::IndustryKind::Warehouse) {
@@ -1464,6 +1560,53 @@ void bridge_structure(const sim::TrackEdge& e, float ax, float ay, float za, flo
     }
 }
 
+// A tunnel portal at (x, y), rail height z, the tunnel running along
+// (dx, dy): a dressed-stone headwall with a round-arched mouth, voussoirs
+// round the arch, a coping, and wing walls splayed back into the hill.
+// Inside GL_QUADS.
+void tunnel_portal(float x, float y, float z, float dx, float dy, bool double_track, const Camera& cam) {
+    const float stone[3] = {0.52f, 0.49f, 0.45f}, dressed[3] = {0.66f, 0.63f, 0.58f}, dark[3] = {0.04f, 0.04f, 0.05f};
+    const float px = -dy, py = dx;
+    const float half = double_track ? 0.24f : 0.15f, open = double_track ? 0.16f : 0.08f;
+    const float height = 0.26f, spring = 0.1f; // the headwall's height; where the arch springs
+    const float ground = std::min(z, cam.ground_z(x, y)) - 0.05f;
+    // The headwall, set into the hill behind the mouth.
+    box(x + dx * 0.04f, y + dy * 0.04f, ground, dx, dy, 0.04f, half, z + height - ground, stone, stone);
+    box(x + dx * 0.04f, y + dy * 0.04f, z + height, dx, dy, 0.05f, half * 1.06f, 0.02f, dressed, dressed);
+    // The mouth: dark, a rectangle to the springing then a half-round arch,
+    // just proud of the wall's face; a ring of lighter voussoirs round it.
+    const float fx = x - dx * 0.003f, fy = y - dy * 0.003f;
+    const auto pt = [&](float across, float up) { glVertex3f(fx + px * across, fy + py * across, z + up); };
+    glNormal3f(-dx, -dy, 0);
+    glColor3fv(dark);
+    pt(-open, 0);
+    pt(open, 0);
+    pt(open, spring);
+    pt(-open, spring);
+    constexpr int kSteps = 10;
+    for (int i = 0; i < kSteps; ++i) {
+        const float a0 = 3.1415927f * static_cast<float>(i) / kSteps, a1 = 3.1415927f * static_cast<float>(i + 1) / kSteps;
+        glColor3fv(dark);
+        pt(0, spring);
+        pt(open * std::cos(a0), spring + open * std::sin(a0));
+        pt(open * std::cos(a1), spring + open * std::sin(a1));
+        pt(0, spring);
+        glColor3fv(i % 2 == 0 ? dressed : stone);
+        const float r0 = open, r1 = open * 1.28f;
+        glVertex3f(fx - dx * 0.001f + px * r0 * std::cos(a0), fy - dy * 0.001f + py * r0 * std::cos(a0), z + spring + r0 * std::sin(a0));
+        glVertex3f(fx - dx * 0.001f + px * r1 * std::cos(a0), fy - dy * 0.001f + py * r1 * std::cos(a0), z + spring + r1 * std::sin(a0));
+        glVertex3f(fx - dx * 0.001f + px * r1 * std::cos(a1), fy - dy * 0.001f + py * r1 * std::cos(a1), z + spring + r1 * std::sin(a1));
+        glVertex3f(fx - dx * 0.001f + px * r0 * std::cos(a1), fy - dy * 0.001f + py * r0 * std::cos(a1), z + spring + r0 * std::sin(a1));
+    }
+    // Wing walls, splayed out and stepping down.
+    for (const float side : {-1.0f, 1.0f}) {
+        const float wx0 = x + px * half * side, wy0 = y + py * half * side;
+        const float wx1 = wx0 - dx * 0.16f + px * 0.08f * side, wy1 = wy0 - dy * 0.16f + py * 0.08f * side;
+        beam(wx0, wy0, z + height * 0.55f, wx1, wy1, z + height * 0.2f, 0.035f, stone);
+        beam(wx0, wy0, z + height * 0.2f, wx1, wy1, ground + 0.04f, 0.04f, stone);
+    }
+}
+
 // Track close up (rt3-clone-spec §15.6 views): a ballast bed with sleepers
 // and two rails on each track, following the ground in cuttings; bridges as
 // decks on piers; tunnels unseen but for their mouths.
@@ -1554,7 +1697,6 @@ void track_body(const sim::Railway& rw, const Camera& cam, std::optional<sim::Co
         }
     }
     // Tunnel mouths, where a tunnel meets track in the open.
-    const float stone[3] = {0.4f, 0.38f, 0.36f}, dark[3] = {0.05f, 0.05f, 0.05f};
     for (const sim::TrackEdge& e : net.edges()) {
         if (e.removed || e.kind != sim::TrackKind::Tunnel) continue;
         for (const sim::NodeId n : {e.a, e.b}) {
@@ -1571,8 +1713,7 @@ void track_body(const sim::Railway& rw, const Camera& cam, std::optional<sim::Co
             if (l <= 0) continue;
             const float dx = (tile(there.pos.x_mm) - hx) / l, dy = (tile(there.pos.y_mm) - hy) / l;
             const float z = cam.z_of(here.z_mm);
-            box(hx + dx * 0.03f, hy + dy * 0.03f, z, dx, dy, 0.03f, e.double_track ? 0.2f : 0.12f, 0.16f, stone, stone);
-            box(hx + dx * 0.031f, hy + dy * 0.031f, z, dx, dy, 0.031f, e.double_track ? 0.15f : 0.07f, 0.11f, dark, stone);
+            tunnel_portal(hx, hy, z, dx, dy, e.double_track, cam);
         }
     }
     glEnd();
