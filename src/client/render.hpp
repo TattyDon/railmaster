@@ -39,10 +39,11 @@ void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float
 
 // Industries and houses: in 3D buildings (houses cream with red roofs, raw
 // producers brown, processors purple, consumers grey), in 2D squares. With `cargo` set, producers of it
-// are ringed red and consumers green. Houses keep off the railway's track
-// and stations.
+// are ringed red and consumers green. In 3D, towns are laid out along
+// streets (paved as the years pass), clear of the railway's track and
+// stations.
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
-                const Camera& cam, std::optional<sim::CargoId> cargo);
+                std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo);
 // RT3-style cargo map: red where the cargo is cheap, green where it is dear.
 void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo, const Camera& cam);
 // Town names, in screen space.

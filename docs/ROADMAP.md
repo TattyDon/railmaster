@@ -196,6 +196,14 @@ colours; ripples on water), with box-filtered mipmaps so far ground does
 not shimmer. Distant land fades into a sky-coloured haze. Smoke stops
 while the game is paused.
 
+Towns are laid out on a grid of streets centred on each town (rows east-west
+or north-south by town): its houses fill the plots nearest the centre, with
+a ragged edge and the odd garden, clear of the railway, industries and
+water. Buildings face their street with windows on each floor and a door:
+cottages, two-storey houses and terraced rows outside, shops and offices
+with awnings in the middle (taller as the town grows) and a church with a
+spire. Streets are dirt, then gravel from 1890 and asphalt from 1930.
+
 Next:
 - Proper low-poly models for engines, cars, stations and buildings, with
   LOD; textures; a modern shader pipeline.

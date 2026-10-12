@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <tuple>
+#include <unordered_set>
 
 namespace railmaster::client {
 
@@ -100,44 +102,6 @@ void box(float x, float y, float z, float dx, float dy, float hl, float hw, floa
     glColor3fv(top);
     glNormal3f(0, 0, 1);
     for (int i = 0; i < 4; ++i) glVertex3f(px[i], py[i], z + h);
-}
-
-// A house: walls and a pitched roof.
-void house(float x, float y, float z, float half, const Camera& cam) {
-    static const float wall[] = {0.88f, 0.82f, 0.68f};
-    static const float roof[] = {0.62f, 0.22f, 0.16f};
-    (void)cam;
-    box(x, y, z, 1, 0, half, half, half * 1.2f, wall, wall);
-    glEnd();
-    glBegin(GL_TRIANGLES);
-    glColor3fv(roof);
-    const float top = z + half * 1.2f, ridge = top + half * 0.9f;
-    // Two slopes running east-west, and the gable ends.
-    glNormal3f(0, -1, 1);
-    glVertex3f(x - half, y - half, top);
-    glVertex3f(x + half, y - half, top);
-    glVertex3f(x + half, y, ridge);
-    glVertex3f(x - half, y - half, top);
-    glVertex3f(x + half, y, ridge);
-    glVertex3f(x - half, y, ridge);
-    glNormal3f(0, 1, 1);
-    glVertex3f(x - half, y + half, top);
-    glVertex3f(x + half, y, ridge);
-    glVertex3f(x + half, y + half, top);
-    glVertex3f(x - half, y + half, top);
-    glVertex3f(x - half, y, ridge);
-    glVertex3f(x + half, y, ridge);
-    glColor3f(0.88f, 0.82f, 0.68f);
-    glNormal3f(-1, 0, 0);
-    glVertex3f(x - half, y - half, top);
-    glVertex3f(x - half, y, ridge);
-    glVertex3f(x - half, y + half, top);
-    glNormal3f(1, 0, 0);
-    glVertex3f(x + half, y - half, top);
-    glVertex3f(x + half, y + half, top);
-    glVertex3f(x + half, y, ridge);
-    glEnd();
-    glBegin(GL_QUADS);
 }
 
 void track_colour(sim::TrackKind kind, float alpha) {
@@ -993,7 +957,8 @@ bool on_water(float x, float y, const Camera& cam) {
     return cam.terrain->ground(tx, ty) == sim::GroundType::Water;
 }
 
-// Where the railway stands, in quarter tiles, so houses keep off it.
+// Where the railway and industries stand, in quarter tiles, so houses keep
+// off them.
 class Occupancy {
 public:
     static constexpr float kCell = 0.25f;
@@ -1026,6 +991,11 @@ public:
             mark(tile(n.pos.x_mm), tile(n.pos.y_mm), 0.25f + 0.25f * s);
         }
     }
+    // Industries' spots, `half` tiles each way from their centres.
+    void mark_square(float x, float y, float half) {
+        for (float yy = y - half; yy <= y + half; yy += kCell)
+            for (float xx = x - half; xx <= x + half; xx += kCell) mark(xx, yy, 0.0f);
+    }
     // Is any cell within `r` tiles of the point taken?
     bool blocked(float x, float y, float r) const {
         const int x0 = cell(x - r), x1 = cell(x + r), y0 = cell(y - r), y1 = cell(y + r);
@@ -1053,6 +1023,288 @@ private:
     int w_, h_;
     std::vector<bool> cells_;
 };
+
+// Towns (rt3-clone-spec §15.6 views): each town's houses stand in rows
+// along a grid of streets centred on it, one building to a plot, and what
+// they are depends on the town's size and how near the centre they stand:
+// cottages, two-storey houses and terraces outside, shops and offices
+// (taller as the town grows) in the middle, and a church.
+enum class Building : std::uint8_t { Cottage, TwoStorey, Terrace, Shop, Church };
+
+struct Plot {
+    float x, y;   // centre, tiles
+    float dx, dy; // along the street
+    float front;  // +1 or -1: which side (across) faces the street
+    float hl, hw; // half length along the street, half depth
+    Building kind;
+    int floors;
+    std::uint32_t seed;
+    std::uint32_t row_seed; // shared along a block's row, so terraces match
+};
+
+struct TownLayout {
+    std::vector<Plot> plots;
+    std::vector<float> streets; // segments x0, y0, x1, y1 (centrelines)
+};
+
+constexpr float kRow = 0.9f;    // between streets along which houses face
+constexpr float kCross = 2.0f;  // between the cross streets
+constexpr float kPlot = 0.36f;  // plot width along the street
+constexpr float kPlotMargin = 0.1f; // clear of the cross street at each end
+constexpr float kStreetHalf = 0.045f;
+
+TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Occupancy& taken,
+                        const Camera& cam) {
+    TownLayout out;
+    const auto k = static_cast<float>(eco.cells_per_node());
+    std::unordered_set<std::uint64_t> street_keys;
+    const auto key = [](std::uint32_t town, int a, int b, int c, int d) {
+        return (std::uint64_t{town} << 40) ^ (static_cast<std::uint64_t>(static_cast<std::uint32_t>(a) & 0x3ff) << 30) ^
+               (static_cast<std::uint64_t>(static_cast<std::uint32_t>(b) & 0x3ff) << 20) ^
+               (static_cast<std::uint64_t>(static_cast<std::uint32_t>(c) & 0x3ff) << 10) ^ static_cast<std::uint64_t>(static_cast<std::uint32_t>(d) & 0x3ff);
+    };
+    const auto lay_out = [&](std::uint32_t town_id, float xc, float yc, const std::vector<sim::SiteId>& sites, std::int64_t town_size) {
+        // Rows run east-west or north-south, by town.
+        const bool rows_ns = unit(hash(town_id, 5, 77)) < 0.5f;
+        const auto world = [&](float a, float c, float& x, float& y) {
+            x = rows_ns ? xc + c : xc + a;
+            y = rows_ns ? yc + a : yc + c;
+        };
+        const float dx = rows_ns ? 0.0f : 1.0f, dy = rows_ns ? 1.0f : 0.0f;
+        const auto street = [&](float a0, float c0, float a1, float c1, std::uint64_t id) {
+            if (!street_keys.insert(id).second) return;
+            float x0, y0, x1, y1;
+            world(a0, c0, x0, y0);
+            world(a1, c1, x1, y1);
+            out.streets.insert(out.streets.end(), {x0, y0, x1, y1});
+        };
+        const std::size_t first = out.plots.size();
+        // The town's buildings fill the plots nearest its centre (a little
+        // jittered, so the edge is ragged, with the odd plot left as a
+        // garden), skipping any the railway, water or industry has.
+        std::int64_t wanted = 0;
+        for (const sim::SiteId id : sites) {
+            const sim::Site& site = eco.sites()[id];
+            if (!site.closed && industries.get(site.type).kind == sim::IndustryKind::House) wanted += std::max(1, site.level);
+        }
+        wanted = std::min<std::int64_t>(wanted, 80);
+        if (wanted == 0) return;
+        const int plots_per_block = static_cast<int>((kCross - 2 * kPlotMargin) / kPlot);
+        const int rows = 2 + static_cast<int>(std::sqrt(static_cast<float>(wanted)) * 0.6f);
+        const int blocks = 1 + static_cast<int>(std::sqrt(static_cast<float>(wanted)) * 0.35f);
+        struct Candidate {
+            float rank;
+            int row, side, block, slot;
+        };
+        std::vector<Candidate> candidates;
+        for (int row = -rows; row <= rows; ++row)
+            for (int side = 0; side < 2; ++side)
+                for (int block = -blocks; block < blocks; ++block)
+                    for (int slot = 0; slot < plots_per_block; ++slot) {
+                        const float a = static_cast<float>(block) * kCross + kPlotMargin + (static_cast<float>(slot) + 0.5f) * kPlot;
+                        const float c = static_cast<float>(row) * kRow + (side == 1 ? 0.3f : -0.3f);
+                        const std::uint32_t h = hash(town_id, static_cast<std::uint32_t>((row + 64) * 2 + side),
+                                                     static_cast<std::uint32_t>((block + 64) * 16 + slot));
+                        if (unit(h) < 0.12f) continue; // a garden
+                        candidates.push_back({std::hypot(a, c) + unit(h >> 8) * 0.9f, row, side, block, slot});
+                    }
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& l, const Candidate& r) {
+            if (l.rank != r.rank) return l.rank < r.rank;
+            return std::tie(l.row, l.side, l.block, l.slot) < std::tie(r.row, r.side, r.block, r.slot);
+        });
+        std::int64_t placed = 0;
+        for (const Candidate& cand : candidates) {
+            if (placed >= wanted) break;
+            const float side = cand.side == 1 ? 1.0f : -1.0f;
+            const std::uint32_t h = hash(town_id, static_cast<std::uint32_t>((cand.row + 64) * 2 + cand.side),
+                                         static_cast<std::uint32_t>((cand.block + 64) * 16 + cand.slot + 7777));
+            Plot p{};
+            p.hw = 0.11f + 0.04f * unit(h >> 8);
+            p.hl = kPlot * 0.5f - 0.04f;
+            const float pa = static_cast<float>(cand.block) * kCross + kPlotMargin + (static_cast<float>(cand.slot) + 0.5f) * kPlot;
+            const float pc = static_cast<float>(cand.row) * kRow + side * (kStreetHalf + 0.04f + p.hw);
+            world(pa, pc, p.x, p.y);
+            if (taken.blocked(p.x, p.y, p.hl + 0.02f) || on_water(p.x, p.y, cam)) continue;
+            p.dx = dx;
+            p.dy = dy;
+            // The street is towards the row line: across is (-dy, dx).
+            p.front = -side;
+            p.seed = h;
+            p.row_seed = hash(town_id, static_cast<std::uint32_t>((cand.row + 64) * 2 + cand.side), static_cast<std::uint32_t>(cand.block + 500));
+            out.plots.push_back(p);
+            ++placed;
+            // The street it faces, the length of the block, and the cross
+            // streets at the block's ends.
+            const float b0 = static_cast<float>(cand.block) * kCross, b1 = b0 + kCross, rc = static_cast<float>(cand.row) * kRow;
+            street(b0, rc, b1, rc, key(town_id, cand.row, 0, cand.block, 1));
+            street(b0, rc, b0, rc + side * kRow, key(town_id, cand.row * 2 + cand.side, 0, cand.block, 2));
+            street(b1, rc, b1, rc + side * kRow, key(town_id, cand.row * 2 + cand.side, 0, cand.block + 1, 2));
+        }
+        // What each building is.
+        const float centre_reach = 0.9f + static_cast<float>(town_size) / 30.0f;
+        std::size_t church = out.plots.size();
+        float church_d = 1e9f;
+        for (std::size_t i = first; i < out.plots.size(); ++i) {
+            Plot& p = out.plots[i];
+            const float d = std::hypot(p.x - xc, p.y - yc);
+            const float r = unit(p.seed >> 4), row_r = unit(p.row_seed);
+            if (town_size >= 10 && d < centre_reach) {
+                p.kind = Building::Shop;
+                p.floors = 2 + static_cast<int>(std::min<std::int64_t>(3, town_size / 25)) - (r < 0.3f ? 1 : 0);
+                p.hl = kPlot * 0.5f - 0.01f;
+            } else if (row_r < 0.3f && town_size >= 6) {
+                p.kind = Building::Terrace; // the row's plots join up
+                p.floors = 2;
+                p.hl = kPlot * 0.5f;
+            } else if (town_size >= 4 && r < 0.45f) {
+                p.kind = Building::TwoStorey;
+                p.floors = 2;
+            } else {
+                p.kind = Building::Cottage;
+                p.floors = 1;
+            }
+            if (town_size >= 5 && std::fabs(d - 0.8f) < church_d) {
+                church_d = std::fabs(d - 0.8f);
+                church = i;
+            }
+        }
+        if (church < out.plots.size()) {
+            out.plots[church].kind = Building::Church;
+            out.plots[church].floors = 1;
+        }
+    };
+    std::vector<bool> in_town(eco.sites().size(), false);
+    for (std::size_t t = 0; t < eco.towns().size(); ++t) {
+        const sim::Town& town = eco.towns()[t];
+        for (const sim::SiteId id : town.houses) in_town[id] = true;
+        lay_out(static_cast<std::uint32_t>(t), (static_cast<float>(town.cx) + 0.5f) * k, (static_cast<float>(town.cy) + 0.5f) * k,
+                town.houses, eco.town_houses(t));
+    }
+    // Houses outside any town: each its own hamlet.
+    for (const sim::Site& site : eco.sites()) {
+        if (in_town[site.id] || industries.get(site.type).kind != sim::IndustryKind::House) continue;
+        lay_out(0x8000u + site.id, (static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k, {site.id}, site.level);
+    }
+    return out;
+}
+
+// Streets on the ground: dirt, then gravel, then asphalt. Inside GL_QUADS.
+void draw_streets(const TownLayout& layout, std::int32_t year, const Camera& cam) {
+    if (year < 1890) glColor3f(0.6f, 0.52f, 0.4f);
+    else if (year < 1930) glColor3f(0.58f, 0.56f, 0.52f);
+    else glColor3f(0.33f, 0.33f, 0.35f);
+    glNormal3f(0, 0, 1);
+    for (std::size_t i = 0; i + 3 < layout.streets.size(); i += 4) {
+        const float x0 = layout.streets[i], y0 = layout.streets[i + 1], x1 = layout.streets[i + 2], y1 = layout.streets[i + 3];
+        const float len = std::hypot(x1 - x0, y1 - y0);
+        if (len <= 0) continue;
+        const float ux = (x1 - x0) / len, uy = (y1 - y0) / len, qx = -uy * kStreetHalf, qy = ux * kStreetHalf;
+        // In short pieces, so the street follows the ground; a little past
+        // each end so crossings meet.
+        const int pieces = std::max(1, static_cast<int>(std::ceil(len / 0.25f)));
+        for (int k = 0; k < pieces; ++k) {
+            const float t0 = static_cast<float>(k) / static_cast<float>(pieces) * len - (k == 0 ? kStreetHalf : 0.0f);
+            const float t1 = static_cast<float>(k + 1) / static_cast<float>(pieces) * len + (k == pieces - 1 ? kStreetHalf : 0.0f);
+            const float ax = x0 + ux * t0, ay = y0 + uy * t0, bx = x0 + ux * t1, by = y0 + uy * t1;
+            ground_vertex(ax - qx, ay - qy, cam);
+            ground_vertex(bx - qx, by - qy, cam);
+            ground_vertex(bx + qx, by + qy, cam);
+            ground_vertex(ax + qx, ay + qy, cam);
+        }
+    }
+}
+
+// Windows on a building's long walls, a row to each floor, and a door on
+// the street side. Inside GL_QUADS.
+void windows(const Plot& p, float z, float floor_h, float wall_h) {
+    const float glass[3] = {0.2f, 0.23f, 0.3f}, door[3] = {0.32f, 0.2f, 0.12f};
+    const float qx = -p.dy, qy = p.dx;
+    const int per_floor = std::max(1, static_cast<int>(p.hl * 2 / 0.075f));
+    const float ww = std::min(0.014f, p.hl / static_cast<float>(per_floor) * 0.45f), wh = floor_h * 0.2f;
+    for (const float sgn : {-1.0f, 1.0f}) {
+        const float off = p.hw + 0.003f;
+        glNormal3f(qx * sgn, qy * sgn, 0);
+        for (int f = 0; f < p.floors; ++f) {
+            const float zc = z + floor_h * (static_cast<float>(f) + 0.55f);
+            if (zc + wh > z + wall_h) break;
+            for (int i = 0; i < per_floor; ++i) {
+                const float t = -p.hl + (static_cast<float>(i) + 0.5f) * 2 * p.hl / static_cast<float>(per_floor);
+                const bool is_door = f == 0 && sgn == p.front && i == per_floor / 2;
+                glColor3fv(is_door ? door : glass);
+                const float cx = p.x + p.dx * t + qx * off * sgn, cy = p.y + p.dy * t + qy * off * sgn;
+                const float z0 = is_door ? z : zc - wh, z1 = is_door ? z + floor_h * 0.7f : zc + wh;
+                // Wound to face outward on either side.
+                const float ex = p.dx * ww * sgn, ey = p.dy * ww * sgn;
+                glVertex3f(cx + ex, cy + ey, z0);
+                glVertex3f(cx - ex, cy - ey, z0);
+                glVertex3f(cx - ex, cy - ey, z1);
+                glVertex3f(cx + ex, cy + ey, z1);
+            }
+        }
+    }
+}
+
+void draw_building(const Plot& p, const Camera& cam) {
+    // Set into the ground on a slope: the lowest corner's height.
+    const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
+    const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
+                              cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)}) - 0.01f;
+    static constexpr float kWalls[][3] = {{0.9f, 0.86f, 0.74f}, {0.94f, 0.93f, 0.9f}, {0.72f, 0.4f, 0.3f},
+                                          {0.8f, 0.74f, 0.6f},  {0.86f, 0.8f, 0.55f}, {0.66f, 0.64f, 0.6f}};
+    static constexpr float kRoofs[][3] = {{0.62f, 0.22f, 0.16f}, {0.36f, 0.37f, 0.42f}, {0.45f, 0.3f, 0.2f}, {0.55f, 0.28f, 0.2f}};
+    const std::uint32_t pick = p.kind == Building::Terrace ? p.row_seed : p.seed;
+    const float* wall = kWalls[(pick >> 3) % 6];
+    const float* roof = kRoofs[(pick >> 9) % 4];
+    const float floor_h = 0.085f;
+    switch (p.kind) {
+    case Building::Cottage:
+    case Building::TwoStorey:
+    case Building::Terrace: {
+        const float h = floor_h * static_cast<float>(p.floors) + 0.02f;
+        box(p.x, p.y, z, p.dx, p.dy, p.hl, p.hw, h, wall, wall);
+        gable(p.x, p.y, z + h, p.dx, p.dy, p.hl * (p.kind == Building::Terrace ? 1.0f : 1.06f), p.hw * 1.12f, p.hw * 0.75f, roof, wall);
+        windows(p, z, floor_h, h);
+        // A chimney stack on the ridge.
+        const float dark[3] = {0.4f, 0.3f, 0.26f};
+        const float along = p.hl * 0.6f * (unit(p.seed >> 12) < 0.5f ? -1.0f : 1.0f);
+        box(p.x + p.dx * along, p.y + p.dy * along, z + h, p.dx, p.dy, 0.012f, 0.018f, p.hw * 0.75f + 0.03f, dark, dark);
+        break;
+    }
+    case Building::Shop: {
+        static constexpr float kShopWalls[][3] = {{0.7f, 0.42f, 0.32f}, {0.8f, 0.76f, 0.68f}, {0.62f, 0.56f, 0.5f}, {0.85f, 0.8f, 0.7f}};
+        static constexpr float kAwnings[][3] = {{0.7f, 0.15f, 0.12f}, {0.15f, 0.45f, 0.25f}, {0.2f, 0.3f, 0.6f}, {0.8f, 0.65f, 0.2f}};
+        const float* shop_wall = kShopWalls[(p.seed >> 3) % 4];
+        const float* awning = kAwnings[(p.seed >> 7) % 4];
+        const float h = floor_h * static_cast<float>(p.floors) + 0.025f;
+        const float top[3] = {0.4f, 0.4f, 0.42f};
+        box(p.x, p.y, z, p.dx, p.dy, p.hl, p.hw, h, shop_wall, top);
+        // A parapet round the flat roof.
+        box(p.x, p.y, z + h, p.dx, p.dy, p.hl, p.hw, 0.015f, shop_wall, shop_wall);
+        windows(p, z, floor_h, h);
+        // An awning over the shop front.
+        const float fx = -p.dy * p.front, fy = p.dx * p.front;
+        const float wz = z + floor_h * 0.95f, ox = p.x + fx * p.hw, oy = p.y + fy * p.hw;
+        glColor3fv(awning);
+        glNormal3f(fx, fy, 1.2f);
+        glVertex3f(ox - p.dx * p.hl, oy - p.dy * p.hl, wz);
+        glVertex3f(ox + p.dx * p.hl, oy + p.dy * p.hl, wz);
+        glVertex3f(ox + p.dx * p.hl + fx * 0.04f, oy + p.dy * p.hl + fy * 0.04f, wz - 0.025f);
+        glVertex3f(ox - p.dx * p.hl + fx * 0.04f, oy - p.dy * p.hl + fy * 0.04f, wz - 0.025f);
+        break;
+    }
+    case Building::Church: {
+        const float stone[3] = {0.78f, 0.75f, 0.68f}, slate[3] = {0.33f, 0.34f, 0.38f};
+        // The nave along the street, the tower and spire at one end.
+        const float nave_hl = p.hl * 0.95f, nave_hw = std::min(p.hw, 0.1f);
+        box(p.x, p.y, z, p.dx, p.dy, nave_hl, nave_hw, 0.12f, stone, stone);
+        gable(p.x, p.y, z + 0.12f, p.dx, p.dy, nave_hl, nave_hw * 1.1f, 0.08f, slate, stone);
+        const float tx = p.x + p.dx * (nave_hl - 0.04f), ty = p.y + p.dy * (nave_hl - 0.04f);
+        box(tx, ty, z, p.dx, p.dy, 0.04f, 0.04f, 0.26f, stone, slate);
+        cylinder(tx, ty, z + 0.26f, 0.045f, 0.2f, slate, slate, 0.002f);
+        break;
+    }
+    }
+}
 
 } // namespace
 
@@ -1457,7 +1709,7 @@ void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& c
 }
 
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
-                const Camera& cam, std::optional<sim::CargoId> cargo) {
+                std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
     // Drawing is in map cells; a site sits at the centre of its economy node.
     const auto k = static_cast<float>(eco.cells_per_node());
@@ -1483,31 +1735,21 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
     if (cam.three_d) {
         const int width = cam.terrain ? cam.terrain->width() : eco.width() * eco.cells_per_node();
         const int height = cam.terrain ? cam.terrain->height() : eco.height() * eco.cells_per_node();
-        const Occupancy taken(rw, cam, width, height);
+        Occupancy taken(rw, cam, width, height);
+        for (const sim::Site& s : eco.sites()) {
+            if (s.closed || industries.get(s.type).kind == sim::IndustryKind::House) continue;
+            taken.mark_square((static_cast<float>(s.cx) + 0.5f) * k, (static_cast<float>(s.cy) + 0.5f) * k, 0.4f * k);
+        }
+        const TownLayout towns = layout_towns(eco, industries, taken, cam);
         begin_lit();
         glBegin(GL_QUADS);
+        draw_streets(towns, year, cam);
+        for (const Plot& p : towns.plots) draw_building(p, cam);
         for (const sim::Site& s : eco.sites()) {
             if (s.closed) continue;
             const sim::IndustryType& t = industries.get(s.type);
             const float x0 = (static_cast<float>(s.cx) + 0.5f) * k, y0 = (static_cast<float>(s.cy) + 0.5f) * k;
-            if (t.kind == sim::IndustryKind::House) {
-                // A few houses round the spot, more as the level rises.
-                const int n = std::clamp(1 + s.level / 2, 1, 4);
-                // Each tries a few spots and is left out if the railway
-                // has them all.
-                for (int i = 0; i < n; ++i) {
-                    for (int attempt = 0; attempt < 6; ++attempt) {
-                        const std::uint32_t h = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy),
-                                                     static_cast<std::uint32_t>(i + 101 + attempt * 17));
-                        const float x = x0 + (unit(h) - 0.5f) * 0.8f * k, y = y0 + (unit(h >> 16) - 0.5f) * 0.8f * k;
-                        const float size = 0.13f + 0.04f * unit(h >> 8);
-                        if (taken.blocked(x, y, size) || on_water(x, y, cam)) continue;
-                        house(x, y, cam.ground_z(x, y), size, cam);
-                        break;
-                    }
-                }
-                continue;
-            }
+            if (t.kind == sim::IndustryKind::House) continue; // laid out by town, above
             industry_3d(t, x0, y0, k, hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3), cam);
         }
         glEnd();

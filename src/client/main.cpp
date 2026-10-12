@@ -389,7 +389,7 @@ int main(int argc, char* argv[]) {
         }
         client::draw_terrain(world.terrain(), cam);
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
-        client::draw_sites(world.economy(), world.data().industries, world.railway(), cam, tools.overlay());
+        client::draw_sites(world.economy(), world.data().industries, world.railway(), world.date().year(), cam, tools.overlay());
         client::draw_territory_borders(world.territories(), cam);
         client::draw_railway(world, cam);
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
