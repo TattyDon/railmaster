@@ -210,6 +210,8 @@ int main(int argc, char* argv[]) {
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     double tick_accumulator = 0.0;
     float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
+    bool show_fps = false;    // F12: frames a second, bottom right
+    double frame_ms = 16.7;   // smoothed time a frame takes
     int right_drag = 0; // pixels the mouse moved with the right button down
     // Camera bookmarks: Shift+0-9 stores the view, 0-9 returns to it (rt3-clone-spec §15.6).
     struct Bookmark {
@@ -327,6 +329,7 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
+                case SDLK_F12: show_fps = !show_fps; break;
                 case SDLK_v: {
                     // 3D or the top-down map, looking at the same place.
                     const sim::MapPoint at{static_cast<std::int64_t>(cam.target_x * cam.mm_per_tile),
@@ -378,6 +381,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        frame_ms += (dt * 1000.0 - frame_ms) * 0.05;
         // Smoke drifts only while the game runs.
         if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);
 
@@ -497,6 +501,21 @@ int main(int argc, char* argv[]) {
             glEnd();
             glColor3f(0.85f, 0.85f, 0.8f);
             client::draw_text(x, y, build_label, 2);
+            if (show_fps) {
+                char fps[48];
+                std::snprintf(fps, sizeof fps, "%.0f FPS  %.1f MS", 1000.0 / std::max(0.1, frame_ms), frame_ms);
+                const auto fw = static_cast<float>(client::text_width(fps, 2));
+                const float fx = static_cast<float>(cam.width_px) - fw - 10, fy = y - 26;
+                glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
+                glBegin(GL_QUADS);
+                glVertex2f(fx - 5, fy - 4);
+                glVertex2f(fx + fw + 5, fy - 4);
+                glVertex2f(fx + fw + 5, fy + 18);
+                glVertex2f(fx - 5, fy + 18);
+                glEnd();
+                glColor3f(0.6f, 1.0f, 0.6f);
+                client::draw_text(fx, fy, fps, 2);
+            }
         }
         SDL_GL_SwapWindow(window);
     }

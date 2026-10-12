@@ -984,14 +984,12 @@ void bridge_rgb(sim::BridgeType b, float* c) {
 // Track close up (rt3-clone-spec §15.6 views): a ballast bed with sleepers
 // and two rails on each track, following the ground in cuttings; bridges as
 // decks on piers; tunnels unseen but for their mouths.
-void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
+void track_body(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player, bool sleepers) {
     const sim::TrackNetwork& net = rw.track();
-    const bool sleepers = cam.zoom >= 26.0f;
     const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
     struct Strip {
         float x0, y0, z0, x1, y1, z1; // a straight bit of one edge
     };
-    begin_lit();
     glBegin(GL_QUADS);
     glNormal3f(0, 0, 1);
     for (const sim::TrackEdge& e : net.edges()) {
@@ -1100,10 +1098,13 @@ void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::Comp
         }
     }
     glEnd();
-    end_lit();
-    // The rails themselves: thin steel lines on each track.
-    if (cam.zoom >= 14.0f) {
-        glLineWidth(cam.zoom >= 40.0f ? 2.0f : 1.0f);
+}
+
+// The rails themselves: thin steel lines on each track.
+void track_rails(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
+    const sim::TrackNetwork& net = rw.track();
+    const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
+    {
         glBegin(GL_LINES);
         for (const sim::TrackEdge& e : net.edges()) {
             if (e.removed || e.kind == sim::TrackKind::Tunnel) continue;
@@ -1138,6 +1139,62 @@ void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::Comp
             }
         }
         glEnd();
+    }
+}
+
+// What the drawn track depends on: every edge, its shape and owner.
+std::uint64_t railway_key(const sim::Railway& rw, std::optional<sim::CompanyId> player, const Camera& cam) {
+    std::uint64_t h = 1469598103934665603ull;
+    const auto mix = [&](std::uint64_t v) { h = (h ^ v) * 1099511628211ull; };
+    const sim::TrackNetwork& net = rw.track();
+    for (const sim::TrackEdge& e : net.edges()) {
+        mix(e.a);
+        mix(e.b);
+        mix((e.removed ? 1u : 0u) | (e.double_track ? 2u : 0u) | (static_cast<unsigned>(e.kind) << 2) |
+            (static_cast<unsigned>(e.bridge) << 6));
+        mix(e.owner);
+    }
+    for (const sim::TrackNode& n : net.nodes()) {
+        mix(static_cast<std::uint64_t>(n.pos.x_mm));
+        mix(static_cast<std::uint64_t>(n.pos.y_mm));
+        mix(static_cast<std::uint64_t>(n.z_mm));
+    }
+    mix(player ? *player + 1u : 0u);
+    mix(static_cast<std::uint64_t>(cam.height_exaggeration * 1000));
+    mix(reinterpret_cast<std::uintptr_t>(cam.terrain));
+    return h;
+}
+
+// Track close up, as display lists rebuilt only when the railway changes:
+// the beds (with or without sleepers, by zoom) and the rails.
+void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::CompanyId> player) {
+    struct Cached {
+        GLuint list = 0;
+        std::uint64_t key = 0;
+    };
+    static Cached beds[2], rails;
+    const std::uint64_t key = railway_key(rw, player, cam);
+    Cached& bed = beds[cam.zoom >= 26.0f ? 1 : 0];
+    if (bed.list == 0 || bed.key != key) {
+        if (bed.list == 0) bed.list = glGenLists(1);
+        glNewList(bed.list, GL_COMPILE);
+        track_body(rw, cam, player, cam.zoom >= 26.0f);
+        glEndList();
+        bed.key = key;
+    }
+    begin_lit();
+    glCallList(bed.list);
+    end_lit();
+    if (cam.zoom >= 14.0f) {
+        if (rails.list == 0 || rails.key != key) {
+            if (rails.list == 0) rails.list = glGenLists(1);
+            glNewList(rails.list, GL_COMPILE);
+            track_rails(rw, cam, player);
+            glEndList();
+            rails.key = key;
+        }
+        glLineWidth(cam.zoom >= 40.0f ? 2.0f : 1.0f);
+        glCallList(rails.list);
     }
 }
 
@@ -1805,7 +1862,9 @@ void frustum(float x, float y, float z0, float r0, float z1, float r1, const flo
 // odd tree elsewhere; conifers (more of them higher up) and broadleaves.
 constexpr int kTreeChunk = 32;
 
-void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Camera& cam, int cx0, int cy0) {
+// `art`: trees from the models where there are some (near the camera), or
+// always the light ones drawn in code (far off).
+void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Camera& cam, int cx0, int cy0, bool art_trees) {
     const float trunk[3] = {0.36f, 0.26f, 0.17f};
     struct ArtTree {
         const models::Model* model;
@@ -1837,7 +1896,7 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
                 const float pick = unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 211)));
                 const bool conifer = map_noise(x, y, 18.0f, 63) > 0.58f ? pick < 0.85f : pick < 0.12f;
                 // A tree from the art where there is some, drawn after this batch.
-                if (const models::Model* m = models::pick(conifer ? "tree_conifer" : "tree_broadleaf", hh >> 3)) {
+                if (const models::Model* m = art_trees ? models::pick(conifer ? "tree_conifer" : "tree_broadleaf", hh >> 3) : nullptr) {
                     const float yaw = unit(hh >> 6) * 6.2831853f;
                     art.push_back({m, x, y, base + 0.01f, std::cos(yaw), std::sin(yaw), 0.42f * size});
                     continue;
@@ -1867,17 +1926,24 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
 // The chunks near the camera, each a display list built when first seen or
 // after the scene changes (a few a frame, so building track never stalls).
 void draw_trees(const sim::Terrain& t, const Scene& sc, const Camera& cam) {
-    struct Chunk {
+    // Each chunk keeps two lists: near the camera its trees come from the
+    // art, further off the light code-drawn ones (a few hundred triangles
+    // a tree against a few dozen), so wide views stay quick.
+    struct Lod {
         GLuint list = 0;
         std::uint64_t version = 0;
         std::uint64_t terrain = 0;
     };
+    struct Chunk {
+        Lod near, far;
+    };
     static std::vector<Chunk> chunks;
-    static int across = 0, down = 0;
-    across = (t.width() + kTreeChunk - 1) / kTreeChunk;
-    down = (t.height() + kTreeChunk - 1) / kTreeChunk;
+    const int across = (t.width() + kTreeChunk - 1) / kTreeChunk;
+    const int down = (t.height() + kTreeChunk - 1) / kTreeChunk;
     if (chunks.size() != static_cast<std::size_t>(across * down)) {
-        for (Chunk& c : chunks) if (c.list != 0) glDeleteLists(c.list, 1);
+        for (Chunk& c : chunks) {
+            for (Lod* l : {&c.near, &c.far}) if (l->list != 0) glDeleteLists(l->list, 1);
+        }
         chunks.assign(static_cast<std::size_t>(across * down), Chunk{});
     }
     static std::uint64_t terrain = 0;
@@ -1886,24 +1952,31 @@ void draw_trees(const sim::Terrain& t, const Scene& sc, const Camera& cam) {
         terrain = terrain_key(t, cam);
         terrain_of = &t;
     }
+    const bool art = models::has("tree_broadleaf") || models::has("tree_conifer");
     const float reach = std::min(cam.distance * 3.0f + 30.0f, 220.0f);
+    const float detail = std::min(cam.distance * 1.4f + 18.0f, 60.0f);
     int builds = 0;
     for (int cy = 0; cy < down; ++cy) {
         for (int cx = 0; cx < across; ++cx) {
             const float mx = (static_cast<float>(cx) + 0.5f) * kTreeChunk, my = (static_cast<float>(cy) + 0.5f) * kTreeChunk;
-            if (std::hypot(mx - cam.target_x, my - cam.target_y) > reach + kTreeChunk) continue;
+            const float d = std::hypot(mx - cam.target_x, my - cam.target_y);
+            if (d > reach + kTreeChunk) continue;
+            const bool near = art && d < detail + kTreeChunk * 0.5f;
             Chunk& c = chunks[static_cast<std::size_t>(cy * across + cx)];
-            const bool stale = c.list == 0 || c.version != sc.version || c.terrain != terrain;
-            if (stale && (builds < 6 || c.list == 0)) {
-                if (c.list == 0) c.list = glGenLists(1);
-                glNewList(c.list, GL_COMPILE);
-                build_tree_chunk(t, *sc.wooded, cam, cx * kTreeChunk, cy * kTreeChunk);
+            Lod& l = near ? c.near : c.far;
+            const bool stale = l.list == 0 || l.version != sc.version || l.terrain != terrain;
+            // A few rebuilt a frame, so building track never stalls; one
+            // never drawn yet is built at once.
+            if (stale && (builds < 6 || l.list == 0)) {
+                if (l.list == 0) l.list = glGenLists(1);
+                glNewList(l.list, GL_COMPILE);
+                build_tree_chunk(t, *sc.wooded, cam, cx * kTreeChunk, cy * kTreeChunk, near);
                 glEndList();
-                c.version = sc.version;
-                c.terrain = terrain;
+                l.version = sc.version;
+                l.terrain = terrain;
                 ++builds;
             }
-            glCallList(c.list);
+            glCallList(l.list);
         }
     }
 }
@@ -2354,7 +2427,24 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
     if (cam.three_d) {
         const Scene& sc = scene(eco, industries, rw, cam);
         const TownLayout& towns = sc.towns;
+        // Towns and industries change only with the scene (and the streets
+        // with the era), so they are compiled into a display list; the
+        // chimneys they register for smoke are kept and replayed each frame.
+        static GLuint list = 0;
+        static std::uint64_t list_key = 0;
+        static std::vector<SmokeSource> list_smoke;
+        const std::uint64_t key = sc.version * 4 + (year < 1890 ? 0u : year < 1930 ? 1u : 2u);
         begin_lit();
+        if (list != 0 && list_key == key) {
+            glCallList(list);
+            g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
+            if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
+            end_lit();
+            return;
+        }
+        if (list == 0) list = glGenLists(1);
+        const std::size_t smoke_before = g_smoke.size();
+        glNewList(list, GL_COMPILE_AND_EXECUTE);
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
         // Houses come from the art where there is some (drawn after this
@@ -2417,6 +2507,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const float depth = std::clamp(p.hw * 2.1f, natural, natural * 1.8f);
             models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, width, depth);
         }
+        glEndList();
+        list_key = key;
+        list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
         if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();
         return;

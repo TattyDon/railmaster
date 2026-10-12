@@ -263,9 +263,15 @@ with props beside them from Kenney's Survival Kit (log piles, ore heaps,
 barrels and crates). Water towers and engine sheds stand clear of other
 track, each building at a node in its own spot.
 
+Speed: woods keep two display lists a chunk, model trees near the camera
+and the light code-drawn ones further off; the detailed track (beds,
+sleepers, rails) and the towns, streets and industries are compiled into
+display lists rebuilt only when the railway or the scene changes (the
+chimneys' smoke is recorded with them and replayed each frame). F12 shows
+frames a second.
+
 Next:
-- Real art: a 2x2-cell house shape for variety; LOD for model trees far
-  off.
+- Real art: a 2x2-cell house shape for variety.
 - More shading: ambient occlusion, water reflections, day and night.
 - Night lights (lit windows, headlamps).
 

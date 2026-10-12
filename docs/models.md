@@ -31,7 +31,7 @@ every time), so a town gets a mix of houses.
 | `engine_steam`, `engine_diesel`, `engine_electric` | Locomotives | Its length to the engine's, front forwards |
 | `car:<cargo>` (e.g. `car:coal`, `car:lumber`, `car:oil`; keys in `data/cargo.json`) | A car carrying that cargo | Its length to the car's |
 | `car_coach`, `car_mail`, `car_diner`, `car_boxcar`, `car_hopper`, `car_caboose` | Cars with no model for their cargo | Its length to the car's |
-| `tree_broadleaf`, `tree_conifer` | The woods' trees | To each tree's height, turned at random |
+| `tree_broadleaf`, `tree_conifer` | The woods' trees near the camera (further off, the code's lighter trees) | To each tree's height, turned at random |
 | `industry:<key>` (e.g. `industry:coal_mine`, `industry:steel_mill`; keys in `data/industries.json`) | That industry's buildings | To 70% of its site, in proportion |
 | `service_tower`, `engine_shed` | Water towers and engine sheds by the track | The tower to its height, the shed along the track, facing it |
 | `props:<key>` | Nothing: a cluster of props in the corner of the industry's site (log piles, ore heaps, crates) | About half a site across |
