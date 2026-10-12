@@ -487,3 +487,145 @@ TEST_CASE("purchase bans and one company only") {
     CHECK(w.execute(FoundCompany{.name = "Second Go", .personal_investment = Money::dollars(100'000)}).error ==
           "this scenario allows only one company");
 }
+
+TEST_CASE("choices, disasters and the new goals are parsed and checked") {
+    const Scenario s = with_events(R"([{"id": "offer", "effects": [{"kind": "choice", "text": "Build the spur?", "months": 2,
+        "options": [{"label": "Yes", "effects": [{"kind": "company_cash", "amount": 1000}]}, {"label": "No"}]}]},
+        {"id": "quake", "effects": [{"kind": "earthquake", "target": "Alpha", "percent": 50}]},
+        {"id": "saboteurs", "effects": [{"kind": "sabotage", "value": 2}]},
+        {"id": "fast", "when": {"goals": [{"kind": "average_speed", "count": 20}, {"kind": "variable", "name": "x", "count": 2}]},
+         "effects": [{"kind": "news", "text": "Fast"}]}])");
+    const EventEffect& choice = s.events[0].effects[0];
+    CHECK(choice.kind == EffectKind::Choice);
+    CHECK(choice.months == 2);
+    REQUIRE(choice.options.size() == 2);
+    CHECK(choice.options[0].label == "Yes");
+    CHECK(choice.options[0].effects.size() == 1);
+    CHECK(choice.options[1].effects.empty());
+    CHECK(s.events[1].effects[0].value == 3); // default radius
+    CHECK(s.events[1].effects[0].percent == 50);
+    CHECK(s.events[2].effects[0].value == 2);
+    CHECK(s.events[3].when.goals[0].kind == GoalKind::AverageSpeed);
+    CHECK(s.events[3].when.goals[1].name == "x");
+
+    for (const char* bad : {
+             R"([{"id": "a", "effects": [{"kind": "choice", "text": "Q", "options": []}]}])",
+             R"([{"id": "a", "effects": [{"kind": "choice", "options": [{"label": "Y"}]}]}])",
+             R"([{"id": "a", "effects": [{"kind": "choice", "text": "Q", "options": [{"label": "Y", "effects": [
+                 {"kind": "choice", "text": "Again", "options": [{"label": "Z"}]}]}]}]}])",
+             R"([{"id": "a", "effects": [{"kind": "earthquake"}]}])",
+             R"([{"id": "a", "effects": [{"kind": "earthquake", "target": "Alpha", "value": 0}]}])",
+             R"([{"id": "a", "when": {"goals": [{"kind": "average_speed"}]}, "effects": [{"kind": "news", "text": "x"}]}])",
+             R"([{"id": "a", "when": {"goals": [{"kind": "variable", "count": 1}]}, "effects": [{"kind": "news", "text": "x"}]}])",
+         }) {
+        CAPTURE(bad);
+        CHECK_THROWS_AS((void)with_events(bad), std::runtime_error);
+    }
+    // An earthquake's town, even inside a choice, is checked when the game starts.
+    CHECK_THROWS_AS(small_world(with_events(R"([{"id": "a", "effects": [{"kind": "choice", "text": "Q", "options": [
+                        {"label": "Y", "effects": [{"kind": "earthquake", "target": "Gamma"}]}]}]}])")),
+                    std::invalid_argument);
+}
+
+TEST_CASE("a question waits for the player's answer, which carries out that option; unanswered, it lapses") {
+    const Scenario s = with_events(R"([{"id": "offer", "when": {"after": "1850-01-15"}, "effects": [
+        {"kind": "choice", "text": "The county offers a grant for a new line", "months": 2, "options": [
+            {"label": "Accept", "effects": [{"kind": "company_cash", "amount": 300000}, {"kind": "set_variable", "target": "deal", "value": 1}]},
+            {"label": "Decline"}]}]}])");
+    const auto grants = [](const World& x) { return x.company().history().back().lines[static_cast<std::size_t>(Ledger::Grants)]; };
+
+    World w = small_world(s, shipped());
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    REQUIRE(w.pending_choices().size() == 1);
+    CHECK(w.choice_effect(w.pending_choices()[0]).text == "The county offers a grant for a new line");
+    CHECK(w.execute(AnswerChoice{.choice = 0, .option = 5}).error == "no such answer");
+    CHECK(w.execute(AnswerChoice{.choice = 3, .option = 0}).error == "no such question");
+    // Saved and loaded, the question is still there to answer.
+    World loaded = World::load(w.save(), shipped());
+    REQUIRE(loaded.pending_choices().size() == 1);
+    REQUIRE(loaded.execute(AnswerChoice{.choice = 0, .option = 0}).ok);
+    CHECK(loaded.pending_choices().empty());
+    CHECK(grants(loaded) == Money::dollars(300'000));
+    CHECK(loaded.variable("deal") == 1);
+
+    // Declining does nothing; so does not answering, once its two months are up.
+    World declined = small_world(s, shipped());
+    run_to(declined, Date::from_ymd(1850, 2, 1));
+    REQUIRE(declined.execute(AnswerChoice{.choice = 0, .option = 1}).ok);
+    CHECK(grants(declined) == Money{});
+    World silent = small_world(s, shipped());
+    run_to(silent, Date::from_ymd(1850, 3, 2));
+    CHECK(silent.pending_choices().size() == 1);
+    (void)silent.take_news();
+    run_to(silent, Date::from_ymd(1850, 4, 2));
+    CHECK(silent.pending_choices().empty());
+    const auto news = silent.take_news();
+    CHECK(std::any_of(news.begin(), news.end(), [](const std::string& n) { return n.rfind("No answer given", 0) == 0; }));
+    CHECK(silent.variable("deal") == 0);
+}
+
+TEST_CASE("an earthquake wrecks track near its town and writes it off; track further away stands (§14.4 [C])") {
+    World w = small_world(with_events(R"([{"id": "quake", "when": {"after": "1850-01-15"},
+        "effects": [{"kind": "earthquake", "target": "Alpha", "value": 3}]}])"),
+                          shipped());
+    flatten(w);
+    const MapPoint alpha = w.economy().node_centre(w.economy().towns()[town_index(w, "Alpha")].cx,
+                                                   w.economy().towns()[town_index(w, "Alpha")].cy);
+    const std::int64_t cell = std::int64_t{w.terrain().tile_size_m()} * 1000;
+    REQUIRE(w.execute(BuildTrack{.start = free_at({alpha.x_mm - 2 * cell, alpha.y_mm}), .end = free_at({alpha.x_mm + 2 * cell, alpha.y_mm})}).ok);
+    REQUIRE(w.execute(BuildTrack{.start = free_at({alpha.x_mm, alpha.y_mm + 15 * cell}), .end = free_at({alpha.x_mm + 10 * cell, alpha.y_mm + 15 * cell})}).ok);
+    const auto live = [](const World& x) {
+        return std::count_if(x.railway().track().edges().begin(), x.railway().track().edges().end(),
+                             [](const TrackEdge& e) { return !e.removed; });
+    };
+    const auto before = live(w);
+    const Money track = w.company().track_value();
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    const auto after = live(w);
+    CHECK(after < before);
+    CHECK(after > 0); // the far line stands
+    CHECK(w.company().track_value() < track);
+    for (const TrackEdge& e : w.railway().track().edges()) {
+        if (e.removed) continue;
+        CHECK(w.railway().track().node(e.a).pos.y_mm > alpha.y_mm + 10 * cell); // only the far line is left
+    }
+    const auto news = w.take_news();
+    CHECK(std::any_of(news.begin(), news.end(), [](const std::string& n) { return n.rfind("Earthquake near Alpha", 0) == 0; }));
+}
+
+TEST_CASE("sabotage stops trains out on the line; average speed and counter goals (§14.3, §14.4 [C])") {
+    World w = small_world(with_events(R"([{"id": "count", "when": {"after": "1850-01-15"},
+        "effects": [{"kind": "add_variable", "target": "n", "value": 2}]},
+        {"id": "wreck", "when": {"after": "1850-03-15"}, "effects": [{"kind": "sabotage", "value": 1}]}])"),
+                          shipped());
+    flatten(w);
+    const std::int64_t cell = std::int64_t{w.terrain().tile_size_m()} * 1000;
+    REQUIRE(w.execute(BuildTrack{.start = free_at({5 * cell, 50 * cell}), .end = free_at({60 * cell, 50 * cell})}).ok);
+    const StationId a = w.execute(BuildStation{.at = node_near(w, {5 * cell, 50 * cell})}).created_id;
+    const StationId b = w.execute(BuildStation{.at = node_near(w, {60 * cell, 50 * cell})}).created_id;
+    LocoTypeId loco = 0;
+    while (!w.data().locomotives.get(loco).available_in(1850)) ++loco;
+    const CommandResult bought = w.execute(BuyTrain{.loco = loco, .cars = 1, .route = {a, b}});
+    CAPTURE(bought.error);
+    REQUIRE(bought.ok);
+
+    const Goal speed{.kind = GoalKind::AverageSpeed, .count = 1};
+    const Goal counter{.kind = GoalKind::Variable, .name = "n", .count = 2};
+    CHECK_FALSE(check_goal(w, counter).met);
+    run_to(w, Date::from_ymd(1850, 2, 1));
+    CHECK(check_goal(w, counter).met);
+    const std::int64_t mph = w.average_speed_mph(w.company().id());
+    MESSAGE(check_goal(w, speed).text);
+    CHECK(mph > 0);
+    CHECK(mph <= w.data().locomotives.get(loco).top_speed_mph);
+    CHECK(check_goal(w, speed).met);
+    CHECK_FALSE(check_goal(w, Goal{.kind = GoalKind::AverageSpeed, .count = 500}).met);
+
+    // Sabotage stops the train if it is out on the line at the month end.
+    const std::uint32_t before = w.railway().train(bought.created_id).breakdowns;
+    run_to(w, Date::from_ymd(1850, 4, 2));
+    const auto news = w.take_news();
+    const bool sabotaged = std::any_of(news.begin(), news.end(), [](const std::string& n) { return n.rfind("Sabotage!", 0) == 0; });
+    if (sabotaged) CHECK(w.railway().train(bought.created_id).breakdowns > before);
+    else MESSAGE("the train was at a station when the saboteurs came");
+}

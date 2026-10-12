@@ -174,6 +174,7 @@ struct Train {
     std::uint32_t stops_made = 0;
     std::uint32_t service_stops = 0;
     std::uint32_t breakdowns = 0;
+    std::int64_t road_ticks = 0; // lifetime ticks running, servicing, broken down or held on the line
 
     std::int32_t built_day = 0;       // Date::days_since_epoch() when bought
     std::int64_t distance_mm = 0;     // lifetime distance run
@@ -279,6 +280,9 @@ public:
     // as before; otherwise it makes for the first stop, from the end of the
     // piece of track it is on.
     void set_route(TrainId id, std::vector<StationId> route, std::vector<std::uint8_t> service_stop);
+    // Stop a train out on the line for `days`, as a breakdown (with the
+    // repair bill); false if it is not on the line.
+    bool break_down(TrainId id, std::int32_t days);
     void add_crossing(Crossing c) { crossings_.push_back(c); }
     const std::vector<Crossing>& crossings() const { return crossings_; }
     // The train standing or running on a piece of track, if any.

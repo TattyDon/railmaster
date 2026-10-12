@@ -851,4 +851,15 @@ void World::merge(Company& buyer, CompanyId tid, Money offer) {
     }
 }
 
+CommandResult World::run(const AnswerChoice& cmd) {
+    if (actor_ != kHumanPlayer) return fail("only the player answers scenario questions");
+    if (cmd.choice >= pending_choices_.size()) return fail("no such question");
+    const PendingChoice c = pending_choices_[cmd.choice];
+    const EventEffect& f = choice_effect(c);
+    if (cmd.option >= f.options.size()) return fail("no such answer");
+    pending_choices_.erase(pending_choices_.begin() + static_cast<std::ptrdiff_t>(cmd.choice));
+    apply_effects(f.options[cmd.option].effects, c.event, false);
+    return success(Money{}, 0);
+}
+
 } // namespace railmaster::sim

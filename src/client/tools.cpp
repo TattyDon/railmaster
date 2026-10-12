@@ -413,6 +413,34 @@ bool Tools::founding_key(SDL_Keycode key, Uint16 mod) {
     return true;
 }
 
+void Tools::draw_choice_dialog() const {
+    const auto& pending = world_.pending_choices();
+    if (pending.empty()) return;
+    const sim::EventEffect& q = world_.choice_effect(pending.front());
+    constexpr float kRow = 20.0f;
+    const auto w = static_cast<float>(cam_.width_px);
+    float width = 940;
+    width = std::max(width, static_cast<float>(text_width(upper(q.text), kScale)) + 40);
+    const float x0 = std::max(10.0f, w / 2 - width / 2), y0 = 90;
+    const float rows = static_cast<float>(q.options.size()) + 3.5f;
+    fill_rect(x0, y0, x0 + width, y0 + kRow * rows, 0.08f, 0.07f, 0.04f, 0.95f);
+    float y = y0 + 14;
+    glColor3f(1.0f, 0.9f, 0.5f);
+    draw_text(x0 + 20, y, upper(q.text), kScale);
+    y += kRow * 1.5f;
+    glColor3f(1, 1, 1);
+    for (std::size_t i = 0; i < q.options.size(); ++i) {
+        draw_text(x0 + 20, y, std::to_string(i + 1) + "  " + upper(q.options[i].label), kScale);
+        y += kRow;
+    }
+    const std::int32_t left = pending.front().until_month - (world_.date().year() * 12 + world_.date().month() - 1);
+    glColor3f(0.75f, 0.75f, 0.7f);
+    draw_text(x0 + 20, y, "ANSWER WITH 1-" + std::to_string(q.options.size()) + " WITHIN " + std::to_string(left) +
+                              (left == 1 ? " MONTH" : " MONTHS") +
+                              (pending.size() > 1 ? ", " + std::to_string(pending.size() - 1) + " MORE WAITING" : ""),
+              kScale);
+}
+
 void Tools::draw_founding_dialog() const {
     const sim::Balance::Stock& b = world_.data().balance.stock;
     constexpr float kRow = 20.0f;
@@ -457,6 +485,17 @@ void Tools::draw_founding_dialog() const {
 
 bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     if (founding_) return founding_key(key, mod);
+    // A scenario event's question takes the number keys until it is answered.
+    if (!world_.pending_choices().empty() && key >= SDLK_1 && key <= SDLK_9) {
+        const auto option = static_cast<std::size_t>(key - SDLK_1);
+        const std::string label = option < world_.choice_effect(world_.pending_choices().front()).options.size()
+                                      ? world_.choice_effect(world_.pending_choices().front()).options[option].label
+                                      : "";
+        const sim::CommandResult r = world_.execute(sim::AnswerChoice{.choice = 0, .option = option});
+        if (r.ok) show("YOU CHOSE: " + upper(label), true);
+        else show("CANNOT: " + r.error, false);
+        return true;
+    }
     switch (key) {
     case SDLK_F1: select(Tool::Inspect); return true;
     case SDLK_F2: select(Tool::Track); return true;
@@ -1582,6 +1621,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Finance) draw_finance_panel(); // on top of everything on the map
     if (tool_ == Tool::Market) draw_market_panel();
     if (tool_ == Tool::Status) draw_status_panel();
+    draw_choice_dialog();
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

@@ -183,6 +183,18 @@ public:
     // The scenario being played, if any; checked on the 1st of each month.
     const std::optional<Scenario>& scenario() const { return scenario_; }
     const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // Questions scenario events have put to the player, waiting for an
+    // answer (AnswerChoice) until their month runs out.
+    struct PendingChoice {
+        std::size_t event = 0;  // index into the scenario's events
+        std::size_t effect = 0; // the Choice among its effects
+        std::int32_t until_month = 0;
+    };
+    const std::vector<PendingChoice>& pending_choices() const { return pending_choices_; }
+    const EventEffect& choice_effect(const PendingChoice& c) const { return scenario_->events[c.event].effects[c.effect]; }
+    // A company's trains' average speed on the road over the last 12 months
+    // (distance run over time spent running), in mph; 0 before any running.
+    std::int64_t average_speed_mph(CompanyId c) const;
     // A scenario's counters (rt3-clone-spec §14.4), set by its events.
     std::int64_t variable(const std::string& name) const {
         const auto it = variables_.find(name);
@@ -274,6 +286,11 @@ private:
     std::vector<std::int32_t> event_month_;
     std::map<std::string, std::int64_t> variables_;
     std::vector<Modifier> modifiers_;
+    std::vector<PendingChoice> pending_choices_;
+    // Month-end totals of each company's trains' distance run and ticks on
+    // the road, the last 13, for average speed over 12 months.
+    std::vector<std::vector<std::pair<std::int64_t, std::int64_t>>> road_samples_;
+    void sample_road();
     CargoRegistry base_cargo_;
     IndustryRegistry base_industries_;
     LocomotiveRegistry base_locos_;
@@ -284,6 +301,10 @@ private:
     void check_event_targets() const;
     void run_events();
     void fire(const ScenarioEvent& e);
+    // Carry out effects; `event` locates a Choice among them for its answer.
+    void apply_effects(const std::vector<EventEffect>& effects, std::size_t event, bool top_level);
+    void earthquake(const EventEffect& f);
+    void sabotage(const EventEffect& f);
     void apply_modifiers();
     std::int32_t month_index() const { return date_.year() * 12 + date_.month() - 1; }
 
@@ -333,6 +354,7 @@ private:
     CommandResult run(const Resign& cmd);
     CommandResult run(const FoundCompany& cmd);
     CommandResult run(const DeclareBankruptcy& cmd);
+    CommandResult run(const AnswerChoice& cmd);
     CommandResult run(const BuyIndustry& cmd);
     CommandResult run(const BuildIndustry& cmd);
     CommandResult run(const UpgradeIndustry& cmd);

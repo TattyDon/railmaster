@@ -50,6 +50,7 @@ Format versions:
 - **7:** luxury demand and the cost index's start year.
 - **8:** warehouse conversion.
 - **9:** service stops on train routes.
+- **10:** scenario questions waiting for an answer, average-speed samples, train running time.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

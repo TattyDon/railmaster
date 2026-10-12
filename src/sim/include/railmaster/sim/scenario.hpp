@@ -34,11 +34,14 @@ enum class GoalKind : std::uint8_t {
     Deliver,           // cargo, count: loads your company has delivered
     OnlyRailroad,      // every rival company merged away
     HighestValue,      // your company's market value is the highest of all
+    AverageSpeed,      // count: your trains' average speed on the road over the last 12 months, mph
+    Variable,          // name, count: a scenario counter (see SetVariable) at least this
 };
 struct Goal {
     GoalKind kind = GoalKind::BookValue;
     std::vector<std::string> towns{};
     std::string cargo{};
+    std::string name{}; // Variable: the counter
     std::int64_t count = 0;
     Money amount{};
 };
@@ -81,7 +84,11 @@ enum class EffectKind : std::uint8_t {
     SetVariable,   // target counter, value
     AddVariable,   // target counter, value
     Briefing,      // text: replaces the scenario's briefing
+    Choice,        // text, options, months: the player picks an option within months (else nothing)
+    Earthquake,    // target town, value radius in cells, percent: destroys that share of track pieces near it
+    Sabotage,      // value: so many of the player's running trains break down
 };
+struct ChoiceOption;
 struct EventEffect {
     EffectKind kind = EffectKind::News;
     std::string target{};
@@ -90,6 +97,12 @@ struct EventEffect {
     std::int32_t months = 0;
     Money amount{};
     std::int64_t value = 0;
+    std::vector<ChoiceOption> options{}; // Choice only
+};
+// One answer to a Choice, and what it does (no further choices).
+struct ChoiceOption {
+    std::string label;
+    std::vector<EventEffect> effects{};
 };
 struct ScenarioEvent {
     std::string id;

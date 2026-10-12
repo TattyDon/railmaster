@@ -239,12 +239,19 @@ struct SetPortMode {
 // gives the bondholders new shares for the rest, and ruins its credit.
 struct DeclareBankruptcy {};
 
+// Answer a scenario event's question (rt3-clone-spec §14.4 [C]: dialogs with
+// choices): `choice` indexes World::pending_choices(), `option` its options.
+struct AnswerChoice {
+    std::size_t choice = 0;
+    std::size_t option = 0;
+};
+
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              SetRoute, SetPriority,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice>;
 
 struct CommandResult {
     bool ok = false;

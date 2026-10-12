@@ -609,6 +609,17 @@ void Railway::set_route(TrainId id, std::vector<StationId> route, std::vector<st
     }
 }
 
+bool Railway::break_down(TrainId id, std::int32_t days) {
+    Train& t = trains_.at(id);
+    if (t.state != TrainState::Moving || t.path.empty()) return false;
+    t.state = TrainState::BrokenDown;
+    t.wait_ticks_left = days * kTrainTicksPerDay;
+    t.speed_mm_per_tick = 0;
+    ++t.breakdowns;
+    breakdowns_.push_back(t.id);
+    return true;
+}
+
 std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
     std::vector<std::pair<TrainId, StationId>> out;
     out.swap(arrivals_);
@@ -617,6 +628,7 @@ std::vector<std::pair<TrainId, StationId>> Railway::take_arrivals() {
 
 void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
     t.yielding = false;
+    if (on_path(t.state)) ++t.road_ticks;
     const LocomotiveType& loco = locos.get(t.loco);
     switch (t.state) {
     case TrainState::Dwelling:

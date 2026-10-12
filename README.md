@@ -96,6 +96,7 @@ and checks the economy against the spec's targets
 | Over a train (Inspect) | E edit its route and per-stop consists in the Train tool (keys as there, Enter saves); H raise its priority (Shift+H lower); F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). The consist keys (F, W, [ ]) apply to every stop |
 | D, C (Track) | Double track, curves on/off |
 | T, B, G (Track) | Tunnel, bridge and overpass frequency: Never, Rarely, Average, Common (Shift steps back). Overpasses at Average go over double track; level crossings make trains take turns |
+| 1 to 9 | Answer a scenario event's question (the game pauses for it) |
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | Ctrl+Z (Track) | Undo the last run of track, at full refund, until you leave the Track tool |
 | U (Track) | Double the run of single track under the cursor, at 90% of laying it again (dearer than building double at once) |

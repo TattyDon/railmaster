@@ -127,6 +127,36 @@
           "target": "camelback_060"
         }
       ]
+    },
+    {
+      "id": "strike_sabotage",
+      "repeat_months": 12,
+      "when": {
+        "after": "1883-01-01",
+        "chance_percent": 6
+      },
+      "effects": [
+        {
+          "kind": "sabotage",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "kestrel_quake",
+      "when": {
+        "after": "1886-01-01",
+        "before": "1895-12-31",
+        "chance_percent": 2
+      },
+      "effects": [
+        {
+          "kind": "earthquake",
+          "target": "Kestrel Gap",
+          "value": 4,
+          "percent": 40
+        }
+      ]
     }
   ]
 }

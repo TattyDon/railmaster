@@ -170,7 +170,9 @@ value (the share price's anchor) does not fall with age.
 - Scenario format and medal conditions: done (JSON files, nested goals
   with deadlines, F10 status screen; [spec/scenarios.md](spec/scenarios.md)).
 - Event and trigger system: done (dated, goal and counter triggers; timed
-  effects) and restrictions (track budgets, purchase bans, one company).
+  effects; questions with answers and deadlines; earthquakes and sabotage)
+  and restrictions (track budgets, purchase bans, one company). Goals
+  include average train speed and counters.
 - Original scenarios built to RT3's design patterns (new maps and text):
   three to start, on generated terrain.
 - Map editor with heightmap import.

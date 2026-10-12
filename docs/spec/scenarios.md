@@ -69,6 +69,8 @@ deliver cargo, reach a book value, win the market.
 | `deliver` | `cargo`, `count` | Loads of the cargo your company has delivered since the start |
 | `only_railroad` | none | Every rival company has merged away |
 | `highest_value` | none | Your company's market value is above every rival's |
+| `average_speed` | `count` (mph) | Your trains' average speed on the line over the last 12 months (distance run over time spent running, servicing, broken down or held; from the start until a year has passed) is at least this (§14.3 `avgLocoSpeed`) |
+| `variable` | `name`, `count` | The scenario counter is at least this (§14.3) |
 
 Amounts are whole dollars.
 
@@ -77,6 +79,7 @@ A file is refused, with a reason, if it has any of these faults:
 - a goal that names a town the file does not place;
 - `connect_towns` with fewer than two towns;
 - `deliver` without a cargo or count;
+- `average_speed` without a count, or `variable` without a name;
 - Bronze with no goals;
 - a deadline on or before the start;
 - a bad date;
@@ -151,6 +154,9 @@ Then the event fires with `chance_percent` chance (100 by default).
 | `territory_price` | `target` territory name, `amount` | Sets a new price for access rights to the territory, for good |
 | `set_variable`, `add_variable` | `target` counter, `value` | Sets or adds to a counter |
 | `briefing` | `text` | Replaces the briefing on the status screen |
+| `choice` | `text`, `options`, `months` (default 1) | Asks the player a question, with up to nine answers, each a `label` and its own `effects`. The game pauses and shows it; the player answers with 1-9. Unanswered after `months` month ends, it lapses and nothing happens. A choice cannot offer another choice |
+| `earthquake` | `target` town, `value` radius in cells (default 3), `percent` (default 100) | Each piece of track (anyone's) whose middle lies within the radius of the town's centre is destroyed with this chance, unless a train is on it. Its owner writes it off with nothing back; trains find another way or wait for the line to be rebuilt |
+| `sabotage` | `value` trains (default 1) | So many of the player's trains out on the line (picked at random) stop as if broken down, for 3 to 10 days, and the repair bill is paid as for a breakdown |
 
 - **Duration:** `months` of 0 (the default) means for good; otherwise the
   effect lapses that many months later. Several effects on the same thing
@@ -160,6 +166,10 @@ Then the event fires with `chance_percent` chance (100 by default).
 - **Ids:** event ids must be unique.
 - **Counters** belong to the whole game; the spec's player, company and
   territory scopes are not modelled.
+
+**Offers with deadlines** are choices: an offer to accept or decline,
+with `months` to answer. The shipped Lowland Junction's banker offers a
+loan this way, and collects it later through a counter.
 
 ## Medals
 
@@ -181,12 +191,8 @@ deadline).
 
 ## Not yet
 
-- Effects not yet modelled (§14.4):
-  - disasters such as earthquake damage and sabotage;
-  - dialogs with choices;
-  - offers with deadlines;
-  - per-player, per-company and per-territory counters.
-- The goals `avgLocoSpeed` and `variable`, and deliveries from or to a
-  particular place (§14.3).
+- Per-player, per-company and per-territory counters (§14.4).
+- Deliveries from or to a particular place (§14.3).
+- Other disasters than earthquakes and sabotage (the spec names only these).
 - Hand-made maps: the terrain is still generated from the seed.
 - A scenario picker in the client; the file is given on the command line.

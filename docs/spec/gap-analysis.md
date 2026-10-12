@@ -53,6 +53,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §3.1, §5.2, §7.1 [I] | 0.5-mile cells; Small/Medium/Large maps of 256 × 256, 384 × 512, 768 × 1024; economy nodes every few cells (~15,000 [D]); catchment radius 2/3/4 cells | 1 km cells, one node per cell, 128 × 128 maps, radii 1/2/3 | as the spec; 2 × 2-cell nodes on Small, 4 × 4 on Medium, 7 × 7 on Large; map counts scale with area |
 | §5.3 [I] | Equilibrium price base × ((D+ε)/(S+ε))^0.5 within 0.3–3×; relaxation over months; middleman flow ∝ gap × stock × conductance; conductance-weighted coupling | screened-Poisson field pinned at sites (consumers 150%, producers 50%, neutral 50%); stock to the single best neighbour | as the spec, except site nodes are not smoothed (it would flatten every market; see m2-economy-model.md); calibrated to the spec's [C] middleman speeds and reshaping time |
 | §9.3 [D], §13.2 [I] | Replace locomotive (keeps route and consist); AI replaces engines over 25 years; a recessionCaution trait | none | as the spec; the old engine is scrapped with no trade-in, and what caution does is ours ([rivals-model.md](rivals-model.md)) |
+| §14.3, §14.4 [C/I] | Average-speed and counter goals; dialogs with choices and offers with deadlines; disasters (earthquake damage, sabotage) | none | as the spec ([scenarios.md](scenarios.md)); the game pauses for a question, as RT3's dialogs do |
 | §11.2 [D] | Bridge, tunnel and overpass frequency: Common / Average (default) / Rarely / Never | a tunnel percentage; overpasses all or nothing per line | the four settings for each ([m1-provisional-models.md](m1-provisional-models.md)); what Average means for overpasses is ours |
 | §9.3 [D], §9.4 [D] | Route list: add and remove stops, priority; service stops added manually | a train's stops fixed when bought | as the spec ([m1-provisional-models.md](m1-provisional-models.md)); a service stop uses the buildings at that station |
 | §9.3 [D] | Consist rules per stop: auto (Any/Freight/Express, min/max, default 0/4) or custom cars; wait for a full load; 8 slots with caboose (−50% breakdowns) and dining car (+20% passengers); copy, retire | a fixed number of cars, one automatic rule | as documented; empty cars are not hauled (our reading of "picks cars for the next stop") |
@@ -118,7 +119,7 @@ Grouped by the spec's own build order (§17).
   travellers who give up avoid rail for a while (§8.3 [D/I]).
 
 **Scenarios and presentation**
-- Event disasters and choice dialogs, average-speed goals, hand-made maps
-  (§14 [C/I]).
+- Hand-made maps; per-player, per-company and per-territory counters;
+  deliveries from or to a place (§14 [C/I]).
 - Ledger reports, lists, overlays F2–F5, radar, 3D camera (§15 [D]).
 - Compressed saves with a command log for replays; content packaging (§16 [I]).

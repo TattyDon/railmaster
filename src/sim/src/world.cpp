@@ -451,6 +451,7 @@ void World::on_new_month() {
         }
     }
     run_rivals();
+    sample_road();
     run_events();
     check_scenario();
 }

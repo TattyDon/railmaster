@@ -23,9 +23,9 @@ namespace {
 
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 9; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 10; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
-                                           // 9: service stops
+                                           // 9: service stops; 10: scenario choices, disasters, average speed
 
 class Writer {
 public:
@@ -249,7 +249,7 @@ void io(Ar& ar, Train& t) {
     fields(ar, t.state, t.at_node, t.path, t.step, t.offset_mm, t.speed_mm_per_tick, t.wait_ticks_left, t.yielding,
            t.replan);
     fields(ar, t.water, t.sand, t.oil, t.water_used_mm, t.sand_used_climb_mm, t.oil_used_mm);
-    fields(ar, t.stops_made, t.service_stops, t.breakdowns, t.built_day, t.distance_mm, t.fuel_kg_km, t.leg_mm_by_owner);
+    fields(ar, t.stops_made, t.service_stops, t.breakdowns, t.road_ticks, t.built_day, t.distance_mm, t.fuel_kg_km, t.leg_mm_by_owner);
     fields(ar, t.revenue, t.last_income, t.last_income_tick);
 }
 
@@ -322,7 +322,7 @@ void io(Ar& ar, ScenarioTown& t) {
 }
 template <class Ar>
 void io(Ar& ar, Goal& g) {
-    fields(ar, g.kind, g.towns, g.cargo, g.count, g.amount);
+    fields(ar, g.kind, g.towns, g.cargo, g.name, g.count, g.amount);
 }
 template <class Ar>
 void io(Ar& ar, MedalTier& t) {
@@ -333,8 +333,14 @@ void io(Ar& ar, EventCondition& c) {
     fields(ar, c.after, c.before, c.goals, c.variable, c.at_least, c.chance_percent);
 }
 template <class Ar>
+void io(Ar& ar, ChoiceOption& o);
+template <class Ar>
 void io(Ar& ar, EventEffect& f) {
-    fields(ar, f.kind, f.target, f.text, f.percent, f.months, f.amount, f.value);
+    fields(ar, f.kind, f.target, f.text, f.percent, f.months, f.amount, f.value, f.options);
+}
+template <class Ar>
+void io(Ar& ar, ChoiceOption& o) {
+    fields(ar, o.label, o.effects);
 }
 template <class Ar>
 void io(Ar& ar, ScenarioEvent& e) {
@@ -443,6 +449,10 @@ void io(Ar& ar, World& w) {
     if constexpr (Ar::loading) w.modifiers_.assign(ar.count(1), {});
     else ar.put(w.modifiers_.size(), 8);
     for (auto& m : w.modifiers_) fields(ar, m.kind, m.target, m.percent, m.until_month);
+    if constexpr (Ar::loading) w.pending_choices_.assign(ar.count(1), {});
+    else ar.put(w.pending_choices_.size(), 8);
+    for (auto& c : w.pending_choices_) fields(ar, c.event, c.effect, c.until_month);
+    fields(ar, w.road_samples_);
 }
 
 World::World(LoadTag, GameData data)

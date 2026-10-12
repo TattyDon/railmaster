@@ -123,6 +123,7 @@ private:
     std::int64_t found_outside_ = 0;
     bool founding_key(SDL_Keycode key, Uint16 mod);
     void draw_founding_dialog() const;
+    void draw_choice_dialog() const; // a scenario event's question, answered with 1-9
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;

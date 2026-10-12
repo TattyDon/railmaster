@@ -156,6 +156,88 @@
           "text": "Corwin is joined. Dunmore's merchants now ask for the line to reach them; the board wants it, and a railroad earning its keep."
         }
       ]
+    },
+    {
+      "id": "banker_offer",
+      "when": {
+        "after": "1850-03-01",
+        "before": "1850-12-31"
+      },
+      "effects": [
+        {
+          "kind": "choice",
+          "text": "A Brennan Falls banker offers $400,000 now against $550,000 from you in three years",
+          "months": 3,
+          "options": [
+            {
+              "label": "Take the money",
+              "effects": [
+                {
+                  "kind": "company_cash",
+                  "amount": 400000
+                },
+                {
+                  "kind": "set_variable",
+                  "target": "banker_loan",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "label": "Decline politely",
+              "effects": [
+                {
+                  "kind": "news",
+                  "text": "The banker takes his money to the canal company"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "banker_collects",
+      "when": {
+        "after": "1853-06-01",
+        "variable": {
+          "name": "banker_loan",
+          "at_least": 1
+        }
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "The Brennan Falls banker collects his $550,000"
+        },
+        {
+          "kind": "company_cash",
+          "amount": -550000
+        }
+      ]
+    },
+    {
+      "id": "fast_mail",
+      "when": {
+        "after": "1854-01-01",
+        "before": "1859-12-31",
+        "goals": [
+          {
+            "kind": "average_speed",
+            "count": 28
+          }
+        ]
+      },
+      "effects": [
+        {
+          "kind": "news",
+          "text": "The Post Office rewards the fastest line in the lowlands"
+        },
+        {
+          "kind": "company_cash",
+          "amount": 150000
+        }
+      ]
     }
   ]
 }

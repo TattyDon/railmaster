@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <functional>
 #include <stdexcept>
 
 namespace railmaster::sim {
@@ -40,6 +41,8 @@ GoalKind parse_kind(const std::string& k) {
     if (k == "deliver") return GoalKind::Deliver;
     if (k == "only_railroad") return GoalKind::OnlyRailroad;
     if (k == "highest_value") return GoalKind::HighestValue;
+    if (k == "average_speed") return GoalKind::AverageSpeed;
+    if (k == "variable") return GoalKind::Variable;
     throw std::runtime_error("unknown goal kind '" + k + "'");
 }
 
@@ -56,6 +59,9 @@ EffectKind parse_effect(const std::string& k) {
     if (k == "set_variable") return EffectKind::SetVariable;
     if (k == "add_variable") return EffectKind::AddVariable;
     if (k == "briefing") return EffectKind::Briefing;
+    if (k == "choice") return EffectKind::Choice;
+    if (k == "earthquake") return EffectKind::Earthquake;
+    if (k == "sabotage") return EffectKind::Sabotage;
     throw std::runtime_error("unknown effect kind '" + k + "'");
 }
 
@@ -105,6 +111,7 @@ Scenario Scenario::from_json(std::string_view json_text) {
             goal.kind = parse_kind(g.at("kind").get<std::string>());
             goal.towns = g.value("towns", std::vector<std::string>{});
             goal.cargo = g.value("cargo", std::string());
+            goal.name = g.value("name", std::string());
             goal.count = g.value("count", std::int64_t{0});
             goal.amount = Money::dollars(g.value("amount", std::int64_t{0}));
             for (const std::string& name : goal.towns) {
@@ -118,6 +125,10 @@ Scenario Scenario::from_json(std::string_view json_text) {
             if (goal.kind == GoalKind::Deliver && (goal.cargo.empty() || goal.count <= 0)) {
                 throw std::runtime_error("deliver needs a cargo and a count");
             }
+            if (goal.kind == GoalKind::AverageSpeed && goal.count <= 0) {
+                throw std::runtime_error("average_speed needs a count in mph");
+            }
+            if (goal.kind == GoalKind::Variable && goal.name.empty()) throw std::runtime_error("variable needs a name");
             return goal;
         };
         const auto& medals = j.at("medals");
@@ -170,29 +181,55 @@ Scenario Scenario::from_json(std::string_view json_text) {
             if (event.when.chance_percent < 0 || event.when.chance_percent > 100) {
                 throw std::runtime_error("event '" + event.id + "': chance_percent must be 0 to 100");
             }
-            for (const auto& ef : ev.at("effects")) {
+            // Effects, and a Choice's options' effects (no choices inside choices).
+            std::function<EventEffect(const nlohmann::json&, bool)> parse_effect_json = [&](const nlohmann::json& ef,
+                                                                                            bool in_choice) {
                 EventEffect effect;
                 effect.kind = parse_effect(ef.at("kind").get<std::string>());
                 effect.target = ef.value("target", std::string());
                 effect.text = ef.value("text", std::string());
                 effect.percent = ef.value("percent", 100);
-                effect.months = ef.value("months", 0);
+                effect.months = ef.value("months", effect.kind == EffectKind::Choice ? 1 : 0);
                 effect.amount = Money::dollars(ef.value("amount", std::int64_t{0}));
-                effect.value = ef.value("value", std::int64_t{0});
+                // Defaults: an earthquake reaches 3 cells, sabotage hits one train.
+                const std::int64_t default_value =
+                    effect.kind == EffectKind::Earthquake ? 3 : effect.kind == EffectKind::Sabotage ? 1 : 0;
+                effect.value = ef.value("value", default_value);
                 const bool needs_target = effect.kind != EffectKind::News && effect.kind != EffectKind::CompanyCash &&
                                           effect.kind != EffectKind::PlayerCash && effect.kind != EffectKind::BuildCost &&
-                                          effect.kind != EffectKind::Briefing;
+                                          effect.kind != EffectKind::Briefing && effect.kind != EffectKind::Choice &&
+                                          effect.kind != EffectKind::Sabotage;
                 if (needs_target && effect.target.empty()) {
                     throw std::runtime_error("event '" + event.id + "': this effect needs a target");
                 }
-                if ((effect.kind == EffectKind::News || effect.kind == EffectKind::Briefing) && effect.text.empty()) {
+                if ((effect.kind == EffectKind::News || effect.kind == EffectKind::Briefing ||
+                     effect.kind == EffectKind::Choice) &&
+                    effect.text.empty()) {
                     throw std::runtime_error("event '" + event.id + "': this effect needs text");
                 }
-                if (effect.percent < 0 || effect.months < 0) {
-                    throw std::runtime_error("event '" + event.id + "': percent and months cannot be negative");
+                if (effect.percent < 0 || effect.months < 0 || effect.value < 0) {
+                    throw std::runtime_error("event '" + event.id + "': percent, months and value cannot be negative");
                 }
-                event.effects.push_back(std::move(effect));
-            }
+                if (effect.kind == EffectKind::Choice) {
+                    if (in_choice) throw std::runtime_error("event '" + event.id + "': a choice cannot offer another choice");
+                    if (effect.months < 1) throw std::runtime_error("event '" + event.id + "': a choice needs at least a month to answer");
+                    for (const auto& o : ef.at("options")) {
+                        ChoiceOption option{o.at("label").get<std::string>(), {}};
+                        for (const auto& oe : o.value("effects", nlohmann::json::array())) {
+                            option.effects.push_back(parse_effect_json(oe, true));
+                        }
+                        effect.options.push_back(std::move(option));
+                    }
+                    if (effect.options.empty() || effect.options.size() > 9) {
+                        throw std::runtime_error("event '" + event.id + "': a choice needs 1 to 9 options");
+                    }
+                }
+                if (effect.kind == EffectKind::Earthquake && (effect.value < 1 || effect.percent > 100)) {
+                    throw std::runtime_error("event '" + event.id + "': an earthquake needs a radius of 1 cell or more and percent up to 100");
+                }
+                return effect;
+            };
+            for (const auto& ef : ev.at("effects")) event.effects.push_back(parse_effect_json(ef, false));
             if (event.effects.empty()) throw std::runtime_error("event '" + event.id + "' does nothing");
             s.events.push_back(std::move(event));
         }
@@ -301,6 +338,14 @@ GoalProgress check_goal(const World& w, const Goal& g) {
         for (const Company& c : w.companies())
             if (!c.defunct() && (!co || c.id() != *co)) ++others;
         return {co.has_value() && others == 0, "Rival railroads still running: " + std::to_string(others)};
+    }
+    case GoalKind::AverageSpeed: {
+        const std::int64_t mph = co ? w.average_speed_mph(*co) : 0;
+        return {mph >= g.count, "Average train speed " + std::to_string(mph) + " of " + std::to_string(g.count) + " mph"};
+    }
+    case GoalKind::Variable: {
+        const std::int64_t have = w.variable(g.name);
+        return {have >= g.count, g.name + " " + std::to_string(have) + " of " + std::to_string(g.count)};
     }
     case GoalKind::HighestValue: {
         Money best;

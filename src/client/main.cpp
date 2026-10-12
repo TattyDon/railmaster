@@ -152,6 +152,7 @@ int main(int argc, char* argv[]) {
     }
     if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
+    std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     double tick_accumulator = 0.0;
     Uint64 last = SDL_GetPerformanceCounter();
 
@@ -263,6 +264,10 @@ int main(int argc, char* argv[]) {
             const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
             tools.show("THE ECONOMY IS NOW IN " + name, better);
         }
+        // A scenario event's question stops the clock until it is answered,
+        // as RT3's event dialogs do.
+        if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+        choices_seen = world.pending_choices().size();
         // Corporate news: splits, grumbling investors, chairmen fired or appointed.
         if (const auto news = world.take_news(); !news.empty()) {
             std::string text;
