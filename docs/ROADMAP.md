@@ -174,10 +174,21 @@ with boiler, chimney, cab and tender; diesel and electric hoods (with a
 pantograph); coaches, mail vans, dining cars, boxcars, hoppers for coal,
 iron and bauxite, and a caboose.
 
+Stations have platforms, a canopy and a station house in the owner's
+colours (longer when bigger); water towers, engine sheds, hotels,
+restaurants, taverns and post offices have their own shapes. Industries
+are shaped by type: mines with headframes and spoil heaps, farms with
+barns, silos and fields (orchards with trees), oil derricks, tanks at
+chemical works and refineries, furnaces and stacks at steel and aluminium
+mills, power stations and a nuclear cooling tower, ports with a quay and
+crane, warehouses, offices and factories with sawtooth roofs. Views can
+be bookmarked (Shift+0-9, 0-9), and a radar shows the whole map.
+
 Next:
+- Keep town houses off track and stations.
 - Proper low-poly models for engines, cars, stations and buildings, with
   LOD; textures; a modern shader pipeline.
-- Camera bookmarks (Shift+0-9 store, 0-9 recall), edge scrolling, a radar.
+- Edge scrolling; smoke and lights; day and night.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

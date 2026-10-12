@@ -480,6 +480,210 @@ float rolling_stock(Stock kind, float x, float y, float z, float dx, float dy, f
     return 0.0f;
 }
 
+// An upright cylinder of eight sides (tanks, silos, stacks, cooling towers);
+// `top_r` narrows or widens the top. Inside GL_QUADS.
+void cylinder(float x, float y, float z, float r, float h, const float* side, const float* top, float top_r = -1.0f) {
+    if (top_r < 0) top_r = r;
+    constexpr int kSides = 8;
+    glColor3fv(side);
+    for (int i = 0; i < kSides; ++i) {
+        const float a0 = 6.2831853f * static_cast<float>(i) / kSides, a1 = 6.2831853f * static_cast<float>(i + 1) / kSides;
+        const float am = (a0 + a1) / 2;
+        glNormal3f(std::cos(am), std::sin(am), (r - top_r) / std::max(0.001f, h));
+        glVertex3f(x + r * std::cos(a0), y + r * std::sin(a0), z);
+        glVertex3f(x + r * std::cos(a1), y + r * std::sin(a1), z);
+        glVertex3f(x + top_r * std::cos(a1), y + top_r * std::sin(a1), z + h);
+        glVertex3f(x + top_r * std::cos(a0), y + top_r * std::sin(a0), z + h);
+    }
+    glColor3fv(top);
+    glNormal3f(0, 0, 1);
+    for (int i = 0; i < kSides; ++i) {
+        const float a0 = 6.2831853f * static_cast<float>(i) / kSides, a1 = 6.2831853f * static_cast<float>(i + 1) / kSides;
+        glVertex3f(x, y, z + h);
+        glVertex3f(x + top_r * std::cos(a0), y + top_r * std::sin(a0), z + h);
+        glVertex3f(x + top_r * std::cos(a1), y + top_r * std::sin(a1), z + h);
+        glVertex3f(x, y, z + h);
+    }
+}
+
+// A pitched roof over a box `hl` long along (dx, dy) and `hw` wide, its
+// eaves at z and ridge `rise` above them. Inside GL_QUADS.
+void gable(float x, float y, float z, float dx, float dy, float hl, float hw, float rise, const float* roof, const float* end) {
+    const float px = -dy, py = dx;
+    glColor3fv(roof);
+    for (const float sgn : {-1.0f, 1.0f}) {
+        glNormal3f(px * sgn * rise, py * sgn * rise, hw);
+        glVertex3f(x - dx * hl + px * hw * sgn, y - dy * hl + py * hw * sgn, z);
+        glVertex3f(x + dx * hl + px * hw * sgn, y + dy * hl + py * hw * sgn, z);
+        glVertex3f(x + dx * hl, y + dy * hl, z + rise);
+        glVertex3f(x - dx * hl, y - dy * hl, z + rise);
+    }
+    glColor3fv(end);
+    for (const float sgn : {-1.0f, 1.0f}) {
+        glNormal3f(dx * sgn, dy * sgn, 0);
+        glVertex3f(x + dx * hl * sgn - px * hw, y + dy * hl * sgn - py * hw, z);
+        glVertex3f(x + dx * hl * sgn + px * hw, y + dy * hl * sgn + py * hw, z);
+        glVertex3f(x + dx * hl * sgn, y + dy * hl * sgn, z + rise);
+        glVertex3f(x + dx * hl * sgn, y + dy * hl * sgn, z + rise);
+    }
+}
+
+// A building with a pitched roof.
+void barn(float x, float y, float z, float dx, float dy, float hl, float hw, float h, const float* wall, const float* roof) {
+    box(x, y, z, dx, dy, hl, hw, h, wall, wall);
+    gable(x, y, z + h, dx, dy, hl * 1.04f, hw * 1.1f, hw * 0.8f, roof, wall);
+}
+
+// A heap (spoil, logs, ore): a four-sided pyramid. Inside GL_QUADS.
+void heap(float x, float y, float z, float half, float h, const float* colour) {
+    glColor3fv(colour);
+    const float cx[4] = {x - half, x + half, x + half, x - half}, cy[4] = {y - half, y - half, y + half, y + half};
+    for (int i = 0; i < 4; ++i) {
+        const int j = (i + 1) % 4;
+        const float ex = cx[j] - cx[i], ey = cy[j] - cy[i];
+        glNormal3f(ey, -ex, half);
+        glVertex3f(cx[i], cy[i], z);
+        glVertex3f(cx[j], cy[j], z);
+        glVertex3f(x, y, z + h);
+        glVertex3f(x, y, z + h);
+    }
+}
+
+// A patch of crop or pasture on the ground. Inside GL_QUADS.
+void field(float x, float y, float half, const float* colour, const Camera& cam) {
+    glColor3fv(colour);
+    glNormal3f(0, 0, 1);
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i) {
+            const float x0 = x - half + half * 0.5f * static_cast<float>(i), y0 = y - half + half * 0.5f * static_cast<float>(j);
+            ground_quad(x0, y0, x0 + half * 0.5f, y0 + half * 0.5f, cam);
+        }
+}
+
+bool ends_with(const std::string& s, const char* suffix) {
+    const std::string tail(suffix);
+    return s.size() >= tail.size() && s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
+}
+
+// One industry, shaped by what it is (k: map cells across its spot).
+void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uint32_t seed, const Camera& cam) {
+    const std::string& key = t.key;
+    const float z = cam.ground_z(x, y);
+    const float grey[3] = {0.55f, 0.53f, 0.5f}, dark[3] = {0.25f, 0.24f, 0.24f}, slate[3] = {0.35f, 0.36f, 0.4f};
+    const float brick[3] = {0.6f, 0.3f, 0.22f}, white[3] = {0.88f, 0.88f, 0.86f}, metal[3] = {0.7f, 0.72f, 0.75f};
+    const float timber[3] = {0.5f, 0.36f, 0.22f}, red_barn[3] = {0.62f, 0.18f, 0.14f};
+    const float yaw = unit(seed) < 0.5f ? 0.0f : 1.5708f;
+    const float dx = std::cos(yaw), dy = std::sin(yaw);
+    if (ends_with(key, "_mine")) {
+        float spoil[3] = {0.12f, 0.12f, 0.12f};
+        if (key == "iron_mine") { spoil[0] = 0.45f; spoil[1] = 0.22f; spoil[2] = 0.15f; }
+        else if (key == "bauxite_mine") { spoil[0] = 0.6f; spoil[1] = 0.3f; spoil[2] = 0.2f; }
+        else if (key == "uranium_mine") { spoil[0] = 0.55f; spoil[1] = 0.55f; spoil[2] = 0.35f; }
+        barn(x - 0.12f * k, y + 0.1f * k, z, dx, dy, 0.14f * k, 0.08f * k, 0.12f, timber, slate);
+        // The headframe: two legs and a beam with its wheel.
+        box(x + 0.08f * k, y - 0.06f * k, z, dx, dy, 0.012f, 0.012f, 0.5f, dark, dark);
+        box(x + 0.08f * k, y + 0.06f * k, z, dx, dy, 0.012f, 0.012f, 0.5f, dark, dark);
+        box(x + 0.08f * k, y, z + 0.48f, dx, dy, 0.03f, 0.07f * k, 0.04f, dark, dark);
+        heap(x + 0.18f * k, y + 0.22f * k, z, 0.14f * k, 0.22f, spoil);
+        return;
+    }
+    if (key == "logging_camp") {
+        barn(x, y - 0.12f * k, z, dx, dy, 0.1f * k, 0.07f * k, 0.1f, timber, dark);
+        for (int i = 0; i < 3; ++i) prism(x - 0.1f * k + 0.1f * k * static_cast<float>(i), y + 0.15f * k, z + 0.03f, 0, 1, 0.12f * k, 0.03f, timber);
+        return;
+    }
+    if (ends_with(key, "_farm") || key == "fruit_orchard" || key == "cattle_ranch" || key == "rubber_plantation") {
+        float crop[3] = {0.55f, 0.6f, 0.25f};
+        if (key == "corn_farm" || key == "grain_farm") { crop[0] = 0.82f; crop[1] = 0.72f; crop[2] = 0.3f; }
+        else if (key == "cotton_farm") { crop[0] = 0.85f; crop[1] = 0.85f; crop[2] = 0.8f; }
+        else if (key == "rice_farm") { crop[0] = 0.5f; crop[1] = 0.7f; crop[2] = 0.45f; }
+        else if (key == "sugar_farm" || key == "coffee_farm" || key == "rubber_plantation") { crop[0] = 0.3f; crop[1] = 0.5f; crop[2] = 0.22f; }
+        else if (key == "dairy_farm" || key == "cattle_ranch" || key == "sheep_farm") { crop[0] = 0.42f; crop[1] = 0.62f; crop[2] = 0.3f; }
+        field(x + 0.12f * k, y + 0.12f * k, 0.3f * k, crop, cam);
+        barn(x - 0.18f * k, y - 0.15f * k, z, dx, dy, 0.1f * k, 0.07f * k, 0.12f, red_barn, slate);
+        cylinder(x - 0.02f * k, y - 0.22f * k, z, 0.04f * k, 0.3f, white, metal);
+        if (key == "fruit_orchard" || key == "coffee_farm" || key == "rubber_plantation") {
+            const float leaf[3] = {0.18f, 0.42f, 0.16f};
+            for (int i = 0; i < 6; ++i) {
+                const float tx = x + 0.12f * k + (static_cast<float>(i % 3) - 1) * 0.12f * k;
+                const float ty = y + 0.12f * k + (static_cast<float>(i / 3) - 0.5f) * 0.14f * k;
+                cylinder(tx, ty, cam.ground_z(tx, ty), 0.035f, 0.1f, leaf, leaf, 0.01f);
+            }
+        }
+        return;
+    }
+    if (key == "oil_well") {
+        // A derrick over a small pump house.
+        heap(x, y, z, 0.07f, 0.6f, dark);
+        box(x + 0.12f * k, y, z, dx, dy, 0.06f, 0.04f, 0.06f, grey, grey);
+        cylinder(x - 0.15f * k, y + 0.12f * k, z, 0.07f * k, 0.12f, metal, white);
+        return;
+    }
+    if (key == "nuclear_plant") {
+        cylinder(x + 0.12f * k, y, z, 0.16f * k, 0.55f, white, grey, 0.11f * k);
+        box(x - 0.15f * k, y, z, dx, dy, 0.1f * k, 0.1f * k, 0.2f, grey, slate);
+        cylinder(x - 0.15f * k, y + 0.2f * k, z, 0.07f * k, 0.18f, white, white, 0.04f * k);
+        return;
+    }
+    if (key == "electric_plant") {
+        box(x, y, z, dx, dy, 0.2f * k, 0.12f * k, 0.22f, brick, slate);
+        cylinder(x + 0.12f * k, y + 0.15f * k, z, 0.035f, 0.75f, brick, dark, 0.025f);
+        cylinder(x - 0.04f * k, y + 0.15f * k, z, 0.035f, 0.75f, brick, dark, 0.025f);
+        return;
+    }
+    if (key == "chemical_plant" || key == "refinery" || key == "plastics_factory" || key == "fertilizer_factory") {
+        box(x - 0.12f * k, y - 0.1f * k, z, dx, dy, 0.12f * k, 0.08f * k, 0.16f, grey, slate);
+        for (int i = 0; i < 3; ++i) {
+            cylinder(x + 0.12f * k, y - 0.2f * k + 0.17f * k * static_cast<float>(i), z, 0.065f * k, 0.18f, white, metal);
+        }
+        cylinder(x - 0.2f * k, y + 0.16f * k, z, 0.02f, 0.6f, metal, dark);
+        return;
+    }
+    if (key == "steel_mill" || key == "aluminum_mill") {
+        box(x - 0.05f * k, y, z, dx, dy, 0.22f * k, 0.14f * k, 0.24f, dark, slate);
+        cylinder(x + 0.2f * k, y - 0.15f * k, z, 0.07f * k, 0.4f, brick, dark, 0.05f * k); // furnace
+        for (int i = 0; i < 3; ++i) cylinder(x - 0.18f * k + 0.12f * k * static_cast<float>(i), y + 0.18f * k, z, 0.03f, 0.8f, brick, dark);
+        return;
+    }
+    if (key == "barracks") {
+        const float olive[3] = {0.45f, 0.45f, 0.3f};
+        for (int i = 0; i < 3; ++i) barn(x, y - 0.2f * k + 0.2f * k * static_cast<float>(i), z, 1, 0, 0.25f * k, 0.05f * k, 0.08f, olive, slate);
+        return;
+    }
+    if (key == "commercial_building") {
+        const float stone[3] = {0.78f, 0.74f, 0.66f}, glass[3] = {0.35f, 0.45f, 0.55f};
+        box(x, y, z, dx, dy, 0.14f * k, 0.12f * k, 0.6f, stone, slate);
+        box(x, y, z + 0.1f, dx, dy, 0.145f * k, 0.125f * k, 0.03f, glass, glass);
+        box(x, y, z + 0.3f, dx, dy, 0.145f * k, 0.125f * k, 0.03f, glass, glass);
+        return;
+    }
+    if (key == "bakery") {
+        barn(x, y, z, dx, dy, 0.1f * k, 0.07f * k, 0.1f, brick, slate);
+        return;
+    }
+    if (t.kind == sim::IndustryKind::Port) {
+        const float quay[3] = {0.5f, 0.48f, 0.44f};
+        box(x, y, z, dx, dy, 0.32f * k, 0.22f * k, 0.05f, quay, quay);
+        barn(x - 0.12f * k, y - 0.08f * k, z + 0.05f, dx, dy, 0.14f * k, 0.07f * k, 0.12f, timber, slate);
+        // A crane: a tower and its jib.
+        box(x + 0.18f * k, y + 0.1f * k, z + 0.05f, dx, dy, 0.02f, 0.02f, 0.45f, dark, dark);
+        box(x + 0.18f * k + dx * 0.12f, y + 0.1f * k + dy * 0.12f, z + 0.45f, dx, dy, 0.14f, 0.015f, 0.025f, dark, dark);
+        return;
+    }
+    if (t.kind == sim::IndustryKind::Warehouse) {
+        barn(x, y, z, dx, dy, 0.28f * k, 0.12f * k, 0.15f, timber, slate);
+        return;
+    }
+    // Other mills and factories: a works with sawtooth roofs and a chimney.
+    const float wall[3] = {0.58f, 0.42f, 0.36f};
+    box(x, y, z, dx, dy, 0.24f * k, 0.15f * k, 0.18f, wall, wall);
+    for (int i = 0; i < 3; ++i) {
+        const float along = -0.16f * k + 0.16f * k * static_cast<float>(i);
+        gable(x + dx * along, y + dy * along, z + 0.18f, -dy, dx, 0.15f * k, 0.08f * k, 0.07f, slate, wall);
+    }
+    cylinder(x + dx * 0.2f * k - dy * 0.1f * k, y + dy * 0.2f * k + dx * 0.1f * k, z, 0.03f, 0.55f, brick, dark, 0.022f);
+}
+
 // Bridge decks by type: wood brown, stone grey, steel dark, suspension pale.
 void bridge_rgb(sim::BridgeType b, float* c) {
     switch (b) {
@@ -776,32 +980,96 @@ void draw_railway(const sim::World& w, const Camera& cam) {
         const float s = std::max(1.5f, 8.0f / (cam.zoom * 0.2f));
         begin_lit();
         glBegin(GL_QUADS);
+        // The direction of the track at a node, for lining buildings up with it.
+        const auto along = [&](sim::NodeId n, float& dx, float& dy) {
+            dx = 1;
+            dy = 0;
+            for (sim::EdgeId id : net.edges_at(n)) {
+                const sim::TrackEdge& e = net.edge(id);
+                if (e.removed) continue;
+                const sim::MapPoint a = net.node(e.a).pos, b = net.node(e.b).pos;
+                const auto ex = static_cast<float>(b.x_mm - a.x_mm), ey = static_cast<float>(b.y_mm - a.y_mm);
+                const float l = std::hypot(ex, ey);
+                if (l > 0) {
+                    dx = ex / l;
+                    dy = ey / l;
+                }
+                return;
+            }
+        };
+        const float stone[3] = {0.7f, 0.68f, 0.62f}, slate[3] = {0.35f, 0.36f, 0.4f}, post[3] = {0.3f, 0.3f, 0.32f};
         for (const sim::Station& st : rw.stations()) {
-            float c[3];
-            owner_rgb(st.owner, player, c[0], c[1], c[2]);
-            const float roof[3] = {c[0] * 0.7f, c[1] * 0.7f, c[2] * 0.7f};
+            // A platform each side of the track, the station house beside one
+            // (in the owner's colours), and a canopy; bigger stations are longer.
+            float trim[3];
+            owner_rgb(st.owner, player, trim[0], trim[1], trim[2]);
+            const float wall[3] = {0.82f, 0.74f, 0.6f};
             const sim::TrackNode& n = net.node(st.node);
-            const float x = tiles(n.pos.x_mm, cam), y = tiles(n.pos.y_mm, cam);
-            const float half = 0.18f * s * (st.size == sim::StationSize::Large ? 1.4f : st.size == sim::StationSize::Small ? 0.8f : 1.0f);
-            box(x, y, cam.z_of(n.z_mm), 1, 0, half, half * 0.6f, 0.12f * s, c, roof);
+            const float x = tiles(n.pos.x_mm, cam), y = tiles(n.pos.y_mm, cam), z = cam.z_of(n.z_mm);
+            float dx, dy;
+            along(st.node, dx, dy);
+            const float qx = -dy, qy = dx;
+            const float len = (st.size == sim::StationSize::Large ? 0.45f : st.size == sim::StationSize::Small ? 0.22f : 0.32f) * s;
+            const float off = 0.1f + 0.03f * s;
+            for (const float side : {-1.0f, 1.0f}) {
+                box(x + qx * off * side, y + qy * off * side, z, dx, dy, len, 0.03f * s, 0.03f, stone, stone);
+            }
+            // Canoqy over the far platform, on posts.
+            for (const float t : {-0.7f, 0.0f, 0.7f}) {
+                box(x + qx * off + dx * len * t, y + qy * off + dy * len * t, z, dx, dy, 0.006f * s, 0.006f * s, 0.09f * s, post, post);
+            }
+            box(x + qx * off, y + qy * off, z + 0.09f * s, dx, dy, len * 0.85f, 0.045f * s, 0.012f * s, trim, trim);
+            // The station house behind the near platform.
+            const float house_off = off + 0.03f * s + 0.07f * s;
+            barn(x - qx * house_off, y - qy * house_off, z, dx, dy, len * 0.55f, 0.06f * s, 0.08f * s, wall, trim);
+            if (st.size == sim::StationSize::Large) {
+                barn(x - qx * house_off + dx * len * 0.75f, y - qy * house_off + dy * len * 0.75f, z, dx, dy, 0.07f * s,
+                     0.06f * s, 0.13f * s, wall, trim);
+            }
         }
         for (const sim::StationBuilding& b : rw.station_buildings()) {
-            float c[3];
+            const float x = tiles(b.pos.x_mm, cam), y = tiles(b.pos.y_mm, cam), z = cam.ground_z(x, y);
             switch (b.type) {
-            case sim::StationBuildingType::PostOffice: c[0] = 0.3f; c[1] = 0.5f; c[2] = 0.95f; break;
-            case sim::StationBuildingType::Hotel: c[0] = 0.95f; c[1] = 0.95f; c[2] = 0.95f; break;
-            case sim::StationBuildingType::Restaurant: c[0] = 0.3f; c[1] = 0.85f; c[2] = 0.35f; break;
-            case sim::StationBuildingType::Tavern: c[0] = 0.9f; c[1] = 0.3f; c[2] = 0.25f; break;
+            case sim::StationBuildingType::PostOffice: {
+                const float wall[3] = {0.85f, 0.82f, 0.75f}, roof[3] = {0.25f, 0.4f, 0.8f};
+                barn(x, y, z, 1, 0, 0.08f * s, 0.06f * s, 0.08f * s, wall, roof);
+                break;
             }
-            const float x = tiles(b.pos.x_mm, cam), y = tiles(b.pos.y_mm, cam);
-            box(x, y, cam.ground_z(x, y), 1, 0, 0.09f * s, 0.09f * s, 0.16f * s, c, c);
+            case sim::StationBuildingType::Hotel: {
+                const float wall[3] = {0.92f, 0.9f, 0.86f}, roof[3] = {0.3f, 0.3f, 0.45f};
+                box(x, y, z, 1, 0, 0.09f * s, 0.07f * s, 0.2f * s, wall, roof);
+                break;
+            }
+            case sim::StationBuildingType::Restaurant: {
+                const float wall[3] = {0.88f, 0.8f, 0.65f}, roof[3] = {0.25f, 0.6f, 0.3f};
+                barn(x, y, z, 1, 0, 0.07f * s, 0.05f * s, 0.07f * s, wall, roof);
+                break;
+            }
+            case sim::StationBuildingType::Tavern: {
+                const float wall[3] = {0.5f, 0.35f, 0.22f}, roof[3] = {0.55f, 0.2f, 0.15f};
+                barn(x, y, z, 1, 0, 0.07f * s, 0.05f * s, 0.07f * s, wall, roof);
+                break;
+            }
+            }
         }
         for (const sim::ServiceBuilding& b : rw.service_buildings()) {
-            const float tower[3] = {0.3f, 0.5f, 0.85f}, shed[3] = {0.85f, 0.65f, 0.2f};
             const sim::TrackNode& n = net.node(b.node);
-            const float x = tiles(n.pos.x_mm, cam) + 0.25f * s, y = tiles(n.pos.y_mm, cam) + 0.25f * s;
-            if (b.type == sim::ServiceType::ServiceTower) box(x, y, cam.ground_z(x, y), 1, 0, 0.05f * s, 0.05f * s, 0.3f * s, tower, tower);
-            else box(x, y, cam.ground_z(x, y), 1, 0, 0.14f * s, 0.09f * s, 0.1f * s, shed, shed);
+            float dx, dy;
+            along(b.node, dx, dy);
+            // Set back from the track, on the side away from the station house.
+            const float back = 0.2f + 0.08f * s;
+            const float x = tiles(n.pos.x_mm, cam) - dy * back, y = tiles(n.pos.y_mm, cam) + dx * back;
+            const float z = cam.ground_z(x, y);
+            if (b.type == sim::ServiceType::ServiceTower) {
+                // A water tank on legs.
+                const float tank[3] = {0.3f, 0.35f, 0.42f};
+                box(x, y, z, dx, dy, 0.012f * s, 0.012f * s, 0.16f * s, post, post);
+                cylinder(x, y, z + 0.16f * s, 0.05f * s, 0.08f * s, tank, slate);
+            } else {
+                // An engine shed.
+                const float wall[3] = {0.55f, 0.32f, 0.22f};
+                barn(x + dx * 0.15f * s, y + dy * 0.15f * s, z, dx, dy, 0.16f * s, 0.07f * s, 0.09f * s, wall, slate);
+            }
         }
         for (const sim::Train& t : rw.trains()) {
             if (!t.in_service()) continue;
@@ -1025,23 +1293,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
                 }
                 continue;
             }
-            float c[3];
-            switch (t.kind) {
-            case sim::IndustryKind::Raw: c[0] = 0.55f; c[1] = 0.35f; c[2] = 0.15f; break;
-            case sim::IndustryKind::Processor: c[0] = 0.55f; c[1] = 0.28f; c[2] = 0.62f; break;
-            case sim::IndustryKind::Sink: c[0] = 0.5f; c[1] = 0.5f; c[2] = 0.55f; break;
-            case sim::IndustryKind::Port: c[0] = 0.95f; c[1] = 0.6f; c[2] = 0.15f; break;
-            case sim::IndustryKind::Warehouse: c[0] = 0.75f; c[1] = 0.55f; c[2] = 0.3f; break;
-            case sim::IndustryKind::House: c[0] = c[1] = c[2] = 0.8f; break;
-            }
-            const float roof[3] = {c[0] * 0.65f, c[1] * 0.65f, c[2] * 0.65f};
-            const float z = cam.ground_z(x0, y0);
-            box(x0, y0, z, 1, 0, 0.32f * k, 0.22f * k, 0.32f, c, roof);
-            if (t.kind == sim::IndustryKind::Processor || t.kind == sim::IndustryKind::Sink) {
-                // A chimney.
-                const float stack[3] = {0.45f, 0.4f, 0.38f};
-                box(x0 + 0.2f * k, y0 - 0.1f * k, z, 1, 0, 0.06f, 0.06f, 0.8f, stack, stack);
-            }
+            industry_3d(t, x0, y0, k, hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3), cam);
         }
         glEnd();
         end_lit();
@@ -1211,6 +1463,90 @@ void draw_territory_names(const sim::TerritoryMap& map, const Camera& cam, const
         glColor4f(0.25f, 0.15f, 0.4f, 0.9f);
         draw_text(px - w / 2, py, label, 2);
     }
+}
+
+void draw_radar(const sim::World& w, const Camera& cam, float x0, float y0, float size) {
+    const sim::Terrain& t = w.terrain();
+    const float across = static_cast<float>(std::max(t.width(), t.height()));
+    const float k = size / across; // pixels per map cell
+    glColor4f(0.05f, 0.05f, 0.07f, 0.9f);
+    glBegin(GL_QUADS);
+    glVertex2f(x0 - 3, y0 - 3);
+    glVertex2f(x0 + size + 3, y0 - 3);
+    glVertex2f(x0 + size + 3, y0 + size + 3);
+    glVertex2f(x0 - 3, y0 + size + 3);
+    // The land, a sample every few cells, lighter higher up.
+    const int step = std::max(1, static_cast<int>(across / 110.0f));
+    for (int ty = 0; ty < t.height(); ty += step) {
+        for (int tx = 0; tx < t.width(); tx += step) {
+            float r, g, b;
+            ground_rgb(t.ground(tx, ty), 0.5f, r, g, b);
+            const float lift = std::clamp(static_cast<float>(t.corner_height(tx, ty)) / 600.0f, 0.0f, 0.35f);
+            if (t.ground(tx, ty) != sim::GroundType::Water) {
+                r += lift;
+                g += lift;
+                b += lift;
+            }
+            glColor3f(r, g, b);
+            const float sx = x0 + static_cast<float>(tx) * k, sy = y0 + static_cast<float>(ty) * k;
+            const float e = static_cast<float>(step) * k;
+            glVertex2f(sx, sy);
+            glVertex2f(sx + e, sy);
+            glVertex2f(sx + e, sy + e);
+            glVertex2f(sx, sy + e);
+        }
+    }
+    // Towns as white dots, stations in their owners' colours.
+    const auto dot = [&](sim::MapPoint p, float half) {
+        const float sx = x0 + static_cast<float>(p.x_mm) / cam.mm_per_tile * k, sy = y0 + static_cast<float>(p.y_mm) / cam.mm_per_tile * k;
+        glVertex2f(sx - half, sy - half);
+        glVertex2f(sx + half, sy - half);
+        glVertex2f(sx + half, sy + half);
+        glVertex2f(sx - half, sy + half);
+    };
+    glColor3f(1, 1, 1);
+    for (const sim::Town& town : w.economy().towns()) dot(w.economy().node_centre(town.cx, town.cy), 2.0f);
+    for (const sim::Station& st : w.railway().stations()) {
+        float r, g, b;
+        owner_rgb(st.owner, w.player_company(), r, g, b);
+        glColor3f(r * 0.6f, g * 0.6f, b * 0.6f);
+        dot(w.railway().track().node(st.node).pos, 1.5f);
+    }
+    glEnd();
+    // Track as thin lines.
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    glColor3f(0.25f, 0.18f, 0.12f);
+    const sim::TrackNetwork& net = w.railway().track();
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (e.removed) continue;
+        for (const sim::NodeId n : {e.a, e.b}) {
+            const sim::MapPoint p = net.node(n).pos;
+            glVertex2f(x0 + static_cast<float>(p.x_mm) / cam.mm_per_tile * k, y0 + static_cast<float>(p.y_mm) / cam.mm_per_tile * k);
+        }
+    }
+    // Where the view looks: a yellow mark and the way it faces.
+    const float vx = x0 + (cam.three_d ? cam.target_x : cam.pan_x + static_cast<float>(cam.width_px) / (2 * cam.zoom)) * k;
+    const float vy = y0 + (cam.three_d ? cam.target_y : cam.pan_y + static_cast<float>(cam.height_px) / (2 * cam.zoom)) * k;
+    glColor3f(1.0f, 0.9f, 0.2f);
+    glVertex2f(vx - 4, vy);
+    glVertex2f(vx + 4, vy);
+    glVertex2f(vx, vy - 4);
+    glVertex2f(vx, vy + 4);
+    if (cam.three_d) {
+        glVertex2f(vx, vy);
+        glVertex2f(vx + std::sin(cam.yaw) * 12, vy - std::cos(cam.yaw) * 12);
+    }
+    glEnd();
+}
+
+std::optional<sim::MapPoint> radar_point(const sim::World& w, const Camera& cam, float x0, float y0, float size, float sx, float sy) {
+    if (sx < x0 || sy < y0 || sx > x0 + size || sy > y0 + size) return std::nullopt;
+    const sim::Terrain& t = w.terrain();
+    const float across = static_cast<float>(std::max(t.width(), t.height()));
+    const float cells_x = (sx - x0) / size * across, cells_y = (sy - y0) / size * across;
+    if (cells_x > static_cast<float>(t.width()) || cells_y > static_cast<float>(t.height())) return std::nullopt;
+    return sim::MapPoint{static_cast<std::int64_t>(cells_x * cam.mm_per_tile), static_cast<std::int64_t>(cells_y * cam.mm_per_tile)};
 }
 
 } // namespace railmaster::client

@@ -197,6 +197,8 @@ and checks the economy against the spec's targets
 | Arrows, mouse wheel | Pan, zoom |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | V | Switch between the 3D view and the flat top-down map |
+| Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |
+| Radar (bottom left) | The whole map, with towns, stations, track and where you are looking; click it to go there |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |
 
 The bottom bar always shows what the current tool does and its options. While

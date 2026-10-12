@@ -158,6 +158,16 @@ int main(int argc, char* argv[]) {
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     double tick_accumulator = 0.0;
     int right_drag = 0; // pixels the mouse moved with the right button down
+    // Camera bookmarks: Shift+0-9 stores the view, 0-9 returns to it (rt3-clone-spec §15.6).
+    struct Bookmark {
+        bool set = false;
+        float x = 0, y = 0, distance = 0, yaw = 0, pitch = 0;
+    };
+    Bookmark bookmarks[10];
+    // The radar, bottom left above the tool bar.
+    constexpr float kRadar = 170.0f;
+    const auto radar_x = [] { return 8.0f; };
+    const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
     Uint64 last = SDL_GetPerformanceCounter();
 
     for (bool running = true; running;) {
@@ -189,6 +199,12 @@ int main(int argc, char* argv[]) {
             case SDL_MOUSEBUTTONDOWN:
                 if (ev.button.button == SDL_BUTTON_RIGHT) {
                     right_drag = 0;
+                    break;
+                }
+                // A click on the radar moves the view there.
+                if (const auto p = client::radar_point(world, cam, radar_x(), radar_y(), kRadar, static_cast<float>(ev.button.x),
+                                                       static_cast<float>(ev.button.y))) {
+                    cam.center_on(*p);
                     break;
                 }
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
@@ -235,6 +251,29 @@ int main(int argc, char* argv[]) {
                 case SDLK_KP_MINUS: speed.slower(); break;
                 case SDLK_PAUSE:
                 case SDLK_SPACE: speed.toggle_pause(); break;
+                case SDLK_0:
+                case SDLK_1:
+                case SDLK_2:
+                case SDLK_3:
+                case SDLK_4:
+                case SDLK_5:
+                case SDLK_6:
+                case SDLK_7:
+                case SDLK_8:
+                case SDLK_9: {
+                    Bookmark& b = bookmarks[ev.key.keysym.sym - SDLK_0];
+                    if ((ev.key.keysym.mod & KMOD_SHIFT) != 0) {
+                        b = {true, cam.target_x, cam.target_y, cam.distance, cam.yaw, cam.pitch};
+                        tools.show("VIEW " + std::to_string(ev.key.keysym.sym - SDLK_0) + " STORED", true);
+                    } else if (b.set) {
+                        cam.target_x = b.x;
+                        cam.target_y = b.y;
+                        cam.distance = b.distance;
+                        cam.yaw = b.yaw;
+                        cam.pitch = b.pitch;
+                    }
+                    break;
+                }
                 case SDLK_v: {
                     // 3D or the top-down map, looking at the same place.
                     const sim::MapPoint at{static_cast<std::int64_t>(cam.target_x * cam.mm_per_tile),
@@ -346,6 +385,7 @@ int main(int argc, char* argv[]) {
         // A scenario's track budget, in place of the speed keys' reminder.
         const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;
         status += tiles ? "  TRACK BUDGET " + std::to_string(*tiles) : std::string("  +/- SPEED, PAUSE");
+        if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
         tools.draw_ui(status);
         SDL_GL_SwapWindow(window);
     }
