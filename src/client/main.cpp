@@ -4,7 +4,7 @@
 // simple shapes (V switches to the old top-down view).
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
-//                   [--scenario=FILE] [--load=FILE] [--version]
+//                   [--scenario=FILE] [--load=FILE] [--no-shaders] [--version]
 // The commit it was built from shows in the bottom-right corner, the window
 // title and --version.
 // Ctrl+S saves the game to railmaster.sav, Ctrl+L loads it back.
@@ -14,6 +14,7 @@
 #include "build_info.hpp"
 #include "font.hpp"
 #include "render.hpp"
+#include "shading.hpp"
 #include "tools.hpp"
 
 #include "railmaster/sim/demo.hpp"
@@ -62,6 +63,7 @@ int main(int argc, char* argv[]) {
     std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
     bool empty = false;
     bool quick = false; // skip the founding dialog: found on the usual terms
+    bool use_shaders = true; // --no-shaders: the fixed-function renderer
     int rivals = 3;
     sim::MapSize map_size = sim::MapSize::Small;
     int territories = 0;
@@ -73,7 +75,8 @@ int main(int argc, char* argv[]) {
             std::printf("railmaster %s (%s)\n", client::kBuildCommit, client::kBuildDate);
             return 0;
         }
-        if (arg == "--empty") empty = true;
+        if (arg == "--no-shaders") use_shaders = false;
+        else if (arg == "--empty") empty = true;
         else if (arg == "--quick") quick = true;
         else if (arg.rfind("--rivals=", 0) == 0) rivals = std::stoi(arg.substr(9));
         else if (arg.rfind("--territories=", 0) == 0) territories = std::stoi(arg.substr(14));
@@ -186,6 +189,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     SDL_GL_SetSwapInterval(1);
+    std::printf("renderer: %s\n", client::shading::init(use_shaders) ? "shaders and shadows" : "fixed-function");
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -422,21 +426,34 @@ int main(int argc, char* argv[]) {
         SDL_GetWindowSize(window, &cam.width_px, &cam.height_px);
         SDL_GL_GetDrawableSize(window, &cam.drawable_w, &cam.drawable_h);
         cam.apply();
+        const bool shaded = cam.three_d && client::shading::active();
+        if (shaded) {
+            // Shadows first: what casts them, seen from the sun.
+            client::shading::begin_shadow_pass(cam);
+            client::draw_terrain(world.terrain(), cam);
+            client::draw_sites(world.economy(), world.data().industries, world.railway(), world.date().year(), cam, std::nullopt);
+            client::draw_railway(world, cam);
+            client::shading::end_shadow_pass(cam);
+            client::clear_smoke();
+        }
         if (cam.three_d) glClearColor(0.55f, 0.70f, 0.85f, 1.0f); // sky
         else glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        if (shaded) client::shading::draw_sky(cam);
         if (cam.three_d) {
             glEnable(GL_DEPTH_TEST);
             glDepthFunc(GL_LEQUAL);
             // Haze: the far land fades into the sky, as in RT3; zoomed out
             // over the whole map it is too far to show.
-            const GLfloat sky[] = {0.55f, 0.70f, 0.85f, 1.0f};
+            GLfloat sky[] = {0.55f, 0.70f, 0.85f, 1.0f};
+            if (shaded) client::shading::horizon_rgb(sky[0], sky[1], sky[2]);
             glEnable(GL_FOG);
             glFogi(GL_FOG_MODE, GL_LINEAR);
             glFogfv(GL_FOG_COLOR, sky);
             glFogf(GL_FOG_START, cam.distance * 2.5f);
             glFogf(GL_FOG_END, cam.distance * 7.0f);
         }
+        if (shaded) client::shading::begin_world(cam);
         client::draw_terrain(world.terrain(), cam);
         if (tools.overlay()) client::draw_price_overlay(world.economy(), world.data().cargo.get(*tools.overlay()), cam);
         client::draw_sites(world.economy(), world.data().industries, world.railway(), world.date().year(), cam, tools.overlay());
@@ -445,6 +462,7 @@ int main(int argc, char* argv[]) {
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         client::draw_smoke(cam, smoke_clock);
         tools.draw_world_overlay();
+        if (shaded) client::shading::end_world();
         glDisable(GL_FOG);
         glDisable(GL_DEPTH_TEST);
 

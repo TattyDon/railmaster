@@ -229,10 +229,19 @@ the towns change. The view opens on the biggest town. The client draws at
 full resolution on Retina screens, with 4x anti-aliasing, and follows the
 window's real size (a Mac may open it smaller than asked).
 
+Shading: GLSL 1.20 shaders on the OpenGL 2.1 context (functions loaded at
+run time) light every pixel with sunlight, a sky-and-ground ambient and the
+haze, and a 2048x2048 shadow map from the sun gives buildings, trees,
+stations, trains and hills soft-edged shadows over the area round the
+camera (wider as it pulls back, fading out at its edge). A gradient sky
+replaces the flat colour. `--no-shaders`, or a system without shaders or
+framebuffers, keeps the fixed-function lighting.
+
 Next:
-- Proper low-poly models for industries, with LOD; textures
-  on buildings; a modern shader pipeline.
-- Edge scrolling; smoke and lights; day and night.
+- Real art: load low-poly models and textures (glTF), starting with CC0
+  packs for engines, cars, buildings and trees; textures on buildings.
+- More shading: ambient occlusion, water reflections, day and night.
+- Night lights (lit windows, headlamps).
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

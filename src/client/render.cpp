@@ -1,6 +1,7 @@
 #include "render.hpp"
 
 #include "font.hpp"
+#include "shading.hpp"
 #include "tools.hpp"
 
 #include <SDL.h>
@@ -76,10 +77,12 @@ void begin_lit() {
     glLightfv(GL_LIGHT0, GL_POSITION, dir);
     glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
+    shading::set_lit(true);
 }
 void end_lit() {
     glDisable(GL_LIGHTING);
     glDisable(GL_COLOR_MATERIAL);
+    shading::set_lit(false);
 }
 
 // A box on the ground (or at z), `hl` long along the direction (dx, dy),
@@ -355,7 +358,7 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
         }
     }
     glEnd();
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
     glDisable(GL_TEXTURE_2D);
     // A skirt round the edge of the map, down to below sea level.
     glBegin(GL_QUADS);
@@ -2438,6 +2441,8 @@ std::optional<sim::MapPoint> radar_point(const sim::World& w, const Camera& cam,
     if (cells_x > static_cast<float>(t.width()) || cells_y > static_cast<float>(t.height())) return std::nullopt;
     return sim::MapPoint{static_cast<std::int64_t>(cells_x * cam.mm_per_tile), static_cast<std::int64_t>(cells_y * cam.mm_per_tile)};
 }
+
+void clear_smoke() { g_smoke.clear(); }
 
 void draw_smoke(const Camera& cam, float seconds) {
     if (!cam.three_d) {

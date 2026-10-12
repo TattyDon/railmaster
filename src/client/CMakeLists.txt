@@ -6,6 +6,7 @@ add_executable(railmaster
     font.cpp
     main.cpp
     render.cpp
+    shading.cpp
     tools.cpp
 )
 
