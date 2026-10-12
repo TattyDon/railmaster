@@ -80,7 +80,8 @@ there):
 - The game draws with shaders and shadows where the graphics card allows
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
-- Mouse wheel zooms, arrow keys pan; Shift+arrows or dragging with the
+- Zoom with the mouse wheel, a two-finger scroll or pinch on a trackpad,
+  or Option (Alt) + Up/Down; arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 
 Other ways to start:
@@ -207,7 +208,8 @@ and checks the economy against the spec's targets
 | F11 | Lists of trains, stations and companies (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station (or the company's market entry) |
 | PgUp / PgDn (Inspect) | Go to your next or previous train |
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
-| Arrows, mouse wheel, mouse at the window edge | Pan, zoom |
+| Arrows, mouse at the window edge | Pan |
+| Mouse wheel, two-finger scroll, pinch, Option (Alt) + Up/Down | Zoom in and out |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | V | Switch between the 3D view and the flat top-down map |
 | F12 | Show frames a second and the time a frame takes (bottom right) |
@@ -245,4 +247,6 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 Art in `data/models/` is by Kenney (www.kenney.nl), CC0; see each pack's
 `License.txt` and [docs/models.md](docs/models.md). The model and image
 loaders in `third_party/` are cgltf (MIT) and stb_image (public domain);
-see [third_party/README.md](third_party/README.md).
+see [third_party/README.md](third_party/README.md). The interface font is
+Source Sans 3 by Adobe, under the SIL Open Font License
+(`data/fonts/OFL-SourceSans3.md`).

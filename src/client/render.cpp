@@ -213,7 +213,7 @@ template <typename Texel> GLuint make_texture(Texel texel) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     // Sharp ground towards the horizon, where the card supports it.
-    if (SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic")) {
+    if (SDL_GL_ExtensionSupported("Gl_ext_texture_filter_anisotropic")) {
         constexpr GLenum kMaxAnisotropy = 0x84FE, kMaxAnisotropyLimit = 0x84FF;
         GLfloat limit = 1.0f;
         glGetFloatv(kMaxAnisotropyLimit, &limit);
@@ -3194,7 +3194,8 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
     const float cell_mm = cam.mm_per_tile;
     for (std::size_t i = 0; i < eco.towns().size(); ++i) {
         const sim::Town& t = eco.towns()[i];
-        const std::string label = t.name + " " + std::string(static_cast<std::size_t>(sim::town_stars(eco.town_houses(i), towns)), '*');
+        const std::string& label = t.name;
+        const int stars = sim::town_stars(eco.town_houses(i), towns);
         float sx = 0, sy = 0;
         const sim::MapPoint c = eco.node_centre(t.cx, t.cy);
         // Over the town: above it in 3D, north of it in 2D.
@@ -3202,16 +3203,31 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
                                        : cam.to_screen({c.x_mm, c.y_mm - static_cast<std::int64_t>(3.0f * cell_mm)}, sx, sy);
         if (!shown) continue;
         if (cam.three_d) sy -= 30;
-        const auto w = static_cast<float>(text_width(label, 2));
+        // The name, then its rating as gold stars.
+        constexpr float kStar = 12.0f;
+        const auto tw = static_cast<float>(text_width(label, 2));
+        const float w = tw + (stars > 0 ? 4.0f + kStar * static_cast<float>(stars) : 0.0f);
         glColor4f(0.0f, 0.0f, 0.0f, 0.55f);
         glBegin(GL_QUADS);
-        glVertex2f(sx - w / 2 - 3, sy - 3);
-        glVertex2f(sx + w / 2 + 3, sy - 3);
-        glVertex2f(sx + w / 2 + 3, sy + 17);
-        glVertex2f(sx - w / 2 - 3, sy + 17);
+        glVertex2f(sx - w / 2 - 5, sy - 4);
+        glVertex2f(sx + w / 2 + 5, sy - 4);
+        glVertex2f(sx + w / 2 + 5, sy + 18);
+        glVertex2f(sx - w / 2 - 5, sy + 18);
         glEnd();
         glColor3f(1.0f, 1.0f, 0.95f);
         draw_text(sx - w / 2, sy, label, 2);
+        glColor3f(0.98f, 0.8f, 0.25f);
+        for (int k = 0; k < stars; ++k) {
+            const float cx = sx - w / 2 + tw + 4.0f + kStar * (static_cast<float>(k) + 0.5f), cy = sy + 7.0f;
+            glBegin(GL_TRIANGLE_FAN);
+            glVertex2f(cx, cy);
+            for (int j = 0; j <= 10; ++j) {
+                const float r = j % 2 == 0 ? kStar * 0.48f : kStar * 0.2f;
+                const float an = -1.5707963f + 3.1415927f * static_cast<float>(j) / 5.0f;
+                glVertex2f(cx + r * std::cos(an), cy + r * std::sin(an));
+            }
+            glEnd();
+        }
     }
 }
 
@@ -3287,8 +3303,7 @@ void draw_territory_names(const sim::TerritoryMap& map, const Camera& cam, const
         if (n[t] == 0) continue;
         const sim::Territory& terr = map.territories[t];
         std::string label = terr.name;
-        for (char& ch : label) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        if (company && company->has_access(static_cast<sim::TerritoryId>(t))) label += " (YOURS)";
+        if (company && company->has_access(static_cast<sim::TerritoryId>(t))) label += " (yours)";
         else if (!terr.open()) label += " " + format_money(terr.access_cost);
         float px = 0, py = 0;
         const auto cell_mm = static_cast<std::int64_t>(cam.mm_per_tile);

@@ -287,6 +287,12 @@ a smoking chimney, an open saw shed over its pit, a log deck stacked in a
 pyramid and stumps all round. Tunnel mouths have a stone headwall with a
 round-arched mouth, a ring of voussoirs, a coping and splayed wing walls.
 
+Interface: text is set in Source Sans 3 (OFL), baked with stb_truetype
+into a glyph atlas per size at the screen's pixel density (the old 5x7
+pixel font remains as a fallback), in sentence case rather than capitals;
+town ratings show as gold stars. Zoom by wheel, smooth trackpad scrolling,
+pinch, or Option (Alt) + Up/Down.
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into

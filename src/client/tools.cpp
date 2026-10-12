@@ -17,8 +17,9 @@ sim::Frequency next_frequency(sim::Frequency f, bool back) {
     return static_cast<sim::Frequency>((static_cast<int>(f) + (back ? 3 : 1)) % 4);
 }
 
-std::string upper(std::string s) {
-    for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+// Names as written: the interface font has lower case (this once made
+// everything capitals for the old pixel font).
+std::string as_written(std::string s) {
     return s;
 }
 
@@ -31,22 +32,22 @@ constexpr float kBottomBarH = 44.0f;
 
 const char* size_name(sim::StationSize s) {
     switch (s) {
-    case sim::StationSize::Small: return "SMALL";
-    case sim::StationSize::Medium: return "MEDIUM";
-    case sim::StationSize::Large: return "LARGE";
+    case sim::StationSize::Small: return "Small";
+    case sim::StationSize::Medium: return "Medium";
+    case sim::StationSize::Large: return "Large";
     }
     return "?";
 }
 
 const char* state_name(sim::TrainState s) {
     switch (s) {
-    case sim::TrainState::Dwelling: return "AT STATION";
-    case sim::TrainState::Moving: return "MOVING";
-    case sim::TrainState::Servicing: return "SERVICING";
-    case sim::TrainState::BrokenDown: return "BROKEN DOWN";
-    case sim::TrainState::NoRoute: return "NO ROUTE";
-    case sim::TrainState::Crashed: return "WRECKED";
-    case sim::TrainState::Retired: return "RETIRED";
+    case sim::TrainState::Dwelling: return "at station";
+    case sim::TrainState::Moving: return "moving";
+    case sim::TrainState::Servicing: return "servicing";
+    case sim::TrainState::BrokenDown: return "broken down";
+    case sim::TrainState::NoRoute: return "no route";
+    case sim::TrainState::Crashed: return "wrecked";
+    case sim::TrainState::Retired: return "retired";
     }
     return "?";
 }
@@ -91,8 +92,8 @@ void Tools::draw_finance_panel() const {
         draw_text(x0 + 720 - static_cast<float>(text_width(b, kScale)), y, b, kScale);
         y += kRow;
     };
-    row(co.name() + (world_.player_company() ? "" : "   (YOU NO LONGER RUN IT)"), "", "", 1.0f, 0.9f, 0.5f);
-    row("INCOME STATEMENT", std::to_string(now.year) + " SO FAR", last ? std::to_string(last->year) : "", 1.0f, 0.9f,
+    row(co.name() + (world_.player_company() ? "" : "   (you no longer run it)"), "", "", 1.0f, 0.9f, 0.5f);
+    row("Income statement", std::to_string(now.year) + " so far", last ? std::to_string(last->year) : "", 1.0f, 0.9f,
         0.5f);
     y += 4;
     for (std::size_t i = 0; i < sim::kLedgerLines; ++i) {
@@ -106,47 +107,47 @@ void Tools::draw_finance_panel() const {
         row(sim::ledger_name(line), cell(now), last ? cell(*last) : "", rev ? 0.6f : 0.95f, rev ? 0.95f : 0.65f,
             rev ? 0.6f : 0.6f);
     }
-    row("PROFIT", format_money(now.profit()), last ? format_money(last->profit()) : "", 1, 1, 1);
+    row("Profit", format_money(now.profit()), last ? format_money(last->profit()) : "", 1, 1, 1);
     y += kRow / 2;
-    row("INVESTED IN TRACK", format_money(now.track_built), last ? format_money(last->track_built) : "", 0.8f, 0.8f,
+    row("Invested in track", format_money(now.track_built), last ? format_money(last->track_built) : "", 0.8f, 0.8f,
         0.8f);
-    row("INVESTED IN BUILDINGS", format_money(now.buildings_built), last ? format_money(last->buildings_built) : "",
+    row("Invested in buildings", format_money(now.buildings_built), last ? format_money(last->buildings_built) : "",
         0.8f, 0.8f, 0.8f);
-    row("INVESTED IN TRAINS", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
+    row("Invested in trains", format_money(now.trains_bought), last ? format_money(last->trains_bought) : "", 0.8f,
         0.8f, 0.8f);
-    row("INVESTED IN INDUSTRIES", format_money(now.industries_bought), last ? format_money(last->industries_bought) : "",
+    row("Invested in industries", format_money(now.industries_bought), last ? format_money(last->industries_bought) : "",
         0.8f, 0.8f, 0.8f);
-    row("SPENT ON MERGERS", format_money(now.acquisitions), last ? format_money(last->acquisitions) : "", 0.8f, 0.8f,
+    row("Spent on mergers", format_money(now.acquisitions), last ? format_money(last->acquisitions) : "", 0.8f, 0.8f,
         0.8f);
     y += kRow / 2;
-    row("BALANCE SHEET", "", "", 1.0f, 0.9f, 0.5f);
-    row("CASH", format_money(co.cash()), "", 0.9f, 0.9f, 0.9f);
-    row("TRACK", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
-    row("STATIONS AND BUILDINGS", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
-    row("TRAINS", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
-    row("INDUSTRIES", format_money(co.industry_value()), "", 0.9f, 0.9f, 0.9f);
-    row("BONDS", (co.debt() > sim::Money{} ? "-" : "") + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
-    row("BOOK VALUE", format_money(co.book_value()), "", 1, 1, 1);
+    row("Balance sheet", "", "", 1.0f, 0.9f, 0.5f);
+    row("Cash", format_money(co.cash()), "", 0.9f, 0.9f, 0.9f);
+    row("Track", format_money(co.track_value()), "", 0.9f, 0.9f, 0.9f);
+    row("Stations and buildings", format_money(co.building_value()), "", 0.9f, 0.9f, 0.9f);
+    row("Trains", format_money(co.rolling_stock_value()), "", 0.9f, 0.9f, 0.9f);
+    row("Industries", format_money(co.industry_value()), "", 0.9f, 0.9f, 0.9f);
+    row("Bonds", (co.debt() > sim::Money{} ? "-" : "") + format_money(co.debt()), "", 0.95f, 0.65f, 0.6f);
+    row("Book value", format_money(co.book_value()), "", 1, 1, 1);
     y += kRow / 2;
     std::string bonds;
     for (const sim::Bond& b : co.bonds()) {
         bonds += (bonds.empty() ? "" : ", ") + std::to_string(b.rate_bp / 100) + "." +
                  std::to_string(b.rate_bp % 100 / 10) + "%";
     }
-    row("PRIME RATE " + std::to_string(co.prime_rate_bp() / 100) + "." +
-            std::to_string(co.prime_rate_bp() % 100 / 10) + "%   COSTS " + std::to_string(world_.cost_percent()) +
-            "% OF NORMAL",
+    row("Prime rate " + std::to_string(co.prime_rate_bp() / 100) + "." +
+            std::to_string(co.prime_rate_bp() % 100 / 10) + "%   costs " + std::to_string(world_.cost_percent()) +
+            "% of normal",
         "", "", 0.9f, 0.9f, 0.9f);
-    row(std::string("CREDIT RATING ") + sim::rating_name(co.credit_rating()) + "   NEW BONDS AT " +
+    row(std::string("Credit rating ") + sim::rating_name(co.credit_rating()) + "   new bonds at " +
             std::to_string(co.bond_rate_bp() / 100) + "." + std::to_string(co.bond_rate_bp() % 100 / 10) + "%",
         "", "", 1.0f, 0.9f, 0.5f);
-    row("BONDS OUTSTANDING: " + (bonds.empty() ? std::string("NONE") : bonds), "", "", 0.9f, 0.9f, 0.9f);
+    row("Bonds outstanding: " + (bonds.empty() ? std::string("None") : bonds), "", "", 0.9f, 0.9f, 0.9f);
     {
         const sim::Sentiment mood = co.sentiment();
         const bool worried = mood == sim::Sentiment::Grumbling || mood == sim::Sentiment::Hostile;
-        row(std::string("INVESTORS: ") + sim::sentiment_name(mood) + "   5-YEAR RETURN " +
-                format_permille(co.weighted_return_permille()) + "   BAD YEARS IN A ROW " +
-                std::to_string(co.bad_year_streak()) + "   SALARY " + format_money(sim::chairman_salary(co)),
+        row(std::string("Investors: ") + sim::sentiment_name(mood) + "   5-year return " +
+                format_permille(co.weighted_return_permille()) + "   bad years in a row " +
+                std::to_string(co.bad_year_streak()) + "   salary " + format_money(sim::chairman_salary(co)),
             "", "", worried ? 0.95f : 0.9f, worried ? 0.65f : 0.9f, worried ? 0.6f : 0.9f);
     }
 
@@ -155,22 +156,22 @@ void Tools::draw_finance_panel() const {
     const auto pct = [](std::int64_t part, std::int64_t whole) {
         return whole > 0 ? std::to_string(part * 100 / whole) + "%" : std::string("-");
     };
-    row("STOCK", "", "", 1.0f, 0.9f, 0.5f);
-    row("SHARE PRICE", format_cents(co.share_price()), "", 0.9f, 0.9f, 0.9f);
-    row("SHARES OUTSTANDING", format_count(co.shares_outstanding()), "", 0.9f, 0.9f, 0.9f);
-    row("BOOK VALUE PER SHARE", format_cents(co.book_value_per_share()), "", 0.9f, 0.9f, 0.9f);
-    row("DIVIDEND PER SHARE (A YEAR)", format_cents(co.dividend_per_share()),
-        "PAID " + format_money(now.dividends_paid), 0.9f, 0.9f, 0.9f);
-    row("STOCK ISSUES THIS YEAR", std::to_string(co.stock_issues_this_year()) + " OF 2", "", 0.9f, 0.9f, 0.9f);
+    row("Stock", "", "", 1.0f, 0.9f, 0.5f);
+    row("Share price", format_cents(co.share_price()), "", 0.9f, 0.9f, 0.9f);
+    row("Shares outstanding", format_count(co.shares_outstanding()), "", 0.9f, 0.9f, 0.9f);
+    row("Book value per share", format_cents(co.book_value_per_share()), "", 0.9f, 0.9f, 0.9f);
+    row("Dividend per share (a year)", format_cents(co.dividend_per_share()),
+        "Paid " + format_money(now.dividends_paid), 0.9f, 0.9f, 0.9f);
+    row("Stock issues this year", std::to_string(co.stock_issues_this_year()) + " of 2", "", 0.9f, 0.9f, 0.9f);
     y += kRow / 2;
-    row("YOU", "", "", 1.0f, 0.9f, 0.5f);
-    row("PERSONAL CASH", format_money(me.cash), "", me.cash < sim::Money{} ? 0.95f : 0.9f,
+    row("You", "", "", 1.0f, 0.9f, 0.5f);
+    row("Personal cash", format_money(me.cash), "", me.cash < sim::Money{} ? 0.95f : 0.9f,
         me.cash < sim::Money{} ? 0.65f : 0.9f, me.cash < sim::Money{} ? 0.6f : 0.9f);
     const std::int64_t mine = me.shares_in(co.id());
-    row("SHARES HELD", format_count(mine) + " (" + pct(mine, co.shares_outstanding()) + ")",
+    row("Shares held", format_count(mine) + " (" + pct(mine, co.shares_outstanding()) + ")",
         format_money(co.share_price() * mine), 0.9f, 0.9f, 0.9f);
-    row("PURCHASING POWER", format_money(sim::purchasing_power(me, world_.market())), "", 0.9f, 0.9f, 0.9f);
-    row("NET WORTH", format_money(sim::net_worth(me, world_.market())), "", 1, 1, 1);
+    row("Purchasing power", format_money(sim::purchasing_power(me, world_.market())), "", 0.9f, 0.9f, 0.9f);
+    row("Net worth", format_money(sim::net_worth(me, world_.market())), "", 1, 1, 1);
 }
 
 std::string format_permille(std::int32_t p) {
@@ -296,25 +297,25 @@ void Tools::on_click(float sx, float sy, bool right_button) {
             const std::string name = world_.data().industries.get(s.type).name;
             if (s.owner && s.owner == world_.player_company()) {
                 const sim::CommandResult r = world_.execute(sim::UpgradeIndustry{.site = *id});
-                if (r.ok) show("UPGRADED THE " + name + " TO LEVEL " + std::to_string(s.level) + " FOR " + format_money(r.cost), true);
-                else show("CANNOT UPGRADE: " + r.error, false);
+                if (r.ok) show("Upgraded the " + name + " to level " + std::to_string(s.level) + " for " + format_money(r.cost), true);
+                else show("Cannot upgrade: " + r.error, false);
             } else {
                 const sim::CommandResult r = world_.execute(sim::BuyIndustry{.site = *id});
-                if (r.ok) show("BOUGHT THE " + name + " FOR " + format_money(r.cost), true);
-                else show("CANNOT BUY: " + r.error, false);
+                if (r.ok) show("Bought the " + name + " for " + format_money(r.cost), true);
+                else show("Cannot buy: " + r.error, false);
             }
             return;
         }
         const auto types = buildable_types();
         if (types.empty()) {
-            show("NO PLANTS CAN BE BUILT YET", false);
+            show("No plants can be built yet", false);
             return;
         }
         const sim::IndustryTypeId t = types[build_choice_ % types.size()];
         const sim::CommandResult r = world_.execute(sim::BuildIndustry{
             .type = t, .cx = world_.economy().cell_x(hover_), .cy = world_.economy().cell_y(hover_)});
-        if (r.ok) show("BUILT A " + world_.data().industries.get(t).name + " FOR " + format_money(r.cost), true);
-        else show("CANNOT BUILD: " + r.error, false);
+        if (r.ok) show("Built a " + world_.data().industries.get(t).name + " for " + format_money(r.cost), true);
+        else show("Cannot build: " + r.error, false);
         return;
     }
     case Tool::Track: {
@@ -324,10 +325,10 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         }
         const sim::CommandResult r = world_.execute(*pending_track());
         if (!r.ok) {
-            show("CANNOT BUILD: " + r.error, false);
+            show("Cannot build: " + r.error, false);
             return;
         }
-        show("BUILT TRACK FOR " + format_money(r.cost), true);
+        show("Built track for " + format_money(r.cost), true);
         // Carry on from where this run ended, as when dragging track in RT3.
         track_start_ = sim::TrackEnd{sim::TrackEnd::Kind::Node, r.created_id, 0,
                                      world_.railway().track().node(r.created_id).pos};
@@ -337,13 +338,13 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     case Tool::Station: {
         if (station_building_) {
             const sim::CommandResult r = world_.execute(sim::BuildStationBuilding{.type = *station_building_, .pos = hover_});
-            if (r.ok) show(std::string("BUILT A ") + sim::station_building_name(*station_building_) + " FOR " + format_money(r.cost), true);
-            else show("CANNOT BUILD: " + r.error, false);
+            if (r.ok) show(std::string("Built a ") + sim::station_building_name(*station_building_) + " for " + format_money(r.cost), true);
+            else show("Cannot build: " + r.error, false);
             return;
         }
         const sim::CommandResult r = world_.execute(sim::BuildStation{.at = hover_pick_, .size = station_size_});
-        if (r.ok) show("BUILT " + world_.railway().station(r.created_id).name + " FOR " + format_money(r.cost), true);
-        else show("CANNOT BUILD: " + r.error, false);
+        if (r.ok) show("Built " + world_.railway().station(r.created_id).name + " for " + format_money(r.cost), true);
+        else show("Cannot build: " + r.error, false);
         return;
     }
     case Tool::ServiceTower:
@@ -351,14 +352,14 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         const auto type = tool_ == Tool::ServiceTower ? sim::ServiceType::ServiceTower
                                                       : sim::ServiceType::MaintenanceFacility;
         const sim::CommandResult r = world_.execute(sim::BuildServiceBuilding{.at = hover_pick_, .type = type});
-        if (r.ok) show("BUILT FOR " + format_money(r.cost), true);
-        else show("CANNOT BUILD: " + r.error, false);
+        if (r.ok) show("Built for " + format_money(r.cost), true);
+        else show("Cannot build: " + r.error, false);
         return;
     }
     case Tool::Train: {
         const auto s = station_near(hover_);
         if (!s) {
-            show("CLICK A STATION TO ADD IT TO THE ROUTE", false);
+            show("Click a station to add it to the route", false);
             return;
         }
         if (stops_.empty() || stops_.back().station != *s) {
@@ -403,9 +404,9 @@ bool Tools::founding_key(SDL_Keycode key, Uint16 mod) {
                                                                       .outside_investment = sim::Money::dollars(found_outside_)});
         if (r.ok) {
             founding_ = false;
-            show("YOU HAVE FOUNDED " + name, true);
+            show("You have founded " + name, true);
         } else {
-            show("CANNOT FOUND IT: " + r.error, false);
+            show("Cannot found it: " + r.error, false);
         }
         break;
     }
@@ -421,24 +422,24 @@ void Tools::draw_choice_dialog() const {
     constexpr float kRow = 20.0f;
     const auto w = static_cast<float>(cam_.width_px);
     float width = 940;
-    width = std::max(width, static_cast<float>(text_width(upper(q.text), kScale)) + 40);
+    width = std::max(width, static_cast<float>(text_width(as_written(q.text), kScale)) + 40);
     const float x0 = std::max(10.0f, w / 2 - width / 2), y0 = 90;
     const float rows = static_cast<float>(q.options.size()) + 3.5f;
     fill_rect(x0, y0, x0 + width, y0 + kRow * rows, 0.08f, 0.07f, 0.04f, 0.95f);
     float y = y0 + 14;
     glColor3f(1.0f, 0.9f, 0.5f);
-    draw_text(x0 + 20, y, upper(q.text), kScale);
+    draw_text(x0 + 20, y, as_written(q.text), kScale);
     y += kRow * 1.5f;
     glColor3f(1, 1, 1);
     for (std::size_t i = 0; i < q.options.size(); ++i) {
-        draw_text(x0 + 20, y, std::to_string(i + 1) + "  " + upper(q.options[i].label), kScale);
+        draw_text(x0 + 20, y, std::to_string(i + 1) + "  " + as_written(q.options[i].label), kScale);
         y += kRow;
     }
     const std::int32_t left = pending.front().until_month - (world_.date().year() * 12 + world_.date().month() - 1);
     glColor3f(0.75f, 0.75f, 0.7f);
-    draw_text(x0 + 20, y, "ANSWER WITH 1-" + std::to_string(q.options.size()) + " WITHIN " + std::to_string(left) +
-                              (left == 1 ? " MONTH" : " MONTHS") +
-                              (pending.size() > 1 ? ", " + std::to_string(pending.size() - 1) + " MORE WAITING" : ""),
+    draw_text(x0 + 20, y, "Answer with 1-" + std::to_string(q.options.size()) + " within " + std::to_string(left) +
+                              (left == 1 ? " month" : " months") +
+                              (pending.size() > 1 ? ", " + std::to_string(pending.size() - 1) + " more waiting" : ""),
               kScale);
 }
 
@@ -459,28 +460,28 @@ void Tools::draw_founding_dialog() const {
     const std::int64_t price = std::max<std::int64_t>(1, b.founding_share_price_cents);
     const std::int64_t shares = (mine + outside).in_cents() / price;
     const std::int64_t stake = mine.in_cents() / price;
-    line("FOUND YOUR RAILROAD", 1.0f, 0.9f, 0.5f);
+    line("Found your railroad", 1.0f, 0.9f, 0.5f);
     y += kRow / 2;
-    line("YOUR FORTUNE " + format_money(world_.investor().cash), 0.9f, 0.9f, 0.9f);
-    line("YOU INVEST " + format_money(mine) + "   (LEFT/RIGHT, SHIFT FOR $1,000,000)", 1, 1, 1);
-    line("OUTSIDE INVESTORS PUT IN " + format_money(outside) + " OF " +
-             format_money(sim::Money::dollars(b.outside_investment)) + " OFFERED   (UP/DOWN)",
+    line("Your fortune " + format_money(world_.investor().cash), 0.9f, 0.9f, 0.9f);
+    line("You invest " + format_money(mine) + "   (left/right, Shift for $1,000,000)", 1, 1, 1);
+    line("Outside investors put in " + format_money(outside) + " of " +
+             format_money(sim::Money::dollars(b.outside_investment)) + " offered   (up/down)",
          1, 1, 1);
     y += kRow / 2;
-    line("CAPITAL " + format_money(mine + outside) + "   " + format_count(shares) + " SHARES AT " +
+    line("Capital " + format_money(mine + outside) + "   " + format_count(shares) + " shares at " +
              format_cents(sim::Money::cents(price)),
          0.9f, 0.9f, 0.9f);
-    line("YOUR STAKE " + format_count(stake) + " SHARES (" + std::to_string(shares > 0 ? stake * 100 / shares : 0) +
-             "%)   YOUR CASH LEFT " + format_money(world_.investor().cash - mine),
+    line("Your stake " + format_count(stake) + " shares (" + std::to_string(shares > 0 ? stake * 100 / shares : 0) +
+             "%)   your cash left " + format_money(world_.investor().cash - mine),
          0.9f, 0.9f, 0.9f);
     if (stake * 2 <= shares) {
-        line("AT HALF THE SHARES OR LESS, INVESTORS CAN VOTE YOU OUT AFTER BAD YEARS", 0.95f, 0.65f, 0.6f);
+        line("At half the shares or less, investors can vote you out after bad years", 0.95f, 0.65f, 0.6f);
     } else {
-        line("WITH OVER HALF THE SHARES, NOBODY CAN VOTE YOU OUT", 0.6f, 0.95f, 0.6f);
+        line("With over half the shares, nobody can vote you out", 0.6f, 0.95f, 0.6f);
     }
-    line("MORE OUTSIDE MONEY BUILDS MORE RAILROAD, BUT DILUTES YOUR CONTROL", 0.8f, 0.8f, 0.8f);
+    line("More outside money builds more railroad, but dilutes your control", 0.8f, 0.8f, 0.8f);
     y += kRow / 2;
-    line(founding_cancellable_ ? "ENTER TO FOUND THE COMPANY, ESC TO CANCEL" : "ENTER TO FOUND THE COMPANY", 1.0f, 0.9f,
+    line(founding_cancellable_ ? "Enter to found the company, Esc to cancel" : "Enter to found the company", 1.0f, 0.9f,
          0.5f);
 }
 
@@ -493,8 +494,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                                       ? world_.choice_effect(world_.pending_choices().front()).options[option].label
                                       : "";
         const sim::CommandResult r = world_.execute(sim::AnswerChoice{.choice = 0, .option = option});
-        if (r.ok) show("YOU CHOSE: " + upper(label), true);
-        else show("CANNOT: " + r.error, false);
+        if (r.ok) show("You chose: " + as_written(label), true);
+        else show("Cannot: " + r.error, false);
         return true;
     }
     switch (key) {
@@ -530,7 +531,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::TrainId id = mine[page_train_];
             jump_ = world_.railway().train_position(id);
             hover_ = *jump_;
-            show("TRAIN " + std::to_string(id + 1) + " (" + std::to_string(page_train_ + 1) + " OF " +
+            show("Train " + std::to_string(id + 1) + " (" + std::to_string(page_train_ + 1) + " of " +
                      std::to_string(mine.size()) + ")",
                  true);
             return true;
@@ -540,8 +541,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::TerritoryId terr = world_.territory_at(hover_);
             if (terr == sim::kNoTerritory) return false;
             const sim::CommandResult r = world_.execute(sim::BuyTerritoryAccess{.territory = terr});
-            if (r.ok) show("BOUGHT ACCESS TO " + world_.territories().territories[terr].name + " FOR " + format_money(r.cost), true);
-            else show("CANNOT: " + r.error, false);
+            if (r.ok) show("Bought access to " + world_.territories().territories[terr].name + " for " + format_money(r.cost), true);
+            else show("Cannot: " + r.error, false);
             return true;
         }
         // Keys act on the train under the cursor (rt3-clone-spec §9.3).
@@ -555,10 +556,10 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         }
         if (!id) return false;
         const sim::Train& t = rw.train(*id);
-        const std::string name = "TRAIN " + std::to_string(*id + 1);
+        const std::string name = "Train " + std::to_string(*id + 1);
         const auto report = [&](const sim::CommandResult& r, const std::string& done) {
             if (r.ok) show(done, true);
-            else show("CANNOT: " + r.error, false);
+            else show("Cannot: " + r.error, false);
             return true;
         };
         // Change every stop's rule the same way ("apply to all stations").
@@ -571,7 +572,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         switch (key) {
         case SDLK_e:
             if (t.owner != world_.company().id()) {
-                show("CANNOT: you can only change your own trains", false);
+                show("Cannot: you can only change your own trains", false);
                 return true;
             }
             // Edit the route in the Train tool, starting from the current one.
@@ -583,31 +584,31 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                                   .rule = i < t.rules.size() ? t.rules[i] : sim::ConsistRule{}});
             }
             stop_sel_ = 0;
-            show("EDITING THE ROUTE OF " + name, true);
+            show("Editing the route of " + name, true);
             return true;
         case SDLK_h: {
             const std::int32_t priority = t.priority + ((mod & KMOD_SHIFT) != 0 ? -1 : 1);
             return report(world_.execute(sim::SetPriority{.train = *id, .priority = priority}),
-                          name + " PRIORITY " + std::to_string(priority));
+                          name + " priority " + std::to_string(priority));
         }
         case SDLK_r: {
             const auto locos = available_locos();
             if (locos.empty()) {
-                show("NO ENGINE IS AVAILABLE", false);
+                show("No engine is available", false);
                 return true;
             }
             const sim::LocoTypeId loco = locos[loco_choice_ % locos.size()];
             return report(world_.execute(sim::ReplaceLocomotive{.train = *id, .loco = loco}),
-                          name + " NOW PULLED BY A NEW " + world_.data().locomotives.get(loco).name);
+                          name + " now pulled by a new " + world_.data().locomotives.get(loco).name);
         }
         case SDLK_f:
             return every_stop(
                 [](sim::ConsistRule& r) { r.filter = static_cast<sim::CargoFilter>((static_cast<int>(r.filter) + 1) % 3); },
-                name + " CONSIST CHANGED");
+                name + " consist changed");
         case SDLK_w:
             return every_stop([](sim::ConsistRule& r) { r.min = r.min > 0 ? 0 : r.max; },
-                              name + (t.rules.empty() || t.rules.front().min == 0 ? " WILL WAIT FOR FULL LOADS"
-                                                                                 : " NO LONGER WAITS FOR FULL LOADS"));
+                              name + (t.rules.empty() || t.rules.front().min == 0 ? " will wait for full loads"
+                                                                                 : " no longer waits for full loads"));
         case SDLK_LEFTBRACKET:
         case SDLK_RIGHTBRACKET:
             return every_stop(
@@ -616,27 +617,27 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                     if (key == SDLK_RIGHTBRACKET) ++r.max;
                     r.min = std::min(r.min, r.max);
                 },
-                name + " CONSIST CHANGED");
+                name + " consist changed");
         case SDLK_c:
             return report(world_.execute(sim::SetSpecialCars{.train = *id, .caboose = !t.caboose, .diner = t.diner}),
-                          name + (t.caboose ? " DROPS ITS CABOOSE" : " GETS A CABOOSE"));
+                          name + (t.caboose ? " drops its caboose" : " gets a caboose"));
         case SDLK_d:
             return report(world_.execute(sim::SetSpecialCars{.train = *id, .caboose = t.caboose, .diner = !t.diner}),
-                          name + (t.diner ? " DROPS ITS DINING CAR" : " GETS A DINING CAR"));
+                          name + (t.diner ? " drops its dining car" : " gets a dining car"));
         case SDLK_y: {
             const sim::CommandResult r = world_.execute(sim::CopyTrain{.train = *id});
-            return report(r, "BOUGHT TRAIN " + std::to_string(r.created_id + 1) + ", A COPY OF " + name);
+            return report(r, "Bought train " + std::to_string(r.created_id + 1) + ", a copy of " + name);
         }
         case SDLK_x:
             // Retiring cannot be undone: ask for a second press.
             if (SDL_GetTicks() > retire_armed_until_ || retire_armed_ != *id) {
                 retire_armed_until_ = SDL_GetTicks() + 3000;
                 retire_armed_ = *id;
-                show("PRESS X AGAIN TO RETIRE " + name, false);
+                show("Press X again to retire " + name, false);
                 return true;
             }
             retire_armed_until_ = 0;
-            return report(world_.execute(sim::RetireTrain{.train = *id}), name + " RETIRED");
+            return report(world_.execute(sim::RetireTrain{.train = *id}), name + " retired");
         default: return false;
         }
     }
@@ -647,14 +648,14 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             if ((mod & KMOD_SHIFT) == 0) {
                 const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
                 if (!p) {
-                    show("POINT AT A PIECE OF TRACK (SHIFT+E FOR ALL YOUR TRACK)", false);
+                    show("Point at a piece of track (Shift+E for all your track)", false);
                     return true;
                 }
                 cmd.edges.push_back(p->edge);
             }
             const sim::CommandResult r = world_.execute(cmd);
-            if (r.ok) show("ELECTRIFIED FOR " + format_money(r.cost), true);
-            else show("CANNOT: " + r.error, false);
+            if (r.ok) show("Electrified for " + format_money(r.cost), true);
+            else show("Cannot: " + r.error, false);
             return true;
         }
         if (key == SDLK_z && (mod & KMOD_CTRL) != 0) {
@@ -662,9 +663,9 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::CommandResult r = world_.execute(sim::UndoTrack{});
             if (r.ok) {
                 cancel();
-                show("UNDONE: " + format_money(sim::Money{} - r.cost) + " REFUNDED", true);
+                show("Undone: " + format_money(sim::Money{} - r.cost) + " refunded", true);
             } else {
-                show("CANNOT UNDO: " + r.error, false);
+                show("Cannot undo: " + r.error, false);
             }
             return true;
         }
@@ -672,19 +673,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             // Double the run of single track under the cursor.
             const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
             if (!p) {
-                show("POINT AT A PIECE OF YOUR TRACK TO DOUBLE IT", false);
+                show("Point at a piece of your track to double it", false);
                 return true;
             }
             const sim::CommandResult r = world_.execute(sim::UpgradeTrack{.edges = world_.railway().run_of(p->edge)});
-            if (r.ok) show("DOUBLED FOR " + format_money(r.cost), true);
-            else show("CANNOT: " + r.error, false);
+            if (r.ok) show("Doubled for " + format_money(r.cost), true);
+            else show("Cannot: " + r.error, false);
             return true;
         }
         if (key == SDLK_x) {
             // Bulldoze the run of track under the cursor, on a second press.
             const auto p = world_.railway().track().nearest_edge_point(hover_, snap_mm());
             if (!p) {
-                show("POINT AT A PIECE OF YOUR TRACK TO REMOVE IT", false);
+                show("Point at a piece of your track to remove it", false);
                 return true;
             }
             const std::vector<sim::EdgeId> run = world_.railway().run_of(p->edge);
@@ -693,8 +694,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                 for (sim::EdgeId e : run) book += world_.railway().track().edge(e).cost;
                 remove_armed_until_ = SDL_GetTicks() + 3000;
                 remove_armed_ = run;
-                show("PRESS X AGAIN TO REMOVE THIS TRACK: " + format_money(book) + " BOOK VALUE, " +
-                         std::to_string(world_.data().balance.track.remove_refund_percent) + "% BACK",
+                show("Press X again to remove this track: " + format_money(book) + " book value, " +
+                         std::to_string(world_.data().balance.track.remove_refund_percent) + "% back",
                      false);
                 return true;
             }
@@ -703,9 +704,9 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::CommandResult r = world_.execute(sim::RemoveTrack{.edges = run});
             if (r.ok) {
                 cancel();
-                show("TRACK REMOVED: " + format_money(sim::Money{} - r.cost) + " BACK", true);
+                show("Track removed: " + format_money(sim::Money{} - r.cost) + " back", true);
             } else {
-                show("CANNOT: " + r.error, false);
+                show("Cannot: " + r.error, false);
             }
             return true;
         }
@@ -782,14 +783,14 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::CommandResult r =
                 world_.execute(sim::SetRoute{.train = id, .route = pending_route(), .service_stops = pending_service()});
             if (!r.ok) {
-                show("CANNOT CHANGE THE ROUTE: " + r.error, false);
+                show("Cannot change the route: " + r.error, false);
             } else if (apply_consists(id)) {
-                show("TRAIN " + std::to_string(id + 1) + " NOW CALLS AT " + std::to_string(stops_.size()) + " STOPS", true);
+                show("Train " + std::to_string(id + 1) + " now calls at " + std::to_string(stops_.size()) + " stops", true);
                 select(Tool::Inspect);
             }
         } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
             if (locos.empty()) {
-                show("NO LOCOMOTIVES AVAILABLE THIS YEAR", false);
+                show("No locomotives available this year", false);
                 return true;
             }
             const sim::LocoTypeId loco = locos[loco_choice_ % locos.size()];
@@ -798,7 +799,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::CommandResult r = world_.execute(
                 sim::BuyTrain{.loco = loco, .cars = static_cast<std::uint8_t>(cars), .route = pending_route()});
             if (!r.ok) {
-                show("CANNOT BUY: " + r.error, false);
+                show("Cannot buy: " + r.error, false);
                 return true;
             }
             const std::vector<bool> service = pending_service();
@@ -806,7 +807,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                 world_.execute(sim::SetRoute{.train = r.created_id, .route = pending_route(), .service_stops = service});
             }
             if (apply_consists(r.created_id)) {
-                show("BOUGHT " + world_.data().locomotives.get(loco).name + " FOR " + format_money(r.cost), true);
+                show("Bought " + world_.data().locomotives.get(loco).name + " for " + format_money(r.cost), true);
             }
             stops_.clear();
             stop_sel_ = 0;
@@ -820,13 +821,13 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             // A last resort: ask for a second press.
             if (SDL_GetTicks() > bankrupt_armed_until_) {
                 bankrupt_armed_until_ = SDL_GetTicks() + 3000;
-                show("PRESS K AGAIN TO DECLARE BANKRUPTCY", false);
+                show("Press K again to declare bankruptcy", false);
                 return true;
             }
             bankrupt_armed_until_ = 0;
             const sim::CommandResult r = world_.execute(sim::DeclareBankruptcy{});
-            if (r.ok) show("BANKRUPT: HALF THE BOND DEBT IS GONE, AND SO IS YOUR CREDIT", false);
-            else show("CANNOT DECLARE BANKRUPTCY: " + r.error, false);
+            if (r.ok) show("Bankrupt: half the bond debt is gone, and so is your credit", false);
+            else show("Cannot declare bankruptcy: " + r.error, false);
             return true;
         }
         const bool big = (mod & KMOD_SHIFT) != 0; // 5,000 shares at a time
@@ -836,33 +837,33 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         std::string done;
         if (key == SDLK_b) {
             r = world_.execute(sim::IssueBond{});
-            done = "ISSUED A " + format_money(sim::Money::dollars(world_.company().finance_balance().bond_face_value)) +
-                   " BOND";
+            done = "Issued A " + format_money(sim::Money::dollars(world_.company().finance_balance().bond_face_value)) +
+                   " bond";
         } else if (key == SDLK_r) {
             r = world_.execute(sim::RepayBond{});
-            done = "REPAID A BOND";
+            done = "Repaid a bond";
         } else if (key == SDLK_a) {
             r = world_.execute(sim::BuyShares{.blocks = blocks});
-            done = "BOUGHT " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
+            done = "Bought " + format_count(blocks * world_.company().stock_balance().share_block) + " shares";
         } else if (key == SDLK_s) {
             r = world_.execute(sim::SellShares{.blocks = blocks});
-            done = "SOLD " + format_count(blocks * world_.company().stock_balance().share_block) + " SHARES";
+            done = "Sold " + format_count(blocks * world_.company().stock_balance().share_block) + " shares";
         } else if (key == SDLK_i) {
             r = world_.execute(sim::IssueStock{});
-            done = "ISSUED NEW STOCK";
+            done = "Issued new stock";
         } else if (key == SDLK_y) {
             r = world_.execute(sim::BuyBackStock{});
-            done = "BOUGHT BACK STOCK";
+            done = "Bought back stock";
         } else if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
             const sim::Money now = world_.company().dividend_per_share();
             const sim::Money next = key == SDLK_RIGHTBRACKET ? now + step : std::max(sim::Money{}, now - step);
             r = world_.execute(sim::SetDividend{.per_share = next});
-            done = "DIVIDEND SET TO " + format_cents(next) + " A SHARE A YEAR";
+            done = "Dividend set to " + format_cents(next) + " a share a year";
         } else {
             return false;
         }
         if (r.ok) show(done, true);
-        else show("CANNOT: " + r.error, false);
+        else show("Cannot: " + r.error, false);
         return true;
     }
     case Tool::Industry:
@@ -871,13 +872,13 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const auto kind = id ? world_.economy().sites()[*id].kind : sim::IndustryKind::Raw;
             if (!id || (kind != sim::IndustryKind::Warehouse && kind != sim::IndustryKind::Port) ||
                 (key == SDLK_c && kind != sim::IndustryKind::Warehouse)) {
-                show(key == SDLK_m ? "POINT AT ONE OF YOUR WAREHOUSES OR PORTS TO CHANGE WHAT IT DOES"
-                                   : "POINT AT ONE OF YOUR WAREHOUSES TO SET WHAT IT CONVERTS",
+                show(key == SDLK_m ? "Point at one of your warehouses or ports to change what it does"
+                                   : "Point at one of your warehouses to set what it converts",
                      false);
                 return true;
             }
             const sim::Site& site = world_.economy().sites()[*id];
-            const std::string what = kind == sim::IndustryKind::Port ? "PORT" : "WAREHOUSE";
+            const std::string what = kind == sim::IndustryKind::Port ? "Port" : "Warehouse";
             sim::SetPortMode cmd{.site = *id};
             if (key == SDLK_m) {
                 // Exchange, exports, imports, round again.
@@ -892,7 +893,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                     for (sim::CargoId out : t.outputs)
                         if (in.cargo != out) pairs.emplace_back(in.cargo, out);
                 if (pairs.empty()) {
-                    show("THIS WAREHOUSE HAS NOTHING TO CONVERT", false);
+                    show("This warehouse has nothing to convert", false);
                     return true;
                 }
                 std::size_t next = 0;
@@ -905,12 +906,12 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                 cmd.convert_to = pairs[next].second;
             }
             const sim::CommandResult r = world_.execute(cmd);
-            if (!r.ok) show("CANNOT: " + r.error, false);
+            if (!r.ok) show("Cannot: " + r.error, false);
             else if (cmd.mode == sim::PortMode::Convert)
-                show("THE WAREHOUSE NOW CONVERTS " + world_.data().cargo.get(cmd.convert_from).name + " INTO " +
+                show("The warehouse now converts " + world_.data().cargo.get(cmd.convert_from).name + " into " +
                          world_.data().cargo.get(cmd.convert_to).name,
                      true);
-            else show("THE " + what + " NOW HANDLES " + sim::port_mode_name(cmd.mode), true);
+            else show("The " + what + " now handles " + sim::port_mode_name(cmd.mode), true);
             return true;
         }
         if (key == SDLK_LEFTBRACKET || key == SDLK_RIGHTBRACKET) {
@@ -932,7 +933,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         const sim::Company& target = world_.company(market_choice_ % n);
         if (key == SDLK_n) {
             if (world_.player_company()) {
-                show("YOU ALREADY RUN A COMPANY", false);
+                show("You already run a company", false);
             } else {
                 open_founding(/*cancellable=*/true);
             }
@@ -942,19 +943,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             // Resigning cannot be undone: ask for a second press.
             if (SDL_GetTicks() > resign_armed_until_) {
                 resign_armed_until_ = SDL_GetTicks() + 3000;
-                show("PRESS Q AGAIN TO RESIGN AS CHAIRMAN", false);
+                show("Press Q again to resign as chairman", false);
                 return true;
             }
             resign_armed_until_ = 0;
             const sim::CommandResult r = world_.execute(sim::Resign{});
-            if (r.ok) show("YOU HAVE RESIGNED. YOU KEEP YOUR SHARES", true);
-            else show("CANNOT RESIGN: " + r.error, false);
+            if (r.ok) show("You have resigned. You keep your shares", true);
+            else show("Cannot resign: " + r.error, false);
             return true;
         }
         if (key == SDLK_t) {
             const sim::CommandResult r = world_.execute(sim::AttemptTakeover{.target = target.id()});
-            if (r.ok) show("THE SHAREHOLDERS MADE YOU CHAIRMAN OF " + target.name(), true);
-            else show("TAKEOVER FAILED: " + r.error, false);
+            if (r.ok) show("The shareholders made you chairman of " + target.name(), true);
+            else show("Takeover failed: " + r.error, false);
             return true;
         }
         if (key == SDLK_m) {
@@ -964,8 +965,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const std::string name = target.name();
             const sim::CommandResult r =
                 world_.execute(sim::AttemptMerger{.target = target.id(), .offer_per_share = offer});
-            if (r.ok) show("MERGED " + name + " FOR " + format_money(r.cost), true);
-            else show("MERGER FAILED: " + r.error, false);
+            if (r.ok) show("Merged " + name + " for " + format_money(r.cost), true);
+            else show("Merger failed: " + r.error, false);
             return true;
         }
         const bool buy = key == SDLK_a;
@@ -977,8 +978,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             buy ? world_.execute(sim::BuyShares{.blocks = blocks, .company = target.id()})
                 : world_.execute(sim::SellShares{.blocks = blocks, .company = target.id()});
         const bool now_short = world_.investor().shares_in(target.id()) < 0;
-        if (r.ok) show((buy ? "BOUGHT " : now_short ? "SOLD SHORT " : "SOLD ") + shares + " " + target.name() + " SHARES", true);
-        else show("CANNOT: " + r.error, false);
+        if (r.ok) show((buy ? "Bought " : now_short ? "Sold short " : "Sold ") + shares + " " + target.name() + " shares", true);
+        else show("Cannot: " + r.error, false);
         return true;
     }
     case Tool::Lists: return lists_key(key);
@@ -994,8 +995,8 @@ void Tools::draw_status_panel() const {
     std::vector<std::pair<std::string, int>> rows; // text, colour: 0 title, 1 plain, 2 met, 3 not met, 4 dim
     const auto& sc = world_.scenario();
     if (!sc) {
-        rows.push_back({"GAME STATUS", 0});
-        rows.push_back({"A FREE GAME: NO GOALS AND NO DEADLINE. START ONE WITH --SCENARIO=FILE.", 1});
+        rows.push_back({"Game status", 0});
+        rows.push_back({"A free game: no goals and no deadline. Start one with --scenario=file.", 1});
     } else {
         const sim::ScenarioResult& res = world_.scenario_result();
         rows.push_back({sc->name, 0});
@@ -1017,26 +1018,26 @@ void Tools::draw_status_panel() const {
             if (on) rules += (rules.empty() ? "" : ", ") + std::string(text);
         };
         if (r.track_tiles) {
-            rules += "TRACK BUDGET " + std::to_string(*r.track_tiles) + " CELLS + " + std::to_string(r.tiles_per_year) +
-                     " A YEAR" + (r.tile_refund ? "" : ", NO REFUND");
+            rules += "Track budget " + std::to_string(*r.track_tiles) + " cells + " + std::to_string(r.tiles_per_year) +
+                     " a year" + (r.tile_refund ? "" : ", no refund");
         }
-        rule(r.no_unconnected_track, "NO UNCONNECTED TRACK");
-        rule(r.one_company_only, "ONE COMPANY ONLY");
-        rule(r.no_track, "NO NEW TRACK");
-        rule(r.no_stations, "NO NEW STATIONS");
-        rule(r.no_trains, "NO NEW TRAINS");
-        rule(r.no_industries, "NO INDUSTRY PURCHASES");
-        rule(!sc->chairman_can_resign, "YOU CANNOT RESIGN");
-        rule(!sc->chairman_can_be_fired, "YOU CANNOT BE FIRED");
-        if (!rules.empty()) rows.push_back({"RULES: " + rules, 1});
+        rule(r.no_unconnected_track, "No unconnected track");
+        rule(r.one_company_only, "One company only");
+        rule(r.no_track, "No new track");
+        rule(r.no_stations, "No new stations");
+        rule(r.no_trains, "No new trains");
+        rule(r.no_industries, "No industry purchases");
+        rule(!sc->chairman_can_resign, "You cannot resign");
+        rule(!sc->chairman_can_be_fired, "You cannot be fired");
+        if (!rules.empty()) rows.push_back({"Rules: " + rules, 1});
         rows.push_back({"", 1});
         for (int m = 0; m < 3; ++m) {
             const auto medal = static_cast<sim::Medal>(m);
             const bool won = res.medal && static_cast<int>(*res.medal) >= m;
-            std::string head = std::string(sim::medal_name(medal)) + " BY " +
+            std::string head = std::string(sim::medal_name(medal)) + " by " +
                                sc->medals[static_cast<std::size_t>(m)].deadline.month_year_label();
-            if (m > 0) head += "  (AND THE GOALS ABOVE)";
-            if (won) head += "  - WON";
+            if (m > 0) head += "  (and the goals above)";
+            if (won) head += "  - won";
             rows.push_back({head, 0});
             for (const sim::Goal& g : sc->medals[static_cast<std::size_t>(m)].goals) {
                 const sim::GoalProgress p = sim::check_goal(world_, g);
@@ -1045,12 +1046,12 @@ void Tools::draw_status_panel() const {
         }
         rows.push_back({"", 1});
         if (res.medal) {
-            rows.push_back({std::string(sim::medal_name(*res.medal)) + " MEDAL WON " + res.won_on->month_year_label() +
-                                "  SCORE " + format_count(world_.scenario_score_milli() / 1000) + "." +
+            rows.push_back({std::string(sim::medal_name(*res.medal)) + " medal won " + res.won_on->month_year_label() +
+                                "  score " + format_count(world_.scenario_score_milli() / 1000) + "." +
                                 std::to_string(world_.scenario_score_milli() % 1000 / 100),
                             2});
         }
-        if (res.finished) rows.push_back({res.medal ? "THE SCENARIO IS OVER." : "THE SCENARIO IS OVER: NO MEDAL.", 0});
+        if (res.finished) rows.push_back({res.medal ? "The scenario is over." : "The scenario is over: no medal.", 0});
     }
     const float h = kRow * static_cast<float>(rows.size()) + 20;
     fill_rect(x0, y0, x0 + w, y0 + h, 0.06f, 0.06f, 0.09f, 0.94f);
@@ -1064,7 +1065,6 @@ void Tools::draw_status_panel() const {
         default: glColor3f(0.85f, 0.85f, 0.85f); break;
         }
         std::string upper = text;
-        for (char& ch : upper) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         draw_text(x0 + 14, y, upper, kScale);
         y += kRow;
     }
@@ -1087,7 +1087,7 @@ void Tools::draw_market_panel() const {
         }
         y += kRow;
     };
-    cells({"STOCK MARKET", "PRICE", "BOOK/SHARE", "LAST YEAR", "YOU HOLD"}, 1.0f, 0.9f, 0.5f);
+    cells({"Stock market", "Price", "Book/share", "Last year", "You hold"}, 1.0f, 0.9f, 0.5f);
     const sim::Investor& me = world_.investor();
     const auto n = static_cast<sim::CompanyId>(companies.size());
     const sim::CompanyId chosen = static_cast<sim::CompanyId>(market_choice_ % n);
@@ -1100,7 +1100,7 @@ void Tools::draw_market_panel() const {
         const float swatch = cols[0] + static_cast<float>(text_width("> ", kScale));
         fill_rect(swatch, y + 2, swatch + 8, y + 10, r, g, b, 1.0f);
         if (c.defunct()) {
-            cells({std::string(sel ? ">" : " ") + "    " + c.name() + " (MERGED INTO " +
+            cells({std::string(sel ? ">" : " ") + "    " + c.name() + " (merged into " +
                        world_.company(*c.merged_into()).name() + ")",
                    "", "", "", ""},
                   0.5f, 0.5f, 0.5f);
@@ -1115,7 +1115,7 @@ void Tools::draw_market_panel() const {
     y += kRow / 2;
 
     const sim::Company& c = world_.company(chosen);
-    std::string chairman = "NONE";
+    std::string chairman = "None";
     std::string bio;
     for (const sim::Investor& inv : world_.investors()) {
         if (inv.chairs && *inv.chairs == c.id()) chairman = inv.name;
@@ -1127,7 +1127,7 @@ void Tools::draw_market_panel() const {
     for (const sim::Station& s : world_.railway().stations()) stations += s.owner == c.id();
     for (const sim::Train& t : world_.railway().trains()) trains += t.owner == c.id() && t.in_service();
     glColor3f(1.0f, 0.9f, 0.5f);
-    draw_text(cols[0], y, c.name() + "   CHAIRMAN: " + chairman, kScale);
+    draw_text(cols[0], y, c.name() + "   chairman: " + chairman, kScale);
     y += kRow;
     glColor3f(0.8f, 0.8f, 0.8f);
     if (!bio.empty()) {
@@ -1138,27 +1138,27 @@ void Tools::draw_market_panel() const {
         draw_text(cols[0], y, s, kScale);
         y += kRow;
     };
-    line("CASH " + format_money(c.cash()) + "   BOOK VALUE " + format_money(c.book_value()) + "   BONDS " +
-         std::to_string(c.bonds().size()) + "   RATING " + sim::rating_name(c.credit_rating()));
-    line("TRACK " + format_money(c.track_value()) + "   STATIONS " + std::to_string(stations) + "   TRAINS " +
+    line("Cash " + format_money(c.cash()) + "   book value " + format_money(c.book_value()) + "   bonds " +
+         std::to_string(c.bonds().size()) + "   rating " + sim::rating_name(c.credit_rating()));
+    line("Track " + format_money(c.track_value()) + "   stations " + std::to_string(stations) + "   trains " +
          std::to_string(trains));
-    line(std::string("INVESTORS ") + sim::sentiment_name(c.sentiment()) + "   5-YEAR RETURN " +
-         format_permille(c.weighted_return_permille()) + "   BAD YEARS IN A ROW " + std::to_string(c.bad_year_streak()));
-    line("SHARES " + format_count(c.shares_outstanding()) + "   IN PUBLIC HANDS " +
-         format_count(sim::public_float(world_.market(), c.id())) + "   DIVIDEND " + format_cents(c.dividend_per_share()) +
-         " A YEAR");
+    line(std::string("Investors ") + sim::sentiment_name(c.sentiment()) + "   5-year return " +
+         format_permille(c.weighted_return_permille()) + "   bad years in a row " + std::to_string(c.bad_year_streak()));
+    line("Shares " + format_count(c.shares_outstanding()) + "   in public hands " +
+         format_count(sim::public_float(world_.market(), c.id())) + "   dividend " + format_cents(c.dividend_per_share()) +
+         " a year");
     const sim::YearAccounts& now = c.this_year();
-    line("THIS YEAR: REVENUE " + format_money(now.revenue()) + "   PROFIT " + format_money(now.profit()) +
-         "   TRACKAGE IN " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackageIncome)]) +
-         " OUT " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackagePaid)]));
+    line("This year: revenue " + format_money(now.revenue()) + "   profit " + format_money(now.profit()) +
+         "   trackage in " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackageIncome)]) +
+         " out " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackagePaid)]));
     y += kRow / 2;
     glColor3f(1.0f, 0.9f, 0.5f);
-    line("PLAYERS");
+    line("Players");
     for (const sim::Investor& inv : world_.investors()) {
         glColor3f(0.85f, 0.85f, 0.85f);
-        line(inv.name + "   NET WORTH " + format_money(sim::net_worth(inv, world_.market())) + "   CASH " +
+        line(inv.name + "   net worth " + format_money(sim::net_worth(inv, world_.market())) + "   cash " +
              format_money(inv.cash) + "   " +
-             (inv.chairs ? "RUNS " + world_.company(*inv.chairs).name() : std::string("NO COMPANY")));
+             (inv.chairs ? "Runs " + world_.company(*inv.chairs).name() : std::string("No company")));
     }
 }
 
@@ -1197,9 +1197,9 @@ std::string Tools::cell_text() const {
         if (site.cx != cx || site.cy != cy) continue;
         const sim::IndustryType& t = world_.data().industries.get(site.type);
         if (!s.empty()) s += ", ";
-        s += t.kind == sim::IndustryKind::House ? std::to_string(site.level) + " HOUSES" : t.name;
+        s += t.kind == sim::IndustryKind::House ? std::to_string(site.level) + " houses" : t.name;
         if (!t.outputs.empty() && t.kind != sim::IndustryKind::House) {
-            s += " (MAKES";
+            s += " (makes";
             for (sim::CargoId o : t.outputs) s += " " + world_.data().cargo.get(o).name;
             s += ")";
         }
@@ -1208,14 +1208,14 @@ std::string Tools::cell_text() const {
     if (const sim::TerritoryId terr = world_.territory_at(hover_); terr != sim::kNoTerritory) {
         const sim::Territory& t = world_.territories().territories[terr];
         if (!s.empty()) s += ".  ";
-        s += "TERRITORY " + t.name + ": ";
-        if (t.open()) s += "OPEN";
-        else if (world_.player_company() && world_.company().has_access(terr)) s += "YOURS";
-        else s += "ACCESS " + format_money(t.access_cost) + ", T TO BUY";
-        if (t.station_cost_percent != 100) s += ", STATIONS +" + std::to_string(t.station_cost_percent - 100) + "%";
-        if (t.overhead_percent != 100) s += ", OVERHEAD +" + std::to_string(t.overhead_percent - 100) + "%";
-        if (t.credit_grades != 0) s += std::string(", CREDIT ") + (t.credit_grades > 0 ? "+" : "") + std::to_string(t.credit_grades);
-        if (t.closed_border) s += ", BORDERS CLOSED";
+        s += "Territory " + t.name + ": ";
+        if (t.open()) s += "Open";
+        else if (world_.player_company() && world_.company().has_access(terr)) s += "Yours";
+        else s += "Access " + format_money(t.access_cost) + ", T to buy";
+        if (t.station_cost_percent != 100) s += ", stations +" + std::to_string(t.station_cost_percent - 100) + "%";
+        if (t.overhead_percent != 100) s += ", overhead +" + std::to_string(t.overhead_percent - 100) + "%";
+        if (t.credit_grades != 0) s += std::string(", credit ") + (t.credit_grades > 0 ? "+" : "") + std::to_string(t.credit_grades);
+        if (t.closed_border) s += ", borders closed";
     }
     if (map_overlay_ == MapOverlay::Grade || map_overlay_ == MapOverlay::Traffic) {
         const sim::Railway& rw = world_.railway();
@@ -1223,20 +1223,20 @@ std::string Tools::cell_text() const {
             if (!s.empty()) s += ".  ";
             if (map_overlay_ == MapOverlay::Grade) {
                 const std::int32_t bp = std::abs(rw.track().grade_bp({p->edge, true}));
-                s += "GRADE " + std::to_string(bp / 100) + "." + std::to_string(bp % 100 / 10) + "%";
+                s += "Grade " + std::to_string(bp / 100) + "." + std::to_string(bp % 100 / 10) + "%";
             } else {
-                s += "TRACK: " + std::to_string(rw.traffic_last_month(p->edge)) + " TRAINS LAST MONTH";
+                s += "Track: " + std::to_string(rw.traffic_last_month(p->edge)) + " trains last month";
                 const std::uint32_t held = rw.held_last_month(p->edge);
-                if (held > 0) s += ", HELD AT MEETS " + std::to_string(held * 24 / sim::World::kTicksPerDay) + " HOURS";
-                if (rw.needs_double_track(p->edge)) s += ", NEEDS DOUBLE TRACK";
+                if (held > 0) s += ", held at meets " + std::to_string(held * 24 / sim::World::kTicksPerDay) + " hours";
+                if (rw.needs_double_track(p->edge)) s += ", needs double track";
             }
         }
     }
     if (overlay_) {
         const sim::CargoType& c = world_.data().cargo.get(*overlay_);
         if (!s.empty()) s += ".  ";
-        s += c.name + " " + format_money(sim::Money::dollars(eco.price(c.id, cx, cy))) + " A LOAD, " +
-             std::to_string(eco.stock_milli(c.id, cx, cy) / sim::kMilli) + " WAITING";
+        s += c.name + " " + format_money(sim::Money::dollars(eco.price(c.id, cx, cy))) + " a load, " +
+             std::to_string(eco.stock_milli(c.id, cx, cy) / sim::kMilli) + " waiting";
     }
     return s;
 }
@@ -1328,33 +1328,33 @@ std::optional<sim::SiteId> Tools::site_under_cursor() const {
 
 std::string Tools::industry_text() const {
     const auto id = site_under_cursor();
-    if (!id) return "OPEN LAND";
+    if (!id) return "Open land";
     const sim::Site& s = world_.economy().sites()[*id];
     const sim::Balance::Industries& b = world_.data().balance.industries;
     const sim::IndustryType& type = world_.data().industries.get(s.type);
-    std::string text = type.name + " (LEVEL " + std::to_string(s.level) + "): ";
-    if (type.kind == sim::IndustryKind::Sink) return text + "A CONSUMER. NOT FOR SALE";
+    std::string text = type.name + " (level " + std::to_string(s.level) + "): ";
+    if (type.kind == sim::IndustryKind::Sink) return text + "A consumer. Not for sale";
     if (!s.owner) {
         if (type.kind == sim::IndustryKind::Port) text += std::string(sim::port_mode_name(s.port_mode)) + ", ";
-        text += "FOR SALE AT " + format_money(sim::industry_price(s, b));
+        text += "For sale at " + format_money(sim::industry_price(s, b));
     } else if (s.owner == world_.player_company()) {
-        text += "YOURS";
+        text += "Yours";
         if (type.kind == sim::IndustryKind::Warehouse || type.kind == sim::IndustryKind::Port) {
             if (s.port_mode == sim::PortMode::Convert) {
-                text += ", CONVERTS " + world_.data().cargo.get(s.convert_from).name + " INTO " +
+                text += ", converts " + world_.data().cargo.get(s.convert_from).name + " into " +
                         world_.data().cargo.get(s.convert_to).name;
             } else {
                 text += std::string(", ") + sim::port_mode_name(s.port_mode);
             }
-            text += type.kind == sim::IndustryKind::Warehouse ? " (M MODE, C CONVERT)" : " (M MODE)";
+            text += type.kind == sim::IndustryKind::Warehouse ? " (M mode, C convert)" : " (M mode)";
         }
         if (sim::buildable(type.kind) || type.kind == sim::IndustryKind::Port) {
-            text += ", UPGRADE " + format_money(world_.construction_cost(sim::industry_upgrade_cost(s, b)));
+            text += ", upgrade " + format_money(world_.construction_cost(sim::industry_upgrade_cost(s, b)));
         }
     } else {
-        text += "OWNED BY " + world_.company(*s.owner).name();
+        text += "Owned by " + world_.company(*s.owner).name();
     }
-    return text + ".  PROFIT " + format_money(sim::annual_profit(s)) + " A YEAR, RUNNING AT " +
+    return text + ".  Profit " + format_money(sim::annual_profit(s)) + " a year, running at " +
            std::to_string(s.utilisation_permille / 10) + "%";
 }
 
@@ -1438,50 +1438,50 @@ void Tools::draw_lists_panel() const {
         if (sel) fill_rect(x0 + 4, y - 2, x0 + w - 4, y + kRow - 3, 0.25f, 0.22f, 0.1f, 0.9f);
         cells(v, sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 0.7f : (mine ? 0.9f : 0.7f));
     };
-    const auto owner_name = [&](sim::CompanyId c) { return upper(world_.company(c).name()); };
+    const auto owner_name = [&](sim::CompanyId c) { return as_written(world_.company(c).name()); };
     const auto mine = [&](sim::CompanyId c) { return world_.player_company() && c == *world_.player_company(); };
     const sim::Railway& rw = world_.railway();
     if (list_kind_ == 0) {
         cols = {x0 + 14, x0 + 90, x0 + 500, x0 + 720, x0 + 880, x0 + 960, x0 + 1160};
-        cells({"TRAINS", "", "OWNER", "ENGINE", "STATE", "STOPS", "PROFIT 12M"}, 1.0f, 0.9f, 0.5f);
+        cells({"Trains", "", "Owner", "Engine", "State", "Stops", "Profit 12M"}, 1.0f, 0.9f, 0.5f);
         std::size_t i = 0;
         for (const sim::Train& t : rw.trains()) {
             if (!t.in_service()) continue;
             if (i >= first && i < first + kShown) {
                 row_colour(i, mine(t.owner),
-                           {std::to_string(t.id + 1), "", owner_name(t.owner), upper(world_.data().locomotives.get(t.loco).name),
+                           {std::to_string(t.id + 1), "", owner_name(t.owner), as_written(world_.data().locomotives.get(t.loco).name),
                             state_name(t.state), std::to_string(t.route.size()), format_money(t.profit_last_year())});
             }
             ++i;
         }
     } else if (list_kind_ == 1) {
         cols = {x0 + 14, x0 + 500, x0 + 640, x0 + 900, x0 + 1160};
-        cells({"STATIONS", "OWNER", "SIZE", "TOWN", "INCOME 12M"}, 1.0f, 0.9f, 0.5f);
-        const char* sizes[] = {"SMALL", "MEDIUM", "LARGE"};
+        cells({"Stations", "Owner", "Size", "Town", "Income 12M"}, 1.0f, 0.9f, 0.5f);
+        const char* sizes[] = {"Small", "Medium", "Large"};
         for (std::size_t i = first; i < n && i < first + kShown; ++i) {
             const sim::Station& s = rw.stations()[i];
             row_colour(i, mine(s.owner),
-                       {upper(s.name), owner_name(s.owner), sizes[static_cast<int>(s.size)],
-                        s.town ? upper(world_.economy().towns()[*s.town].name) : "", format_money(s.income_last_year())});
+                       {as_written(s.name), owner_name(s.owner), sizes[static_cast<int>(s.size)],
+                        s.town ? as_written(world_.economy().towns()[*s.town].name) : "", format_money(s.income_last_year())});
         }
     } else {
         cols = {x0 + 14, x0 + 600, x0 + 790, x0 + 960, x0 + 1060, x0 + 1160};
-        cells({"COMPANIES", "CASH", "REVENUE 12M", "BOOK VALUE", "TRAINS", "STATIONS"}, 1.0f, 0.9f, 0.5f);
+        cells({"Companies", "Cash", "Revenue 12M", "Book value", "Trains", "Stations"}, 1.0f, 0.9f, 0.5f);
         for (std::size_t i = first; i < n && i < first + kShown; ++i) {
             const sim::Company& c = world_.companies()[i];
             std::size_t trains = 0, stations = 0;
             for (const sim::Train& t : rw.trains()) trains += t.in_service() && t.owner == c.id();
             for (const sim::Station& s : rw.stations()) stations += s.owner == c.id();
             if (c.defunct()) {
-                row_colour(i, false, {upper(c.name()) + " (GONE)", "", "", "", "", ""});
+                row_colour(i, false, {as_written(c.name()) + " (gone)", "", "", "", "", ""});
                 continue;
             }
             row_colour(i, mine(c.id()),
-                       {upper(c.name()), format_money(c.cash()), format_money(c.trailing_revenue().value_or(sim::Money{})),
+                       {as_written(c.name()), format_money(c.cash()), format_money(c.trailing_revenue().value_or(sim::Money{})),
                         format_money(c.book_value()), std::to_string(trains), std::to_string(stations)});
         }
     }
-    if (n == 0) cells({"NONE YET"}, 0.7f, 0.7f, 0.7f);
+    if (n == 0) cells({"None yet"}, 0.7f, 0.7f, 0.7f);
 }
 
 std::vector<sim::StationId> Tools::pending_route() const {
@@ -1500,7 +1500,7 @@ bool Tools::apply_consists(sim::TrainId id) {
     for (std::size_t i = 0; i < stops_.size(); ++i) {
         const sim::CommandResult r = world_.execute(sim::SetConsist{.train = id, .stop = i, .rule = stops_[i].rule});
         if (!r.ok) {
-            show("STOP " + std::to_string(i + 1) + " CONSIST: " + r.error, false);
+            show("Stop " + std::to_string(i + 1) + " consist: " + r.error, false);
             return false;
         }
     }
@@ -1511,18 +1511,18 @@ bool Tools::apply_consists(sim::TrainId id) {
 // EXPRESS 0-4 CARS".
 std::string Tools::stop_text() const {
     const PendingStop& p = stops_[stop_sel_];
-    std::string s = "STOP " + std::to_string(stop_sel_ + 1) + "/" + std::to_string(stops_.size()) + " " +
-                    upper(world_.railway().station(p.station).name) + ": ";
+    std::string s = "Stop " + std::to_string(stop_sel_ + 1) + "/" + std::to_string(stops_.size()) + " " +
+                    as_written(world_.railway().station(p.station).name) + ": ";
     const auto& cargo = world_.data().cargo;
     if (p.rule.custom) {
-        for (std::size_t i = 0; i < p.rule.cars.size(); ++i) s += (i ? "," : "") + upper(cargo.get(p.rule.cars[i]).name);
-        if (p.rule.cars.empty()) s += "NO CARS";
-        s += " CARS";
+        for (std::size_t i = 0; i < p.rule.cars.size(); ++i) s += (i ? "," : "") + as_written(cargo.get(p.rule.cars[i]).name);
+        if (p.rule.cars.empty()) s += "No cars";
+        s += " cars";
     } else {
-        s += upper(sim::cargo_filter_name(p.rule.filter)) + " " + std::to_string(p.rule.min) + "-" +
-             std::to_string(p.rule.max) + " CARS";
+        s += as_written(sim::cargo_filter_name(p.rule.filter)) + " " + std::to_string(p.rule.min) + "-" +
+             std::to_string(p.rule.max) + " cars";
     }
-    if (p.service) s += ", SERVICE STOP";
+    if (p.service) s += ", service stop";
     return s;
 }
 
@@ -1542,16 +1542,16 @@ std::string Tools::speed_chart_text() const {
         return out;
     };
     const std::string appeal = (l.appeal_percent > 0 ? "+" : "") + std::to_string(l.appeal_percent) + "%";
-    return "SPEED WITH " + std::to_string(cars_) + " CARS, FLAT/1%/2%/3%: FREIGHT " + row(false) + " MPH, EXPRESS " +
-           row(true) + " MPH.  APPEAL " + appeal;
+    return "Speed with " + std::to_string(cars_) + " cars, flat/1%/2%/3%: freight " + row(false) + " mph, express " +
+           row(true) + " mph.  Appeal " + appeal;
 }
 
 std::vector<Tools::Button> Tools::layout_buttons() const {
     static constexpr std::pair<Tool, const char*> kButtons[] = {
-        {Tool::Inspect, "F1 LOOK"},       {Tool::Track, "F2 TRACK"},       {Tool::Station, "F3 STATION"},
-        {Tool::ServiceTower, "F4 TOWER"}, {Tool::Maintenance, "F5 SHED"},  {Tool::Train, "F6 TRAIN"},
-        {Tool::Finance, "F7 BOOKS"},      {Tool::Market, "F8 MARKET"},     {Tool::Industry, "F9 INDUSTRY"},
-        {Tool::Status, "F10 STATUS"},     {Tool::Lists, "F11 LISTS"},
+        {Tool::Inspect, "F1 Look"},       {Tool::Track, "F2 Track"},       {Tool::Station, "F3 Station"},
+        {Tool::ServiceTower, "F4 Tower"}, {Tool::Maintenance, "F5 Shed"},  {Tool::Train, "F6 Train"},
+        {Tool::Finance, "F7 Books"},      {Tool::Market, "F8 Market"},     {Tool::Industry, "F9 Industry"},
+        {Tool::Status, "F10 Status"},     {Tool::Lists, "F11 Lists"},
     };
     std::vector<Button> out;
     float x = 6.0f;
@@ -1566,67 +1566,67 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
 std::string Tools::hint() const {
     switch (tool_) {
     case Tool::Inspect: {
-        std::string cargo_map = "O/P MAP: ";
+        std::string cargo_map = "O/P map: ";
         switch (map_overlay_) {
-        case MapOverlay::None: cargo_map += "OFF"; break;
-        case MapOverlay::Holdings: cargo_map += "HOLDINGS"; break;
-        case MapOverlay::Profit: cargo_map += "PROFIT"; break;
-        case MapOverlay::Grade: cargo_map += "GRADE"; break;
-        case MapOverlay::Traffic: cargo_map += "TRAFFIC"; break;
-        case MapOverlay::Cargo: cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "OFF"; break;
+        case MapOverlay::None: cargo_map += "Off"; break;
+        case MapOverlay::Holdings: cargo_map += "Holdings"; break;
+        case MapOverlay::Profit: cargo_map += "Profit"; break;
+        case MapOverlay::Grade: cargo_map += "Grade"; break;
+        case MapOverlay::Traffic: cargo_map += "Traffic"; break;
+        case MapOverlay::Cargo: cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "Off"; break;
         }
-        return cargo_map + "   TRAIN: E ROUTE H PRIORITY F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE";
+        return cargo_map + "   train: E route H priority F filter W full [ ] cars C caboose D diner Y copy XX retire R engine";
     }
     case Tool::Track:
-        return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
-               (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") + "  T TUNNEL " +
-               upper(sim::frequency_name(tunnels_)) + "  B BRIDGE " + upper(sim::frequency_name(bridges_)) + "  G OVERPASS " +
-               upper(sim::frequency_name(overpasses_));
+        return std::string(track_start_ ? "Right-click stops" : "Click to start") + "  D double " +
+               (double_track_ ? "On" : "Off") + "  C curves " + (curves_ ? "On" : "Off") + "  T tunnel " +
+               as_written(sim::frequency_name(tunnels_)) + "  B bridge " + as_written(sim::frequency_name(bridges_)) + "  G overpass " +
+               as_written(sim::frequency_name(overpasses_));
     case Tool::Station:
         if (station_building_) {
-            return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +
+            return std::string("Click near a station to build a ") + sim::station_building_name(*station_building_) + " " +
                    format_money(world_.construction_cost(sim::station_building_cost(*station_building_, world_.data().balance))) +
-                   ".  B NEXT KIND";
+                   ".  B next kind";
         }
-        return std::string("CLICK ON TRACK TO BUILD A STATION.  B FOR BUILDINGS.  [ ] SIZE: ") + size_name(station_size_) + " " +
+        return std::string("Click on track to build a station.  B for buildings.  [ ] size: ") + size_name(station_size_) + " " +
                format_money(sim::station_cost(station_size_));
     case Tool::ServiceTower:
-        return "CLICK ON TRACK: SERVICE TOWER (WATER, SAND) " +
+        return "Click on track: service tower (water, sand) " +
                format_money(sim::service_building_cost(sim::ServiceType::ServiceTower));
     case Tool::Maintenance:
-        return "CLICK ON TRACK: MAINTENANCE FACILITY (OIL) " +
+        return "Click on track: maintenance facility (oil) " +
                format_money(sim::service_building_cost(sim::ServiceType::MaintenanceFacility));
     case Tool::Train: {
         const auto locos = available_locos();
-        std::string loco = "NONE AVAILABLE";
+        std::string loco = "None available";
         if (!locos.empty()) {
             const auto& l = world_.data().locomotives.get(locos[loco_choice_ % locos.size()]);
-            loco = l.name + " " + std::to_string(l.top_speed_mph) + "MPH " + format_money(l.cost);
+            loco = l.name + " " + std::to_string(l.top_speed_mph) + "Mph " + format_money(l.cost);
         }
         if (stops_.empty()) {
-            return std::string(editing_ ? "TRAIN " + std::to_string(*editing_ + 1) + ": " : "") +
-                   "CLICK STATIONS IN ORDER.  L ENGINE: " + loco + "  [ ] CARS: " + std::to_string(cars_);
+            return std::string(editing_ ? "Train " + std::to_string(*editing_ + 1) + ": " : "") +
+                   "Click stations in order.  L engine: " + loco + "  [ ] cars: " + std::to_string(cars_);
         }
-        return std::string(editing_ ? "TRAIN " + std::to_string(*editing_ + 1) + " " : "") + stop_text() +
-               (editing_ ? "  ENTER SAVES" : "  ENTER BUYS " + loco);
+        return std::string(editing_ ? "Train " + std::to_string(*editing_ + 1) + " " : "") + stop_text() +
+               (editing_ ? "  Enter saves" : "  Enter buys " + loco);
     }
     case Tool::Industry: {
         const auto types = buildable_types();
         const std::string plant =
-            types.empty() ? std::string("NONE YET") : world_.data().industries.get(types[build_choice_ % types.size()]).name;
-        return "CLICK AN INDUSTRY TO BUY IT, YOURS TO UPGRADE, OPEN LAND TO BUILD.  [ ] " + plant + " " +
+            types.empty() ? std::string("None yet") : world_.data().industries.get(types[build_choice_ % types.size()]).name;
+        return "Click an industry to buy it, yours to upgrade, open land to build.  [ ] " + plant + " " +
                format_money(world_.construction_cost(sim::industry_build_cost(world_.data().balance.industries)));
     }
     case Tool::Market:
-        return "UP/DOWN CHOOSE  A/S BUY/SELL, BELOW 0 IS SHORT  T TAKEOVER  M MERGE +20% (SHIFT +50%)  QQ RESIGN  N NEW "
-               "COMPANY";
+        return "Up/down choose  A/S buy/sell, below 0 is short  T takeover  M merge +20% (Shift +50%)  qq resign  N new "
+               "Company";
     case Tool::Status:
-        return world_.scenario() ? "SCENARIO GOALS, CHECKED AT EACH MONTH END" : "NO SCENARIO: A FREE GAME";
+        return world_.scenario() ? "Scenario goals, checked at each month end" : "No scenario: a free game";
     case Tool::Lists:
-        return "TAB TRAINS/STATIONS/COMPANIES   UP/DOWN, PGUP/PGDN CHOOSE   ENTER GO TO IT";
+        return "Tab trains/stations/companies   up/down, pgup/pgdn choose   Enter go to it";
     case Tool::Finance:
-        return "B/R BOND ISSUE/REPAY   A/S BUY/SELL 1,000 SHARES (SHIFT 5,000)   I/Y ISSUE/BUY BACK STOCK   [ ] "
-               "DIVIDEND   KK BANKRUPTCY";
+        return "B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   [ ] "
+               "dividend   KK bankruptcy";
     }
     return {};
 }
@@ -1637,16 +1637,17 @@ std::string Tools::inspect_text() const {
     for (const sim::Train& t : rw.trains()) {
         if (sim::distance_mm(rw.train_position(t.id), hover_) > snap) continue;
         const auto& loco = world_.data().locomotives.get(t.loco);
-        std::string s = "TRAIN " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ". ";
+        std::string s = "Train " + std::to_string(t.id + 1) + ": " + loco.name + ", " + state_name(t.state) + ". ";
         const auto service = std::count(t.service_stop.begin(), t.service_stop.end(), std::uint8_t{1});
-        s += std::to_string(t.route.size()) + " STOPS";
-        if (service > 0) s += " (" + std::to_string(service) + " SERVICE)";
-        s += ", PRIORITY " + std::to_string(t.priority) + ". ";
+        s += std::to_string(t.route.size()) + " stops";
+        if (service > 0) s += " (" + std::to_string(service) + " service)";
+        s += ", priority " + std::to_string(t.priority) + ". ";
         if (t.owner != world_.company().id()) s = world_.company(t.owner).name() + " " + s;
-        // Load, grouped by cargo: "2 COAL, 1 STEEL, 1 EMPTY".
+        // Load, grouped by cargo: "2 coal, 1 steel, 1 empty".
         std::vector<std::pair<std::string, int>> load;
         for (const sim::Car& car : t.cars) {
-            const std::string what = car.cargo ? world_.data().cargo.get(*car.cargo).name : "EMPTY";
+            std::string what = car.cargo ? world_.data().cargo.get(*car.cargo).name : "empty";
+            for (char& ch : what) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
             auto it = std::find_if(load.begin(), load.end(), [&](const auto& p) { return p.first == what; });
             if (it == load.end()) load.emplace_back(what, 1);
             else ++it->second;
@@ -1655,30 +1656,29 @@ std::string Tools::inspect_text() const {
             s += (i ? ", " : "") + std::to_string(load[i].second) + " " + load[i].first;
         }
         const std::int32_t age = (world_.date().days_since_epoch() - t.built_day) / 365;
-        s += ". ENGINE " + std::to_string(age) + (age == 1 ? " YEAR" : " YEARS") + " OLD. EARNED " + format_money(t.revenue) +
-             ", PROFIT " + format_money(t.profit_last_year()) + " IN " + std::to_string(t.profit_months.size()) + " MONTHS.";
+        s += ". Engine " + std::to_string(age) + (age == 1 ? " year" : " years") + " old. Earned " + format_money(t.revenue) +
+             ", profit " + format_money(t.profit_last_year()) + " in " + std::to_string(t.profit_months.size()) + " months.";
         if (!t.rules.empty()) {
             const sim::ConsistRule& r = t.rules.front();
-            std::string what = r.custom ? std::string("CUSTOM") : std::string(sim::cargo_filter_name(r.filter));
-            for (char& ch : what) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-            s += " " + what + " " + std::to_string(r.min) + "-" + std::to_string(r.capacity()) + " CARS";
+            std::string what = r.custom ? std::string("Custom") : std::string(sim::cargo_filter_name(r.filter));
+            s += " " + what + " " + std::to_string(r.min) + "-" + std::to_string(r.capacity()) + " cars";
             if (std::any_of(t.rules.begin(), t.rules.end(), [&](const sim::ConsistRule& x) { return !(x == r); })) {
-                s += " AT THE FIRST STOP (VARIES)";
+                s += " at the first stop (varies)";
             }
-            if (t.holding) s += ", WAITING FOR A FULL LOAD";
-            if (t.caboose) s += ", CABOOSE";
-            if (t.diner) s += ", DINER";
+            if (t.holding) s += ", waiting for a full load";
+            if (t.caboose) s += ", caboose";
+            if (t.diner) s += ", diner";
             s += ".";
         }
-        if (loco.fuel == sim::Fuel::Steam) s += " WATER " + percent(t.water);
-        s += " SAND " + percent(t.sand) + " OIL " + percent(t.oil);
+        if (loco.fuel == sim::Fuel::Steam) s += " water " + percent(t.water);
+        s += " sand " + percent(t.sand) + " oil " + percent(t.oil);
         return s;
     }
     if (const auto st = station_near(hover_)) {
         const sim::Station& s = rw.station(*st);
-        std::string text = "STATION: " + s.name + " (" + size_name(s.size) + ")" +
+        std::string text = "Station: " + s.name + " (" + size_name(s.size) + ")" +
                            (s.owner != world_.company().id() ? ", " + world_.company(s.owner).name() : std::string()) +
-                           ". WAITING:";
+                           ". Waiting:";
         bool any = false;
         for (std::size_t c = 0; c < s.waiting.size(); ++c) {
             if (s.waiting[c].milli < sim::kMilli) continue;
@@ -1695,7 +1695,7 @@ std::string Tools::inspect_text() const {
                     world_.data().cargo.get(static_cast<sim::CargoId>(c)).name;
             any = true;
         }
-        return any ? text : text + " NOTHING";
+        return any ? text : text + " nothing";
     }
     return cell_text();
 }
@@ -1720,8 +1720,8 @@ void Tools::draw_ui(const std::string& status) const {
     fill_rect(0, 0, w, kTopBarH, 0.08f, 0.08f, 0.1f, 0.85f);
     glColor3f(0.95f, 0.95f, 0.9f);
     draw_text(8, 4, status, kScale);
-    const std::string spent = (world_.sandbox() ? std::string("SANDBOX   ") : std::string()) + "COMPANY " +
-                              format_money(world_.company().cash()) + "   NET WORTH " +
+    const std::string spent = (world_.sandbox() ? std::string("Sandbox   ") : std::string()) + "Company " +
+                              format_money(world_.company().cash()) + "   net worth " +
                               format_money(sim::net_worth(world_.investor(), world_.market()));
     draw_text(w - static_cast<float>(text_width(spent, kScale)) - 8, 4, spent, kScale);
 
@@ -1748,13 +1748,13 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = industry_text();
     } else if (tool_ == Tool::Train && !stops_.empty()) {
         const auto& cargo = world_.data().cargo.all();
-        line2 = "UP/DOWN STOP  F KIND  W FULL  [ ] CARS  K CUSTOM  < > " +
-                (cargo.empty() ? std::string() : upper(cargo[cargo_choice_ % cargo.size()].name)) +
-                "  S SERVICE  BKSP DROP  L ENGINE";
+        line2 = "Up/down stop  F kind  W full  [ ] cars  K custom  < > " +
+                (cargo.empty() ? std::string() : as_written(cargo[cargo_choice_ % cargo.size()].name)) +
+                "  S service  bksp drop  L engine";
     } else if (tool_ == Tool::Train) {
         line2 = speed_chart_text();
     } else if (tool_ == Tool::Track) {
-        line2 = "E WIRE (SHIFT: ALL)  U DOUBLE UP  CTRL+Z UNDO  X TWICE REMOVE";
+        line2 = "E wire (Shift: all)  U double Up  Ctrl+Z undo  X twice remove";
         if (const auto cmd = pending_track()) {
             const sim::PlanResult plan = world_.preview(*cmd);
             if (plan.plan && !plan.plan->crossings.empty()) {
@@ -1763,11 +1763,11 @@ void Tools::draw_ui(const std::string& status) const {
                     std::count_if(c.begin(), c.end(), [](const sim::TrackPlan::Crossing& x) { return x.overpass; }));
                 const std::size_t level = c.size() - over;
                 line2.clear();
-                if (over > 0) line2 = std::to_string(over) + (over == 1 ? " OVERPASS" : " OVERPASSES") + " AT 4X THE PIECE'S COST";
+                if (over > 0) line2 = std::to_string(over) + (over == 1 ? " overpass" : " overpasses") + " at 4x the piece's cost";
                 if (level > 0) {
                     if (!line2.empty()) line2 += ", ";
-                    line2 += std::to_string(level) + (level == 1 ? " LEVEL CROSSING" : " LEVEL CROSSINGS") +
-                             ": TRAINS WILL TAKE TURNS (G FOR MORE OVERPASSES)";
+                    line2 += std::to_string(level) + (level == 1 ? " level crossing" : " level crossings") +
+                             ": trains will take turns (G for more overpasses)";
                 }
             }
         }

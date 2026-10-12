@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -131,7 +132,7 @@ int main(int argc, char* argv[]) {
     bool demo_pending = !empty;
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
-        std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        std::fprintf(stderr, "Sdl_init failed: %s\n", SDL_GetError());
         return 1;
     }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -166,7 +167,7 @@ int main(int argc, char* argv[]) {
         cam.target_y = look->second;
         cam.distance = 4.5f;
     }
-    const std::string build_label = std::string("BUILD ") + client::kBuildCommit + "  " + client::kBuildDate;
+    const std::string build_label = std::string("Build ") + client::kBuildCommit + "  " + client::kBuildDate;
     const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
     // High-DPI: draw at the screen's full resolution on Retina displays.
     const Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
@@ -180,7 +181,7 @@ int main(int argc, char* argv[]) {
                                   cam.height_px, window_flags);
     }
     if (!window) {
-        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        std::fprintf(stderr, "Sdl_createwindow failed: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -195,7 +196,7 @@ int main(int argc, char* argv[]) {
         gl = window ? SDL_GL_CreateContext(window) : nullptr;
     }
     if (!gl) {
-        std::fprintf(stderr, "SDL_GL_CreateContext failed: %s\n", SDL_GetError());
+        std::fprintf(stderr, "Sdl_gl_createcontext failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
@@ -203,6 +204,7 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetSwapInterval(1);
     std::printf("renderer: %s\n", client::shading::init(use_shaders) ? "shaders and shadows" : "fixed-function");
     client::models::init(data_dir);
+    client::init_font(data_dir + "/fonts/SourceSans3-Semibold.ttf");
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -250,10 +252,24 @@ int main(int argc, char* argv[]) {
             case SDL_MOUSEWHEEL: {
                 int mx = 0, my = 0;
                 SDL_GetMouseState(&mx, &my);
-                cam.zoom_at(static_cast<float>(mx), static_cast<float>(my), ev.wheel.y > 0 ? 1.15f : 0.87f);
+                // Smooth on a trackpad (many small scrolls), a step a notch
+                // on a mouse wheel.
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                const float amount = std::clamp(ev.wheel.preciseY, -3.0f, 3.0f);
+#else
+                const float amount = static_cast<float>(std::clamp(ev.wheel.y, -3, 3));
+#endif
+                if (amount != 0.0f) cam.zoom_at(static_cast<float>(mx), static_cast<float>(my), std::pow(1.15f, amount));
                 tools.on_mouse_move(static_cast<float>(mx), static_cast<float>(my));
                 break;
             }
+            case SDL_MULTIGESTURE:
+                // Pinch on a trackpad or touch screen: spread to zoom in.
+                if (std::fabs(ev.mgesture.dDist) > 0.0005f) {
+                    cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2,
+                                1.0f + ev.mgesture.dDist * 6.0f);
+                }
+                break;
             case SDL_MOUSEMOTION:
                 // Right-drag turns and tilts the view.
                 if ((ev.motion.state & SDL_BUTTON_RMASK) != 0 && cam.three_d) {
@@ -292,16 +308,15 @@ int main(int argc, char* argv[]) {
                             const std::string bytes = world.save();
                             out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
                             if (!out) throw std::runtime_error("cannot write " + file);
-                            tools.show("GAME SAVED TO " + file, true);
+                            tools.show("Game saved to " + file, true);
                         } else {
                             world = sim::World::load(read_file(file), load_game_data(data_dir));
                             demo_pending = false;
                             tools.select(tools.tool()); // drop half-made lines and routes
-                            tools.show("GAME LOADED FROM " + file + ": " + world.date().month_year_label(), true);
+                            tools.show("Game loaded from " + file + ": " + world.date().month_year_label(), true);
                         }
                     } catch (const std::exception& e) {
                         std::string why = e.what();
-                        for (char& ch : why) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
                         tools.show(why, false);
                     }
                     break;
@@ -330,7 +345,7 @@ int main(int argc, char* argv[]) {
                     Bookmark& b = bookmarks[ev.key.keysym.sym - SDLK_0];
                     if ((ev.key.keysym.mod & KMOD_SHIFT) != 0) {
                         b = {true, cam.target_x, cam.target_y, cam.distance, cam.yaw, cam.pitch};
-                        tools.show("VIEW " + std::to_string(ev.key.keysym.sym - SDLK_0) + " STORED", true);
+                        tools.show("View " + std::to_string(ev.key.keysym.sym - SDLK_0) + " stored", true);
                     } else if (b.set) {
                         cam.target_x = b.x;
                         cam.target_y = b.y;
@@ -367,8 +382,15 @@ int main(int argc, char* argv[]) {
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         const float pan_speed = static_cast<float>(dt) * 400.0f / cam.zoom;
         const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+        const bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
         const float turn = static_cast<float>(dt) * 1.5f;
-        if (shift && cam.three_d) {
+        if (alt) {
+            // Option (Alt) + Up/Down zooms, for laptops without a wheel.
+            const float step = std::pow(3.0f, static_cast<float>(dt));
+            const auto cx = static_cast<float>(cam.width_px) / 2, cy = static_cast<float>(cam.height_px) / 2;
+            if (keys[SDL_SCANCODE_UP]) cam.zoom_at(cx, cy, step);
+            if (keys[SDL_SCANCODE_DOWN]) cam.zoom_at(cx, cy, 1.0f / step);
+        } else if (shift && cam.three_d) {
             if (keys[SDL_SCANCODE_LEFT]) cam.orbit(-turn, 0);
             if (keys[SDL_SCANCODE_RIGHT]) cam.orbit(turn, 0);
             if (keys[SDL_SCANCODE_UP]) cam.orbit(0, turn * 0.6f);
@@ -419,9 +441,8 @@ int main(int argc, char* argv[]) {
         // News ticker stand-in: tell the player when the economy turns.
         if (const auto turned = world.take_economy_news()) {
             std::string name = sim::economic_state_name(*turned);
-            for (char& ch : name) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
             const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
-            tools.show("THE ECONOMY IS NOW IN " + name, better);
+            tools.show("The economy is now in " + name, better);
         }
         // The lists and train paging move the view.
         if (const auto p = tools.take_jump()) cam.center_on(*p);
@@ -442,6 +463,7 @@ int main(int argc, char* argv[]) {
         // asked (to fit a laptop screen) without a resize event.
         SDL_GetWindowSize(window, &cam.width_px, &cam.height_px);
         SDL_GL_GetDrawableSize(window, &cam.drawable_w, &cam.drawable_h);
+        client::set_pixel_ratio(static_cast<float>(cam.drawable_w) / static_cast<float>(std::max(1, cam.width_px)));
         cam.apply();
         const bool shaded = cam.three_d && client::shading::active();
         if (shaded) {
@@ -488,14 +510,12 @@ int main(int argc, char* argv[]) {
         client::draw_territory_names(world.territories(), cam,
                                      world.player_company() ? &world.company(*world.player_company()) : nullptr);
         std::string economy = sim::economic_state_name(world.economic_state());
-        for (char& ch : economy) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
         std::string pace = sim::game_speed_name(speed.speed());
-        for (char& ch : pace) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
-        std::string status = world.date().month_year_label() + "  " + economy + " ECONOMY  " +
-                             (speed.speed() == sim::GameSpeed::Paused ? pace : "SPEED " + pace);
+        std::string status = world.date().month_year_label() + "  " + economy + " economy  " +
+                             (speed.speed() == sim::GameSpeed::Paused ? pace : "Speed " + pace);
         // A scenario's track budget, in place of the speed keys' reminder.
         const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;
-        status += tiles ? "  TRACK BUDGET " + std::to_string(*tiles) : std::string("  +/- SPEED, PAUSE");
+        status += tiles ? "  track budget " + std::to_string(*tiles) : std::string("  +/- speed, pause");
         if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
         tools.draw_ui(status);
         // Which build this is, bottom right above the hint bar, so players
@@ -514,7 +534,7 @@ int main(int argc, char* argv[]) {
             client::draw_text(x, y, build_label, 2);
             if (show_fps) {
                 char fps[48];
-                std::snprintf(fps, sizeof fps, "%.0f FPS  %.1f MS", 1000.0 / std::max(0.1, frame_ms), frame_ms);
+                std::snprintf(fps, sizeof fps, "%.0f fps  %.1f ms", 1000.0 / std::max(0.1, frame_ms), frame_ms);
                 const auto fw = static_cast<float>(client::text_width(fps, 2));
                 const float fx = static_cast<float>(cam.width_px) - fw - 10, fy = y - 26;
                 glColor4f(0.0f, 0.0f, 0.0f, 0.55f);

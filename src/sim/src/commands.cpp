@@ -710,7 +710,8 @@ CommandResult World::run(const Resign&) {
 CommandResult World::run(const FoundCompany& cmd) {
     if (auto why = founding_problem(actor_, cmd)) return fail(*why);
     const CompanyId id = found_for(actor_, cmd);
-    news_.push_back(market_.investors[actor_].name + " has founded " + company(id).name());
+    const std::string& who = market_.investors[actor_].name;
+    news_.push_back(who + (who == "You" ? " have founded " : " has founded ") + company(id).name());
     return success(Money{}, id);
 }
 
