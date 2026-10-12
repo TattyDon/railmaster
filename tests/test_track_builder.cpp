@@ -237,3 +237,81 @@ TEST_CASE("a run can finish on an existing node") {
     // The last point must actually be the end node.
     CHECK_FALSE(plan_track(net, terrain, a, straight_points({kKm, kKm}, {4 * kKm, kKm}, kKm), b, {}).plan);
 }
+
+namespace {
+
+// A valley 100 m deep at x = 10 in otherwise high ground.
+Terrain valley_terrain() {
+    Terrain t(20, 20, 1000);
+    for (int y = 0; y <= 20; ++y)
+        for (int x = 0; x <= 20; ++x) t.set_corner_height(x, y, std::min(100, 50 * std::abs(x - 10)));
+    return t;
+}
+
+TrackPlan plan_across(const Terrain& terrain, std::int32_t tunnels, std::int32_t bridges) {
+    TrackNetwork net;
+    const NodeId start = net.add_node({2 * kKm, 5 * kKm}, terrain.height_at_mm({2 * kKm, 5 * kKm}));
+    TrackBuildOptions opts;
+    opts.tunnel_preference = tunnels;
+    opts.bridge_preference = bridges;
+    auto r = plan_track(net, terrain, start, straight_points({2 * kKm, 5 * kKm}, {18 * kKm, 5 * kKm}, kKm / 2),
+                        std::nullopt, opts);
+    REQUIRE(r.plan.has_value());
+    return *r.plan;
+}
+
+} // namespace
+
+TEST_CASE("the bridge setting decides how a valley is crossed; the tunnel setting how a ridge is (§11.2 [D])") {
+    const Balance& b = default_balance();
+    const auto pref = [&](Frequency f) { return structure_preference(f, b); };
+    // A valley: never bridged when bridges are Never, more bridge the more common they are.
+    const Terrain valley = valley_terrain();
+    const auto bridged = [&](Frequency f) { return count_kind(plan_across(valley, pref(Frequency::Average), pref(f)), TrackKind::Bridge); };
+    CHECK(bridged(Frequency::Never) == 0);
+    CHECK(bridged(Frequency::Rarely) <= bridged(Frequency::Average));
+    CHECK(bridged(Frequency::Average) < bridged(Frequency::Common));
+    CHECK(bridged(Frequency::Common) > 0);
+    // A ridge: never tunnelled when tunnels are Never, whatever the bridge setting.
+    const Terrain ridge = ridge_terrain();
+    const auto tunnelled = [&](Frequency t, Frequency br) {
+        return count_kind(plan_across(ridge, pref(t), pref(br)), TrackKind::Tunnel);
+    };
+    for (const Frequency br : {Frequency::Rarely, Frequency::Average, Frequency::Common}) {
+        CHECK(tunnelled(Frequency::Never, br) == 0);
+        CHECK(tunnelled(Frequency::Common, br) > 0);
+    }
+    CHECK(tunnelled(Frequency::Rarely, Frequency::Average) <= tunnelled(Frequency::Average, Frequency::Average));
+    CHECK(tunnelled(Frequency::Average, Frequency::Average) <= tunnelled(Frequency::Common, Frequency::Average));
+    // Both never: refused where the ground needs one or the other, fine where it does not.
+    TrackNetwork net;
+    const NodeId start = net.add_node({2 * kKm, 5 * kKm}, 0);
+    TrackBuildOptions neither;
+    neither.tunnel_preference = neither.bridge_preference = 0;
+    const auto across = straight_points({2 * kKm, 5 * kKm}, {18 * kKm, 5 * kKm}, kKm / 2);
+    const PlanResult refused = plan_track(net, ridge, start, across, std::nullopt, neither);
+    CHECK_FALSE(refused.plan.has_value());
+    CHECK(refused.error.find("never") != std::string::npos);
+    CHECK(plan_track(net, flat_terrain(), start, across, std::nullopt, neither).plan.has_value());
+    // Every setting keeps within the grade limit.
+    for (const Frequency t : {Frequency::Never, Frequency::Rarely, Frequency::Average, Frequency::Common}) {
+        for (const Frequency br : {Frequency::Rarely, Frequency::Average, Frequency::Common}) {
+            for (const Terrain* terrain : {&valley, &ridge}) {
+                const TrackPlan p = plan_across(*terrain, pref(t), pref(br));
+                for (std::size_t i = 1; i < p.rail_z_mm.size(); ++i) {
+                    const std::int64_t rise = std::abs(p.rail_z_mm[i] - p.rail_z_mm[i - 1]);
+                    CHECK(rise * 10000 <= b.track.default_max_grade_bp * p.pieces[i].length_mm + 10000);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("overpasses by frequency: always, over main lines, over main lines by a main line, never [I]") {
+    CHECK(overpass_wanted(Frequency::Common, false, false));
+    CHECK(overpass_wanted(Frequency::Average, false, true));
+    CHECK_FALSE(overpass_wanted(Frequency::Average, true, false));
+    CHECK(overpass_wanted(Frequency::Rarely, true, true));
+    CHECK_FALSE(overpass_wanted(Frequency::Rarely, false, true));
+    CHECK_FALSE(overpass_wanted(Frequency::Never, true, true));
+}

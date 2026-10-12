@@ -94,7 +94,8 @@ and checks the economy against the spec's targets
 | Right click / Esc | Stop the current line or route; Esc again returns to Inspect |
 | Train tool | Click stations in order; Backspace drops the last; S makes the last a service stop (the train fills up there with the station's service buildings even when not low); Enter buys the train |
 | Over a train (Inspect) | E edit its route in the Train tool (click stations, Backspace drops the last, S makes the last a service stop, Enter saves); H raise its priority (Shift+H lower); F cargo filter (Any, Freight, Express); W wait for full loads; [ ] maximum cars; C caboose; D dining car; Y copy the train; X twice to retire it; R re-engine with the engine chosen in the Train tool (L there). The consist keys (F, W, [ ]) apply to every stop |
-| D, C, G, [ ] (Track) | Double track, curves on/off, overpasses on/off (a line crossing others otherwise meets them at level crossings, where trains take turns), tunnel preference |
+| D, C (Track) | Double track, curves on/off |
+| T, B, G (Track) | Tunnel, bridge and overpass frequency: Never, Rarely, Average, Common (Shift steps back). Overpasses at Average go over double track; level crossings make trains take turns |
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | Ctrl+Z (Track) | Undo the last run of track, at full refund, until you leave the Track tool |
 | U (Track) | Double the run of single track under the cursor, at 90% of laying it again (dearer than building double at once) |

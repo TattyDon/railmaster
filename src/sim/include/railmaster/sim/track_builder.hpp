@@ -39,6 +39,17 @@ std::optional<MapPoint> continuing_control_point(const TrackNetwork& net, NodeId
 
 // --- Planning and building ---------------------------------------------------
 
+// RT3's bridge, tunnel and overpass frequency settings (rt3-clone-spec
+// §11.2 [D]); Average is the default.
+enum class Frequency : std::uint8_t { Never, Rarely, Average, Common };
+const char* frequency_name(Frequency f);
+// The tunnel or bridge preference a setting stands for (Balance::track).
+std::int32_t structure_preference(Frequency f, const Balance& b);
+// Whether a new line crossing existing track at ground level goes over it
+// [I]: Common, always; Average, over double track (main lines); Rarely,
+// over double track when the new line is double too; Never, not at all.
+bool overpass_wanted(Frequency f, bool new_line_double, bool crossed_double);
+
 struct TrackBuildOptions {
     std::int32_t year = 1830;
     bool double_track = false;
@@ -47,6 +58,9 @@ struct TrackBuildOptions {
     // over it, 0..100. At 0 the rail never goes below the ground, so no
     // tunnels. Mirrors RT3's "Tunnels" build setting.
     std::int32_t tunnel_preference = 50;
+    // Likewise how strongly it bridges valleys rather than dipping into
+    // them, 0..100; water is always bridged. RT3's "Bridges" setting.
+    std::int32_t bridge_preference = 50;
     std::optional<BridgeType> bridge_type; // nullopt: cheapest type that fits
 };
 
@@ -72,9 +86,9 @@ struct TrackPlan {
         std::size_t piece = 0; // index into pieces
         EdgeId edge = 0;       // the track it crosses
         MapPoint at{};
+        bool overpass = false; // goes over rather than meeting it
     };
     std::vector<Crossing> crossings{};
-    bool overpasses = false;
 };
 
 struct PlanResult {

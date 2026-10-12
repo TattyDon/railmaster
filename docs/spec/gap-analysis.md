@@ -53,6 +53,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §3.1, §5.2, §7.1 [I] | 0.5-mile cells; Small/Medium/Large maps of 256 × 256, 384 × 512, 768 × 1024; economy nodes every few cells (~15,000 [D]); catchment radius 2/3/4 cells | 1 km cells, one node per cell, 128 × 128 maps, radii 1/2/3 | as the spec; 2 × 2-cell nodes on Small, 4 × 4 on Medium, 7 × 7 on Large; map counts scale with area |
 | §5.3 [I] | Equilibrium price base × ((D+ε)/(S+ε))^0.5 within 0.3–3×; relaxation over months; middleman flow ∝ gap × stock × conductance; conductance-weighted coupling | screened-Poisson field pinned at sites (consumers 150%, producers 50%, neutral 50%); stock to the single best neighbour | as the spec, except site nodes are not smoothed (it would flatten every market; see m2-economy-model.md); calibrated to the spec's [C] middleman speeds and reshaping time |
 | §9.3 [D], §13.2 [I] | Replace locomotive (keeps route and consist); AI replaces engines over 25 years; a recessionCaution trait | none | as the spec; the old engine is scrapped with no trade-in, and what caution does is ours ([rivals-model.md](rivals-model.md)) |
+| §11.2 [D] | Bridge, tunnel and overpass frequency: Common / Average (default) / Rarely / Never | a tunnel percentage; overpasses all or nothing per line | the four settings for each ([m1-provisional-models.md](m1-provisional-models.md)); what Average means for overpasses is ours |
 | §9.3 [D], §9.4 [D] | Route list: add and remove stops, priority; service stops added manually | a train's stops fixed when bought | as the spec ([m1-provisional-models.md](m1-provisional-models.md)); a service stop uses the buildings at that station |
 | §9.3 [D] | Consist rules per stop: auto (Any/Freight/Express, min/max, default 0/4) or custom cars; wait for a full load; 8 slots with caboose (−50% breakdowns) and dining car (+20% passengers); copy, retire | a fixed number of cars, one automatic rule | as documented; empty cars are not hauled (our reading of "picks cars for the next stop") |
 | §10.2, §11.2 [D/I] | Electrification drawn over existing track or "Electrify all track", +75% of single-track cost; electric engines need every leg between consecutive stops electrified | none: electric engines ran anywhere | as the spec (75% of the open-ground rate per km, × the double-track share on double track); electric trains route only over electrified track; rivals do not electrify, so they buy no electric engines |
@@ -106,7 +107,6 @@ Grouped by the spec's own build order (§17).
 
 **Trains and track**
 - Measured per-locomotive numbers to replace ours (§17 items 1 and 4).
-- Bridge, tunnel and overpass frequency settings (Common to Never); overpasses are all or nothing per line (§11.2 [D]).
 
 **Economy**
 - Industry and demand-block footprints of 4 × 4 cells (§3.1 [C]); ours sit

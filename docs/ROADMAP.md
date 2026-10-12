@@ -33,10 +33,12 @@ yielding on a rival's track, and route editing: changing a train's stops,
 manual service stops and priority (rt3-clone-spec §9.3), from Inspect
 (E, H) and the Train tool.
 
+Bridge, tunnel and overpass frequency settings (Never to Common, §11.2)
+are done too: T, B and G in the Track tool.
+
 Still to do:
 - Per-stop consists and custom cars in the client (the simulation has them:
   rt3-clone-spec §9.3).
-- Bridge, tunnel and overpass frequency settings (§11.2).
 
 ## M2: The economy (in progress)
 Done in the first slice: the economy-node grid and cargo price field, with
@@ -153,8 +155,9 @@ Done in the eighth slice: the spec's ageing (maintenance +4% of the new
 cost a year, half again with no oil; breakdowns rising with age like
 crashes) and track upkeep at 2% of cost a year.
 
-Still to do:
-- Depreciation of track, buildings and trains.
+Not planned: depreciation. The spec's balance sheet carries track,
+buildings and trains at their value and names no depreciation, so book
+value (the share price's anchor) does not fall with age.
 
 ## M4: Real 3D client
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

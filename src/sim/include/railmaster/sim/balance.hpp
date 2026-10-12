@@ -137,6 +137,12 @@ struct Balance {
         // the piece costs this multiple of plain track (rt3-clone-spec §11.2
         // [D/I]: 4x). Without one, the lines meet at a level crossing.
         std::int32_t overpass_multiple = 4;
+        // How strongly the router goes under hills (tunnels) or over valleys
+        // (bridges) rather than following the ground, at each of RT3's
+        // frequency settings Never, Rarely, Average and Common (rt3-clone-spec
+        // §11.2 [D] settings, [I] values): 0 follows the ground, 100 keeps
+        // the straightest line the grade limit allows.
+        std::array<std::int32_t, 4> structure_frequency_percent{0, 25, 50, 75};
     } track;
 
     struct Stations {

@@ -13,6 +13,16 @@ namespace railmaster::client {
 
 namespace {
 
+sim::Frequency next_frequency(sim::Frequency f, bool back) {
+    return static_cast<sim::Frequency>((static_cast<int>(f) + (back ? 3 : 1)) % 4);
+}
+
+std::string upper(std::string s) {
+    for (char& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    return s;
+}
+
+
 constexpr int kScale = 2;
 constexpr float kTopBarH = 22.0f;
 constexpr float kToolbarY = 26.0f;
@@ -230,7 +240,8 @@ std::optional<sim::BuildTrack> Tools::pending_track() const {
     cmd.end = hover_pick_;
     cmd.double_track = double_track_;
     cmd.overpasses = overpasses_;
-    cmd.tunnel_preference = tunnel_preference_;
+    cmd.tunnels = tunnels_;
+    cmd.bridges = bridges_;
     if (curves_ && cmd.start.kind == sim::TrackEnd::Kind::Node) {
         cmd.curve_control = sim::continuing_control_point(world_.railway().track(), cmd.start.node, cmd.end.pos);
     }
@@ -637,11 +648,12 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             }
             return true;
         }
-        if (key == SDLK_g) overpasses_ = !overpasses_;
+        // Frequency settings cycle Never, Rarely, Average, Common (Shift: back).
+        if (key == SDLK_g) overpasses_ = next_frequency(overpasses_, (mod & KMOD_SHIFT) != 0);
+        else if (key == SDLK_t) tunnels_ = next_frequency(tunnels_, (mod & KMOD_SHIFT) != 0);
+        else if (key == SDLK_b) bridges_ = next_frequency(bridges_, (mod & KMOD_SHIFT) != 0);
         else if (key == SDLK_d) double_track_ = !double_track_;
         else if (key == SDLK_c) curves_ = !curves_;
-        else if (key == SDLK_LEFTBRACKET) tunnel_preference_ = std::max(0, tunnel_preference_ - 10);
-        else if (key == SDLK_RIGHTBRACKET) tunnel_preference_ = std::min(100, tunnel_preference_ + 10);
         else return false;
         return true;
     case Tool::Station:
@@ -1269,9 +1281,10 @@ std::string Tools::hint() const {
         return "TRAIN: E ROUTE H PRIORITY F FILTER W FULL [ ] CARS C CABOOSE D DINER Y COPY XX RETIRE R ENGINE  " + cargo_map;
     }
     case Tool::Track:
-        return std::string(track_start_ ? "CLICK TO BUILD, RIGHT-CLICK TO STOP" : "CLICK TO START A LINE") +
-               "  D DOUBLE " + (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") +
-               "  G OVERPASSES " + (overpasses_ ? "ON" : "OFF") + "  [ ] TUNNELS " + std::to_string(tunnel_preference_) + "%";
+        return std::string(track_start_ ? "RIGHT-CLICK STOPS" : "CLICK TO START") + "  D DOUBLE " +
+               (double_track_ ? "ON" : "OFF") + "  C CURVES " + (curves_ ? "ON" : "OFF") + "  T TUNNEL " +
+               upper(sim::frequency_name(tunnels_)) + "  B BRIDGE " + upper(sim::frequency_name(bridges_)) + "  G OVERPASS " +
+               upper(sim::frequency_name(overpasses_));
     case Tool::Station:
         if (station_building_) {
             return std::string("CLICK NEAR A STATION TO BUILD A ") + sim::station_building_name(*station_building_) + " " +
@@ -1438,11 +1451,17 @@ void Tools::draw_ui(const std::string& status) const {
         if (const auto cmd = pending_track()) {
             const sim::PlanResult plan = world_.preview(*cmd);
             if (plan.plan && !plan.plan->crossings.empty()) {
-                const std::size_t n = plan.plan->crossings.size();
-                line2 = std::to_string(n) +
-                        (overpasses_ ? (n == 1 ? " OVERPASS, AT 4X THAT PIECE'S COST" : " OVERPASSES, AT 4X THOSE PIECES' COST")
-                                     : (n == 1 ? " LEVEL CROSSING: TRAINS WILL TAKE TURNS (G FOR AN OVERPASS)"
-                                               : " LEVEL CROSSINGS: TRAINS WILL TAKE TURNS (G FOR OVERPASSES)"));
+                const auto& c = plan.plan->crossings;
+                const auto over = static_cast<std::size_t>(
+                    std::count_if(c.begin(), c.end(), [](const sim::TrackPlan::Crossing& x) { return x.overpass; }));
+                const std::size_t level = c.size() - over;
+                line2.clear();
+                if (over > 0) line2 = std::to_string(over) + (over == 1 ? " OVERPASS" : " OVERPASSES") + " AT 4X THE PIECE'S COST";
+                if (level > 0) {
+                    if (!line2.empty()) line2 += ", ";
+                    line2 += std::to_string(level) + (level == 1 ? " LEVEL CROSSING" : " LEVEL CROSSINGS") +
+                             ": TRAINS WILL TAKE TURNS (G FOR MORE OVERPASSES)";
+                }
             }
         }
     }

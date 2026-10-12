@@ -22,19 +22,26 @@ TrackEnd at_node(const World& world, NodeId n) {
 
 TrackEnd on_ground(MapPoint p) { return {TrackEnd::Kind::Free, 0, 0, p}; }
 
-// Plan a line the way a thrifty player would: of the routes with no, few
-// or the default tunnels, the cheapest that can be built.
+// Plan a line the way a thrifty player would: of the routes with tunnels
+// and bridges never, rarely or at the default frequency, the cheapest that
+// can be built.
 std::optional<TrackPlan> cheapest_route(const World& world, BuildTrack& cmd) {
+    constexpr Frequency kTried[] = {Frequency::Never, Frequency::Rarely, Frequency::Average};
     std::optional<TrackPlan> cheapest;
-    std::int32_t best_preference = cmd.tunnel_preference;
-    for (const std::int32_t preference : {0, 25, 50}) {
-        cmd.tunnel_preference = preference;
-        if (PlanResult plan = world.preview(cmd); plan.plan && (!cheapest || plan.plan->total_cost < cheapest->total_cost)) {
-            cheapest = std::move(plan.plan);
-            best_preference = preference;
+    Frequency best_tunnels = cmd.tunnels, best_bridges = cmd.bridges;
+    for (const Frequency tunnels : kTried) {
+        for (const Frequency bridges : kTried) {
+            cmd.tunnels = tunnels;
+            cmd.bridges = bridges;
+            if (PlanResult plan = world.preview(cmd); plan.plan && (!cheapest || plan.plan->total_cost < cheapest->total_cost)) {
+                cheapest = std::move(plan.plan);
+                best_tunnels = tunnels;
+                best_bridges = bridges;
+            }
         }
     }
-    cmd.tunnel_preference = best_preference;
+    cmd.tunnels = best_tunnels;
+    cmd.bridges = best_bridges;
     return cheapest;
 }
 

@@ -75,8 +75,10 @@ private:
     std::optional<sim::TrackEnd> track_start_;
     bool double_track_ = false;
     bool curves_ = true;
-    bool overpasses_ = false; // lift new track over the lines it crosses
-    std::int32_t tunnel_preference_ = 50;
+    // RT3's frequency settings for new track (rt3-clone-spec §11.2).
+    sim::Frequency tunnels_ = sim::Frequency::Average;
+    sim::Frequency bridges_ = sim::Frequency::Average;
+    sim::Frequency overpasses_ = sim::Frequency::Average;
 
     sim::StationSize station_size_ = sim::StationSize::Medium;
     // What the station tool places: a station, or a building near one.

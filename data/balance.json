@@ -385,6 +385,12 @@
     "remove_refund_percent": 10,
     "steel_bridge_multiple": 5,
     "stone_bridge_multiple": 6,
+    "structure_frequency_percent": [
+      0,
+      25,
+      50,
+      75
+    ],
     "suspension_bridge_multiple": 10,
     "suspension_min_span_mm": 2000000,
     "tunnel_cover_mm": 12000,

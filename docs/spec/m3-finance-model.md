@@ -33,7 +33,7 @@ From [overview-finance-scenarios.md §4](overview-finance-scenarios.md):
 - **Cash.** Every build or purchase command is checked against company cash
   and refused, with the shortfall, if it cannot be paid (not in sandbox).
   Spending moves cash into assets carried at cost: track, buildings, trains.
-  There is no depreciation yet.
+  There is no depreciation: the spec's balance sheet names none (§12.7).
 - **Revenue.** Delivery income is posted to freight, passenger, mail or
   troop revenue as it is earned.
 - **Running costs, charged on the 1st of each month for the month before.**

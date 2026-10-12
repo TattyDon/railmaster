@@ -45,11 +45,14 @@ struct BuildTrack {
     TrackEnd end{};
     std::optional<MapPoint> curve_control{}; // nullopt: straight
     bool double_track = false;
-    std::int32_t tunnel_preference = 50;
+    // RT3's frequency settings (rt3-clone-spec §11.2 [D]): how readily the
+    // line tunnels under hills, bridges valleys, and goes over the track it
+    // crosses (an overpass costs 4x the piece) rather than meeting it at a
+    // level crossing.
+    Frequency tunnels = Frequency::Average;
+    Frequency bridges = Frequency::Average;
+    Frequency overpasses = Frequency::Average;
     std::optional<BridgeType> bridge_type{};
-    // Lift this line over the track it crosses (4x the piece's cost)
-    // rather than meeting it at level crossings [D].
-    bool overpasses = false;
 };
 
 struct BuildStation {

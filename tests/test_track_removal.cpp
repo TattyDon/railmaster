@@ -292,7 +292,7 @@ namespace {
 World crossing_world(bool overpass, CommandResult* b_result = nullptr) {
     World w = flat_world();
     REQUIRE(w.execute(BuildTrack{.start = free_at(5, 15), .end = free_at(25, 15)}).ok);
-    const CommandResult b = w.execute(BuildTrack{.start = free_at(15, 5), .end = free_at(15, 25), .overpasses = overpass});
+    const CommandResult b = w.execute(BuildTrack{.start = free_at(15, 5), .end = free_at(15, 25), .overpasses = overpass ? Frequency::Common : Frequency::Never});
     REQUIRE(b.ok);
     if (b_result) *b_result = b;
     return w;
@@ -377,4 +377,14 @@ TEST_CASE("crossings follow splits and go with removed or undone track") {
     // Saved games keep them.
     World again = crossing_world(false);
     CHECK(World::load(again.save(), test_data()).railway().crossings().size() == 1);
+}
+
+TEST_CASE("at the default overpass setting a line goes over double track and meets single track at level") {
+    for (const bool main_line : {false, true}) {
+        World w = flat_world();
+        REQUIRE(w.execute(BuildTrack{.start = free_at(5, 15), .end = free_at(25, 15), .double_track = main_line}).ok);
+        REQUIRE(w.execute(BuildTrack{.start = free_at(15, 5), .end = free_at(15, 25)}).ok);
+        REQUIRE(w.railway().crossings().size() == 1);
+        CHECK(w.railway().crossings().front().overpass == main_line);
+    }
 }

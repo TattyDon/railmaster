@@ -300,7 +300,7 @@ private:
     PlanResult priced(PlanResult r) const;
     // Find where a planned run crosses existing track at ground level, and
     // add the overpass surcharge if it is to go over.
-    void mark_crossings(TrackPlan& plan, MapPoint start, bool overpasses) const;
+    void mark_crossings(TrackPlan& plan, MapPoint start, Frequency overpasses) const;
 
     CommandResult run(const BuildTrack& cmd);
     CommandResult run(const BuildStation& cmd);

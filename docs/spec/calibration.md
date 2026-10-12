@@ -145,7 +145,7 @@ its track on half the maps since rivers and tunnels came in, and the tool
 skipped those maps silently. It now chooses, among each town and its two
 nearest, the triangle with the most houses whose track and territory
 access cost at most 60% of its cash (`demo.track_budget_percent`), and
-builds each line by the cheapest of its tunnel settings. A map it cannot
+builds each line by the cheapest of its tunnel and bridge settings. A map it cannot
 build on now counts against it. Finally, the returns fell with the era:
 about 13% from 1830, 10% from 1900 and 4% from 1950. Faster trains run
 more kilometres for the same passengers, so they burn more fuel and broke
@@ -155,6 +155,11 @@ of RT2's Near Perfect figure [RL]. The spec's era factor on passenger and
 mail spawning (§8.3), absent until now, rises from 100% in 1830 to 135% in
 1950. The demo now returns 12.5% from 1830, 15.4% from 1900 and 14.8% from
 1950; its other metrics and the rivals' are as before.
+
+With the bridge, tunnel and overpass frequency settings, the demo network
+tries tunnels and bridges each at Never, Rarely and Average and builds the
+cheapest; its return is 12.6% from 1830, 15.9% from 1900 and 15.5% from
+1950. Rivals build at Average, which plans track exactly as before.
 
 ## What changed
 

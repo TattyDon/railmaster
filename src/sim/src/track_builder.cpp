@@ -189,7 +189,17 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
         cut[i] = std::min(cut[i], cut[i + 1] + step(i + 1));
         fill[i] = std::max(fill[i], fill[i + 1] - step(i + 1));
     }
-    const std::int64_t t = std::clamp(options.tunnel_preference, 0, 100);
+    // Under the grade limit, fewer tunnels means climbing over more (on
+    // embankments and bridges) and fewer bridges means cutting through more,
+    // so the two settings meet in one blend: the tunnel preference pulls
+    // towards the cut, the bridge preference towards the fill. "Never" is
+    // absolute: no tunnels keeps to the fill, no bridges to the cut (water
+    // is still bridged).
+    const std::int64_t tunnels = std::clamp(options.tunnel_preference, 0, 100);
+    const std::int64_t bridges = std::clamp(options.bridge_preference, 0, 100);
+    std::int64_t t = (tunnels + 100 - bridges) / 2;
+    if (tunnels == 0) t = 0;
+    else if (bridges == 0) t = 100;
     for (std::size_t i = 0; i <= n; ++i) z[i] = (cut[i] * t + fill[i] * (100 - t)) / 100;
 
     // The ends are fixed to the existing node heights; re-clamp inwards from
@@ -231,6 +241,20 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
         plan.pieces.push_back(piece);
     }
 
+    if (tunnels == 0 && bridges == 0) {
+        const bool structures = std::any_of(plan.pieces.begin(), plan.pieces.end(), [&](const PlannedPiece& p) {
+            return p.kind == TrackKind::Tunnel;
+        });
+        bool viaduct = false;
+        for (std::size_t i = 1; i <= n; ++i) {
+            viaduct = viaduct || (plan.pieces[i - 1].kind == TrackKind::Bridge && !piece_over_water[i]);
+        }
+        if (structures || viaduct) {
+            result.error = "the ground needs a tunnel or a bridge, and both are set to never";
+            return result;
+        }
+    }
+
     // Long water crossings get a suspension bridge once one exists [D],
     // unless the player chose a bridge type.
     if (!options.bridge_type && bridge_available(BridgeType::Suspension, options.year)) {
@@ -258,6 +282,30 @@ PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::i
 
     result.plan = std::move(plan);
     return result;
+}
+
+const char* frequency_name(Frequency f) {
+    switch (f) {
+    case Frequency::Never: return "never";
+    case Frequency::Rarely: return "rarely";
+    case Frequency::Average: return "average";
+    case Frequency::Common: return "common";
+    }
+    return "average";
+}
+
+std::int32_t structure_preference(Frequency f, const Balance& b) {
+    return b.track.structure_frequency_percent[static_cast<std::size_t>(f)];
+}
+
+bool overpass_wanted(Frequency f, bool new_line_double, bool crossed_double) {
+    switch (f) {
+    case Frequency::Never: return false;
+    case Frequency::Rarely: return new_line_double && crossed_double;
+    case Frequency::Average: return crossed_double;
+    case Frequency::Common: return true;
+    }
+    return false;
 }
 
 NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner, std::vector<EdgeId>* built) {

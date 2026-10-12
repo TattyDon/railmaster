@@ -50,11 +50,12 @@ std::vector<MapPoint> run_points(const BuildTrack& cmd, const Balance& b) {
     return straight_points(cmd.start.pos, cmd.end.pos, piece);
 }
 
-TrackBuildOptions options_for(const BuildTrack& cmd, std::int32_t year) {
+TrackBuildOptions options_for(const BuildTrack& cmd, std::int32_t year, const Balance& b) {
     TrackBuildOptions o;
     o.year = year;
     o.double_track = cmd.double_track;
-    o.tunnel_preference = cmd.tunnel_preference;
+    o.tunnel_preference = structure_preference(cmd.tunnels, b);
+    o.bridge_preference = structure_preference(cmd.bridges, b);
     o.bridge_type = cmd.bridge_type;
     return o;
 }
@@ -86,16 +87,15 @@ PlanResult World::preview(const BuildTrack& cmd) const {
         cmd.end.kind == TrackEnd::Kind::Free ? std::nullopt
                                              : std::optional<std::int64_t>{anchor_z(net, terrain_, cmd.end)};
     PlanResult r = priced(plan_track_between(terrain_, cmd.start.pos, anchor_z(net, terrain_, cmd.start),
-                                             run_points(cmd, data_.balance), end_z, options_for(cmd, date_.year()),
+                                             run_points(cmd, data_.balance), end_z, options_for(cmd, date_.year(), data_.balance),
                                              data_.balance));
     if (r.plan) mark_crossings(*r.plan, cmd.start.pos, cmd.overpasses);
     return r;
 }
 
-void World::mark_crossings(TrackPlan& plan, MapPoint start, bool overpasses) const {
+void World::mark_crossings(TrackPlan& plan, MapPoint start, Frequency overpasses) const {
     const TrackNetwork& net = railway_.track();
     plan.crossings.clear();
-    plan.overpasses = overpasses;
     if (plan.points.empty()) return;
     const MapPoint finish = plan.points.back();
     MapPoint prev = start;
@@ -112,15 +112,14 @@ void World::mark_crossings(TrackPlan& plan, MapPoint start, bool overpasses) con
                 const bool known = std::any_of(plan.crossings.begin(), plan.crossings.end(), [&](const TrackPlan::Crossing& c) {
                     return std::abs(c.at.x_mm - at->x_mm) <= 2 && std::abs(c.at.y_mm - at->y_mm) <= 2;
                 });
-                if (!known) plan.crossings.push_back({i, e.id, *at});
+                if (!known) plan.crossings.push_back({i, e.id, *at, overpass_wanted(overpasses, plan.double_track, e.double_track)});
             }
         }
         prev = next;
     }
-    if (!overpasses) return;
     std::vector<bool> lifted(plan.pieces.size(), false);
     for (const TrackPlan::Crossing& c : plan.crossings) {
-        if (lifted[c.piece]) continue;
+        if (!c.overpass || lifted[c.piece]) continue;
         lifted[c.piece] = true;
         PlannedPiece& p = plan.pieces[c.piece];
         const Money extra = construction_cost(
@@ -241,7 +240,7 @@ CommandResult World::run(const BuildTrack& cmd) {
     // The end node already exists now (even for open ground), so plan into it.
     std::vector<MapPoint> points = run_points(cmd, data_.balance);
     PlanResult plan = priced(plan_track(railway_.track(), terrain_, from, std::move(points), to,
-                                        options_for(cmd, date_.year()), data_.balance));
+                                        options_for(cmd, date_.year(), data_.balance), data_.balance));
     if (!plan.plan) throw std::logic_error("track plan changed between check and build: " + plan.error);
     mark_crossings(*plan.plan, railway_.track().node(from).pos, cmd.overpasses);
     TrackUndo undo;
@@ -251,7 +250,7 @@ CommandResult World::run(const BuildTrack& cmd) {
     build_track(railway_.track(), *plan.plan, acting().id(), &undo.edges);
     for (EdgeId e : undo.edges) undo.ends.emplace_back(railway_.track().edge(e).a, railway_.track().edge(e).b);
     for (const TrackPlan::Crossing& c : plan.plan->crossings) {
-        railway_.add_crossing({c.edge, undo.edges[c.piece], c.at, plan.plan->overpasses});
+        railway_.add_crossing({c.edge, undo.edges[c.piece], c.at, c.overpass});
     }
     acting().invest_track(plan.plan->total_cost);
     if (track_undo_.size() <= actor_) track_undo_.resize(std::size_t{actor_} + 1);
