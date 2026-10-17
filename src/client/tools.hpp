@@ -85,9 +85,14 @@ private:
     int company_tab_ = 0;
     std::size_t territory_sel_ = 0;
     // The Ledger (L; §12.7): overview, ten years' income statements, every
-    // company's balance sheet, haulage by cargo, and the players.
+    // company's balance sheet, haulage by cargo, the players, and lists of
+    // your trains, stations and industries and of the cargo.
     void draw_ledger_panel() const;
     int ledger_tab_ = 0;
+    std::size_t ledger_sel_ = 0; // the chosen row in the trains, stations, industries and cargo lists
+    // The ids those lists show, in order (trains and stations best first).
+    std::vector<std::uint32_t> ledger_items() const;
+    bool ledger_key(SDL_Keycode key);
     // Tabs along the top of a screen; their places are kept for clicks.
     struct TabBox {
         float x0, y0, x1, y1;

@@ -254,7 +254,8 @@ void Tools::draw_ledger_panel() const {
     ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 14, y0 + 8, "Ledger: " + as_written(co.name()), kScale + 1);
-    float y = draw_tabs(x0 + 14, y0 + 36, {"Overview", "Income statement", "Balance sheets", "Haulage", "Players"}, ledger_tab_);
+    float y = draw_tabs(x0 + 14, y0 + 36, {"Overview", "Income statement", "Balance sheets", "Haulage", "Players", "Trains", "Stations", "Industries", "Cargo"},
+                        ledger_tab_);
     ui::rule(x0 + 10, x0 + w - 10, y - 4);
     Table t{x0, y + 4, {}};
     const auto& cargo = world_.data().cargo.all();
@@ -396,7 +397,7 @@ void Tools::draw_ledger_panel() const {
         else t.line("All cargo", {format_count((total + sim::kMilli / 2) / sim::kMilli), "100%"}, 1, 1, 1);
         break;
     }
-    default: {
+    case 4: {
         // Every player: cash, shares at market, net worth, and the company they run.
         t.edges = {560, 720, 880, 1040};
         t.heading("Player", {"Cash", "Shares", "Net worth", "Runs"});
@@ -410,6 +411,194 @@ void Tools::draw_ledger_panel() const {
         }
         break;
     }
+    default: {
+        // The lists (§12.7 sub-reports): one row per train, station,
+        // industry or cargo, the chosen one highlighted; Enter opens it.
+        const std::vector<std::uint32_t> items = ledger_items();
+        const sim::Railway& rw = world_.railway();
+        const sim::Economy& eco = world_.economy();
+        const std::int32_t today = world_.date().days_since_epoch();
+        const auto loads = [](std::int64_t milli) { return format_count((milli + sim::kMilli / 2) / sim::kMilli); };
+        std::vector<std::string> head;
+        std::string first;
+        switch (ledger_tab_) {
+        case 5:
+            t.edges = {440, 500, 630, 760, 890, 1020, 1150};
+            first = "Train";
+            head = {"Age", "Stops", "Freight", "Passengers", "Costs", "Profit", "Last year"};
+            break;
+        case 6:
+            t.edges = {420, 600, 700, 800, 960, 1120};
+            first = "Station";
+            head = {"Size", "Town", "Waiting", "Trains", "This month", "12 months"};
+            break;
+        case 7:
+            t.edges = {420, 520, 680, 840, 1000};
+            first = "Industry";
+            head = {"Level", "Running", "Made", "Profit a year", "Paid"};
+            break;
+        default:
+            t.edges = {420, 560, 720, 880};
+            first = "Cargo";
+            head = {"Since", "Base price", "Waiting", "Delivered"};
+            break;
+        }
+        t.heading(first, head);
+        if (items.empty()) {
+            const char* none[] = {"You have no trains yet (F6 to buy one)", "You have no stations yet (F3 to build one)",
+                                  "You own no industries (F9 to buy or build one)", "No cargo yet"};
+            t.line(none[ledger_tab_ - 5], {}, 0.68f, 0.66f, 0.62f);
+            break;
+        }
+        const float bottom = y0 + h - 30;
+        const auto rows_shown = static_cast<std::size_t>(std::max(1.0f, (bottom - t.y) / t.row));
+        const std::size_t sel = std::min(ledger_sel_, items.size() - 1);
+        const std::size_t from = sel >= rows_shown ? sel - rows_shown + 1 : 0;
+        std::vector<std::int64_t> waiting(world_.data().cargo.all().size(), 0);
+        for (const sim::Station& s : rw.stations()) {
+            if (s.owner != co.id()) continue;
+            for (std::size_t c = 0; c < s.waiting.size() && c < waiting.size(); ++c) waiting[c] += s.waiting[c].milli;
+            for (const sim::ExpressWaiting& e : s.express) waiting[e.cargo] += e.milli;
+        }
+        for (std::size_t i = from; i < items.size() && t.y < bottom; ++i) {
+            const std::uint32_t id = items[i];
+            if (i == sel) ui::selection(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3);
+            const float b = i == sel ? 1.0f : 0.9f;
+            std::vector<std::string> cells;
+            std::string label;
+            switch (ledger_tab_) {
+            case 5: {
+                const sim::Train& tr = rw.train(id);
+                const sim::TrainAccounts& a = tr.accounts;
+                label = "Train " + std::to_string(tr.id + 1) + "   " + as_written(world_.data().locomotives.get(tr.loco).name);
+                const std::int32_t age = (today - tr.built_day) / 365;
+                cells = {std::to_string(age), std::to_string(tr.route.size()), format_money(a.freight), format_money(a.express),
+                         format_money(a.costs()), format_money(a.profit()),
+                         sim::Date::from_days(tr.built_day).year() < world_.date().year() ? format_money(tr.accounts_last_year.profit())
+                                                                                          : std::string("-")};
+                break;
+            }
+            case 6: {
+                const sim::Station& s = rw.station(id);
+                label = as_written(s.name);
+                std::int64_t milli = 0;
+                for (const sim::WaitingCargo& wc : s.waiting) milli += wc.milli;
+                for (const sim::ExpressWaiting& e : s.express) milli += e.milli;
+                std::size_t calling = 0;
+                for (const sim::Train& tr : rw.trains()) {
+                    calling += tr.in_service() && std::find(tr.route.begin(), tr.route.end(), s.id) != tr.route.end();
+                }
+                cells = {size_name(s.size), s.town ? as_written(eco.towns()[*s.town].name) : std::string("-"), loads(milli),
+                         std::to_string(calling), format_money(s.income_this_month), format_money(s.income_last_year())};
+                break;
+            }
+            case 7: {
+                const sim::Site& s = eco.sites()[id];
+                label = as_written(world_.data().industries.get(s.type).name);
+                std::int64_t made = 0;
+                for (const std::int64_t m : s.made_milli) made += m;
+                cells = {std::to_string(s.level), s.closed ? std::string("closed") : std::to_string(s.utilisation_permille / 10) + "%",
+                         loads(made), format_money(sim::annual_profit(s)), format_money(s.owner_paid)};
+                break;
+            }
+            default: {
+                const sim::CargoType& c = world_.data().cargo.get(static_cast<sim::CargoId>(id));
+                label = c.name;
+                const bool express = c.cargo_class == sim::CargoClass::Express;
+                cells = {std::to_string(c.available_year), express ? std::string("fare") : format_money(c.base_price),
+                         loads(waiting[id]), loads(co.delivered_milli(static_cast<std::uint16_t>(id)))};
+                break;
+            }
+            }
+            t.line(label, cells, b, b * (i == sel ? 0.95f : 0.98f), b * (i == sel ? 0.7f : 0.92f));
+        }
+        glColor3f(0.68f, 0.66f, 0.62f);
+        std::string foot = std::to_string(sel + 1) + " of " + std::to_string(items.size()) + "   Up/Down choose   Enter ";
+        foot += ledger_tab_ == 8 ? "shows its price map" : "opens it on the map";
+        if (ledger_tab_ == 5) foot += "   Figures are this year's so far";
+        draw_text(x0 + 14, y0 + h - 26, foot, kScale);
+        break;
+    }
+    }
+}
+
+std::vector<std::uint32_t> Tools::ledger_items() const {
+    std::vector<std::uint32_t> out;
+    const sim::CompanyId me = world_.company().id();
+    switch (ledger_tab_) {
+    case 5: {
+        // Your trains, the most profitable this year first.
+        for (const sim::Train& t : world_.railway().trains()) {
+            if (t.in_service() && t.owner == me) out.push_back(t.id);
+        }
+        std::stable_sort(out.begin(), out.end(), [&](std::uint32_t a, std::uint32_t b) {
+            return world_.railway().train(a).accounts.profit() > world_.railway().train(b).accounts.profit();
+        });
+        break;
+    }
+    case 6: {
+        // Your stations, the best earners over the last 12 months first.
+        for (const sim::Station& s : world_.railway().stations()) {
+            if (s.owner == me) out.push_back(s.id);
+        }
+        std::stable_sort(out.begin(), out.end(), [&](std::uint32_t a, std::uint32_t b) {
+            return world_.railway().station(a).income_last_year() > world_.railway().station(b).income_last_year();
+        });
+        break;
+    }
+    case 7:
+        for (const sim::Site& s : world_.economy().sites()) {
+            if (s.owner && *s.owner == me) out.push_back(s.id);
+        }
+        break;
+    case 8:
+        for (const sim::CargoType& c : world_.data().cargo.all()) {
+            if (c.available_year <= world_.date().year()) out.push_back(c.id);
+        }
+        break;
+    default: break;
+    }
+    return out;
+}
+
+bool Tools::ledger_key(SDL_Keycode key) {
+    const std::vector<std::uint32_t> items = ledger_items();
+    if (items.empty()) return false;
+    const std::size_t n = items.size();
+    ledger_sel_ = std::min(ledger_sel_, n - 1);
+    switch (key) {
+    case SDLK_UP: ledger_sel_ = (ledger_sel_ + n - 1) % n; return true;
+    case SDLK_DOWN: ledger_sel_ = (ledger_sel_ + 1) % n; return true;
+    case SDLK_PAGEUP: ledger_sel_ = ledger_sel_ > 20 ? ledger_sel_ - 20 : 0; return true;
+    case SDLK_PAGEDOWN: ledger_sel_ = std::min(n - 1, ledger_sel_ + 20); return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER: {
+        const std::uint32_t id = items[ledger_sel_];
+        const sim::Railway& rw = world_.railway();
+        if (ledger_tab_ == 8) {
+            // The cargo's price map.
+            map_overlay_ = MapOverlay::Cargo;
+            overlay_ = static_cast<sim::CargoId>(id);
+            select(Tool::Inspect);
+            return true;
+        }
+        const int tab = ledger_tab_;
+        select(Tool::Inspect);
+        if (tab == 5) {
+            jump_ = rw.train_position(id);
+            open_detail(DetailKind::Train, id);
+        } else if (tab == 6) {
+            jump_ = rw.track().node(rw.station(id).node).pos;
+            open_detail(DetailKind::Station, id);
+        } else {
+            const sim::Site& s = world_.economy().sites()[id];
+            jump_ = world_.economy().node_centre(s.cx, s.cy);
+            open_detail(DetailKind::Industry, id);
+        }
+        hover_ = *jump_;
+        return true;
+    }
+    default: return false;
     }
 }
 
@@ -663,7 +852,10 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     case Tool::Ledger:
         for (std::size_t i = 0; i < tab_boxes_.size(); ++i) {
             const TabBox& b = tab_boxes_[i];
-            if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) (tool_ == Tool::Finance ? company_tab_ : ledger_tab_) = static_cast<int>(i);
+            if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) {
+                (tool_ == Tool::Finance ? company_tab_ : ledger_tab_) = static_cast<int>(i);
+                ledger_sel_ = 0;
+            }
         }
         return;
     case Tool::Status:
@@ -920,8 +1112,9 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_TAB:
         if (tool_ == Tool::Finance || tool_ == Tool::Ledger) {
             int& tab = tool_ == Tool::Finance ? company_tab_ : ledger_tab_;
-            const int n = tool_ == Tool::Finance ? 4 : 5;
+            const int n = tool_ == Tool::Finance ? 4 : 9;
             tab = (tab + ((mod & KMOD_SHIFT) != 0 ? n - 1 : 1)) % n;
+            ledger_sel_ = 0;
             return true;
         }
         break;
@@ -1420,6 +1613,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     case Tool::Lists: return lists_key(key);
+    case Tool::Ledger: return ledger_key(key);
     default: return false;
     }
 }

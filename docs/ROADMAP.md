@@ -329,8 +329,8 @@ Still to do:
   ten years of income statements, balance sheets, haulage, players),
   opening by itself at each year's end. News goes to a message history on M,
   and headlines to a newspaper that pauses the game (§15.4). The train
-  panel has its cost window and breakdown-risk meter. Still to come: the
-  ledger's train, station, industry and cargo sub-reports.)
+  panel has its cost window and breakdown-risk meter. The ledger has its
+  train, station, industry and cargo lists too.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios
