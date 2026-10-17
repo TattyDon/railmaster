@@ -470,6 +470,125 @@ void Tools::show(std::string message, bool good) {
     message_until_ = SDL_GetTicks() + 4000;
 }
 
+void Tools::log(const std::string& text, bool good) {
+    log_.push_back({world_.date().month_year_label(), text, good});
+    if (log_.size() > 500) log_.erase(log_.begin());
+}
+
+void Tools::open_newspaper(const std::string& headline, std::vector<std::string> more) {
+    paper_ = Paper{world_.date().month_year_label(), headline, std::move(more)};
+    paper_open_ = true;
+}
+
+namespace {
+
+// Words laid into lines no wider than `width` points.
+std::vector<std::string> wrap(const std::string& text, int scale, float width) {
+    std::vector<std::string> lines;
+    std::istringstream words(text);
+    std::string word, line;
+    while (words >> word) {
+        const std::string longer = line.empty() ? word : line + " " + word;
+        if (!line.empty() && static_cast<float>(text_width(longer, scale)) > width) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = longer;
+        }
+    }
+    if (!line.empty()) lines.push_back(line);
+    return lines;
+}
+
+} // namespace
+
+void Tools::draw_log_panel() const {
+    constexpr float kRow = 18.0f;
+    const float x0 = 40, y0 = 56, w = std::min(900.0f, static_cast<float>(cam_.width_px) - 80);
+    // As tall as the messages need, up to the bottom bar.
+    float need = 60;
+    for (std::size_t i = log_scroll_; i < log_.size() && need < 2000; ++i) {
+        need += kRow * static_cast<float>(wrap(log_[log_.size() - 1 - i].text, kScale, w - 170).size()) + 4;
+    }
+    const float h = std::min(std::max(need, 90.0f), static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 12);
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y0 + 8, "Messages", kScale + 1);
+    glColor3f(0.68f, 0.66f, 0.62f);
+    const std::string keys = "Up/Down, PgUp/PgDn scroll   M or Esc close";
+    draw_text(x0 + w - 14 - static_cast<float>(text_width(keys, kScale)), y0 + 12, keys, kScale);
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 36);
+    float y = y0 + 44;
+    if (log_.empty()) {
+        glColor3f(0.68f, 0.66f, 0.62f);
+        draw_text(x0 + 14, y, "No news yet", kScale);
+        return;
+    }
+    // Newest first, each with the month it came.
+    for (std::size_t i = log_scroll_; i < log_.size(); ++i) {
+        const LogEntry& e = log_[log_.size() - 1 - i];
+        const auto lines = wrap(e.text, kScale, w - 170);
+        if (y + kRow * static_cast<float>(lines.size()) > y0 + h - 8) break;
+        glColor3f(0.75f, 0.7f, 0.6f);
+        draw_text(x0 + 14, y, e.when, kScale);
+        if (e.good) glColor3f(0.9f, 0.88f, 0.82f);
+        else glColor3f(1.0f, 0.6f, 0.52f);
+        for (const std::string& l : lines) {
+            draw_text(x0 + 150, y, l, kScale);
+            y += kRow;
+        }
+        y += 4;
+    }
+}
+
+void Tools::draw_newspaper() const {
+    // A front page: newsprint, a masthead, the date and the headline.
+    const float w = 640, cx = static_cast<float>(cam_.width_px) / 2;
+    const float x0 = cx - w / 2, x1 = cx + w / 2;
+    const auto head = wrap(paper_->headline, kScale + 2, w - 60);
+    float h = 176 + 34.0f * static_cast<float>(head.size()) + (paper_->more.empty() ? 0.0f : 30.0f);
+    for (const std::string& m : paper_->more) h += 18.0f * static_cast<float>(wrap(m, kScale, w - 80).size());
+    const float y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2 - 20), y1 = y0 + h;
+    fill_rect(x0 + 8, y0 + 10, x1 + 8, y1 + 10, 0.0f, 0.0f, 0.0f, 0.35f); // shadow
+    fill_rect(x0, y0, x1, y1, 0.93f, 0.9f, 0.8f, 1.0f);
+    fill_rect(x0 + 6, y0 + 6, x1 - 6, y1 - 6, 0.95f, 0.92f, 0.83f, 1.0f);
+    const auto centred = [&](const std::string& s, float y, int scale) {
+        draw_text(cx - static_cast<float>(text_width(s, scale)) / 2, y, s, scale);
+    };
+    const auto hrule = [&](float y, float thick) { fill_rect(x0 + 20, y, x1 - 20, y + thick, 0.15f, 0.12f, 0.1f, 1.0f); };
+    glColor3f(0.1f, 0.08f, 0.07f);
+    centred("The Railroad Gazette", y0 + 18, kScale + 2);
+    float y = y0 + 64;
+    hrule(y, 2);
+    hrule(y + 4, 1);
+    glColor3f(0.25f, 0.2f, 0.17f);
+    draw_text(x0 + 24, y + 9, paper_->when, kScale);
+    const std::string price = "One cent";
+    draw_text(x1 - 24 - static_cast<float>(text_width(price, kScale)), y + 9, price, kScale);
+    y += 32;
+    hrule(y, 1);
+    y += 14;
+    glColor3f(0.08f, 0.06f, 0.05f);
+    for (const std::string& l : head) {
+        centred(l, y, kScale + 2);
+        y += 34;
+    }
+    if (!paper_->more.empty()) {
+        y += 6;
+        hrule(y, 1);
+        y += 12;
+        glColor3f(0.2f, 0.17f, 0.14f);
+        for (const std::string& m : paper_->more) {
+            for (const std::string& l : wrap(m, kScale, w - 80)) {
+                centred(l, y, kScale);
+                y += 18;
+            }
+        }
+    }
+    glColor3f(0.45f, 0.4f, 0.35f);
+    centred("Esc, Enter or a click to read on", y1 - 30, kScale);
+}
+
 void Tools::on_mouse_move(float sx, float sy) {
     hover_sx_ = sx;
     hover_sy_ = sy;
@@ -515,6 +634,10 @@ std::vector<sim::LocoTypeId> Tools::available_locos() const {
 
 void Tools::on_click(float sx, float sy, bool right_button) {
     if (founding_) return;
+    if (paper_open_) {
+        paper_open_ = false;
+        return;
+    }
     if (right_button) {
         cancel();
         return;
@@ -742,6 +865,31 @@ void Tools::draw_founding_dialog() const {
 
 bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     if (founding_) return founding_key(key, mod);
+    if (paper_open_) {
+        if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_KP_ENTER || key == SDLK_SPACE) paper_open_ = false;
+        return true;
+    }
+    if (log_open_) {
+        const std::size_t n = log_.size();
+        switch (key) {
+        case SDLK_ESCAPE:
+        case SDLK_m: log_open_ = false; return true;
+        case SDLK_UP: log_scroll_ = log_scroll_ > 0 ? log_scroll_ - 1 : 0; return true;
+        case SDLK_DOWN: log_scroll_ = n > 0 ? std::min(n - 1, log_scroll_ + 1) : 0; return true;
+        case SDLK_PAGEUP: log_scroll_ = log_scroll_ > 10 ? log_scroll_ - 10 : 0; return true;
+        case SDLK_PAGEDOWN: log_scroll_ = n > 0 ? std::min(n - 1, log_scroll_ + 10) : 0; return true;
+        default: break;
+        }
+    }
+    if (key == SDLK_m && tool_ != Tool::Market && tool_ != Tool::Industry && (mod & (KMOD_CTRL | KMOD_GUI)) == 0) {
+        log_open_ = true;
+        log_scroll_ = 0;
+        return true;
+    }
+    if (key == SDLK_n && (mod & KMOD_SHIFT) != 0 && paper_) {
+        paper_open_ = true;
+        return true;
+    }
     // A scenario event's question takes the number keys until it is answered.
     if (!world_.pending_choices().empty() && key >= SDLK_1 && key <= SDLK_9) {
         const auto option = static_cast<std::size_t>(key - SDLK_1);
@@ -2465,7 +2613,9 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Status) draw_status_panel();
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
+    if (log_open_) draw_log_panel();
     draw_choice_dialog();
+    if (paper_open_) draw_newspaper();
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

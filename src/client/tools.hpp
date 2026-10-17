@@ -54,6 +54,13 @@ public:
     void open_founding(bool cancellable);
     bool founding_open() const { return founding_; }
 
+    // News (rt3-clone-spec §15.4): every item goes into the message history
+    // (M, newest first); a headline opens the newspaper, which takes all
+    // input until Esc, Enter, Space or a click closes it (Shift+N reopens).
+    void log(const std::string& text, bool good);
+    void open_newspaper(const std::string& headline, std::vector<std::string> more);
+    bool newspaper_open() const { return paper_open_; }
+
 private:
     struct Button {
         Tool tool;
@@ -177,6 +184,23 @@ private:
     bool founding_key(SDL_Keycode key, Uint16 mod);
     void draw_founding_dialog() const;
     void draw_choice_dialog() const; // a scenario event's question, answered with 1-9
+    struct LogEntry {
+        std::string when;
+        std::string text;
+        bool good;
+    };
+    std::vector<LogEntry> log_;
+    bool log_open_ = false;
+    std::size_t log_scroll_ = 0; // entries skipped from the newest
+    void draw_log_panel() const;
+    struct Paper {
+        std::string when;
+        std::string headline;
+        std::vector<std::string> more;
+    };
+    std::optional<Paper> paper_;
+    bool paper_open_ = false;
+    void draw_newspaper() const;
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;

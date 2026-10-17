@@ -105,7 +105,7 @@ void World::apply_effects(const std::vector<EventEffect>& effects, std::size_t e
     for (std::size_t i = 0; i < effects.size(); ++i) {
         const EventEffect& f = effects[i];
         switch (f.kind) {
-        case EffectKind::News: news_.push_back(f.text); break;
+        case EffectKind::News: headline(f.text); break;
         case EffectKind::CompanyCash:
             if (player_company()) company().post(Ledger::Grants, f.amount);
             break;
@@ -167,7 +167,7 @@ void World::earthquake(const EventEffect& f) {
     for (std::size_t c = 0; c < lost.size(); ++c) {
         if (lost[c] > Money{}) company(static_cast<CompanyId>(c)).remove_track(lost[c], Money{});
     }
-    news_.push_back("Earthquake near " + f.target + ": " + std::to_string(wrecked.size()) + " pieces of track destroyed");
+    headline("Earthquake near " + f.target + ": " + std::to_string(wrecked.size()) + " pieces of track destroyed");
 }
 
 // Saboteurs stop some of the player's trains out on the line, as breakdowns
@@ -186,7 +186,7 @@ void World::sabotage(const EventEffect& f) {
         railway_.break_down(running[pick], rng_.between(b.breakdown_min_days, b.breakdown_max_days));
         running.erase(running.begin() + static_cast<std::ptrdiff_t>(pick));
     }
-    if (hit > 0) news_.push_back("Sabotage! " + std::to_string(hit) + (hit == 1 ? " train" : " trains") + " wrecked on the line");
+    if (hit > 0) headline("Sabotage! " + std::to_string(hit) + (hit == 1 ? " train" : " trains") + " wrecked on the line");
 }
 
 std::int64_t World::average_speed_mph(CompanyId c) const {

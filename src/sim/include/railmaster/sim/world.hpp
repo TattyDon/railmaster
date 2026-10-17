@@ -132,6 +132,10 @@ public:
     // Things that happened since the last call, for the news ticker:
     // splits, grumbling investors, chairmen fired, appointed or resigning.
     std::vector<std::string> take_news() { return std::exchange(news_, {}); }
+    // The news big enough for a newspaper's front page (RT3's newspaper
+    // dialogs): scenario news, disasters, bankruptcies, chairmen voted out,
+    // rivals founded, medals. Each is also in take_news(). Not saved.
+    std::vector<std::string> take_headlines() { return std::exchange(headlines_, {}); }
     Company& company(CompanyId id) { return market_.companies.at(id); }
     const Company& company(CompanyId id) const { return market_.companies.at(id); }
     const std::vector<Company>& companies() const { return market_.companies; }
@@ -267,6 +271,11 @@ private:
     Market market_;
     std::vector<Rival> rivals_;
     std::vector<std::string> news_;
+    std::vector<std::string> headlines_; // transient, not saved
+    void headline(std::string text) {
+        news_.push_back(text);
+        headlines_.push_back(std::move(text));
+    }
     CompanyId last_player_company_ = 0;
     bool chairman_can_be_fired_ = true;
     bool chairman_can_resign_ = true;

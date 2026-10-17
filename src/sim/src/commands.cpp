@@ -711,7 +711,8 @@ CommandResult World::run(const FoundCompany& cmd) {
     if (auto why = founding_problem(actor_, cmd)) return fail(*why);
     const CompanyId id = found_for(actor_, cmd);
     const std::string& who = market_.investors[actor_].name;
-    news_.push_back(who + (who == "You" ? " have founded " : " has founded ") + company(id).name());
+    if (who == "You") news_.push_back(who + " have founded " + company(id).name());
+    else headline(who + " has founded " + company(id).name());
     return success(Money{}, id);
 }
 
@@ -719,7 +720,7 @@ CommandResult World::run(const DeclareBankruptcy&) {
     Company& c = acting();
     if (auto why = c.bankruptcy_problem()) return fail(*why);
     c.declare_bankruptcy();
-    news_.push_back(c.name() + " has declared bankruptcy");
+    headline(c.name() + " has declared bankruptcy");
     return success(Money{}, c.id());
 }
 

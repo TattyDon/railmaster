@@ -491,14 +491,14 @@ void World::check_scenario() {
         if (!std::all_of(goals.begin(), goals.end(), [&](const Goal& g) { return check_goal(*this, g).met; })) continue;
         scenario_result_.medal = medal;
         scenario_result_.won_on = date_;
-        news_.push_back(std::string(medal_name(medal)) + " medal won: " + scenario_->name);
+        headline(std::string(medal_name(medal)) + " medal won: " + scenario_->name);
         break;
     }
     const bool gold = scenario_result_.medal == Medal::Gold;
     if (gold || day >= scenario_->last_deadline().days_since_epoch()) {
         scenario_result_.finished = true;
-        if (!scenario_result_.medal) news_.push_back(scenario_->name + ": time is up, no medal");
-        else if (!gold) news_.push_back(scenario_->name + " over: " + medal_name(*scenario_result_.medal) + " medal");
+        if (!scenario_result_.medal) headline(scenario_->name + ": time is up, no medal");
+        else if (!gold) headline(scenario_->name + " over: " + medal_name(*scenario_result_.medal) + " medal");
     }
 }
 
@@ -719,7 +719,7 @@ void World::review_chairmen() {
             continue;
         }
         market_.investors[*chairman].chairs.reset();
-        news_.push_back("The shareholders of " + c.name() + " have voted " + who + " out as chairman");
+        headline("The shareholders of " + c.name() + " have voted " + who + " out as chairman");
         appoint_chairman(c.id(), chairman);
     }
 }

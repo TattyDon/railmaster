@@ -195,6 +195,10 @@ TEST_CASE("connecting the named towns wins Bronze at the next month end, not bef
     CHECK_FALSE(w.scenario_result().finished);
     const auto news = w.take_news();
     CHECK(std::find(news.begin(), news.end(), "Bronze medal won: Test") != news.end());
+    // A medal makes the newspaper's front page; the grumbling of investors would not.
+    const auto heads = w.take_headlines();
+    CHECK(std::find(heads.begin(), heads.end(), "Bronze medal won: Test") != heads.end());
+    CHECK(w.take_headlines().empty());
     // Won about 1.9 years before the deadline: one whole year early.
     CHECK(w.scenario_score_milli() == 1050);
 }

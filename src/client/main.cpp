@@ -223,6 +223,11 @@ int main(int argc, char* argv[]) {
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
+    bool paper_paused = false; // the newspaper paused the game, and closing it resumes
+    // What happened while the game was set up (rivals founding) goes in the
+    // message history without a newspaper.
+    for (const std::string& n : world.take_news()) tools.log(n, true);
+    (void)world.take_headlines();
     double tick_accumulator = 0.0;
     float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
     bool show_fps = false;    // F12: frames a second, bottom right
@@ -452,11 +457,15 @@ int main(int argc, char* argv[]) {
                 std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
             }
         }
-        // News ticker stand-in: tell the player when the economy turns.
+        // The economy turning makes the front page.
         if (const auto turned = world.take_economy_news()) {
             std::string name = sim::economic_state_name(*turned);
+            for (char& ch : name) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
             const bool better = static_cast<int>(*turned) >= static_cast<int>(sim::EconomicState::Normal);
-            tools.show("The economy is now in " + name, better);
+            const std::string text = "The economy turns: the country is in " + name;
+            tools.show(text, better);
+            tools.log(text, better);
+            if (!tools.newspaper_open()) tools.open_newspaper(text, {});
         }
         // The lists and train paging move the view.
         if (const auto p = tools.take_jump()) cam.center_on(*p);
@@ -472,12 +481,37 @@ int main(int argc, char* argv[]) {
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
             }
         }
-        // Corporate news: splits, grumbling investors, chairmen fired or appointed.
+        // News: splits, grumbling investors, chairmen fired or appointed,
+        // industries opening and closing, scenario news and disasters. All
+        // of it goes in the message history (M); headlines make the paper.
         if (const auto news = world.take_news(); !news.empty()) {
+            const auto bad_news = [](const std::string& n) {
+                for (const char* word : {"voted", "grumbling", "bankruptcy", "closed", "Earthquake", "Sabotage", "no medal"}) {
+                    if (n.find(word) != std::string::npos) return true;
+                }
+                return false;
+            };
             std::string text;
-            for (const std::string& n : news) text += (text.empty() ? "" : "   ") + n;
-            const bool bad = text.find("voted") != std::string::npos || text.find("grumbling") != std::string::npos;
+            bool bad = false;
+            for (const std::string& n : news) {
+                text += (text.empty() ? "" : "   ") + n;
+                bad |= bad_news(n);
+                tools.log(n, !bad_news(n));
+            }
             tools.show(text, !bad);
+        }
+        if (auto heads = world.take_headlines(); !heads.empty()) {
+            const std::string first = heads.front();
+            heads.erase(heads.begin());
+            tools.open_newspaper(first, std::move(heads));
+        }
+        // The newspaper stops the clock while it is read, as RT3's do.
+        if (tools.newspaper_open() && !paper_paused) {
+            paper_paused = speed.speed() != sim::GameSpeed::Paused;
+            if (paper_paused) speed.toggle_pause();
+        } else if (!tools.newspaper_open() && paper_paused) {
+            paper_paused = false;
+            if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause();
         }
 
         cam.terrain = &world.terrain();
