@@ -59,8 +59,8 @@ std::string read_file(const std::string& path) {
 
 } // namespace
 
-Title::Title(std::string data_dir, std::vector<std::pair<std::string, std::string>> slots)
-    : data_dir_(std::move(data_dir)), slots_(std::move(slots)) {
+Title::Title(std::string data_dir, std::string maps_dir, std::vector<std::pair<std::string, std::string>> slots)
+    : maps_dir_(std::move(maps_dir)), data_dir_(std::move(data_dir)), slots_(std::move(slots)) {
     // The scenarios shipped in data/scenarios, in order of their start.
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(data_dir_ + "/scenarios", ec)) {
@@ -72,21 +72,34 @@ Title::Title(std::string data_dir, std::vector<std::pair<std::string, std::strin
             // A broken file is left off the list; the game says why when started from the command line.
         }
     }
-    // Hand-made landscapes: the images in data/maps, named after their files.
-    for (const auto& entry : std::filesystem::directory_iterator(data_dir_ + "/maps", ec)) {
-        if (entry.path().extension() != ".png") continue;
-        std::string name = entry.path().stem().string();
-        std::replace(name.begin(), name.end(), '_', ' ');
-        if (!name.empty()) name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
-        maps_.emplace_back(entry.path().string(), name);
-    }
-    std::sort(maps_.begin(), maps_.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+    scan_maps();
     std::sort(scenarios_.begin(), scenarios_.end(),
               [](const ScenarioInfo& a, const ScenarioInfo& b) { return a.year != b.year ? a.year < b.year : a.name < b.name; });
     seed_ = SDL_GetPerformanceCounter() % 9000 + 1000;
 }
 
+void Title::scan_maps() {
+    // Hand-made landscapes: the images in data/maps and the player's own
+    // maps folder, named after their files.
+    maps_.clear();
+    std::error_code ec;
+    for (const std::string& dir : {data_dir_ + "/maps", maps_dir_}) {
+        if (dir.empty()) continue;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (entry.path().extension() != ".png") continue;
+            std::string name = entry.path().stem().string();
+            std::replace(name.begin(), name.end(), '_', ' ');
+            if (!name.empty()) name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+            maps_.emplace_back(entry.path().string(), name);
+        }
+    }
+    std::sort(maps_.begin(), maps_.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+    landscape_ = std::min(landscape_, static_cast<int>(maps_.size()));
+    editor_from_ = std::min(editor_from_, static_cast<int>(maps_.size()) + 1);
+}
+
 void Title::show() {
+    scan_maps();
     open_ = true;
     page_ = 0;
     sel_ = 0;
@@ -94,7 +107,8 @@ void Title::show() {
 
 int Title::items() const {
     switch (page_) {
-    case 0: return 4;
+    case 0: return 5;
+    case 4: return 3; // map size, start from, open
     case 1: return 7; // map size, rivals, territories, difficulty, landscape, map number, start
     case 2: return static_cast<int>(scenarios_.size());
     default: return static_cast<int>(slots_.size());
@@ -102,6 +116,14 @@ int Title::items() const {
 }
 
 void Title::change(int step) {
+    if (page_ == 4) {
+        if (sel_ == 0) map_size_ = (map_size_ + step + 3) % 3;
+        if (sel_ == 1) {
+            const int n = static_cast<int>(maps_.size()) + 2;
+            editor_from_ = (editor_from_ + step + n) % n;
+        }
+        return;
+    }
     switch (sel_) {
     case 0: map_size_ = (map_size_ + step + 3) % 3; break;
     case 1: rivals_ = std::clamp(rivals_ + step, 0, kMaxRivals); break;
@@ -120,13 +142,26 @@ void Title::change(int step) {
 void Title::choose() {
     switch (page_) {
     case 0:
-        if (sel_ == 3) {
+        if (sel_ == 4) {
             request_ = Request{Request::Kind::Quit, {}, {}};
             return;
         }
         page_ = sel_ + 1;
-        sel_ = page_ == 1 ? 6 : 0;
+        sel_ = page_ == 1 ? 6 : page_ == 4 ? 2 : 0;
         return;
+    case 4: {
+        if (sel_ != 2) {
+            change(+1);
+            return;
+        }
+        Request r{Request::Kind::Editor, {}, {}};
+        r.config.seed = seed_;
+        r.config.set_map_size(static_cast<sim::MapSize>(map_size_));
+        r.flat = editor_from_ == 0;
+        if (editor_from_ >= 2) r.path = maps_[static_cast<std::size_t>(editor_from_ - 2)].first;
+        request_ = r;
+        return;
+    }
     case 1: {
         if (sel_ != 6) {
             change(+1);
@@ -166,10 +201,10 @@ void Title::key(SDL_Keycode key) {
     case SDLK_UP: sel_ = (sel_ + n - 1) % n; return;
     case SDLK_DOWN: sel_ = (sel_ + 1) % n; return;
     case SDLK_LEFT:
-        if (page_ == 1) change(-1);
+        if (page_ == 1 || page_ == 4) change(-1);
         return;
     case SDLK_RIGHT:
-        if (page_ == 1) change(+1);
+        if (page_ == 1 || page_ == 4) change(+1);
         return;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
@@ -234,8 +269,8 @@ void Title::draw(float width, float height, const std::string& build) const {
     std::string foot;
     switch (page_) {
     case 0: {
-        const char* names[] = {"New railroad", "Scenarios", "Load a saved game", "Quit"};
-        for (int i = 0; i < 4; ++i) item(names[i], i == sel_, 380, kScale + 1);
+        const char* names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor", "Quit"};
+        for (int i = 0; i < 5; ++i) item(names[i], i == sel_, 380, kScale + 1);
         foot = "Up/Down and Enter, or click";
         break;
     }
@@ -278,6 +313,33 @@ void Title::draw(float width, float height, const std::string& build) const {
             }
         }
         foot = "Up/Down choose   Enter plays   Esc back";
+        break;
+    }
+    case 4: {
+        heading("Map editor");
+        const std::string from = editor_from_ == 0   ? std::string("Flat land")
+                                 : editor_from_ == 1 ? std::string("Generated hills")
+                                                     : maps_[static_cast<std::size_t>(editor_from_ - 2)].second;
+        const std::string values[] = {kSizes[map_size_], from};
+        const char* labels[] = {"Map size", "Start from"};
+        for (int i = 0; i < 2; ++i) {
+            const float row = y;
+            item(labels[i], i == sel_, 460, kScale);
+            glColor3f(i == sel_ ? 1.0f : 0.85f, i == sel_ ? 0.9f : 0.8f, i == sel_ ? 0.6f : 0.7f);
+            const std::string v = "<  " + values[i] + "  >";
+            draw_text(x0 + 440 - static_cast<float>(text_width(v, kScale)), row, v, kScale);
+        }
+        y += 10;
+        item("Open the editor", sel_ == 2, 460, kScale + 1);
+        y += 14;
+        glColor3f(0.82f, 0.78f, 0.7f);
+        for (const std::string& l : wrap("Shape the land with brushes, paint water, then save the map to play on later, or play "
+                                         "a new railroad on it at once.",
+                                         kScale, 460)) {
+            draw_text(x0, y, l, kScale);
+            y += 19;
+        }
+        foot = "Left/Right change   Enter opens   Esc back";
         break;
     }
     default: {

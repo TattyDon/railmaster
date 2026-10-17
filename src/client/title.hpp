@@ -17,14 +17,16 @@ namespace railmaster::client {
 class Title {
 public:
     struct Request {
-        enum class Kind { NewGame, Scenario, Load, Quit } kind;
+        enum class Kind { NewGame, Scenario, Load, Editor, Quit } kind;
         sim::WorldConfig config{}; // NewGame
-        std::string path;          // Scenario and Load; for NewGame, a landscape image (none: generated)
+        std::string path;          // Scenario and Load; for NewGame and Editor, a landscape image (none: generated)
+        bool flat = false;         // Editor: start from flat land
     };
 
     // `data_dir` holds scenarios/; `slots` are the save files to offer, each
     // with a line saying what it holds ("Empty" when there is none).
-    Title(std::string data_dir, std::vector<std::pair<std::string, std::string>> slots);
+    // `maps_dir`: the player's own maps (the editor saves there), listed with data/maps'.
+    Title(std::string data_dir, std::string maps_dir, std::vector<std::pair<std::string, std::string>> slots);
 
     bool open() const { return open_; }
     void show();
@@ -49,7 +51,10 @@ private:
     void change(int step); // Left/Right on the new-railroad settings
 
     bool open_ = false;
-    int page_ = 0; // 0 the title, 1 new railroad, 2 scenarios, 3 load
+    int page_ = 0; // 0 the title, 1 new railroad, 2 scenarios, 3 load, 4 map editor
+    void scan_maps();
+    std::string maps_dir_;
+    int editor_from_ = 0; // the map editor starts from: 0 flat land, 1 generated, else maps_[n - 2]
     int sel_ = 0;
     std::string data_dir_;
     std::vector<ScenarioInfo> scenarios_;

@@ -1,12 +1,15 @@
 find_package(SDL2 REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(ZLIB REQUIRED) # PNG maps from the map editor
 
 add_executable(railmaster
     audio.cpp
     camera.cpp
+    editor.cpp
     font.cpp
     main.cpp
     model.cpp
+    png.cpp
     render.cpp
     shading.cpp
     third_party_impl.cpp
@@ -39,6 +42,7 @@ target_link_libraries(railmaster PRIVATE
     railmaster::sim
     SDL2::SDL2
     OpenGL::GL
+    ZLIB::ZLIB
     railmaster_warnings)
 
 # Lets the client run straight from the build tree; pass a path to override.

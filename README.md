@@ -89,8 +89,17 @@ there):
   or Option (Alt) + Up/Down; arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 
-Hand-made maps: any PNG in `data/maps/` appears under Landscape on the
-title screen. Brightness is height (black low, white the highest hills),
+Map editor (title screen, Map editor): start from flat land, generated
+hills or any map, then shape it with brushes: 1 Raise, 2 Lower, 3 Smooth,
+4 Flatten (to the height where the stroke began), 5 Water, 6 Land, with
+`[` `]` for the brush size and left-drag to apply; the arrows, wheel and
+right-drag move the view as in the game. S saves it as a map in your own
+folder (`maps/` beside your saved games), where the title screen finds
+it; P starts a new railroad on it at once; Esc leaves (asking first if it
+is not saved).
+
+Hand-made maps: any PNG in `data/maps/` (or saved by the editor) appears
+under Landscape on the title screen. Brightness is height (black low, white the highest hills),
 and blue, or near-black, is water; the image is stretched over the chosen
 map size, and towns and industries are placed on its dry land. Draw one in
 any image editor, or see `tools/maps/make_maps.py`, which drew the three

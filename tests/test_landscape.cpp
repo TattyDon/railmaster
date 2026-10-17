@@ -87,3 +87,19 @@ TEST_CASE("a world on a hand-made landscape keeps its heights and water, places 
     CHECK(back.terrain().corner_height(cfg.width_tiles, 100) == t.corner_height(cfg.width_tiles, 100));
     CHECK(back.terrain().ground(0, 100) == GroundType::Water);
 }
+
+TEST_CASE("a terrain gives back its landscape, which makes the same terrain again") {
+    Terrain t(8, 6, 805);
+    t.apply(flat_landscape(8, 6, 50));
+    t.set_corner_height(3, 2, 120);
+    t.set_ground(5, 4, GroundType::Water);
+    const Landscape l = landscape_of(t);
+    CHECK(l.corners[static_cast<std::size_t>(2 * 9 + 3)] == 120);
+    CHECK(l.corners[0] == 50);
+    CHECK(l.water[static_cast<std::size_t>(4 * 8 + 5)] == 1);
+    Terrain again(8, 6, 805);
+    again.apply(l);
+    CHECK(again.corner_height(3, 2) == 120);
+    CHECK(again.ground(5, 4) == GroundType::Water);
+    CHECK(again.ground(4, 4) == GroundType::Grass);
+}

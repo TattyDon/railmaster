@@ -38,6 +38,12 @@ struct Landscape {
 Landscape landscape_from_image(const std::uint8_t* rgb, std::int32_t image_w, std::int32_t image_h, std::int32_t map_w,
                                std::int32_t map_h, std::int32_t max_height_m, std::int32_t sea_level);
 
+class Terrain;
+// A terrain's heights and water, as a landscape (to play on, or save as a map).
+Landscape landscape_of(const Terrain& t);
+// A flat landscape of dry land, `metres` high (the map editor's blank page).
+Landscape flat_landscape(std::int32_t width, std::int32_t height, std::int32_t metres);
+
 // Heightfield terrain. Heights are sampled at tile *corners*, so a map of
 // W x H tiles has (W+1) x (H+1) height samples. Heights are whole metres
 // to keep slope computation in integer arithmetic.

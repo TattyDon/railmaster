@@ -239,6 +239,28 @@ Landscape landscape_from_image(const std::uint8_t* rgb, std::int32_t image_w, st
     return l;
 }
 
+Landscape landscape_of(const Terrain& t) {
+    Landscape l;
+    l.width = t.width();
+    l.height = t.height();
+    l.corners.reserve(static_cast<std::size_t>(t.width() + 1) * static_cast<std::size_t>(t.height() + 1));
+    for (std::int32_t cy = 0; cy <= t.height(); ++cy)
+        for (std::int32_t cx = 0; cx <= t.width(); ++cx) l.corners.push_back(t.corner_height(cx, cy));
+    l.water.reserve(static_cast<std::size_t>(t.width()) * static_cast<std::size_t>(t.height()));
+    for (std::int32_t ty = 0; ty < t.height(); ++ty)
+        for (std::int32_t tx = 0; tx < t.width(); ++tx) l.water.push_back(t.ground(tx, ty) == GroundType::Water ? 1 : 0);
+    return l;
+}
+
+Landscape flat_landscape(std::int32_t width, std::int32_t height, std::int32_t metres) {
+    Landscape l;
+    l.width = width;
+    l.height = height;
+    l.corners.assign(static_cast<std::size_t>(width + 1) * static_cast<std::size_t>(height + 1), metres);
+    l.water.assign(static_cast<std::size_t>(width) * static_cast<std::size_t>(height), 0);
+    return l;
+}
+
 void Terrain::apply(const Landscape& l) {
     if (l.width != width_ || l.height != height_) throw std::invalid_argument("landscape: not this map's size");
     for (std::int32_t cy = 0; cy <= height_; ++cy) {

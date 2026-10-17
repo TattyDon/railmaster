@@ -351,8 +351,10 @@ Still to do:
 - Map editor with heightmap import. Started: hand-made landscapes from
   heightmap images (`data/maps`, chosen on the title screen or with
   `--landscape`; brightness is height, blue is water), kept in saves.
-  Still to come: editing in the game (raising and lowering land, water,
-  towns, industries, territories) and saving maps.
+  The map editor (title screen) shapes land with raise, lower, smooth
+  and flatten brushes, paints water and land, saves maps as heightmap
+  images and plays a railroad on them. Still to come: placing towns,
+  industries and territories by hand, and scenarios made in the editor.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

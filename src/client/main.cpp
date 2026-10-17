@@ -16,6 +16,8 @@
 
 #include "audio.hpp"
 #include "build_info.hpp"
+#include "editor.hpp"
+#include "png.hpp"
 #include "title.hpp"
 #include "font.hpp"
 #include "model.hpp"
@@ -33,6 +35,7 @@
 #include <stb_image.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <new>
 #include <cctype>
 #include <cmath>
@@ -87,6 +90,27 @@ std::optional<sim::Landscape> read_landscape(const std::string& path, const sim:
     }
     stbi_image_free(px);
     return l;
+}
+
+// A map as a heightmap image, the format read_landscape takes back: a pixel
+// a cell, its brightness the cell's height and water blue.
+bool save_map_image(const sim::Terrain& t, std::int32_t max_height_m, const std::string& path) {
+    std::vector<std::uint8_t> rgb;
+    rgb.reserve(static_cast<std::size_t>(t.width()) * static_cast<std::size_t>(t.height()) * 3);
+    for (std::int32_t y = 0; y < t.height(); ++y) {
+        for (std::int32_t x = 0; x < t.width(); ++x) {
+            if (t.ground(x, y) == sim::GroundType::Water) {
+                rgb.insert(rgb.end(), {40, 80, 190});
+                continue;
+            }
+            const std::int64_t h = (std::int64_t{t.corner_height(x, y)} + t.corner_height(x + 1, y) + t.corner_height(x, y + 1) +
+                                    t.corner_height(x + 1, y + 1)) / 4;
+            // Dry land stays above the sea line (24 of 255) however low it lies.
+            const auto grey = static_cast<std::uint8_t>(std::clamp<std::int64_t>(h * 255 / std::max(1, max_height_m), 26, 255));
+            rgb.insert(rgb.end(), {grey, grey, grey});
+        }
+    }
+    return client::write_png(path, t.width(), t.height(), rgb);
 }
 
 int main(int argc, char* argv[]) {
@@ -333,7 +357,15 @@ int main(int argc, char* argv[]) {
         }
         return slots;
     };
-    client::Title title(data_dir, save_slots());
+    // The player's own maps, which the map editor saves.
+    std::string maps_dir;
+    if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+        maps_dir = std::string(pref) + "maps";
+        SDL_free(pref);
+    }
+    client::Title title(data_dir, maps_dir, save_slots());
+    client::Editor editor(world, cam);
+    std::string editor_path; // where the map being edited was last saved
     if (title_at_start) {
         title.show();
         speed.toggle_pause(); // the railway behind the title runs
@@ -366,6 +398,43 @@ int main(int argc, char* argv[]) {
         if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
         if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause(); // every game starts paused [D]
         modal_paused = false;
+        title.hide();
+    };
+    // The map editor: a map with nothing on it yet, to shape and save.
+    const auto start_editor = [&](const client::Title::Request& req) {
+        sim::WorldConfig cfg = req.config;
+        cfg.rivals = 0;
+        cfg.populate = false;
+        cfg.found_player_company = false;
+        cfg.industries_appear = false;
+        cfg.town_growth = false;
+        cfg.business_cycle = false;
+        sim::GameData d = load_game_data(data_dir);
+        const std::int32_t max_h = d.balance.map.max_height_m;
+        std::string name = "New map";
+        if (req.flat) cfg.landscape = sim::flat_landscape(cfg.width_tiles, cfg.height_tiles, max_h / 6);
+        else if (!req.path.empty()) {
+            cfg.landscape = read_landscape(req.path, cfg, max_h);
+            name = std::filesystem::path(req.path).stem().string();
+        }
+        try {
+            world = sim::World(cfg, std::move(d));
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "Map editor: %s\n", e.what());
+            return;
+        }
+        const client::Tools::Settings kept = tools.settings();
+        tools.~Tools();
+        new (&tools) client::Tools(world, cam);
+        tools.settings() = kept;
+        look_at_biggest_town();
+        cam.distance = static_cast<float>(std::max(world.terrain().width(), world.terrain().height())) * 0.45f;
+        if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+        modal_paused = false;
+        (void)world.take_news();
+        (void)world.take_headlines();
+        editor_path.clear();
+        editor.begin(name, max_h);
         title.hide();
     };
     // What happened while the game was set up (rivals founding) goes in the
@@ -417,6 +486,22 @@ int main(int argc, char* argv[]) {
                 }
                 if (ev.type == SDL_MOUSEWHEEL || ev.type == SDL_MULTIGESTURE || ev.type == SDL_MOUSEBUTTONDOWN ||
                     ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEMOTION) {
+                    continue;
+                }
+            }
+            // The map editor takes the keys (the arrows and the mouse still move the view).
+            if (editor.open() && !title.open()) {
+                if (ev.type == SDL_KEYDOWN && editor.key(ev.key.keysym.sym)) continue;
+                if (ev.type == SDL_KEYDOWN && (ev.key.keysym.mod & KMOD_CTRL) != 0) continue; // no saving or loading games
+                if (ev.type == SDL_MOUSEBUTTONDOWN && editor.mouse_down(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y),
+                                                                        ev.button.button)) {
+                    continue;
+                }
+                if (ev.type == SDL_MOUSEBUTTONUP) editor.mouse_up(ev.button.button);
+                if (ev.type == SDL_MOUSEMOTION) editor.mouse_move(static_cast<float>(ev.motion.x), static_cast<float>(ev.motion.y));
+                if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_RIGHT) continue;
+                if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym != SDLK_v && ev.key.keysym.sym != SDLK_n &&
+                    ev.key.keysym.sym != SDLK_F12) {
                     continue;
                 }
             }
@@ -592,6 +677,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        if (editor.open() && !title.open()) editor.update(dt);
         frame_ms += (dt * 1000.0 - frame_ms) * 0.05;
         if (tools.take_settings_changed()) {
             // From the menu's Settings page: a fixed time of day takes effect at once.
@@ -717,7 +803,45 @@ int main(int argc, char* argv[]) {
                 modal_paused = false;
                 title.hide();
                 break;
+            case client::Title::Request::Kind::Editor: start_editor(*req); break;
             case client::Title::Request::Kind::Quit: running = false; break;
+            }
+        }
+        // The map editor's requests.
+        if (const auto req = editor.take_request()) {
+            const std::int32_t max_h = world.data().balance.map.max_height_m;
+            switch (req->kind) {
+            case client::Editor::Request::Kind::Save: {
+                if (editor_path.empty()) {
+                    // A new name in the player's maps folder: my_map_1.png, my_map_2.png, ...
+                    std::error_code ec;
+                    std::filesystem::create_directories(maps_dir, ec);
+                    for (int n = 1; editor_path.empty() || std::filesystem::exists(editor_path); ++n) {
+                        editor_path = maps_dir + "/my_map_" + std::to_string(n) + ".png";
+                    }
+                }
+                if (save_map_image(world.terrain(), max_h, editor_path)) editor.saved(editor_path);
+                else std::fprintf(stderr, "Cannot write %s\n", editor_path.c_str());
+                break;
+            }
+            case client::Editor::Request::Kind::Play: {
+                // A new railroad on the map as it stands.
+                sim::WorldConfig cfg;
+                cfg.width_tiles = world.terrain().width();
+                cfg.height_tiles = world.terrain().height();
+                cfg.seed = world.config().seed;
+                cfg.rivals = 3;
+                cfg.found_player_company = false;
+                cfg.landscape = sim::landscape_of(world.terrain());
+                editor.end();
+                start_world(cfg);
+                break;
+            }
+            case client::Editor::Request::Kind::Leave:
+                editor.end();
+                title.set_slots(save_slots());
+                title.show();
+                break;
             }
         }
         // The newspaper and the menu stop the clock while open, as RT3's do.
@@ -830,7 +954,8 @@ int main(int argc, char* argv[]) {
         client::draw_analysis_overlay(world, tools.map_overlay(), cam);
         client::draw_smoke(cam, smoke_clock);
         client::draw_lights(cam);
-        tools.draw_world_overlay();
+        if (editor.open()) editor.draw_world_overlay();
+        else tools.draw_world_overlay();
         if (shaded) client::shading::end_world();
         glDisable(GL_FOG);
         glDisable(GL_DEPTH_TEST);
@@ -852,7 +977,8 @@ int main(int argc, char* argv[]) {
             continue;
         }
         if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
-        tools.draw_ui(status);
+        if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
+        else tools.draw_ui(status);
         // Which build this is, bottom right above the hint bar, so players
         // can tell whether they are on the latest commit.
         {
