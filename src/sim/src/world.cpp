@@ -130,8 +130,15 @@ World::World(const WorldConfig& config, GameData data)
     }
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
+        std::vector<std::pair<IndustryTypeId, std::pair<std::int32_t, std::int32_t>>> fixed_sites;
+        const std::int32_t k = economy_.cells_per_node();
+        for (const MapIndustry& m : config.industries) {
+            const auto type = data_.industries.find(m.type);
+            if (!type) throw std::invalid_argument("map: no industry type \"" + m.type + "\"");
+            fixed_sites.push_back({*type, {m.x / k, m.y / k}});
+        }
         populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns,
-                         /*fill_towns=*/config.towns.empty());
+                         /*fill_towns=*/config.towns.empty(), fixed_sites);
         // Territories go down once the towns are placed, before trade starts across them.
         if (config.territories > 0) make_territories(config.territories);
         // History, so the map starts with prices and cargo in place.

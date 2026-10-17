@@ -122,3 +122,24 @@ TEST_CASE("a hand-made map's towns are its only towns, placed where they were pu
     CHECK(back.config().towns.size() == 2);
     CHECK(back.economy().towns()[1].name == "Bexley Wharf");
 }
+
+TEST_CASE("a hand-made map's industries are its only industries, placed where they were put") {
+    WorldConfig cfg;
+    cfg.seed = 6;
+    cfg.rivals = 0;
+    cfg.landscape = flat_landscape(cfg.width_tiles, cfg.height_tiles, 60);
+    cfg.towns = {{"Ashcombe", 40, 50, 25}};
+    cfg.industries = {{"coal_mine", 100, 100}, {"steel_mill", 160, 100}};
+    World w(cfg, shipped());
+    const std::int32_t k = w.economy().cells_per_node();
+    std::vector<std::string> kinds;
+    for (const Site& s : w.economy().sites()) {
+        const IndustryType& t = w.data().industries.get(s.type);
+        if (t.kind == IndustryKind::House) continue;
+        kinds.push_back(t.key);
+        if (t.key == "coal_mine") CHECK((s.cx == 100 / k && s.cy == 100 / k));
+    }
+    CHECK(kinds == std::vector<std::string>{"coal_mine", "steel_mill"});
+    cfg.industries = {{"no_such_works", 10, 10}};
+    CHECK_THROWS_AS(World(cfg, shipped()), std::invalid_argument);
+}

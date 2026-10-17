@@ -16,8 +16,8 @@ namespace {
 constexpr int kScale = 2;
 constexpr double kPi = 3.14159265358979;
 constexpr float kBarH = 22.0f, kToolbarY = 26.0f, kButtonH = 22.0f, kBottomH = 44.0f;
-constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land", "7 Town"};
-constexpr int kBrushes = 7;
+constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land", "7 Town", "8 Industry"};
+constexpr int kBrushes = 8;
 // Town sizes, in houses: village to city.
 constexpr std::int32_t kTownSizes[] = {8, 15, 25, 40, 60};
 
@@ -82,7 +82,16 @@ bool Editor::key(SDL_Keycode key) {
     case SDLK_4:
     case SDLK_5:
     case SDLK_6:
-    case SDLK_7: brush_ = static_cast<Brush>(key - SDLK_1); return true;
+    case SDLK_7:
+    case SDLK_8: brush_ = static_cast<Brush>(key - SDLK_1); return true;
+    case SDLK_COMMA:
+    case SDLK_PERIOD: {
+        // The industry the brush puts down: the previous or next type.
+        const std::size_t n = placeable().size();
+        if (n > 0) industry_type_ = (industry_type_ + (key == SDLK_PERIOD ? 1 : n - 1)) % n;
+        brush_ = Brush::Industry;
+        return true;
+    }
     case SDLK_LEFTBRACKET: radius_ = std::max(1, radius_ - 1); return true;
     case SDLK_RIGHTBRACKET: radius_ = std::min(40, radius_ + 1); return true;
     case SDLK_s: request_ = Request{Request::Kind::Save}; return true;
@@ -112,6 +121,10 @@ bool Editor::mouse_down(float sx, float sy, int button) {
     mouse_move(sx, sy);
     if (brush_ == Brush::Town) {
         town_click();
+        return true;
+    }
+    if (brush_ == Brush::Industry) {
+        industry_click();
         return true;
     }
     town_sel_.reset();
@@ -144,6 +157,41 @@ void Editor::town_click() {
     towns_.push_back({name, cx, cy, kTownSizes[2]});
     town_sel_ = towns_.size() - 1;
     fresh_name_ = true;
+    dirty_ = true;
+}
+
+std::vector<const sim::IndustryType*> Editor::placeable() const {
+    // Every industry but houses (towns place those), in the data's order.
+    std::vector<const sim::IndustryType*> out;
+    for (const sim::IndustryType& t : world_.data().industries.all()) {
+        if (t.kind != sim::IndustryKind::House) out.push_back(&t);
+    }
+    return out;
+}
+
+void Editor::industry_click() {
+    const sim::Terrain& t = world_.terrain();
+    const double tile_mm = t.tile_size_m() * 1000.0;
+    const auto cx = static_cast<std::int32_t>(static_cast<double>(hover_.x_mm) / tile_mm);
+    const auto cy = static_cast<std::int32_t>(static_cast<double>(hover_.y_mm) / tile_mm);
+    if (cx < 0 || cy < 0 || cx >= t.width() || cy >= t.height()) return;
+    town_sel_.reset();
+    // A click on an industry removes it; elsewhere it puts one down.
+    for (std::size_t i = 0; i < industries_.size(); ++i) {
+        if (std::abs(industries_[i].x - cx) <= 2 && std::abs(industries_[i].y - cy) <= 2) {
+            industries_.erase(industries_.begin() + static_cast<std::ptrdiff_t>(i));
+            dirty_ = true;
+            return;
+        }
+    }
+    const auto types = placeable();
+    if (types.empty()) return;
+    if (t.ground(cx, cy) == sim::GroundType::Water) {
+        message_ = "Industries stand on dry land";
+        message_until_ = SDL_GetTicks() + 2500;
+        return;
+    }
+    industries_.push_back({types[industry_type_ % types.size()]->key, cx, cy});
     dirty_ = true;
 }
 
@@ -192,7 +240,7 @@ void Editor::apply(float seconds) {
         const double k = 1 - d * d;
         return k * k;
     };
-    if (brush_ == Brush::Town) return;
+    if (brush_ == Brush::Town || brush_ == Brush::Industry) return;
     if (brush_ == Brush::Water || brush_ == Brush::Land) {
         for (int y = ya; y < yb; ++y) {
             for (int x = x0; x < x1; ++x) {
@@ -247,7 +295,11 @@ void Editor::draw_world_overlay() const {
         const bool sel = town_sel_ && *town_sel_ == i;
         draw_marker(p, cam_, sel ? 9.0f : 6.0f, 1.0f, sel ? 0.95f : 0.8f, sel ? 0.6f : 0.35f);
     }
-    if (brush_ == Brush::Town) {
+    for (const sim::MapIndustry& m : industries_) {
+        const sim::MapPoint p{static_cast<std::int64_t>((m.x + 0.5) * tile_mm), static_cast<std::int64_t>((m.y + 0.5) * tile_mm)};
+        draw_marker(p, cam_, 5.0f, 0.55f, 0.8f, 1.0f);
+    }
+    if (brush_ == Brush::Town || brush_ == Brush::Industry) {
         draw_marker(hover_, cam_, 4, 1.0f, 0.85f, 0.4f);
         return;
     }
@@ -286,16 +338,37 @@ void Editor::draw_ui(float width, float height) const {
         x += w + 3;
     }
     glColor3f(0.92f, 0.88f, 0.8f);
-    const std::string brush = brush_ == Brush::Town ? std::string("Click land to found a town, or a town to pick it")
-                                                    : "Brush " + std::to_string(radius_) + " cells  ([ ] to change)";
+    std::string brush = "Brush " + std::to_string(radius_) + " cells  ([ ] to change)";
+    if (brush_ == Brush::Town) brush = "Click land to found a town, or a town to pick it";
+    if (brush_ == Brush::Industry) {
+        const auto types = placeable();
+        brush = "< " + (types.empty() ? std::string("none") : types[industry_type_ % types.size()]->name) +
+                " >  (, and . to choose)   click to place, click one to remove";
+    }
     draw_text(x + 14, kToolbarY + 4, brush, kScale);
 
     ui::bar(0, height - kBottomH, width, height, false);
     glColor3f(0.85f, 0.85f, 0.85f);
     draw_text(8, height - kBottomH + 6,
               town_sel_ ? "Type the town's name   [ ] smaller or larger   Delete removes it   Enter done"
-                        : "Left-drag shapes the land.  1-7 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
+                        : "Left-drag shapes the land.  1-8 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
               kScale);
+    // The industries' names, close up.
+    if (cam_.distance < 70.0f) {
+        for (const sim::MapIndustry& m : industries_) {
+            float sx = 0, sy = 0;
+            cam_.to_screen({static_cast<std::int64_t>((m.x + 0.5) * t.tile_size_m() * 1000.0),
+                            static_cast<std::int64_t>((m.y + 0.5) * t.tile_size_m() * 1000.0)},
+                           sx, sy);
+            if (sx < -100 || sy < 40 || sx > width + 100 || sy > height - kBottomH) continue;
+            const auto type = world_.data().industries.find(m.type);
+            const std::string label = type ? world_.data().industries.get(*type).name : m.type;
+            const auto w = static_cast<float>(text_width(label, kScale));
+            ui::chip(sx - w / 2 - 5, sy + 8, sx + w / 2 + 5, sy + 26, 0.5f);
+            glColor3f(0.75f, 0.88f, 1.0f);
+            draw_text(sx - w / 2, sy + 10, label, kScale);
+        }
+    }
     // The towns' names, on chips over their places.
     const double cell_mm = t.tile_size_m() * 1000.0;
     for (std::size_t i = 0; i < towns_.size(); ++i) {

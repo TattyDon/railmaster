@@ -95,8 +95,12 @@ hills or any map, then shape it with brushes: 1 Raise, 2 Lower, 3 Smooth,
 `[` `]` for the brush size and left-drag to apply; and 7 Town: click land
 to found a town (it gets a name; type to rename it, `[` `]` make it a
 village up to a city, Delete removes it, Enter is done), or click a town
-to pick it. A map with towns of its own has those towns and no others;
-they are kept beside its image as a `.json` file; the arrows, wheel and
+to pick it; and 8 Industry: `,` and `.` choose which (coal mine, steel
+mill, port, ...), a click on dry land places one, a click on one removes
+it. A map with towns of its own has those towns and no others, and
+likewise its industries (with none placed, the usual random ones and
+ports go down); both are kept beside its image as a `.json` file, and a
+map from your own folder is saved back over itself; the arrows, wheel and
 right-drag move the view as in the game. S saves it as a map in your own
 folder (`maps/` beside your saved games), where the title screen finds
 it; P starts a new railroad on it at once; Esc leaves (asking first if it

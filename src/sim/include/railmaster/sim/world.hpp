@@ -79,6 +79,9 @@ struct WorldConfig {
     // A hand-made map's towns, placed in the map editor (map cells): when
     // there are any, the map has these towns and no others.
     std::vector<ScenarioTown> towns{};
+    // Its industries likewise: when there are any, the map has these and
+    // no others (no random industries or ports).
+    std::vector<MapIndustry> industries{};
 };
 
 // The config for playing a scenario: its seed, start, map size, rivals,

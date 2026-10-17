@@ -846,7 +846,8 @@ std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& carg
 
 void populate_economy(Economy& economy, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b,
-                      const std::vector<PlacedTown>& fixed_towns, bool fill_towns) {
+                      const std::vector<PlacedTown>& fixed_towns, bool fill_towns,
+                      const std::vector<std::pair<IndustryTypeId, std::pair<std::int32_t, std::int32_t>>>& fixed_sites) {
     const Balance::MapGeneration& mg = b.map;
     const std::int32_t w = economy.width(), h = economy.height();
     const auto land = [&](std::int32_t x, std::int32_t y) {
@@ -909,6 +910,17 @@ void populate_economy(Economy& economy, const CargoRegistry& cargo,
             add_town(std::move(name), cx, cy, rng.between(mg.town_min_houses, mg.town_max_houses));
             break;
         }
+    }
+
+    // Industries placed by hand: these and no others.
+    if (!fixed_sites.empty()) {
+        for (const auto& [type, at] : fixed_sites) {
+            const auto [x, y] = at;
+            if (!land(x, y) || taken[idx(x, y)]) continue;
+            economy.add_site(industries, type, x, y);
+            taken[idx(x, y)] = true;
+        }
+        return;
     }
 
     // Industries, in the map's usual numbers.

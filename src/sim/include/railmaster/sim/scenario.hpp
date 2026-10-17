@@ -22,6 +22,13 @@ struct ScenarioTown {
     std::int32_t houses = 20;
 };
 
+// An industry placed by hand on a map (the map editor): its type's key
+// ("coal_mine") and its place in map cells.
+struct MapIndustry {
+    std::string type;
+    std::int32_t x = 0, y = 0;
+};
+
 // One goal (rt3-clone-spec §14.3 [I]). Which fields matter depends on kind.
 enum class GoalKind : std::uint8_t {
     ConnectTowns,      // towns: each served by a station of yours, all joined by track

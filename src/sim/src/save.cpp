@@ -25,14 +25,15 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 15; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 16; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
                                            // 12: train profits, station income and track traffic by month;
                                            // 13: each train's accounts this year and last;
                                            // 14: a hand-made landscape in the config;
-                                           // 15: a hand-made map's towns in the config
+                                           // 15: a hand-made map's towns in the config;
+                                           // 16: and its industries
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -401,6 +402,10 @@ void io(Ar& ar, Rival& r) {
 // --- Scenarios ---
 
 template <class Ar>
+void io(Ar& ar, MapIndustry& m) {
+    fields(ar, m.type, m.x, m.y);
+}
+template <class Ar>
 void io(Ar& ar, ScenarioTown& t) {
     fields(ar, t.name, t.x, t.y, t.houses);
 }
@@ -598,7 +603,7 @@ void io(Ar& ar, WorldConfig& c) {
     fields(ar, c.seed, c.start_date, c.width_tiles, c.height_tiles, c.tile_size_m, c.cells_per_node, c.sandbox,
            c.found_player_company, c.founding, c.starting_cash, c.populate, c.difficulty, c.business_cycle, c.rivals);
     fields(ar, c.chairman_can_be_fired, c.chairman_can_resign, c.town_growth, c.industries_appear, c.territories,
-           c.rival_ai, c.scenario, c.landscape, c.towns);
+           c.rival_ai, c.scenario, c.landscape, c.towns, c.industries);
 }
 template <class Ar>
 void io(Ar& ar, Landscape& l) {

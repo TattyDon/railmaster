@@ -114,37 +114,50 @@ bool save_map_image(const sim::Terrain& t, std::int32_t max_height_m, const std:
     return client::write_png(path, t.width(), t.height(), rgb);
 }
 
-// A map's towns, kept beside its image as NAME.json: the map's size and,
-// for each town, its name, place (map cells) and houses. Read for a map of
-// another size, the places are stretched to fit.
-std::vector<sim::ScenarioTown> read_map_towns(const std::string& image, const sim::WorldConfig& cfg) {
+// A map's towns and industries, kept beside its image as NAME.json: the
+// map's size; for each town its name, place (map cells) and houses; for
+// each industry its type and place. Read for a map of another size, the
+// places are stretched to fit.
+struct MapExtras {
     std::vector<sim::ScenarioTown> towns;
+    std::vector<sim::MapIndustry> industries;
+};
+
+MapExtras read_map_extras(const std::string& image, const sim::WorldConfig& cfg) {
+    MapExtras m;
     std::ifstream in(std::filesystem::path(image).replace_extension(".json"));
-    if (!in) return towns;
+    if (!in) return m;
     try {
         const nlohmann::json doc = nlohmann::json::parse(in);
         const std::int32_t w = std::max(1, doc.value("width", cfg.width_tiles)), h = std::max(1, doc.value("height", cfg.height_tiles));
+        const auto fit_x = [&](const nlohmann::json& j) {
+            return std::clamp(static_cast<std::int32_t>(std::int64_t{j.value("x", 0)} * cfg.width_tiles / w), 0, cfg.width_tiles - 1);
+        };
+        const auto fit_y = [&](const nlohmann::json& j) {
+            return std::clamp(static_cast<std::int32_t>(std::int64_t{j.value("y", 0)} * cfg.height_tiles / h), 0, cfg.height_tiles - 1);
+        };
         for (const auto& t : doc.value("towns", nlohmann::json::array())) {
-            const auto x = static_cast<std::int32_t>(std::int64_t{t.value("x", 0)} * cfg.width_tiles / w);
-            const auto y = static_cast<std::int32_t>(std::int64_t{t.value("y", 0)} * cfg.height_tiles / h);
-            towns.push_back({t.value("name", std::string("Unnamed")), std::clamp(x, 0, cfg.width_tiles - 1),
-                             std::clamp(y, 0, cfg.height_tiles - 1), std::clamp(t.value("houses", 25), 1, 200)});
+            m.towns.push_back({t.value("name", std::string("Unnamed")), fit_x(t), fit_y(t), std::clamp(t.value("houses", 25), 1, 200)});
+        }
+        for (const auto& i : doc.value("industries", nlohmann::json::array())) {
+            m.industries.push_back({i.value("type", std::string()), fit_x(i), fit_y(i)});
         }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "%s: %s\n", image.c_str(), e.what());
     }
-    return towns;
+    return m;
 }
 
-bool write_map_towns(const std::string& image, std::int32_t width, std::int32_t height, const std::vector<sim::ScenarioTown>& towns) {
+bool write_map_extras(const std::string& image, std::int32_t width, std::int32_t height, const MapExtras& m) {
     const auto path = std::filesystem::path(image).replace_extension(".json");
-    if (towns.empty()) {
+    if (m.towns.empty() && m.industries.empty()) {
         std::error_code ec;
         std::filesystem::remove(path, ec);
         return true;
     }
-    nlohmann::json doc = {{"width", width}, {"height", height}, {"towns", nlohmann::json::array()}};
-    for (const sim::ScenarioTown& t : towns) doc["towns"].push_back({{"name", t.name}, {"x", t.x}, {"y", t.y}, {"houses", t.houses}});
+    nlohmann::json doc = {{"width", width}, {"height", height}, {"towns", nlohmann::json::array()}, {"industries", nlohmann::json::array()}};
+    for (const sim::ScenarioTown& t : m.towns) doc["towns"].push_back({{"name", t.name}, {"x", t.x}, {"y", t.y}, {"houses", t.houses}});
+    for (const sim::MapIndustry& i : m.industries) doc["industries"].push_back({{"type", i.type}, {"x", i.x}, {"y", i.y}});
     std::ofstream out(path);
     out << doc.dump(1) << "\n";
     return static_cast<bool>(out);
@@ -200,7 +213,9 @@ int main(int argc, char* argv[]) {
     config.territories = territories;
     if (!landscape_path.empty()) {
         config.landscape = read_landscape(landscape_path, config, data.balance.map.max_height_m);
-        config.towns = read_map_towns(landscape_path, config);
+        MapExtras extras = read_map_extras(landscape_path, config);
+        config.towns = std::move(extras.towns);
+        config.industries = std::move(extras.industries);
     }
     if (!scenario_path.empty()) {
         try {
@@ -457,7 +472,7 @@ int main(int argc, char* argv[]) {
             cfg.landscape = read_landscape(req.path, cfg, max_h);
             name = std::filesystem::path(req.path).stem().string();
         }
-        const std::vector<sim::ScenarioTown> towns = req.path.empty() ? std::vector<sim::ScenarioTown>{} : read_map_towns(req.path, cfg);
+        const MapExtras extras = req.path.empty() ? MapExtras{} : read_map_extras(req.path, cfg);
         try {
             world = sim::World(cfg, std::move(d));
         } catch (const std::exception& e) {
@@ -474,9 +489,16 @@ int main(int argc, char* argv[]) {
         modal_paused = false;
         (void)world.take_news();
         (void)world.take_headlines();
+        // A map of the player's own is saved back where it came from; the
+        // shipped maps and new ones are saved as new maps.
         editor_path.clear();
+        if (!req.path.empty() && !maps_dir.empty() &&
+            std::filesystem::path(req.path).parent_path() == std::filesystem::path(maps_dir)) {
+            editor_path = req.path;
+        }
         editor.begin(name, max_h);
-        editor.set_towns(towns);
+        editor.set_towns(extras.towns);
+        editor.set_industries(extras.industries);
         title.hide();
     };
     // What happened while the game was set up (rivals founding) goes in the
@@ -830,7 +852,9 @@ int main(int argc, char* argv[]) {
                 sim::WorldConfig cfg = req->config;
                 if (!req->path.empty()) {
                     cfg.landscape = read_landscape(req->path, cfg, load_game_data(data_dir).balance.map.max_height_m);
-                    cfg.towns = read_map_towns(req->path, cfg);
+                    MapExtras extras = read_map_extras(req->path, cfg);
+                    cfg.towns = std::move(extras.towns);
+                    cfg.industries = std::move(extras.industries);
                 }
                 start_world(cfg);
                 break;
@@ -868,7 +892,8 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 if (save_map_image(world.terrain(), max_h, editor_path) &&
-                    write_map_towns(editor_path, world.terrain().width(), world.terrain().height(), editor.towns())) {
+                    write_map_extras(editor_path, world.terrain().width(), world.terrain().height(),
+                                     MapExtras{editor.towns(), editor.industries()})) {
                     editor.saved(editor_path);
                 }
                 else std::fprintf(stderr, "Cannot write %s\n", editor_path.c_str());
@@ -884,6 +909,7 @@ int main(int argc, char* argv[]) {
                 cfg.found_player_company = false;
                 cfg.landscape = sim::landscape_of(world.terrain());
                 cfg.towns = editor.towns();
+                cfg.industries = editor.industries();
                 editor.end();
                 start_world(cfg);
                 break;

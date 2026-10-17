@@ -17,7 +17,7 @@ namespace railmaster::client {
 // towns, industries or companies; the camera keys work as in the game.
 class Editor {
 public:
-    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town };
+    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town, Industry };
     struct Request {
         enum class Kind { Save, Play, Leave } kind;
     };
@@ -34,6 +34,9 @@ public:
     // The map's towns, in map cells (the Town brush places, names and sizes them).
     const std::vector<sim::ScenarioTown>& towns() const { return towns_; }
     void set_towns(std::vector<sim::ScenarioTown> towns) { towns_ = std::move(towns); }
+    // Its industries (the Industry brush places and removes them).
+    const std::vector<sim::MapIndustry>& industries() const { return industries_; }
+    void set_industries(std::vector<sim::MapIndustry> industries) { industries_ = std::move(industries); }
     // Typed text (SDL_TEXTINPUT), for a town's name.
     void text(const char* utf8);
 
@@ -51,6 +54,10 @@ public:
 private:
     void apply(float seconds);
     void town_click();
+    void industry_click();
+    std::vector<sim::MapIndustry> industries_;
+    std::size_t industry_type_ = 0; // which of the placeable types the brush puts down
+    std::vector<const sim::IndustryType*> placeable() const;
     std::vector<sim::ScenarioTown> towns_;
     std::optional<std::size_t> town_sel_{}; // the town being named and sized
     bool fresh_name_ = false;               // the next letter typed starts its name afresh
