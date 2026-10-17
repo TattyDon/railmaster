@@ -76,6 +76,9 @@ struct WorldConfig {
     // A hand-made landscape for the map (its size must match), in place of
     // generated hills and rivers.
     std::optional<Landscape> landscape;
+    // A hand-made map's towns, placed in the map editor (map cells): when
+    // there are any, the map has these towns and no others.
+    std::vector<ScenarioTown> towns{};
 };
 
 // The config for playing a scenario: its seed, start, map size, rivals,

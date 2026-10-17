@@ -92,7 +92,11 @@ there):
 Map editor (title screen, Map editor): start from flat land, generated
 hills or any map, then shape it with brushes: 1 Raise, 2 Lower, 3 Smooth,
 4 Flatten (to the height where the stroke began), 5 Water, 6 Land, with
-`[` `]` for the brush size and left-drag to apply; the arrows, wheel and
+`[` `]` for the brush size and left-drag to apply; and 7 Town: click land
+to found a town (it gets a name; type to rename it, `[` `]` make it a
+village up to a city, Delete removes it, Enter is done), or click a town
+to pick it. A map with towns of its own has those towns and no others;
+they are kept beside its image as a `.json` file; the arrows, wheel and
 right-drag move the view as in the game. S saves it as a map in your own
 folder (`maps/` beside your saved games), where the title screen finds
 it; P starts a new railroad on it at once; Esc leaves (asking first if it

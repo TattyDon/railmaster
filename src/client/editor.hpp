@@ -17,7 +17,7 @@ namespace railmaster::client {
 // towns, industries or companies; the camera keys work as in the game.
 class Editor {
 public:
-    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land };
+    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town };
     struct Request {
         enum class Kind { Save, Play, Leave } kind;
     };
@@ -31,6 +31,11 @@ public:
     void saved(const std::string& path); // the map was saved there
     std::optional<Request> take_request() { return std::exchange(request_, std::nullopt); }
     const std::string& name() const { return name_; }
+    // The map's towns, in map cells (the Town brush places, names and sizes them).
+    const std::vector<sim::ScenarioTown>& towns() const { return towns_; }
+    void set_towns(std::vector<sim::ScenarioTown> towns) { towns_ = std::move(towns); }
+    // Typed text (SDL_TEXTINPUT), for a town's name.
+    void text(const char* utf8);
 
     // True if the event was the editor's.
     bool key(SDL_Keycode key);
@@ -45,6 +50,11 @@ public:
 
 private:
     void apply(float seconds);
+    void town_click();
+    std::vector<sim::ScenarioTown> towns_;
+    std::optional<std::size_t> town_sel_{}; // the town being named and sized
+    bool fresh_name_ = false;               // the next letter typed starts its name afresh
+    std::uint32_t name_seed_ = 1;
 
     sim::World& world_;
     const Camera& cam_;

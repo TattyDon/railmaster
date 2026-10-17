@@ -47,6 +47,8 @@ bool cargo_available(CargoId c, const CargoRegistry& cargo, std::int32_t year) {
     return cargo.get(c).cargo_class == CargoClass::Freight && year >= cargo.get(c).available_year;
 }
 
+} // namespace
+
 std::string town_name(Random& rng) {
     static constexpr const char* kFirst[] = {"Ash",  "Brook", "Car",   "Dun",   "Elm",  "Fair", "Glen",
                                              "Hart", "Iron",  "Kings", "Lake",  "Mill", "North", "Oak",
@@ -55,8 +57,6 @@ std::string town_name(Random& rng) {
                                               "burg", "ville", "dale", "mouth", "ridge", "crest", "haven"};
     return std::string(kFirst[rng.below(std::size(kFirst))]) + kSecond[rng.below(std::size(kSecond))];
 }
-
-} // namespace
 
 // --- Industry data -----------------------------------------------------------
 
@@ -846,7 +846,7 @@ std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& carg
 
 void populate_economy(Economy& economy, const CargoRegistry& cargo,
                       const IndustryRegistry& industries, Random& rng, std::int32_t year, const Balance& b,
-                      const std::vector<PlacedTown>& fixed_towns) {
+                      const std::vector<PlacedTown>& fixed_towns, bool fill_towns) {
     const Balance::MapGeneration& mg = b.map;
     const std::int32_t w = economy.width(), h = economy.height();
     const auto land = [&](std::int32_t x, std::int32_t y) {
@@ -896,7 +896,7 @@ void populate_economy(Economy& economy, const CargoRegistry& cargo,
         const std::int32_t cx = std::clamp(t.cx, 0, w - 1), cy = std::clamp(t.cy, 0, h - 1);
         add_town(t.name, cx, cy, std::max(1, t.houses));
     }
-    for (auto t = static_cast<std::int32_t>(fixed_towns.size()); t < town_count; ++t) {
+    for (auto t = static_cast<std::int32_t>(fixed_towns.size()); fill_towns && t < town_count; ++t) {
         for (int attempt = 0; attempt < 200; ++attempt) {
             const std::int32_t cx = rng.between(3, std::max(3, w - 4)), cy = rng.between(3, std::max(3, h - 4));
             if (!land(cx, cy) || taken[idx(cx, cy)]) continue;

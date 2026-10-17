@@ -103,3 +103,22 @@ TEST_CASE("a terrain gives back its landscape, which makes the same terrain agai
     CHECK(again.ground(5, 4) == GroundType::Water);
     CHECK(again.ground(4, 4) == GroundType::Grass);
 }
+
+TEST_CASE("a hand-made map's towns are its only towns, placed where they were put, and saved") {
+    WorldConfig cfg;
+    cfg.seed = 5;
+    cfg.rivals = 0;
+    cfg.landscape = flat_landscape(cfg.width_tiles, cfg.height_tiles, 60);
+    cfg.towns = {{"Ashcombe", 40, 50, 30}, {"Bexley Wharf", 200, 180, 12}};
+    World w(cfg, shipped());
+    REQUIRE(w.economy().towns().size() == 2);
+    const std::int32_t k = w.economy().cells_per_node();
+    CHECK(w.economy().towns()[0].name == "Ashcombe");
+    CHECK(w.economy().towns()[0].cx == 40 / k);
+    CHECK(w.economy().towns()[1].name == "Bexley Wharf");
+    CHECK(w.economy().towns()[1].cy == 180 / k);
+    CHECK(w.economy().town_houses(0) > w.economy().town_houses(1));
+    const World back = World::load(w.save(), shipped());
+    CHECK(back.config().towns.size() == 2);
+    CHECK(back.economy().towns()[1].name == "Bexley Wharf");
+}

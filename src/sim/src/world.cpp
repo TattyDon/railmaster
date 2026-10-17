@@ -117,9 +117,21 @@ World::World(const WorldConfig& config, GameData data)
             fixed_towns.push_back({t.name, t.x / k, t.y / k, t.houses});
         }
     }
+    {
+        // A hand-made map's towns, on dry land likewise.
+        const std::int32_t r = data_.balance.map.town_spread_cells + economy_.cells_per_node();
+        const std::int32_t k = economy_.cells_per_node();
+        for (const ScenarioTown& t : config.towns) {
+            for (std::int32_t y = std::max(0, t.y - r); y <= std::min(terrain_.height() - 1, t.y + r); ++y)
+                for (std::int32_t x = std::max(0, t.x - r); x <= std::min(terrain_.width() - 1, t.x + r); ++x)
+                    if (terrain_.ground(x, y) == GroundType::Water) terrain_.set_ground(x, y, GroundType::Grass);
+            fixed_towns.push_back({t.name, t.x / k, t.y / k, t.houses});
+        }
+    }
     refresh_economy_terrain();
     if (config.populate && !data_.industries.all().empty()) {
-        populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns);
+        populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns,
+                         /*fill_towns=*/config.towns.empty());
         // Territories go down once the towns are placed, before trade starts across them.
         if (config.territories > 0) make_territories(config.territories);
         // History, so the map starts with prices and cargo in place.

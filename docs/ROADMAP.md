@@ -353,8 +353,9 @@ Still to do:
   `--landscape`; brightness is height, blue is water), kept in saves.
   The map editor (title screen) shapes land with raise, lower, smooth
   and flatten brushes, paints water and land, saves maps as heightmap
-  images and plays a railroad on them. Still to come: placing towns,
-  industries and territories by hand, and scenarios made in the editor.
+  images and plays a railroad on them, and places, names and sizes towns
+  (kept with the map). Still to come: placing industries and territories
+  by hand, and scenarios made in the editor.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

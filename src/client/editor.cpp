@@ -16,7 +16,10 @@ namespace {
 constexpr int kScale = 2;
 constexpr double kPi = 3.14159265358979;
 constexpr float kBarH = 22.0f, kToolbarY = 26.0f, kButtonH = 22.0f, kBottomH = 44.0f;
-constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land"};
+constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land", "7 Town"};
+constexpr int kBrushes = 7;
+// Town sizes, in houses: village to city.
+constexpr std::int32_t kTownSizes[] = {8, 15, 25, 40, 60};
 
 } // namespace
 
@@ -37,13 +40,49 @@ void Editor::saved(const std::string& path) {
 
 bool Editor::key(SDL_Keycode key) {
     if (key != SDLK_ESCAPE) leave_armed_ = false;
+    // Naming a town: the keys type (letters arrive as text).
+    if (town_sel_ && *town_sel_ < towns_.size()) {
+        std::string& name = towns_[*town_sel_].name;
+        switch (key) {
+        case SDLK_BACKSPACE:
+            if (fresh_name_) name.clear();
+            else if (!name.empty()) name.pop_back();
+            fresh_name_ = false;
+            dirty_ = true;
+            return true;
+        case SDLK_DELETE:
+            towns_.erase(towns_.begin() + static_cast<std::ptrdiff_t>(*town_sel_));
+            town_sel_.reset();
+            dirty_ = true;
+            return true;
+        case SDLK_LEFTBRACKET:
+        case SDLK_RIGHTBRACKET: {
+            // A size smaller or larger.
+            std::int32_t& houses = towns_[*town_sel_].houses;
+            int at = 0;
+            while (at < 4 && kTownSizes[at] < houses) ++at;
+            at = std::clamp(at + (key == SDLK_RIGHTBRACKET ? 1 : -1), 0, 4);
+            houses = kTownSizes[at];
+            dirty_ = true;
+            return true;
+        }
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_ESCAPE:
+            if (name.empty()) name = "Unnamed";
+            town_sel_.reset();
+            return true;
+        default: return true; // letters come as text
+        }
+    }
     switch (key) {
     case SDLK_1:
     case SDLK_2:
     case SDLK_3:
     case SDLK_4:
     case SDLK_5:
-    case SDLK_6: brush_ = static_cast<Brush>(key - SDLK_1); return true;
+    case SDLK_6:
+    case SDLK_7: brush_ = static_cast<Brush>(key - SDLK_1); return true;
     case SDLK_LEFTBRACKET: radius_ = std::max(1, radius_ - 1); return true;
     case SDLK_RIGHTBRACKET: radius_ = std::min(40, radius_ + 1); return true;
     case SDLK_s: request_ = Request{Request::Kind::Save}; return true;
@@ -71,6 +110,11 @@ bool Editor::mouse_down(float sx, float sy, int button) {
         return true;
     }
     mouse_move(sx, sy);
+    if (brush_ == Brush::Town) {
+        town_click();
+        return true;
+    }
+    town_sel_.reset();
     held_ = true;
     pending_ = 0.05; // a click shapes a little at once
     const sim::Terrain& t = world_.terrain();
@@ -79,6 +123,40 @@ bool Editor::mouse_down(float sx, float sy, int button) {
     const auto cy = std::clamp(static_cast<std::int32_t>(std::lround(static_cast<double>(hover_.y_mm) / tile_mm)), 0, t.height());
     flatten_to_ = t.corner_height(cx, cy);
     return true;
+}
+
+void Editor::town_click() {
+    const sim::Terrain& t = world_.terrain();
+    const double tile_mm = t.tile_size_m() * 1000.0;
+    const auto cx = static_cast<std::int32_t>(static_cast<double>(hover_.x_mm) / tile_mm);
+    const auto cy = static_cast<std::int32_t>(static_cast<double>(hover_.y_mm) / tile_mm);
+    if (cx < 0 || cy < 0 || cx >= t.width() || cy >= t.height()) return;
+    // A click near a town picks it; elsewhere it founds one.
+    for (std::size_t i = 0; i < towns_.size(); ++i) {
+        if (std::abs(towns_[i].x - cx) <= 4 && std::abs(towns_[i].y - cy) <= 4) {
+            town_sel_ = i;
+            fresh_name_ = true;
+            return;
+        }
+    }
+    sim::Random rng(name_seed_++ * 2654435761u + static_cast<std::uint32_t>(towns_.size()));
+    std::string name = sim::town_name(rng);
+    towns_.push_back({name, cx, cy, kTownSizes[2]});
+    town_sel_ = towns_.size() - 1;
+    fresh_name_ = true;
+    dirty_ = true;
+}
+
+void Editor::text(const char* utf8) {
+    if (!town_sel_ || *town_sel_ >= towns_.size()) return;
+    // [ and ] size the town; they are not part of its name.
+    const std::string typed = utf8;
+    if (typed == "[" || typed == "]") return;
+    std::string& name = towns_[*town_sel_].name;
+    if (fresh_name_) name.clear();
+    fresh_name_ = false;
+    if (name.size() < 28) name += typed;
+    dirty_ = true;
 }
 
 void Editor::mouse_up(int button) {
@@ -114,6 +192,7 @@ void Editor::apply(float seconds) {
         const double k = 1 - d * d;
         return k * k;
     };
+    if (brush_ == Brush::Town) return;
     if (brush_ == Brush::Water || brush_ == Brush::Land) {
         for (int y = ya; y < yb; ++y) {
             for (int x = x0; x < x1; ++x) {
@@ -160,9 +239,19 @@ void Editor::apply(float seconds) {
 }
 
 void Editor::draw_world_overlay() const {
-    // The brush's reach, a ring on the land.
     const sim::Terrain& t = world_.terrain();
     const double tile_mm = t.tile_size_m() * 1000.0;
+    // The towns' places.
+    for (std::size_t i = 0; i < towns_.size(); ++i) {
+        const sim::MapPoint p{static_cast<std::int64_t>((towns_[i].x + 0.5) * tile_mm), static_cast<std::int64_t>((towns_[i].y + 0.5) * tile_mm)};
+        const bool sel = town_sel_ && *town_sel_ == i;
+        draw_marker(p, cam_, sel ? 9.0f : 6.0f, 1.0f, sel ? 0.95f : 0.8f, sel ? 0.6f : 0.35f);
+    }
+    if (brush_ == Brush::Town) {
+        draw_marker(hover_, cam_, 4, 1.0f, 0.85f, 0.4f);
+        return;
+    }
+    // The brush's reach, a ring on the land.
     const double r = radius_ * tile_mm;
     const float colour[3] = {brush_ == Brush::Water ? 0.4f : 1.0f, brush_ == Brush::Water ? 0.7f : 0.95f,
                              brush_ == Brush::Water ? 1.0f : 0.6f};
@@ -186,7 +275,7 @@ void Editor::draw_ui(float width, float height) const {
 
     buttons_.clear();
     float x = 6;
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < kBrushes; ++i) {
         const float w = static_cast<float>(text_width(kBrushNames[i], kScale)) + 12;
         const bool on = static_cast<int>(brush_) == i;
         ui::tab(x, kToolbarY, x + w, kToolbarY + kButtonH, on);
@@ -197,13 +286,32 @@ void Editor::draw_ui(float width, float height) const {
         x += w + 3;
     }
     glColor3f(0.92f, 0.88f, 0.8f);
-    const std::string brush = "Brush " + std::to_string(radius_) + " cells  ([ ] to change)";
+    const std::string brush = brush_ == Brush::Town ? std::string("Click land to found a town, or a town to pick it")
+                                                    : "Brush " + std::to_string(radius_) + " cells  ([ ] to change)";
     draw_text(x + 14, kToolbarY + 4, brush, kScale);
 
     ui::bar(0, height - kBottomH, width, height, false);
     glColor3f(0.85f, 0.85f, 0.85f);
     draw_text(8, height - kBottomH + 6,
-              "Left-drag shapes the land.  1-6 brush   [ ] size   S save the map   P play a railroad on it   Esc leave", kScale);
+              town_sel_ ? "Type the town's name   [ ] smaller or larger   Delete removes it   Enter done"
+                        : "Left-drag shapes the land.  1-7 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
+              kScale);
+    // The towns' names, on chips over their places.
+    const double cell_mm = t.tile_size_m() * 1000.0;
+    for (std::size_t i = 0; i < towns_.size(); ++i) {
+        float sx = 0, sy = 0;
+        cam_.to_screen({static_cast<std::int64_t>((towns_[i].x + 0.5) * cell_mm), static_cast<std::int64_t>((towns_[i].y + 0.5) * cell_mm)}, sx,
+                       sy);
+        if (sx < -100 || sy < 40 || sx > width + 100 || sy > height - kBottomH) continue;
+        const bool sel = town_sel_ && *town_sel_ == i;
+        const std::string label = towns_[i].name + (sel && (SDL_GetTicks() / 500) % 2 == 0 ? "|" : "") + "  (" +
+                                  std::to_string(towns_[i].houses) + " houses)";
+        const auto w = static_cast<float>(text_width(label, kScale));
+        ui::chip(sx - w / 2 - 6, sy - 30, sx + w / 2 + 6, sy - 10, sel ? 0.85f : 0.62f);
+        if (sel) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.95f, 0.92f, 0.85f);
+        draw_text(sx - w / 2, sy - 28, label, kScale);
+    }
     std::string line2;
     if (SDL_GetTicks() < message_until_) {
         line2 = message_;
