@@ -78,6 +78,17 @@ public:
         save_dir_ = std::move(dir);
         quick_save_ = std::move(quick);
     }
+    // The player's settings, changed on the menu's Settings page (and by
+    // F12 and N); main applies them and keeps them between games.
+    struct Settings {
+        int volume = 7; // 0 (off) to 10
+        bool edge_scroll = true;
+        int time_mode = 0; // day, dusk, night, dawn, the whole day round
+        bool show_fps = false;
+    };
+    Settings& settings() { return settings_; }
+    // Whether the menu changed them since the last call (to save them).
+    bool take_settings_changed() { return std::exchange(settings_changed_, false); }
     // The save slots: the quick save first, then the named games.
     static constexpr int kSaveSlots = 6;
     std::string slot_path(int slot) const;
@@ -234,6 +245,9 @@ private:
     std::vector<std::string> slot_info_;      // what each slot holds, read when its page opens
     std::optional<MenuRequest> menu_request_;
     std::string save_dir_, quick_save_ = "railmaster.sav";
+    Settings settings_{};
+    bool settings_changed_ = false;
+    void change_setting(int step);
     int menu_items() const;
     void menu_choose();
     bool menu_key(SDL_Keycode key);

@@ -14,6 +14,7 @@
 // A scenario sets the map, rivals and territories itself, and starts with
 // no demo network.
 
+#include "audio.hpp"
 #include "build_info.hpp"
 #include "title.hpp"
 #include "font.hpp"
@@ -218,6 +219,7 @@ int main(int argc, char* argv[]) {
     std::printf("renderer: %s\n", client::shading::init(use_shaders) ? "shaders and shadows" : "fixed-function");
     client::models::init(data_dir);
     client::init_font(data_dir + "/fonts/SourceSans3-Semibold.ttf");
+    std::printf("sound: %s\n", client::audio::init() ? "on" : "no audio device");
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -244,6 +246,31 @@ int main(int argc, char* argv[]) {
         tools.set_save_paths(pref, kQuickSave);
         SDL_free(pref);
     }
+    // The settings, kept in the player's folder as lines of "name value".
+    std::string settings_path;
+    if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+        settings_path = std::string(pref) + "settings.txt";
+        SDL_free(pref);
+    }
+    {
+        std::ifstream in(settings_path);
+        std::string name;
+        int value = 0;
+        client::Tools::Settings& st = tools.settings();
+        while (in >> name >> value) {
+            if (name == "volume") st.volume = std::clamp(value, 0, 10);
+            else if (name == "edge_scroll") st.edge_scroll = value != 0;
+            else if (name == "time_of_day") st.time_mode = std::clamp(value, 0, 4);
+            else if (name == "show_fps") st.show_fps = value != 0;
+        }
+    }
+    const auto save_settings = [&] {
+        if (settings_path.empty()) return;
+        const client::Tools::Settings& st = tools.settings();
+        std::ofstream out(settings_path);
+        out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
+            << "\nshow_fps " << st.show_fps << "\n";
+    };
     const auto save_game = [&](const std::string& file) {
         try {
             std::ofstream out(file, std::ios::binary);
@@ -298,8 +325,10 @@ int main(int argc, char* argv[]) {
         demo_pending = false;
         // The tools keep only choices in progress; start them afresh.
         // (C++20 lets an object with reference members be replaced in place.)
+        const client::Tools::Settings kept = tools.settings();
         tools.~Tools();
         new (&tools) client::Tools(world, cam);
+        tools.settings() = kept;
         if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
             tools.set_save_paths(pref, kQuickSave);
             SDL_free(pref);
@@ -321,11 +350,9 @@ int main(int argc, char* argv[]) {
     (void)world.take_headlines();
     double tick_accumulator = 0.0;
     float smoke_clock = 0.0f; // seconds of unpaused play, for the smoke
-    bool show_fps = false;    // F12: frames a second, bottom right
     // The time of day: N cycles day, dusk, night, dawn and a slow round of
     // all four while the game runs (one every six minutes).
-    int time_mode = 0;
-    float time_phase = 0.0f;
+    float time_phase = tools.settings().time_mode < 4 ? 0.25f * static_cast<float>(tools.settings().time_mode) : 0.0f;
     static constexpr const char* kTimeNames[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
     double frame_ms = 16.7;   // smoothed time a frame takes
     int right_drag = 0; // pixels the mouse moved with the right button down
@@ -340,6 +367,14 @@ int main(int argc, char* argv[]) {
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
     Uint64 last = SDL_GetPerformanceCounter();
+    // What each train was doing last frame, to hear it start, stop and be paid.
+    struct Heard {
+        sim::TrainState state = sim::TrainState::Dwelling;
+        std::uint64_t paid_tick = 0;
+    };
+    std::vector<Heard> heard;
+    double last_whistle = 0, clock_s = 0; // seconds; whistles are spaced out
+    std::uint64_t heard_ticks = 0;
     static const Uint8 kNoKeys[SDL_NUM_SCANCODES] = {}; // no key held, while the title screen has them
 
     for (bool running = true; running;) {
@@ -352,6 +387,7 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
                 if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
+                    client::audio::play(client::audio::Sound::Click, 0.5f);
                     title.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y));
                     continue;
                 }
@@ -408,6 +444,7 @@ int main(int argc, char* argv[]) {
                     cam.center_on(*p);
                     break;
                 }
+                client::audio::play(client::audio::Sound::Click, 0.35f);
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
                 break;
             case SDL_MOUSEBUTTONUP:
@@ -458,11 +495,18 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
-                case SDLK_F12: show_fps = !show_fps; break;
+                case SDLK_F12:
+                    tools.settings().show_fps = !tools.settings().show_fps;
+                    save_settings();
+                    break;
                 case SDLK_n:
+                {
+                    int& time_mode = tools.settings().time_mode;
                     time_mode = (time_mode + 1) % 5;
                     if (time_mode < 4) time_phase = 0.25f * static_cast<float>(time_mode);
                     tools.show(std::string("Time of day: ") + kTimeNames[time_mode] + "  (N to change)", true);
+                    save_settings();
+                }
                     break;
                 case SDLK_v: {
                     // 3D or the top-down map, looking at the same place.
@@ -513,7 +557,7 @@ int main(int argc, char* argv[]) {
         }
         // The mouse at the window's edge scrolls the view, as in RT3 (not
         // while a button is held, so drags and orbits stay put).
-        if (SDL_GetMouseFocus() == window && !title.open()) {
+        if (SDL_GetMouseFocus() == window && !title.open() && tools.settings().edge_scroll) {
             int mx = 0, my = 0;
             if (SDL_GetMouseState(&mx, &my) == 0) {
                 constexpr int kEdge = 4;
@@ -525,7 +569,13 @@ int main(int argc, char* argv[]) {
         }
 
         frame_ms += (dt * 1000.0 - frame_ms) * 0.05;
-        if (time_mode == 4 && speed.speed() != sim::GameSpeed::Paused) time_phase += static_cast<float>(dt) / 360.0f;
+        if (tools.take_settings_changed()) {
+            // From the menu's Settings page: a fixed time of day takes effect at once.
+            if (tools.settings().time_mode < 4) time_phase = 0.25f * static_cast<float>(tools.settings().time_mode);
+            save_settings();
+        }
+        client::audio::set_master(static_cast<float>(tools.settings().volume) / 10.0f);
+        if (tools.settings().time_mode == 4 && speed.speed() != sim::GameSpeed::Paused) time_phase += static_cast<float>(dt) / 360.0f;
         client::shading::set_time_of_day(time_phase);
         // Smoke drifts only while the game runs.
         if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);
@@ -649,6 +699,59 @@ int main(int argc, char* argv[]) {
             if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause();
         }
 
+        // Sound: whistles as trains leave, a bell as they arrive, the cash
+        // register when your trains are paid, and the engine nearest the
+        // middle of the view working. Louder the closer the view.
+        clock_s += dt;
+        {
+            const sim::Railway& rw = world.railway();
+            const bool running_now = speed.speed() != sim::GameSpeed::Paused;
+            const float near = std::clamp(10.0f / std::max(1.0f, cam.distance), 0.08f, 1.0f);
+            const auto w = static_cast<float>(cam.width_px), h = static_cast<float>(cam.height_px);
+            // Another game started or loaded: what was heard was of the old one.
+            if (world.total_ticks() < heard_ticks) heard.clear();
+            heard_ticks = world.total_ticks();
+            if (heard.size() != rw.trains().size()) heard.resize(rw.trains().size());
+            float best = 2.0f, engine_rate = 0, engine_volume = 0, engine_pan = 0;
+            for (const sim::Train& t : rw.trains()) {
+                Heard& was = heard[t.id];
+                const bool mine = world.player_company() && t.owner == *world.player_company();
+                float sx = 0, sy = 0;
+                cam.to_screen(rw.train_position(t.id), sx, sy);
+                const bool seen = sx >= 0 && sx < w && sy >= 0 && sy < h;
+                const float pan = std::clamp(sx / std::max(1.0f, w) * 2 - 1, -1.0f, 1.0f);
+                const bool steam = world.data().locomotives.get(t.loco).fuel == sim::Fuel::Steam;
+                if (t.in_service() && seen && running_now) {
+                    if (was.state == sim::TrainState::Dwelling && t.state == sim::TrainState::Moving && clock_s - last_whistle > 1.5) {
+                        // Steam whistles; diesels and electrics a deeper horn.
+                        client::audio::play(client::audio::Sound::Whistle, 0.45f * near, pan, steam ? 1.0f : 0.72f);
+                        last_whistle = clock_s;
+                    }
+                    if (was.state == sim::TrainState::Moving && t.state == sim::TrainState::Dwelling) {
+                        client::audio::play(client::audio::Sound::Bell, 0.3f * near, pan);
+                    }
+                    // The engine nearest the middle of the view.
+                    if (t.state == sim::TrainState::Moving && steam) {
+                        const float off = std::hypot(sx / w - 0.5f, sy / h - 0.5f) * 2;
+                        if (off < best) {
+                            best = off;
+                            const std::int64_t unit = sim::mph_to_mm_per_tick(100, world.data().balance);
+                            const float mph = unit > 0 ? static_cast<float>(t.speed_mm_per_tick * 100 / unit) : 0.0f;
+                            engine_rate = std::clamp(mph * 0.15f, 1.2f, 9.0f);
+                            engine_volume = 0.75f * near * (1.0f - 0.5f * std::min(1.0f, off));
+                            engine_pan = pan;
+                        }
+                    }
+                }
+                if (mine && t.last_income_tick != was.paid_tick && was.paid_tick != 0 && t.last_income > sim::Money{}) {
+                    client::audio::play(client::audio::Sound::Coin, seen ? 0.55f : 0.25f, seen ? pan : 0.0f);
+                }
+                was.state = t.state;
+                was.paid_tick = t.last_income_tick == 0 ? 1 : t.last_income_tick;
+            }
+            client::audio::set_engine(engine_rate, engine_volume, engine_pan);
+        }
+
         cam.terrain = &world.terrain();
         // The window's real size: the system may have made it smaller than
         // asked (to fit a laptop screen) without a resize event.
@@ -727,7 +830,7 @@ int main(int argc, char* argv[]) {
             client::ui::chip(x - 7, y - 5, x + w + 7, y + 19);
             glColor3f(0.85f, 0.85f, 0.8f);
             client::draw_text(x, y, build_label, 2);
-            if (show_fps) {
+            if (tools.settings().show_fps) {
                 char fps[48];
                 std::snprintf(fps, sizeof fps, "%.0f fps  %.1f ms", 1000.0 / std::max(0.1, frame_ms), frame_ms);
                 const auto fw = static_cast<float>(client::text_width(fps, 2));
@@ -740,6 +843,7 @@ int main(int argc, char* argv[]) {
         SDL_GL_SwapWindow(window);
     }
 
+    client::audio::shutdown();
     SDL_GL_DeleteContext(gl);
     SDL_DestroyWindow(window);
     SDL_Quit();

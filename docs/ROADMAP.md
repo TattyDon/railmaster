@@ -334,7 +334,9 @@ Still to do:
   loads named games, shows the briefing and quits (§15.4 File Options),
   and a title screen starts a new railroad (map size, rivals,
   territories, difficulty), a scenario or a saved game.)
-- Original art and audio pipeline (`assets/`, credits).
+- Original art and audio pipeline (`assets/`, credits). Sound so far is
+  synthesised in the client (`src/client/audio.cpp`): whistles, chuffs,
+  bells, the cash register and clicks; music is still to come.
 
 ## M5: Opponents and scenarios
 - AI chairmen with personality traits.

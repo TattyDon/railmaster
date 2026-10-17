@@ -797,13 +797,35 @@ void Tools::open_menu() {
     menu_sel_ = 0;
 }
 
+namespace {
+
+// The game menu's pages, and the items on its first.
+enum MenuPage { kMenuMain, kMenuSave, kMenuLoad, kMenuQuit, kMenuLeave, kMenuSettings };
+enum MenuItem { kItemResume, kItemSave, kItemLoad, kItemBriefing, kItemSettings, kItemMainMenu, kItemQuit, kMainItems };
+constexpr int kSettingRows = 5; // sound, edge scrolling, time of day, frames a second, back
+constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
+
+} // namespace
+
 int Tools::menu_items() const {
     switch (menu_page_) {
-    case 0: return 6;
-    case 1:
-    case 2: return kSaveSlots + 1;
+    case kMenuMain: return kMainItems;
+    case kMenuSave:
+    case kMenuLoad: return kSaveSlots + 1;
+    case kMenuSettings: return kSettingRows;
     default: return 2;
     }
+}
+
+void Tools::change_setting(int step) {
+    switch (menu_sel_) {
+    case 0: settings_.volume = std::clamp(settings_.volume + step, 0, 10); break;
+    case 1: settings_.edge_scroll = !settings_.edge_scroll; break;
+    case 2: settings_.time_mode = (settings_.time_mode + step + 5) % 5; break;
+    case 3: settings_.show_fps = !settings_.show_fps; break;
+    default: return;
+    }
+    settings_changed_ = true;
 }
 
 void Tools::menu_choose() {
@@ -812,29 +834,33 @@ void Tools::menu_choose() {
         for (int i = 0; i <= kSaveSlots; ++i) slot_info_.push_back(save_summary(slot_path(i)));
     };
     switch (menu_page_) {
-    case 0:
+    case kMenuMain:
         switch (menu_sel_) {
-        case 0: menu_open_ = false; break;
-        case 1:
-        case 2:
-            menu_page_ = menu_sel_;
+        case kItemResume: menu_open_ = false; break;
+        case kItemSave:
+        case kItemLoad:
+            menu_page_ = menu_sel_ == kItemSave ? kMenuSave : kMenuLoad;
             menu_sel_ = 1;
             read_slots();
             break;
-        case 3:
+        case kItemBriefing:
             menu_open_ = false;
             select(Tool::Status);
             break;
+        case kItemSettings:
+            menu_page_ = kMenuSettings;
+            menu_sel_ = 0;
+            break;
         default:
             // Main menu or quit: ask first.
-            menu_page_ = menu_sel_ == 4 ? 4 : 3;
+            menu_page_ = menu_sel_ == kItemMainMenu ? kMenuLeave : kMenuQuit;
             menu_sel_ = 0;
             break;
         }
         return;
-    case 1:
-    case 2: {
-        const bool saving = menu_page_ == 1;
+    case kMenuSave:
+    case kMenuLoad: {
+        const bool saving = menu_page_ == kMenuSave;
         if (!saving && slot_info_[static_cast<std::size_t>(menu_sel_)] == "Empty") {
             show("Nothing saved there", false);
             return;
@@ -843,14 +869,17 @@ void Tools::menu_choose() {
         menu_open_ = false;
         return;
     }
+    case kMenuSettings:
+        if (menu_sel_ == kSettingRows - 1) menu_key(SDLK_ESCAPE);
+        else change_setting(+1);
+        return;
     default:
         if (menu_sel_ == 1) {
-            menu_request_ = MenuRequest{menu_page_ == 4 ? MenuRequest::Kind::MainMenu : MenuRequest::Kind::Quit, {}};
+            menu_request_ = MenuRequest{menu_page_ == kMenuLeave ? MenuRequest::Kind::MainMenu : MenuRequest::Kind::Quit, {}};
             menu_open_ = false;
             menu_sel_ = 0;
         } else {
-            menu_sel_ = menu_page_ == 4 ? 4 : 5;
-            menu_page_ = 0;
+            menu_key(SDLK_ESCAPE);
         }
         return;
     }
@@ -860,20 +889,29 @@ bool Tools::menu_key(SDL_Keycode key) {
     const int n = menu_items();
     switch (key) {
     case SDLK_ESCAPE:
-        if (menu_page_ == 0) menu_open_ = false;
-        else {
-            menu_sel_ = menu_page_ == 3 ? 5 : menu_page_;
-            menu_page_ = 0;
+        // Back to the first page, on the item that led here.
+        switch (menu_page_) {
+        case kMenuMain: menu_open_ = false; break;
+        case kMenuSave: menu_sel_ = kItemSave; break;
+        case kMenuLoad: menu_sel_ = kItemLoad; break;
+        case kMenuQuit: menu_sel_ = kItemQuit; break;
+        case kMenuLeave: menu_sel_ = kItemMainMenu; break;
+        default: menu_sel_ = kItemSettings; break;
         }
+        menu_page_ = kMenuMain;
         break;
     case SDLK_UP: menu_sel_ = (menu_sel_ + n - 1) % n; break;
     case SDLK_DOWN: menu_sel_ = (menu_sel_ + 1) % n; break;
+    case SDLK_LEFT:
+    case SDLK_RIGHT:
+        if (menu_page_ == kMenuSettings) change_setting(key == SDLK_LEFT ? -1 : +1);
+        break;
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
     case SDLK_SPACE: menu_choose(); break;
     default:
         // Number keys pick a slot.
-        if ((menu_page_ == 1 || menu_page_ == 2) && key >= SDLK_0 && key <= SDLK_0 + kSaveSlots) {
+        if ((menu_page_ == kMenuSave || menu_page_ == kMenuLoad) && key >= SDLK_0 && key <= SDLK_0 + kSaveSlots) {
             menu_sel_ = static_cast<int>(key - SDLK_0);
             menu_choose();
         }
@@ -887,25 +925,32 @@ void Tools::draw_menu() const {
     std::vector<std::string> items, notes;
     std::string title;
     switch (menu_page_) {
-    case 0:
+    case kMenuMain:
         title = "Railmaster";
-        items = {"Resume", "Save game", "Load game", "Briefing and goals", "Main menu", "Quit"};
+        items = {"Resume", "Save game", "Load game", "Briefing and goals", "Settings", "Main menu", "Quit"};
         break;
-    case 1:
-    case 2:
-        title = menu_page_ == 1 ? "Save game" : "Load game";
+    case kMenuSave:
+    case kMenuLoad:
+        title = menu_page_ == kMenuSave ? "Save game" : "Load game";
         for (int i = 0; i <= kSaveSlots; ++i) {
             items.push_back(i == 0 ? std::string("Quick save (Ctrl+S)") : "Game " + std::to_string(i));
             notes.push_back(static_cast<std::size_t>(i) < slot_info_.size() ? slot_info_[static_cast<std::size_t>(i)] : "");
         }
         break;
+    case kMenuSettings:
+        title = "Settings";
+        items = {"Sound", "Scroll at the window's edge", "Time of day", "Frames a second", "Back"};
+        notes = {settings_.volume == 0 ? std::string("Off") : std::to_string(settings_.volume * 10) + "%",
+                 settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.show_fps ? "On" : "Off", ""};
+        break;
     default:
-        title = menu_page_ == 4 ? "Leave without saving?" : "Quit without saving?";
-        items = {"No, back to the game", menu_page_ == 4 ? "Yes, to the main menu" : "Yes, quit"};
+        title = menu_page_ == kMenuLeave ? "Leave without saving?" : "Quit without saving?";
+        items = {"No, back to the game", menu_page_ == kMenuLeave ? "Yes, to the main menu" : "Yes, quit"};
         break;
     }
     constexpr float kRow = 30.0f;
-    const float w = menu_page_ == 1 || menu_page_ == 2 ? 760.0f : 420.0f;
+    const bool slots = menu_page_ == kMenuSave || menu_page_ == kMenuLoad;
+    const float w = slots ? 760.0f : menu_page_ == kMenuSettings ? 560.0f : 420.0f;
     const float h = 84 + kRow * static_cast<float>(items.size()) + 34;
     const float x0 = (static_cast<float>(cam_.width_px) - w) / 2;
     const float y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2 - 30);
@@ -923,6 +968,12 @@ void Tools::draw_menu() const {
         else glColor3f(0.9f, 0.88f, 0.82f);
         if (notes.empty()) {
             draw_text(x0 + (w - static_cast<float>(text_width(items[i], kScale + 1))) / 2, y, items[i], kScale + 1);
+        } else if (menu_page_ == kMenuSettings) {
+            draw_text(x0 + 24, y + 2, items[i], kScale);
+            if (!notes[i].empty()) {
+                const std::string v = "<  " + notes[i] + "  >";
+                draw_text(x0 + w - 24 - static_cast<float>(text_width(v, kScale)), y + 2, v, kScale);
+            }
         } else {
             draw_text(x0 + 24, y + 2, items[i], kScale);
             if (notes[i] == "Empty") glColor3f(0.55f, 0.53f, 0.5f);
@@ -931,9 +982,10 @@ void Tools::draw_menu() const {
         y += kRow;
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    const std::string foot = menu_page_ == 0   ? "Up/Down and Enter, or click.  Esc returns to the game"
-                             : menu_page_ >= 3 ? "Up/Down and Enter, or click.  Esc goes back"
-                                               : "Up/Down and Enter, a number, or click.  Esc goes back";
+    const std::string foot = menu_page_ == kMenuMain       ? "Up/Down and Enter, or click.  Esc returns to the game"
+                             : menu_page_ == kMenuSettings ? "Left/Right change.  Esc goes back"
+                             : slots                       ? "Up/Down and Enter, a number, or click.  Esc goes back"
+                                                           : "Up/Down and Enter, or click.  Esc goes back";
     draw_text(x0 + (w - static_cast<float>(text_width(foot, kScale))) / 2, y0 + h - 28, foot, kScale);
 }
 
