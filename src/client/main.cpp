@@ -223,7 +223,45 @@ int main(int argc, char* argv[]) {
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
-    bool paper_paused = false; // the newspaper paused the game, and closing it resumes
+    bool modal_paused = false; // the newspaper or menu paused the game, and closing it resumes
+    // Saving and loading, from Ctrl+S and Ctrl+L (the quick save, in the
+    // working directory) and the game menu's slots (in the player's own
+    // folder). Beside each save, a line saying what it holds, for the menu.
+    static constexpr const char* kQuickSave = "railmaster.sav";
+    if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+        tools.set_save_paths(pref, kQuickSave);
+        SDL_free(pref);
+    }
+    const auto save_game = [&](const std::string& file) {
+        try {
+            std::ofstream out(file, std::ios::binary);
+            const std::string bytes = world.save();
+            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            if (!out) throw std::runtime_error("cannot write " + file);
+            std::ofstream about(file + ".txt");
+            about << world.date().month_year_label() << ", "
+                  << (world.player_company() ? world.company().name() : std::string("no company")) << ", net worth "
+                  << client::format_money(sim::net_worth(world.investor(), world.market())) << "\n";
+            tools.show("Game saved to " + file, true);
+        } catch (const std::exception& e) {
+            tools.show(e.what(), false);
+        }
+    };
+    const auto load_game = [&](const std::string& file) {
+        try {
+            world = sim::World::load(read_file(file), load_game_data(data_dir));
+            demo_pending = false;
+            tools.select(tools.tool()); // drop half-made lines and routes
+            // What the loaded game has already been told.
+            ledger_year = world.date().year();
+            choices_seen = world.pending_choices().size();
+            (void)world.take_news();
+            (void)world.take_headlines();
+            tools.show("Game loaded from " + file + ": " + world.date().month_year_label(), true);
+        } catch (const std::exception& e) {
+            tools.show(e.what(), false);
+        }
+    };
     // What happened while the game was set up (rivals founding) goes in the
     // message history without a newspaper.
     for (const std::string& n : world.take_news()) tools.log(n, true);
@@ -313,24 +351,8 @@ int main(int argc, char* argv[]) {
                 // Ctrl+S saves the game, Ctrl+L loads the last save.
                 if ((ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                     (ev.key.keysym.sym == SDLK_s || ev.key.keysym.sym == SDLK_l)) {
-                    const std::string file = "railmaster.sav";
-                    try {
-                        if (ev.key.keysym.sym == SDLK_s) {
-                            std::ofstream out(file, std::ios::binary);
-                            const std::string bytes = world.save();
-                            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-                            if (!out) throw std::runtime_error("cannot write " + file);
-                            tools.show("Game saved to " + file, true);
-                        } else {
-                            world = sim::World::load(read_file(file), load_game_data(data_dir));
-                            demo_pending = false;
-                            tools.select(tools.tool()); // drop half-made lines and routes
-                            tools.show("Game loaded from " + file + ": " + world.date().month_year_label(), true);
-                        }
-                    } catch (const std::exception& e) {
-                        std::string why = e.what();
-                        tools.show(why, false);
-                    }
+                    if (ev.key.keysym.sym == SDLK_s) save_game(kQuickSave);
+                    else load_game(kQuickSave);
                     break;
                 }
                 if (tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod)) break;
@@ -505,12 +527,21 @@ int main(int argc, char* argv[]) {
             heads.erase(heads.begin());
             tools.open_newspaper(first, std::move(heads));
         }
-        // The newspaper stops the clock while it is read, as RT3's do.
-        if (tools.newspaper_open() && !paper_paused) {
-            paper_paused = speed.speed() != sim::GameSpeed::Paused;
-            if (paper_paused) speed.toggle_pause();
-        } else if (!tools.newspaper_open() && paper_paused) {
-            paper_paused = false;
+        // The game menu's requests.
+        if (const auto req = tools.take_menu_request()) {
+            switch (req->kind) {
+            case client::Tools::MenuRequest::Kind::Save: save_game(req->path); break;
+            case client::Tools::MenuRequest::Kind::Load: load_game(req->path); break;
+            case client::Tools::MenuRequest::Kind::Quit: running = false; break;
+            }
+        }
+        // The newspaper and the menu stop the clock while open, as RT3's do.
+        const bool modal = tools.newspaper_open() || tools.menu_open();
+        if (modal && !modal_paused) {
+            modal_paused = speed.speed() != sim::GameSpeed::Paused;
+            if (modal_paused) speed.toggle_pause();
+        } else if (!modal && modal_paused) {
+            modal_paused = false;
             if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause();
         }
 

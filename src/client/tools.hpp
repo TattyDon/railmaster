@@ -61,6 +61,27 @@ public:
     void open_newspaper(const std::string& headline, std::vector<std::string> more);
     bool newspaper_open() const { return paper_open_; }
 
+    // The game menu (rt3-clone-spec §15.4 File Options), on Esc when nothing
+    // else is open: resume, save, load, the briefing, quit. It takes all
+    // input while open; what it asks of the game comes out of
+    // take_menu_request() for main to carry out.
+    struct MenuRequest {
+        enum class Kind { Save, Load, Quit } kind;
+        std::string path;
+    };
+    std::optional<MenuRequest> take_menu_request() { return std::exchange(menu_request_, std::nullopt); }
+    bool menu_open() const { return menu_open_; }
+    void open_menu();
+    // Where the menu's save slots live (a folder of the player's own); the
+    // quick save (Ctrl+S) stays at `quick`.
+    void set_save_paths(std::string dir, std::string quick) {
+        save_dir_ = std::move(dir);
+        quick_save_ = std::move(quick);
+    }
+    // The save slots: the quick save first, then the named games.
+    static constexpr int kSaveSlots = 6;
+    std::string slot_path(int slot) const;
+
 private:
     struct Button {
         Tool tool;
@@ -206,6 +227,17 @@ private:
     std::optional<Paper> paper_;
     bool paper_open_ = false;
     void draw_newspaper() const;
+    bool menu_open_ = false;
+    int menu_page_ = 0; // 0 the menu, 1 save, 2 load, 3 quit?
+    int menu_sel_ = 0;
+    mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
+    std::vector<std::string> slot_info_;      // what each slot holds, read when its page opens
+    std::optional<MenuRequest> menu_request_;
+    std::string save_dir_, quick_save_ = "railmaster.sav";
+    int menu_items() const;
+    void menu_choose();
+    bool menu_key(SDL_Keycode key);
+    void draw_menu() const;
     std::string message_;
     bool message_good_ = true;
     Uint32 message_until_ = 0;

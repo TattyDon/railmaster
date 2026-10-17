@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <fstream>
 #include <sstream>
 
 namespace railmaster::client {
@@ -778,6 +779,157 @@ void Tools::draw_newspaper() const {
     centred("Esc, Enter or a click to read on", y1 - 30, kScale);
 }
 
+std::string Tools::slot_path(int slot) const {
+    if (slot == 0) return quick_save_;
+    return save_dir_ + "game" + std::to_string(slot) + ".sav";
+}
+
+void Tools::open_menu() {
+    menu_open_ = true;
+    menu_page_ = 0;
+    menu_sel_ = 0;
+}
+
+int Tools::menu_items() const {
+    switch (menu_page_) {
+    case 0: return 5;
+    case 1:
+    case 2: return kSaveSlots + 1;
+    default: return 2;
+    }
+}
+
+void Tools::menu_choose() {
+    const auto read_slots = [&] {
+        // What each slot holds: the line written beside it when it was saved.
+        slot_info_.clear();
+        for (int i = 0; i <= kSaveSlots; ++i) {
+            std::ifstream in(slot_path(i) + ".txt");
+            std::string line;
+            if (std::getline(in, line)) slot_info_.push_back(line);
+            else slot_info_.push_back(std::ifstream(slot_path(i)) ? "A saved game" : "Empty");
+        }
+    };
+    switch (menu_page_) {
+    case 0:
+        switch (menu_sel_) {
+        case 0: menu_open_ = false; break;
+        case 1:
+        case 2:
+            menu_page_ = menu_sel_;
+            menu_sel_ = 1;
+            read_slots();
+            break;
+        case 3:
+            menu_open_ = false;
+            select(Tool::Status);
+            break;
+        default:
+            menu_page_ = 3;
+            menu_sel_ = 0;
+            break;
+        }
+        return;
+    case 1:
+    case 2: {
+        const bool saving = menu_page_ == 1;
+        if (!saving && slot_info_[static_cast<std::size_t>(menu_sel_)] == "Empty") {
+            show("Nothing saved there", false);
+            return;
+        }
+        menu_request_ = MenuRequest{saving ? MenuRequest::Kind::Save : MenuRequest::Kind::Load, slot_path(menu_sel_)};
+        menu_open_ = false;
+        return;
+    }
+    default:
+        if (menu_sel_ == 1) menu_request_ = MenuRequest{MenuRequest::Kind::Quit, {}};
+        else menu_page_ = 0;
+        menu_sel_ = 0;
+        return;
+    }
+}
+
+bool Tools::menu_key(SDL_Keycode key) {
+    const int n = menu_items();
+    switch (key) {
+    case SDLK_ESCAPE:
+        if (menu_page_ == 0) menu_open_ = false;
+        else {
+            menu_sel_ = menu_page_ == 3 ? 4 : menu_page_;
+            menu_page_ = 0;
+        }
+        break;
+    case SDLK_UP: menu_sel_ = (menu_sel_ + n - 1) % n; break;
+    case SDLK_DOWN: menu_sel_ = (menu_sel_ + 1) % n; break;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+    case SDLK_SPACE: menu_choose(); break;
+    default:
+        // Number keys pick a slot.
+        if ((menu_page_ == 1 || menu_page_ == 2) && key >= SDLK_0 && key <= SDLK_0 + kSaveSlots) {
+            menu_sel_ = static_cast<int>(key - SDLK_0);
+            menu_choose();
+        }
+        break;
+    }
+    return true;
+}
+
+void Tools::draw_menu() const {
+    menu_boxes_.clear();
+    std::vector<std::string> items, notes;
+    std::string title;
+    switch (menu_page_) {
+    case 0:
+        title = "Railmaster";
+        items = {"Resume", "Save game", "Load game", "Briefing and goals", "Quit"};
+        break;
+    case 1:
+    case 2:
+        title = menu_page_ == 1 ? "Save game" : "Load game";
+        for (int i = 0; i <= kSaveSlots; ++i) {
+            items.push_back(i == 0 ? std::string("Quick save (Ctrl+S)") : "Game " + std::to_string(i));
+            notes.push_back(static_cast<std::size_t>(i) < slot_info_.size() ? slot_info_[static_cast<std::size_t>(i)] : "");
+        }
+        break;
+    default:
+        title = "Quit without saving?";
+        items = {"No, back to the game", "Yes, quit"};
+        break;
+    }
+    constexpr float kRow = 30.0f;
+    const float w = menu_page_ == 1 || menu_page_ == 2 ? 760.0f : 420.0f;
+    const float h = 84 + kRow * static_cast<float>(items.size()) + 34;
+    const float x0 = (static_cast<float>(cam_.width_px) - w) / 2;
+    const float y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2 - 30);
+    fill_rect(0, 0, static_cast<float>(cam_.width_px), static_cast<float>(cam_.height_px), 0.0f, 0.0f, 0.0f, 0.35f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + (w - static_cast<float>(text_width(title, kScale + 2))) / 2, y0 + 14, title, kScale + 2);
+    ui::rule(x0 + 14, x0 + w - 14, y0 + 62);
+    float y = y0 + 76;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        const bool sel = static_cast<int>(i) == menu_sel_;
+        if (sel) ui::selection(x0 + 10, y - 3, x0 + w - 10, y + kRow - 5);
+        menu_boxes_.push_back({x0 + 10, y - 3, x0 + w - 10, y + kRow - 5});
+        if (sel) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.9f, 0.88f, 0.82f);
+        if (notes.empty()) {
+            draw_text(x0 + (w - static_cast<float>(text_width(items[i], kScale + 1))) / 2, y, items[i], kScale + 1);
+        } else {
+            draw_text(x0 + 24, y + 2, items[i], kScale);
+            if (notes[i] == "Empty") glColor3f(0.55f, 0.53f, 0.5f);
+            draw_text(x0 + 220, y + 2, notes[i], kScale);
+        }
+        y += kRow;
+    }
+    glColor3f(0.6f, 0.58f, 0.54f);
+    const std::string foot = menu_page_ == 0   ? "Up/Down and Enter, or click.  Esc returns to the game"
+                             : menu_page_ == 3 ? "Up/Down and Enter, or click.  Esc goes back"
+                                               : "Up/Down and Enter, a number, or click.  Esc goes back";
+    draw_text(x0 + (w - static_cast<float>(text_width(foot, kScale))) / 2, y0 + h - 28, foot, kScale);
+}
+
 void Tools::on_mouse_move(float sx, float sy) {
     hover_sx_ = sx;
     hover_sy_ = sy;
@@ -825,6 +977,20 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     if (founding_) return;
     if (paper_open_) {
         paper_open_ = false;
+        return;
+    }
+    if (menu_open_) {
+        if (right_button) {
+            menu_key(SDLK_ESCAPE);
+            return;
+        }
+        for (std::size_t i = 0; i < menu_boxes_.size(); ++i) {
+            const TabBox& b = menu_boxes_[i];
+            if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) {
+                menu_sel_ = static_cast<int>(i);
+                menu_choose();
+            }
+        }
         return;
     }
     if (right_button) {
@@ -1061,6 +1227,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_KP_ENTER || key == SDLK_SPACE) paper_open_ = false;
         return true;
     }
+    if (menu_open_) return menu_key(key);
     if (log_open_) {
         const std::size_t n = log_.size();
         switch (key) {
@@ -1125,7 +1292,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else if (detail_) {
             detail_.reset();
             follow_ = false;
-        } else select(Tool::Inspect);
+        } else if (tool_ == Tool::Inspect) {
+            open_menu();
+        } else {
+            select(Tool::Inspect);
+        }
         return true;
     default: break;
     }
@@ -2846,6 +3017,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (log_open_) draw_log_panel();
     draw_choice_dialog();
     if (paper_open_) draw_newspaper();
+    if (menu_open_) draw_menu();
 
     // Price or problem next to the cursor while laying track.
     if (const auto cmd = pending_track()) {

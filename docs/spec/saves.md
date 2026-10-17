@@ -3,7 +3,11 @@
 `World::save()` writes the whole game to bytes, and `World::load(bytes, data)`
 reads it back (`src/sim/src/save.cpp`). In the client, Ctrl+S saves to
 `railmaster.sav` in the working directory, Ctrl+L loads that file, and
-`--load=FILE` starts from a save.
+`--load=FILE` starts from a save. The game menu (Esc) saves and loads six
+named games, `game1.sav` to `game6.sav`, in the player's own folder
+(`SDL_GetPrefPath("Railmaster", "Railmaster")`). Beside every save the
+client writes a one-line `.txt` (date, company, net worth) for the menu
+to show; the game never reads it back.
 
 ## What is in a save
 
