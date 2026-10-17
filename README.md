@@ -60,10 +60,14 @@ there):
 ./build/src/client/railmaster
 ```
 
-- The game opens with the founding dialog: Enter founds your railroad on
-  the usual terms (`--quick` skips the dialog).
-- A starter network of three towns, their stations and two trains is
-  built for you.
+- The game opens on the title screen, over a demo railway running on its
+  own: **New railroad** (choose the map size, rival railroads, territories,
+  difficulty and map, then Start), **Scenarios** (each with its briefing),
+  **Load a saved game**, or **Quit**. Up/Down and Enter, or click.
+- A new railroad or scenario opens with the founding dialog: Enter founds
+  your railroad on the usual terms.
+- `--quick` skips the title screen and the dialog and starts on the demo
+  network: three towns, their stations and two trains, built for you.
 - Every game starts paused: Space starts the clock, + and - change the
   speed.
 - F1 to F11 pick the tools (or click the toolbar), and the bottom bar
@@ -84,7 +88,8 @@ there):
   or Option (Alt) + Up/Down; arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 
-Other ways to start:
+Other ways to start, straight from the command line (any of these skips
+the title screen):
 - a scenario with Bronze, Silver and Gold goals:
   `./build/src/client/railmaster --scenario=data/scenarios/lowland_junction.json`
   (F10 shows the goals);
@@ -206,7 +211,7 @@ and checks the economy against the spec's targets
 | F9 | Industry tool: hover an industry for its owner, price and profit; click to buy it, click one of your plants to upgrade it, click open land to build the plant or warehouse chosen with [ ]; M changes what your warehouse or port does (exports, imports or both); C sets a warehouse to convert one cargo into another, at a quarter yield. Ports can be bought too |
 | F8 | Market screen: every company and player. Up / Down choose a company; A / S buy or sell its shares (Shift: 5 blocks; selling below zero sells short); T bid to take it over; M offer to merge it into your company at 20% over market (Shift: 50%); Q twice to resign as chairman; N found a new company if you run none |
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
-| Esc (Look tool, nothing open) | The game menu (rt3-clone-spec §15.4 File Options), pausing the game: Resume, Save game, Load game, Briefing and goals, Quit (asks first). Saving and loading offer six named games, kept in your own folder (on a Mac `~/Library/Application Support/Railmaster/Railmaster/`), with the quick save; each slot shows the date, company and net worth it holds. Number keys pick a slot |
+| Esc (Look tool, nothing open) | The game menu (rt3-clone-spec §15.4 File Options), pausing the game: Resume, Save game, Load game, Briefing and goals, Main menu (back to the title screen) and Quit (both ask first). Saving and loading offer six named games, kept in your own folder (on a Mac `~/Library/Application Support/Railmaster/Railmaster/`), with the quick save; each slot shows the date, company and net worth it holds. Number keys pick a slot |
 | Ctrl+S, Ctrl+L | Quick save to `railmaster.sav` in the working directory, and load it back (`--load=FILE` starts from any save) |
 | F11 | Lists of trains, stations and companies (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station and opens its detail panel (or the company's market entry) |
 | M | Message history (rt3-clone-spec §15.4): every piece of news, newest first, with its month (Up/Down and PgUp/PgDn scroll; M or Esc closes). Not in the Market and Industry tools, where M has its own use |

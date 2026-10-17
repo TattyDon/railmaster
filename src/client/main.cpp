@@ -5,6 +5,8 @@
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
 //                   [--scenario=FILE] [--load=FILE] [--no-shaders] [--look=X,Y] [--version]
+// With none of --quick, --empty, --scenario, --load or --look it opens on
+// the title screen (title.cpp), over the demo network running by itself.
 // --look starts the view over map tile (X, Y), close in.
 // The commit it was built from shows in the bottom-right corner, the window
 // title and --version.
@@ -13,6 +15,7 @@
 // no demo network.
 
 #include "build_info.hpp"
+#include "title.hpp"
 #include "font.hpp"
 #include "model.hpp"
 #include "render.hpp"
@@ -28,6 +31,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <new>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -118,7 +122,10 @@ int main(int argc, char* argv[]) {
         }
         empty = true;
     }
-    config.found_player_company = quick || !load_path.empty();
+    // Started with no game chosen on the command line: the title screen,
+    // over the demo railway running on its own.
+    const bool title_at_start = !quick && !empty && scenario_path.empty() && load_path.empty() && !look;
+    config.found_player_company = quick || !load_path.empty() || title_at_start;
     sim::World world(config, std::move(data));
     if (!load_path.empty()) {
         try {
@@ -150,7 +157,11 @@ int main(int argc, char* argv[]) {
     cam.target_x = static_cast<float>(world.terrain().width()) / 2;
     cam.target_y = static_cast<float>(world.terrain().height()) / 2;
     // Open on the biggest town, close enough to see its streets.
-    {
+    const auto look_at_biggest_town = [&] {
+        cam.mm_per_tile = static_cast<float>(world.terrain().tile_size_m()) * 1000.0f;
+        cam.terrain = &world.terrain();
+        cam.target_x = static_cast<float>(world.terrain().width()) / 2;
+        cam.target_y = static_cast<float>(world.terrain().height()) / 2;
         const sim::Economy& eco = world.economy();
         std::int64_t best = -1;
         for (std::size_t t = 0; t < eco.towns().size(); ++t) {
@@ -162,23 +173,24 @@ int main(int argc, char* argv[]) {
             cam.target_y = (static_cast<float>(eco.towns()[t].cy) + 0.5f) * k;
         }
         if (best >= 0) cam.distance = 14.0f;
-    }
+    };
+    look_at_biggest_town();
     if (look) {
         cam.target_x = look->first;
         cam.target_y = look->second;
         cam.distance = 4.5f;
     }
     const std::string build_label = std::string("Build ") + client::kBuildCommit + "  " + client::kBuildDate;
-    const std::string title = std::string("Railmaster (") + client::kBuildCommit + ")";
+    const std::string window_title = std::string("Railmaster (") + client::kBuildCommit + ")";
     // High-DPI: draw at the screen's full resolution on Retina displays.
     const Uint32 window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
-    SDL_Window* window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+    SDL_Window* window = SDL_CreateWindow(window_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                           cam.width_px, cam.height_px, window_flags);
     if (!window) {
         // No multisampling to be had: try again without it.
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-        window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
+        window = SDL_CreateWindow(window_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
                                   cam.height_px, window_flags);
     }
     if (!window) {
@@ -192,7 +204,7 @@ int main(int argc, char* argv[]) {
         SDL_DestroyWindow(window);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
         SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-        window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
+        window = SDL_CreateWindow(window_title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, cam.width_px,
                                   cam.height_px, window_flags);
         gl = window ? SDL_GL_CreateContext(window) : nullptr;
     }
@@ -219,7 +231,7 @@ int main(int argc, char* argv[]) {
             cam.center_on(world.economy().node_centre(t.cx, t.cy));
         }
     }
-    if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
+    if (!world.player_company() && !title_at_start) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
@@ -262,6 +274,47 @@ int main(int argc, char* argv[]) {
             tools.show(e.what(), false);
         }
     };
+    const auto save_slots = [&] {
+        std::vector<std::pair<std::string, std::string>> slots;
+        for (int i = 0; i <= client::Tools::kSaveSlots; ++i) {
+            const std::string path = tools.slot_path(i);
+            slots.emplace_back(path, client::save_summary(path));
+        }
+        return slots;
+    };
+    client::Title title(data_dir, save_slots());
+    if (title_at_start) {
+        title.show();
+        speed.toggle_pause(); // the railway behind the title runs
+    }
+    // A new game from the title screen: a fresh world and fresh tools.
+    const auto start_world = [&](const sim::WorldConfig& cfg) {
+        try {
+            world = sim::World(cfg, load_game_data(data_dir));
+        } catch (const std::exception& e) {
+            tools.show(e.what(), false);
+            return;
+        }
+        demo_pending = false;
+        // The tools keep only choices in progress; start them afresh.
+        // (C++20 lets an object with reference members be replaced in place.)
+        tools.~Tools();
+        new (&tools) client::Tools(world, cam);
+        if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+            tools.set_save_paths(pref, kQuickSave);
+            SDL_free(pref);
+        }
+        look_at_biggest_town();
+        ledger_year = world.date().year();
+        choices_seen = 0;
+        for (const std::string& n : world.take_news()) tools.log(n, true);
+        (void)world.take_headlines();
+        if (world.scenario()) tools.select(client::Tool::Status);
+        if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
+        if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause(); // every game starts paused [D]
+        modal_paused = false;
+        title.hide();
+    };
     // What happened while the game was set up (rivals founding) goes in the
     // message history without a newspaper.
     for (const std::string& n : world.take_news()) tools.log(n, true);
@@ -287,10 +340,26 @@ int main(int argc, char* argv[]) {
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
     Uint64 last = SDL_GetPerformanceCounter();
+    static const Uint8 kNoKeys[SDL_NUM_SCANCODES] = {}; // no key held, while the title screen has them
 
     for (bool running = true; running;) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
+            // The title screen takes the keys and clicks while it is up.
+            if (title.open()) {
+                if (ev.type == SDL_KEYDOWN) {
+                    title.key(ev.key.keysym.sym);
+                    continue;
+                }
+                if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
+                    title.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y));
+                    continue;
+                }
+                if (ev.type == SDL_MOUSEWHEEL || ev.type == SDL_MULTIGESTURE || ev.type == SDL_MOUSEBUTTONDOWN ||
+                    ev.type == SDL_MOUSEBUTTONUP || ev.type == SDL_MOUSEMOTION) {
+                    continue;
+                }
+            }
             switch (ev.type) {
             case SDL_QUIT: running = false; break;
             case SDL_WINDOWEVENT:
@@ -418,7 +487,9 @@ int main(int argc, char* argv[]) {
 
         // Arrows pan; with Shift, left and right turn the view and up and
         // down tilt it (rt3-clone-spec §15.6).
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        // Behind the title screen the view circles slowly, and the keys are the title's.
+        if (title.open() && cam.three_d) cam.orbit(static_cast<float>(dt) * 0.03f, 0);
+        const Uint8* keys = title.open() ? kNoKeys : SDL_GetKeyboardState(nullptr);
         const float pan_speed = static_cast<float>(dt) * 400.0f / cam.zoom;
         const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
         const bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
@@ -442,7 +513,7 @@ int main(int argc, char* argv[]) {
         }
         // The mouse at the window's edge scrolls the view, as in RT3 (not
         // while a button is held, so drags and orbits stay put).
-        if (SDL_GetMouseFocus() == window) {
+        if (SDL_GetMouseFocus() == window && !title.open()) {
             int mx = 0, my = 0;
             if (SDL_GetMouseState(&mx, &my) == 0) {
                 constexpr int kEdge = 4;
@@ -478,6 +549,13 @@ int main(int argc, char* argv[]) {
             } catch (const std::exception& e) {
                 std::fprintf(stderr, "%s (carrying on without it)\n", e.what());
             }
+        }
+        // Behind the title screen the news goes unread.
+        if (title.open()) {
+            (void)world.take_economy_news();
+            (void)world.take_news();
+            (void)world.take_headlines();
+            ledger_year = world.date().year();
         }
         // The economy turning makes the front page.
         if (const auto turned = world.take_economy_news()) {
@@ -532,11 +610,37 @@ int main(int argc, char* argv[]) {
             switch (req->kind) {
             case client::Tools::MenuRequest::Kind::Save: save_game(req->path); break;
             case client::Tools::MenuRequest::Kind::Load: load_game(req->path); break;
+            case client::Tools::MenuRequest::Kind::MainMenu:
+                title.set_slots(save_slots());
+                title.show();
+                break;
             case client::Tools::MenuRequest::Kind::Quit: running = false; break;
             }
         }
+        // The title screen's requests.
+        if (const auto req = title.take_request()) {
+            switch (req->kind) {
+            case client::Title::Request::Kind::NewGame: start_world(req->config); break;
+            case client::Title::Request::Kind::Scenario:
+                try {
+                    sim::WorldConfig cfg = sim::scenario_config(sim::Scenario::from_json(read_file(req->path)));
+                    cfg.found_player_company = false;
+                    start_world(cfg);
+                } catch (const std::exception& e) {
+                    std::fprintf(stderr, "Failed to load scenario %s: %s\n", req->path.c_str(), e.what());
+                }
+                break;
+            case client::Title::Request::Kind::Load:
+                load_game(req->path);
+                if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+                modal_paused = false;
+                title.hide();
+                break;
+            case client::Title::Request::Kind::Quit: running = false; break;
+            }
+        }
         // The newspaper and the menu stop the clock while open, as RT3's do.
-        const bool modal = tools.newspaper_open() || tools.menu_open();
+        const bool modal = !title.open() && (tools.newspaper_open() || tools.menu_open());
         if (modal && !modal_paused) {
             modal_paused = speed.speed() != sim::GameSpeed::Paused;
             if (modal_paused) speed.toggle_pause();
@@ -608,6 +712,11 @@ int main(int argc, char* argv[]) {
         // A scenario's track budget, in place of the speed keys' reminder.
         const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;
         status += tiles ? "  track budget " + std::to_string(*tiles) : std::string("  +/- speed, pause");
+        if (title.open()) {
+            title.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px), build_label);
+            SDL_GL_SwapWindow(window);
+            continue;
+        }
         if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
         tools.draw_ui(status);
         // Which build this is, bottom right above the hint bar, so players

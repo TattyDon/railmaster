@@ -9,6 +9,7 @@ add_executable(railmaster
     render.cpp
     shading.cpp
     third_party_impl.cpp
+    title.cpp
     tools.cpp
     ui.cpp
 )

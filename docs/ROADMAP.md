@@ -331,7 +331,9 @@ Still to do:
   and headlines to a newspaper that pauses the game (§15.4). The train
   panel has its cost window and breakdown-risk meter. The ledger has its
   train, station, industry and cargo lists too. A game menu on Esc saves and
-  loads named games, shows the briefing and quits (§15.4 File Options).)
+  loads named games, shows the briefing and quits (§15.4 File Options),
+  and a title screen starts a new railroad (map size, rivals,
+  territories, difficulty), a scenario or a saved game.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios

@@ -66,7 +66,7 @@ public:
     // input while open; what it asks of the game comes out of
     // take_menu_request() for main to carry out.
     struct MenuRequest {
-        enum class Kind { Save, Load, Quit } kind;
+        enum class Kind { Save, Load, MainMenu, Quit } kind;
         std::string path;
     };
     std::optional<MenuRequest> take_menu_request() { return std::exchange(menu_request_, std::nullopt); }
@@ -228,7 +228,7 @@ private:
     bool paper_open_ = false;
     void draw_newspaper() const;
     bool menu_open_ = false;
-    int menu_page_ = 0; // 0 the menu, 1 save, 2 load, 3 quit?
+    int menu_page_ = 0; // 0 the menu, 1 save, 2 load, 3 quit?, 4 main menu?
     int menu_sel_ = 0;
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
     std::vector<std::string> slot_info_;      // what each slot holds, read when its page opens
@@ -244,6 +244,9 @@ private:
 };
 
 std::string format_money(sim::Money m);
+// What a save file holds, from the line written beside it: "Jun 1835,
+// Railmaster Railroad, net worth $5,120,000"; "Empty" if there is no save.
+std::string save_summary(const std::string& path);
 // Dollars and cents, for share prices and dividends.
 std::string format_cents(sim::Money m);
 std::string format_count(std::int64_t n); // 600,000

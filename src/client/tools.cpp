@@ -603,6 +603,13 @@ bool Tools::ledger_key(SDL_Keycode key) {
     }
 }
 
+std::string save_summary(const std::string& path) {
+    std::ifstream in(path + ".txt");
+    std::string line;
+    if (std::getline(in, line)) return line;
+    return std::ifstream(path) ? "A saved game" : "Empty";
+}
+
 std::string format_permille(std::int32_t p) {
     const std::int32_t a = p < 0 ? -p : p;
     return (p < 0 ? "-" : "+") + std::to_string(a / 10) + "." + std::to_string(a % 10) + "%";
@@ -792,7 +799,7 @@ void Tools::open_menu() {
 
 int Tools::menu_items() const {
     switch (menu_page_) {
-    case 0: return 5;
+    case 0: return 6;
     case 1:
     case 2: return kSaveSlots + 1;
     default: return 2;
@@ -801,14 +808,8 @@ int Tools::menu_items() const {
 
 void Tools::menu_choose() {
     const auto read_slots = [&] {
-        // What each slot holds: the line written beside it when it was saved.
         slot_info_.clear();
-        for (int i = 0; i <= kSaveSlots; ++i) {
-            std::ifstream in(slot_path(i) + ".txt");
-            std::string line;
-            if (std::getline(in, line)) slot_info_.push_back(line);
-            else slot_info_.push_back(std::ifstream(slot_path(i)) ? "A saved game" : "Empty");
-        }
+        for (int i = 0; i <= kSaveSlots; ++i) slot_info_.push_back(save_summary(slot_path(i)));
     };
     switch (menu_page_) {
     case 0:
@@ -825,7 +826,8 @@ void Tools::menu_choose() {
             select(Tool::Status);
             break;
         default:
-            menu_page_ = 3;
+            // Main menu or quit: ask first.
+            menu_page_ = menu_sel_ == 4 ? 4 : 3;
             menu_sel_ = 0;
             break;
         }
@@ -842,9 +844,14 @@ void Tools::menu_choose() {
         return;
     }
     default:
-        if (menu_sel_ == 1) menu_request_ = MenuRequest{MenuRequest::Kind::Quit, {}};
-        else menu_page_ = 0;
-        menu_sel_ = 0;
+        if (menu_sel_ == 1) {
+            menu_request_ = MenuRequest{menu_page_ == 4 ? MenuRequest::Kind::MainMenu : MenuRequest::Kind::Quit, {}};
+            menu_open_ = false;
+            menu_sel_ = 0;
+        } else {
+            menu_sel_ = menu_page_ == 4 ? 4 : 5;
+            menu_page_ = 0;
+        }
         return;
     }
 }
@@ -855,7 +862,7 @@ bool Tools::menu_key(SDL_Keycode key) {
     case SDLK_ESCAPE:
         if (menu_page_ == 0) menu_open_ = false;
         else {
-            menu_sel_ = menu_page_ == 3 ? 4 : menu_page_;
+            menu_sel_ = menu_page_ == 3 ? 5 : menu_page_;
             menu_page_ = 0;
         }
         break;
@@ -882,7 +889,7 @@ void Tools::draw_menu() const {
     switch (menu_page_) {
     case 0:
         title = "Railmaster";
-        items = {"Resume", "Save game", "Load game", "Briefing and goals", "Quit"};
+        items = {"Resume", "Save game", "Load game", "Briefing and goals", "Main menu", "Quit"};
         break;
     case 1:
     case 2:
@@ -893,8 +900,8 @@ void Tools::draw_menu() const {
         }
         break;
     default:
-        title = "Quit without saving?";
-        items = {"No, back to the game", "Yes, quit"};
+        title = menu_page_ == 4 ? "Leave without saving?" : "Quit without saving?";
+        items = {"No, back to the game", menu_page_ == 4 ? "Yes, to the main menu" : "Yes, quit"};
         break;
     }
     constexpr float kRow = 30.0f;
@@ -925,7 +932,7 @@ void Tools::draw_menu() const {
     }
     glColor3f(0.6f, 0.58f, 0.54f);
     const std::string foot = menu_page_ == 0   ? "Up/Down and Enter, or click.  Esc returns to the game"
-                             : menu_page_ == 3 ? "Up/Down and Enter, or click.  Esc goes back"
+                             : menu_page_ >= 3 ? "Up/Down and Enter, or click.  Esc goes back"
                                                : "Up/Down and Enter, a number, or click.  Esc goes back";
     draw_text(x0 + (w - static_cast<float>(text_width(foot, kScale))) / 2, y0 + h - 28, foot, kScale);
 }
