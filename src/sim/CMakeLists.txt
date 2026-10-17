@@ -1,0 +1,37 @@
+# The simulation core: deterministic, headless, no rendering or platform deps.
+# Everything that affects game outcomes lives here so it can be unit-tested
+# and, later, run in lockstep for multiplayer.
+
+find_package(nlohmann_json 3.10 REQUIRED)
+find_package(ZLIB REQUIRED) # compressed saves
+
+add_library(railmaster_sim
+    src/ai.cpp
+    src/balance.cpp
+    src/economic_state.cpp
+    src/cargo.cpp
+    src/demo.cpp
+    src/commands.cpp
+    src/company.cpp
+    src/date.cpp
+    src/economy.cpp
+    src/freight.cpp
+    src/game_speed.cpp
+    src/locomotive.cpp
+    src/railway.cpp
+    src/events.cpp
+    src/save.cpp
+    src/scenario.cpp
+    src/stock.cpp
+    src/territory.cpp
+    src/terrain.cpp
+    src/track.cpp
+    src/track_builder.cpp
+    src/world.cpp
+)
+add_library(railmaster::sim ALIAS railmaster_sim)
+
+target_include_directories(railmaster_sim PUBLIC include)
+target_link_libraries(railmaster_sim
+    PUBLIC nlohmann_json::nlohmann_json
+    PRIVATE railmaster_warnings ZLIB::ZLIB)

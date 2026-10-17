@@ -1,0 +1,237 @@
+{
+  "about": "Art for the 3D client. For each role it draws, list the glTF models (.glb or .gltf, paths relative to this folder) that can play it; one is picked per object. Roles left empty are drawn in code. See docs/models.md for the roles and how to add art.",
+  "material_colors": {
+    "leafsGreen": [
+      0.28,
+      0.5,
+      0.2
+    ],
+    "leafsDark": [
+      0.15,
+      0.34,
+      0.18
+    ],
+    "woodBark": [
+      0.45,
+      0.32,
+      0.22
+    ],
+    "woodBarkDark": [
+      0.36,
+      0.26,
+      0.19
+    ]
+  },
+  "roles": {
+    "house": [
+      "prefab:cottage-wood-terracotta",
+      "prefab:cottage-wood-slate",
+      "prefab:house-wood",
+      "prefab:house-stone"
+    ],
+    "terrace": [
+      "prefab:terrace-stone",
+      "prefab:terrace-wood"
+    ],
+    "shop": [
+      "prefab:shop-stone",
+      "prefab:shop-wood"
+    ],
+    "church": [
+      "prefab:church"
+    ],
+    "station_small": [
+      "prefab:station-small"
+    ],
+    "station_medium": [
+      "prefab:station-medium"
+    ],
+    "station_large": [
+      "prefab:station-large"
+    ],
+    "industry:lumber_mill": [
+      "prefab:watermill"
+    ],
+    "beside:grain_farm": [
+      "prefab:windmill"
+    ],
+    "beside:corn_farm": [
+      "prefab:windmill"
+    ],
+    "engine_steam": [
+      "kenney-train-kit/train-locomotive-a.glb",
+      "kenney-train-kit/train-locomotive-b.glb",
+      "kenney-train-kit/train-locomotive-c.glb"
+    ],
+    "engine_diesel": [
+      "kenney-train-kit/train-diesel-a.glb",
+      "kenney-train-kit/train-diesel-b.glb",
+      "kenney-train-kit/train-diesel-box-a.glb"
+    ],
+    "engine_electric": [
+      "kenney-train-kit/train-electric-square-a.glb",
+      "kenney-train-kit/train-electric-square-b.glb"
+    ],
+    "car_coach": [
+      "kenney-train-kit/train-locomotive-passenger-a.glb"
+    ],
+    "car_diner": [
+      "kenney-train-kit/train-locomotive-passenger-a.glb"
+    ],
+    "car_mail": [
+      "kenney-train-kit/train-locomotive-passenger-b.glb"
+    ],
+    "car_boxcar": [
+      "kenney-train-kit/train-carriage-container-red.glb",
+      "kenney-train-kit/train-carriage-container-green.glb",
+      "kenney-train-kit/train-carriage-container-blue.glb"
+    ],
+    "car_hopper": [
+      "kenney-train-kit/train-carriage-coal.glb"
+    ],
+    "car:coal": [
+      "kenney-train-kit/train-carriage-coal.glb"
+    ],
+    "car:iron": [
+      "kenney-train-kit/train-carriage-dirt.glb"
+    ],
+    "car:bauxite": [
+      "kenney-train-kit/train-carriage-dirt.glb"
+    ],
+    "car:uranium": [
+      "kenney-train-kit/train-carriage-dirt.glb"
+    ],
+    "car:logs": [
+      "kenney-train-kit/train-carriage-wood.glb"
+    ],
+    "car:pulpwood": [
+      "kenney-train-kit/train-carriage-wood.glb"
+    ],
+    "car:lumber": [
+      "kenney-train-kit/train-carriage-lumber.glb"
+    ],
+    "car:oil": [
+      "kenney-train-kit/train-carriage-tank.glb"
+    ],
+    "car:diesel": [
+      "kenney-train-kit/train-carriage-tank.glb"
+    ],
+    "car:chemicals": [
+      "kenney-train-kit/train-carriage-tank.glb"
+    ],
+    "car:milk": [
+      "kenney-train-kit/train-carriage-tank.glb"
+    ],
+    "tree_broadleaf": [
+      "kenney-nature-kit/tree_oak.glb",
+      "kenney-nature-kit/tree_default.glb",
+      "kenney-nature-kit/tree_fat.glb",
+      "kenney-nature-kit/tree_detailed.glb"
+    ],
+    "tree_conifer": [
+      "kenney-nature-kit/tree_pineTallA.glb",
+      "kenney-nature-kit/tree_pineTallB.glb",
+      "kenney-nature-kit/tree_pineDefaultA.glb",
+      "kenney-nature-kit/tree_cone.glb"
+    ],
+    "industry:steel_mill": [
+      "prefab:works-stacks"
+    ],
+    "industry:aluminum_mill": [
+      "prefab:works-stacks"
+    ],
+    "industry:textile_mill": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:paper_mill": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:furniture_factory": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:toy_factory": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:tire_factory": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:auto_plant": [
+      "prefab:works-sawtooth"
+    ],
+    "industry:tool_and_die": [
+      "prefab:works-chimney"
+    ],
+    "industry:munitions_factory": [
+      "prefab:works-chimney"
+    ],
+    "industry:weapons_factory": [
+      "prefab:works-chimney"
+    ],
+    "industry:plastics_factory": [
+      "prefab:works-workshop"
+    ],
+    "industry:recycling_plant": [
+      "prefab:works-workshop"
+    ],
+    "industry:brewery": [
+      "prefab:works-gabled"
+    ],
+    "industry:distillery": [
+      "prefab:works-gabled"
+    ],
+    "industry:meat_packing_plant": [
+      "prefab:works-gabled"
+    ],
+    "industry:dairy_processor": [
+      "prefab:works-gabled"
+    ],
+    "industry:chemical_plant": [
+      "prefab:works-tanks"
+    ],
+    "industry:fertilizer_factory": [
+      "prefab:works-tanks"
+    ],
+    "industry:refinery": [
+      "prefab:works-refinery"
+    ],
+    "industry:electric_plant": [
+      "prefab:works-power"
+    ],
+    "industry:nuclear_plant": [
+      "prefab:works-cooling-tower"
+    ],
+    "industry:warehouse": [
+      "prefab:works-warehouse"
+    ],
+    "industry:barracks": [
+      "prefab:works-long-shed"
+    ],
+    "service_tower": [
+      "prefab:water-tower"
+    ],
+    "engine_shed": [
+      "prefab:engine-shed"
+    ],
+    "props:logging_camp": [
+      "prefab:props-logs"
+    ],
+    "props:coal_mine": [
+      "prefab:props-ore"
+    ],
+    "props:iron_mine": [
+      "prefab:props-ore"
+    ],
+    "props:bauxite_mine": [
+      "prefab:props-ore"
+    ],
+    "props:uranium_mine": [
+      "prefab:props-ore"
+    ],
+    "props:port": [
+      "prefab:props-goods"
+    ],
+    "props:warehouse": [
+      "prefab:props-goods"
+    ]
+  }
+}

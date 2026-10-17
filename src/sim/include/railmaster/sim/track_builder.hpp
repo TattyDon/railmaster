@@ -1,0 +1,120 @@
+#pragma once
+
+#include "railmaster/sim/balance.hpp"
+#include "railmaster/sim/fixed_math.hpp"
+#include "railmaster/sim/money.hpp"
+#include "railmaster/sim/track.hpp"
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace railmaster::sim {
+
+class Terrain;
+
+
+// Bridge eras [D, rt3-clone-spec §11.2]; prices and thresholds are in Balance::track.
+constexpr std::int32_t kWoodStoneBridgeLastYear = 1865;
+constexpr std::int32_t kSteelBridgeFirstYear = 1865;
+constexpr std::int32_t kSuspensionBridgeFirstYear = 1895;
+
+bool bridge_available(BridgeType type, std::int32_t year);
+bool bridge_carries_double_track(BridgeType type);
+
+// --- Geometry: the horizontal shape of a run ---------------------------------
+// Each returns the points after `a` up to and including `b`, spaced no
+// more than `max_piece_mm` apart.
+
+std::vector<MapPoint> straight_points(MapPoint a, MapPoint b, std::int64_t max_piece_mm);
+
+// Quadratic Bezier curve from a to b, bending towards `control`.
+std::vector<MapPoint> curve_points(MapPoint a, MapPoint control, MapPoint b, std::int64_t max_piece_mm);
+
+// A control point that makes a curve from `from` carry on in the direction
+// the existing track was heading, so new track joins smoothly. Returns
+// nullopt unless exactly one piece of track ends at `from`.
+std::optional<MapPoint> continuing_control_point(const TrackNetwork& net, NodeId from, MapPoint to);
+
+// --- Planning and building ---------------------------------------------------
+
+// RT3's bridge, tunnel and overpass frequency settings (rt3-clone-spec
+// §11.2 [D]); Average is the default.
+enum class Frequency : std::uint8_t { Never, Rarely, Average, Common };
+const char* frequency_name(Frequency f);
+// The tunnel or bridge preference a setting stands for (Balance::track).
+std::int32_t structure_preference(Frequency f, const Balance& b);
+// Whether a new line crossing existing track at ground level goes over it
+// [I]: Common, always; Average, over double track (main lines); Rarely,
+// over double track when the new line is double too; Never, not at all.
+bool overpass_wanted(Frequency f, bool new_line_double, bool crossed_double);
+
+struct TrackBuildOptions {
+    std::int32_t year = 1830;
+    bool double_track = false;
+    std::optional<std::int32_t> max_grade_bp; // nullopt: the balance default
+    // How strongly the route cuts through high ground rather than climbing
+    // over it, 0..100. At 0 the rail never goes below the ground, so no
+    // tunnels. Mirrors RT3's "Tunnels" build setting.
+    std::int32_t tunnel_preference = 50;
+    // Likewise how strongly it bridges valleys rather than dipping into
+    // them, 0..100; water is always bridged. RT3's "Bridges" setting.
+    std::int32_t bridge_preference = 50;
+    std::optional<BridgeType> bridge_type; // nullopt: cheapest type that fits
+};
+
+struct PlannedPiece {
+    TrackKind kind = TrackKind::Ground;
+    BridgeType bridge = BridgeType::None;
+    std::int64_t length_mm = 0;
+    Money cost;
+};
+
+struct TrackPlan {
+    NodeId from = 0;
+    std::optional<NodeId> end_node; // join an existing node rather than ending at a new one
+    std::vector<MapPoint> points;   // after `from`, one per piece
+    std::vector<std::int64_t> rail_z_mm;
+    std::vector<PlannedPiece> pieces;
+    bool double_track = false;
+    Money total_cost;
+    // Where it crosses existing track at ground level (rt3-clone-spec §11.2):
+    // level crossings, or overpasses when asked for (the piece then costs
+    // more; see World::preview).
+    struct Crossing {
+        std::size_t piece = 0; // index into pieces
+        EdgeId edge = 0;       // the track it crosses
+        MapPoint at{};
+        bool overpass = false; // goes over rather than meeting it
+    };
+    std::vector<Crossing> crossings{};
+};
+
+struct PlanResult {
+    std::optional<TrackPlan> plan;
+    std::string error; // set when plan is empty
+};
+
+// Work out rail heights, structure types and cost for a run of track along
+// `points` (as produced by the geometry helpers). Does not change the network.
+PlanResult plan_track(const TrackNetwork& net, const Terrain& terrain, NodeId from,
+                      std::vector<MapPoint> points, std::optional<NodeId> end_node,
+                      const TrackBuildOptions& options, const Balance& b = default_balance());
+
+// The same, starting from a position and rail height that need not be a
+// node yet, and ending at ground level unless `end_z` is given. Used to
+// preview a run before its end points exist. The plan's from/end_node are
+// left unset; build such a plan only via plan_track.
+PlanResult plan_track_between(const Terrain& terrain, MapPoint start_pos, std::int64_t start_z,
+                              std::vector<MapPoint> points, std::optional<std::int64_t> end_z,
+                              const TrackBuildOptions& options, const Balance& b = default_balance());
+
+// Price per km of single track of a kind, before the economy's cost level.
+std::int64_t per_km_rate(TrackKind kind, BridgeType bridge, const Balance::Track& t);
+
+// Add a plan's nodes and pieces to the network, each piece carrying its
+// cost. Returns the end node; `built`, if given, receives the new pieces.
+NodeId build_track(TrackNetwork& net, const TrackPlan& plan, CompanyId owner = 0, std::vector<EdgeId>* built = nullptr);
+
+} // namespace railmaster::sim

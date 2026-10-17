@@ -1,0 +1,3 @@
+add_executable(railmaster_replay main.cpp)
+target_link_libraries(railmaster_replay PRIVATE railmaster_sim railmaster_warnings)
+target_compile_definitions(railmaster_replay PRIVATE RAILMASTER_DEFAULT_DATA_DIR="${PROJECT_SOURCE_DIR}/data")
