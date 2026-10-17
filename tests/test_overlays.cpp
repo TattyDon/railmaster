@@ -134,3 +134,20 @@ TEST_CASE("each train keeps a year's accounts, closed at the year's end (§15.4 
     CHECK(std::abs((upkeep - line(Ledger::TrainMaintenance)).in_cents()) <= 12 * 100);
     CHECK(std::abs((fuel - line(Ledger::Fuel)).in_cents()) <= 12 * 100);
 }
+
+TEST_CASE("the demo network's regular trains keep their travellers (no town gives up on the railway)") {
+    WorldConfig cfg;
+    cfg.seed = 1;
+    World w(cfg, shipped());
+    (void)build_demo_network(w);
+    std::size_t avoided = 0, months = 0;
+    for (int m = 0; m < 36; ++m) {
+        run_to(w, Date::from_days(w.date().days_since_epoch() + 30));
+        ++months;
+        for (const Station& s : w.railway().stations()) {
+            for (const std::int32_t until : s.avoided_until) avoided += until > w.date().days_since_epoch();
+        }
+    }
+    MESSAGE("station-months avoided: " << avoided << " over " << months << " months");
+    CHECK(avoided == 0);
+}

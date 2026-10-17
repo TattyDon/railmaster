@@ -112,12 +112,12 @@ TEST_CASE("stations gather only cargo a calling train could sell for more") {
     s.site("coal_mine", 5, 10);
     s.site("electric_plant", 30, 10);
     s.days(100);
-    gather_at_stations(s.rw, s.eco, s.cargo, s.ind, 1850);
+    gather_at_stations(s.rw, s.eco, s.cargo, s.ind, 1850, 0);
     const StationId mine = s.stations[0];
     CHECK(s.rw.station(mine).waiting[s.c("coal")].milli == 0); // no train calls here yet
 
     s.rw.add_train(0, 4, {s.stations[0], s.stations[1]});
-    for (int i = 0; i < 10; ++i) gather_at_stations(s.rw, s.eco, s.cargo, s.ind, 1850);
+    for (int i = 0; i < 10; ++i) gather_at_stations(s.rw, s.eco, s.cargo, s.ind, 1850, 0);
     const WaitingCargo& pool = s.rw.station(mine).waiting[s.c("coal")];
     CHECK(pool.milli > 0);
     // Bought at the station's price: the best in its catchment, below the

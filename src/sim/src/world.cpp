@@ -478,13 +478,13 @@ void World::charge_running_costs() {
 void World::on_new_day() {
     if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
     economy_.step_day(data_.cargo, data_.industries, date_.year());
-    gather_at_stations(railway_, economy_, data_.cargo, data_.industries, date_.year());
+    gather_at_stations(railway_, economy_, data_.cargo, data_.industries, date_.year(), date_.days_since_epoch());
 }
 
 // Running costs for the month just ended are charged on the 1st, before a
 // new year's accounts are opened, so December's land in the old year.
 void World::on_new_month() {
-    start_new_month(railway_);
+    start_new_month(railway_, date_.days_since_epoch());
     charge_running_costs();
     railway_.close_month();
     account_industries(1);

@@ -72,7 +72,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::MapGeneration, towns_pe
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Freight, decay_ppm_per_sensitivity_day, expired_permille)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::ReferenceSpeed, year, mph)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Express, attraction_half, min_load_milli, cap_milli,
-                                                wait_loss_per_mille_per_sensitivity, mail_cap_months,
+                                                wait_loss_per_mille_per_sensitivity, mail_cap_months, max_legs,
+                                                avoid_lost_percent, avoid_days, avoid_generation_percent,
                                                 fare_reference_km, fare_distance_exponent_permille,
                                                 speed_factor_min_permille, speed_factor_max_permille, reference_speeds,
                                                 era_volume_percent)

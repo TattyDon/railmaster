@@ -79,10 +79,10 @@ std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t tick
 // a train route with it (more connections, more traffic). Waiting express
 // loads dwindle as passengers give up and mail goes stale.
 void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
-                        std::int32_t year);
+                        std::int32_t year, std::int32_t today);
 
 // Monthly: reset the mail demand caps.
-void start_new_month(Railway& rw);
+void start_new_month(Railway& rw, std::int32_t today);
 
 // A train has arrived at a station. Unload every car whose cargo sells here
 // for more than it cost: RT3 unloads at the first such stop. Cargo is never

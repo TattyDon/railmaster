@@ -121,6 +121,9 @@
   },
   "express": {
     "attraction_half": 2,
+    "avoid_days": 182,
+    "avoid_generation_percent": 40,
+    "avoid_lost_percent": 50,
     "cap_milli": 20000,
     "era_volume_percent": [
       {
@@ -151,6 +154,7 @@
     "fare_distance_exponent_permille": 900,
     "fare_reference_km": 50,
     "mail_cap_months": 2,
+    "max_legs": 3,
     "min_load_milli": 500,
     "reference_speeds": [
       {

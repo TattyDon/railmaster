@@ -230,15 +230,25 @@ How we implement them (code: `freight.hpp`):
 2. **Waiting.** Each pool loses 0.1% a day per point of decay sensitivity
    (passengers 0.9%, mail 1%), half the on-train rate [C], and holds at most
    20 loads.
+   - **Giving up** (rt3-clone-spec §8.3 [D]: travellers who cannot get
+     through go home and avoid rail for a while): what a station makes and
+     what it loses waiting (decay, and loads with no room to wait) are
+     counted each month. When more than `avoid_lost_percent` (50%) is lost,
+     the place avoids the railway for `avoid_days` (182, the spec's 6
+     months [I]) and makes only `avoid_generation_percent` (40%) as many.
+     The station's detail panel says so.
 3. **Loading.** Express loads compete with freight for empty cars, valued
    at their fare. Loads whose destination is on this train's route ride
    straight there. Otherwise a load may ride to a stop of this train from
    which another train runs to its destination, choosing the one nearest
    the destination. At that hub it gets off and waits with the others for
    its destination (rt3-clone-spec §8.3 [D]: travellers go to a hub to
-   catch a direct train). One change at most [I].
+   catch a direct train). Journeys may take up to `express.max_legs`
+   trains (3, so two changes) [I]: a load rides to the stop of its train
+   from which its destination is fewest trains away, nearest the
+   destination among equals, and changes there.
    - **Destinations:** stations generate passengers and mail for every
-     station they can reach with at most one change, so joining networks
+     station they can reach within `max_legs` trains, so joining networks
      (your own or a rival's) brings more traffic [D].
    - **Fares:** each train is paid for its own leg, from the station where
      the load boarded it.

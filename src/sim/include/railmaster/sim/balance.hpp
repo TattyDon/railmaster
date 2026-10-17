@@ -286,6 +286,16 @@ struct Balance {
         std::int32_t cap_milli = 20'000;
         std::int32_t wait_loss_per_mille_per_sensitivity = 1; // ~half the on-train rate [I, spec §8.2]
         std::int32_t mail_cap_months = 2;
+        // Journeys of up to this many trains: travellers change at hubs on
+        // the way (rt3-clone-spec §8.3 [D]; how many changes is [I]).
+        std::int32_t max_legs = 3;
+        // Travellers who give up (rt3-clone-spec §8.3 [D]): when more than
+        // this share of a month's new passengers (or mail) at a station is
+        // lost waiting, the place avoids rail for avoid_days [I: 6 months],
+        // making only avoid_generation_percent as many.
+        std::int32_t avoid_lost_percent = 50;
+        std::int32_t avoid_days = 182;
+        std::int32_t avoid_generation_percent = 40;
         // Fares (rt3-clone-spec §8.3 [I]): the cargo's rate per km x
         // reference distance x (distance / reference)^0.9, so a trip of the
         // reference distance pays the plain rate per km ...

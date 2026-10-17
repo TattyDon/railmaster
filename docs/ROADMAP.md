@@ -99,8 +99,9 @@ minimum and maximum cars, waiting for full loads, caboose and dining car,
 copying and retiring trains; empty cars are no longer hauled.
 
 Still to do:
-- Express units with homes and destinations, more than one change of
-  trains, and travellers who give up avoiding rail for a while (§8.3).
+- Express units with homes (express loads have destination stations, change
+  trains up to twice, and a town whose travellers mostly give up avoids
+  rail for six months; origin and destination *houses* are not modelled).
 - Industry footprints of 4 × 4 cells (§3.1).
 
 Later eras are calibrated too: the demo network started in 1900 and 1950
@@ -339,7 +340,8 @@ Still to do:
   bells, the cash register and clicks; music is still to come.
 
 ## M5: Opponents and scenarios
-- AI chairmen with personality traits.
+- AI chairmen with personality traits: done (data/tycoons.json: expansion,
+  borrowing, dividends, speculation, takeovers, industry, recession caution).
 - Scenario format and medal conditions: done (JSON files, nested goals
   with deadlines, F10 status screen; [spec/scenarios.md](spec/scenarios.md)).
 - Event and trigger system: done (dated, goal and counter triggers; timed

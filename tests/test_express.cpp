@@ -51,7 +51,7 @@ struct Towns {
     CargoId pax() const { return *cargo.find("passengers"); }
     CargoId mail() const { return *cargo.find("mail"); }
     void gather(int days) {
-        for (int i = 0; i < days; ++i) gather_at_stations(rw, eco, cargo, ind, 1850);
+        for (int i = 0; i < days; ++i) gather_at_stations(rw, eco, cargo, ind, 1850, i);
     }
     std::int32_t waiting(StationId at, CargoId c, StationId dest) const {
         for (const ExpressWaiting& e : rw.station(at).express)
@@ -192,7 +192,7 @@ TEST_CASE("a town stops paying for mail beyond its monthly demand") {
     };
     CHECK(deliver_mail(10) > Money{});
     CHECK(deliver_mail(11) == Money{}); // 1 load received >= cap of 6 * 1000 / 12 * 2 = 1000
-    start_new_month(w.rw);
+    start_new_month(w.rw, 30);
     CHECK(deliver_mail(40) > Money{});
 
     // Passengers have no such cap.
@@ -250,4 +250,73 @@ TEST_CASE("joining networks makes more passengers: destinations one change away 
     joined.gather(10);
     CHECK(two.waiting(two.st[0], two.pax(), two.st[2]) == 0);
     CHECK(joined.waiting(joined.st[0], joined.pax(), joined.st[2]) > 0);
+}
+
+TEST_CASE("travellers reach places two changes of trains away, changing where they get nearer in trains") {
+    // Four towns, three trains end to end: 0-1, 1-2, 2-3.
+    Towns w({5, 20, 35, 50}, 20);
+    w.rw.add_train(0, 4, {w.st[0], w.st[1]});
+    w.rw.add_train(0, 4, {w.st[1], w.st[2]});
+    w.rw.add_train(0, 4, {w.st[2], w.st[3]});
+    w.gather(30);
+    // Three trains from 0 to 3: within the default reach.
+    CHECK(w.waiting(w.st[0], w.pax(), w.st[3]) > 0);
+    // Loaded at 0 for 3, they ride the first train to 1, the hub nearer in trains.
+    const TrainId first = 0;
+    for (auto& e : w.rw.station_mut(w.st[0]).express) {
+        if (e.destination != w.st[3]) e.milli = 0; // only the far travellers wait
+    }
+    w.arrive(first, w.st[0], 31);
+    bool bound_for_3 = false;
+    for (const Car& car : w.rw.train(first).cars) {
+        if (car.destination && *car.destination == w.st[3]) {
+            bound_for_3 = true;
+            CHECK(car.via == std::optional<std::uint32_t>(w.st[1]));
+        }
+    }
+    CHECK(bound_for_3);
+
+    // With journeys of at most two trains, 3 is out of reach from 0.
+    Balance b = default_balance();
+    b.express.max_legs = 2;
+    Towns near({5, 20, 35, 50}, 20);
+    near.rw.set_balance(b);
+    near.rw.add_train(0, 4, {near.st[0], near.st[1]});
+    near.rw.add_train(0, 4, {near.st[1], near.st[2]});
+    near.rw.add_train(0, 4, {near.st[2], near.st[3]});
+    near.gather(30);
+    CHECK(near.waiting(near.st[0], near.pax(), near.st[2]) > 0);
+    CHECK(near.waiting(near.st[0], near.pax(), near.st[3]) == 0);
+}
+
+TEST_CASE("when most travellers give up waiting, the town avoids the railway for six months") {
+    Towns w({5, 25}, 30);
+    w.rw.add_train(0, 4, {w.st[0], w.st[1]}); // a train that never comes: it stays where it is
+    const auto avoided = [&] {
+        const auto& a = w.rw.station(w.st[0]).avoided_until;
+        return w.pax() < a.size() ? a[w.pax()] : 0;
+    };
+    // The first month the waiting room is still filling: few have given up yet.
+    int day = 0;
+    for (; day < 30; ++day) gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, day);
+    start_new_month(w.rw, day);
+    CHECK(avoided() == 0);
+    // Once it is full, nearly everyone made gives up: the town avoids the railway.
+    for (int month = 0; month < 6 && avoided() == 0; ++month) {
+        for (int i = 0; i < 30; ++i, ++day) gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, day);
+        start_new_month(w.rw, day);
+    }
+    const std::int32_t until = avoided();
+    REQUIRE(until > 0);
+    CHECK(until == day + default_balance().express.avoid_days);
+    // While avoided, the town makes fewer travellers.
+    const auto made_on = [&](std::int32_t when) {
+        for (auto& e : w.rw.station_mut(w.st[0]).express) e.milli = 0;
+        gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, when);
+        return w.waiting(w.st[0], w.pax(), w.st[1]);
+    };
+    const std::int32_t avoided_day = made_on(day + 1);
+    const std::int32_t normal_day = made_on(until + 1);
+    CHECK(avoided_day > 0);
+    CHECK(avoided_day * 100 <= normal_day * (default_balance().express.avoid_generation_percent + 5));
 }

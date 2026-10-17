@@ -52,6 +52,12 @@ struct Station {
     std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
     std::vector<ExpressWaiting> express{}; // sorted by (cargo, destination)
     std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
+    // Express made here and lost waiting this month, by CargoId (milli), and
+    // the day until which travellers avoid the station after too many gave
+    // up (rt3-clone-spec §8.3 [D]); 0 for none.
+    std::vector<std::int32_t> express_made_month{};
+    std::vector<std::int32_t> express_lost_month{};
+    std::vector<std::int32_t> avoided_until{};
     std::optional<std::size_t> town{}; // index into Economy::towns(); none in open country
     std::int32_t built_day = 0;
     // Passenger traffic this month, for the station-area buildings: loads

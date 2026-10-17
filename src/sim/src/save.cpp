@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 18; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 19; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -34,7 +34,7 @@ constexpr std::uint32_t kSaveVersion = 18; // 2: events, Grants; 3: restrictions
                                            // 14: a hand-made landscape in the config;
                                            // 15: a hand-made map's towns in the config;
                                            // 16: and its industries; 17: and its territories;
-                                           // 18: a scenario's hand-made map
+                                           // 18: a scenario's hand-made map; 19: travellers giving up
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -302,6 +302,7 @@ void io(Ar& ar, Station& s) {
     fields(ar, s.id, s.name, s.node, s.size, s.owner, s.waiting, s.express, s.received_this_month, s.town, s.built_day,
            s.passengers_boarded_milli, s.passengers_arrived_milli, s.passengers_waiting_milli_days, s.income_this_month,
            s.income_months);
+    fields(ar, s.express_made_month, s.express_lost_month, s.avoided_until);
 }
 template <class Ar>
 void io(Ar& ar, Crossing& c) {

@@ -2774,6 +2774,17 @@ void Tools::draw_detail_panel() const {
         }
         if (!any) rows.push_back(dim({"Nothing made or wanted within reach"}));
         rows.push_back(dim({"Made and wanted: loads a year"}));
+        // Travellers who gave up on the railway here (rt3-clone-spec §8.3).
+        for (std::size_t c = 0; c < s.avoided_until.size(); ++c) {
+            if (s.avoided_until[c] <= today) continue;
+            DetailRow r = line({cargo.get(static_cast<sim::CargoId>(c)).name + " avoid the railway here",
+                                "until " + sim::Date::from_days(s.avoided_until[c]).month_year_label()});
+            r.r = 1.0f;
+            r.g = 0.6f;
+            r.b = 0.5f;
+            rows.push_back(r);
+            rows.push_back(dim({"Too many gave up waiting: run trains here more often"}));
+        }
 
         // Buildings by the station: its own service buildings, and the
         // post offices, hotels, restaurants and taverns within range.
