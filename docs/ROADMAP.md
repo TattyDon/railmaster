@@ -348,7 +348,11 @@ Still to do:
   include average train speed and counters.
 - Original scenarios built to RT3's design patterns (new maps and text):
   three to start, on generated terrain.
-- Map editor with heightmap import.
+- Map editor with heightmap import. Started: hand-made landscapes from
+  heightmap images (`data/maps`, chosen on the title screen or with
+  `--landscape`; brightness is height, blue is water), kept in saves.
+  Still to come: editing in the game (raising and lowering land, water,
+  towns, industries, territories) and saving maps.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

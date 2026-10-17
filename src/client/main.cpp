@@ -4,7 +4,7 @@
 // simple shapes (V switches to the old top-down view).
 //
 // Usage: railmaster [data-dir] [--empty] [--quick] [--rivals=N] [--map=small|medium|large] [--territories=N]
-//                   [--scenario=FILE] [--load=FILE] [--no-shaders] [--look=X,Y] [--version]
+//                   [--scenario=FILE] [--load=FILE] [--landscape=IMAGE] [--no-shaders] [--look=X,Y] [--version]
 // With none of --quick, --empty, --scenario, --load or --look it opens on
 // the title screen (title.cpp), over the demo network running by itself.
 // --look starts the view over map tile (X, Y), close in.
@@ -30,6 +30,7 @@
 
 #include <SDL.h>
 #include <SDL_opengl.h>
+#include <stb_image.h>
 
 #include <algorithm>
 #include <new>
@@ -68,6 +69,26 @@ sim::GameData load_game_data(const std::string& dir) {
 
 } // namespace
 
+// A hand-made landscape from an image (data/maps; the first step of the map
+// editor, docs/ROADMAP.md M5): the image stretched over the config's map size.
+// Problems are reported and leave the map generated.
+std::optional<sim::Landscape> read_landscape(const std::string& path, const sim::WorldConfig& cfg, std::int32_t max_height_m) {
+    int w = 0, h = 0, channels = 0;
+    stbi_uc* px = stbi_load(path.c_str(), &w, &h, &channels, 3);
+    if (!px) {
+        std::fprintf(stderr, "Cannot read %s: %s\n", path.c_str(), stbi_failure_reason());
+        return std::nullopt;
+    }
+    std::optional<sim::Landscape> l;
+    try {
+        l = sim::landscape_from_image(px, w, h, cfg.width_tiles, cfg.height_tiles, max_height_m, 24);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "%s: %s\n", path.c_str(), e.what());
+    }
+    stbi_image_free(px);
+    return l;
+}
+
 int main(int argc, char* argv[]) {
     std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
     bool empty = false;
@@ -79,6 +100,7 @@ int main(int argc, char* argv[]) {
     int territories = 0;
     std::string scenario_path;
     std::string load_path;
+    std::string landscape_path; // --landscape=FILE: a heightmap image for the map
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--version") {
@@ -96,6 +118,7 @@ int main(int argc, char* argv[]) {
         else if (arg.rfind("--territories=", 0) == 0) territories = std::stoi(arg.substr(14));
         else if (arg.rfind("--scenario=", 0) == 0) scenario_path = arg.substr(11);
         else if (arg.rfind("--load=", 0) == 0) load_path = arg.substr(7);
+        else if (arg.rfind("--landscape=", 0) == 0) landscape_path = arg.substr(12);
         else if (arg == "--map=small") map_size = sim::MapSize::Small;
         else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
         else if (arg == "--map=large") map_size = sim::MapSize::Large;
@@ -114,6 +137,7 @@ int main(int argc, char* argv[]) {
     config.rivals = rivals;
     config.set_map_size(map_size);
     config.territories = territories;
+    if (!landscape_path.empty()) config.landscape = read_landscape(landscape_path, config, data.balance.map.max_height_m);
     if (!scenario_path.empty()) {
         try {
             config = sim::scenario_config(sim::Scenario::from_json(read_file(scenario_path)));
@@ -670,7 +694,14 @@ int main(int argc, char* argv[]) {
         // The title screen's requests.
         if (const auto req = title.take_request()) {
             switch (req->kind) {
-            case client::Title::Request::Kind::NewGame: start_world(req->config); break;
+            case client::Title::Request::Kind::NewGame: {
+                sim::WorldConfig cfg = req->config;
+                if (!req->path.empty()) {
+                    cfg.landscape = read_landscape(req->path, cfg, load_game_data(data_dir).balance.map.max_height_m);
+                }
+                start_world(cfg);
+                break;
+            }
             case client::Title::Request::Kind::Scenario:
                 try {
                     sim::WorldConfig cfg = sim::scenario_config(sim::Scenario::from_json(read_file(req->path)));

@@ -84,6 +84,7 @@ Format versions:
 - **11:** compressed; the game's config and command log.
 - **12:** train profits, station income and track traffic by month.
 - **13:** each train's accounts, this year and last (the train window's cost window).
+- **14:** a hand-made landscape in the game's config.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

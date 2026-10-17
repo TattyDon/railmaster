@@ -91,8 +91,10 @@ World::World(const WorldConfig& config, GameData data)
     chairman_can_resign_ = config.chairman_can_resign;
     town_growth_ = config.town_growth;
     industries_appear_ = config.industries_appear;
-    terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
-    {
+    if (config.landscape) {
+        terrain_.apply(*config.landscape);
+    } else {
+        terrain_.generate_rolling_hills(rng_, data_.balance.map.max_height_m);
         // Rivers, in the map's usual number for its size.
         const std::int64_t cell_km = config.tile_size_m;
         const std::int64_t area_permille =

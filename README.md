@@ -62,7 +62,8 @@ there):
 
 - The game opens on the title screen, over a demo railway running on its
   own: **New railroad** (choose the map size, rival railroads, territories,
-  difficulty and map, then Start), **Scenarios** (each with its briefing),
+  difficulty, the landscape (generated, or one of the hand-made maps in
+  `data/maps`) and the seed for towns and industries, then Start), **Scenarios** (each with its briefing),
   **Load a saved game**, or **Quit**. Up/Down and Enter, or click.
 - A new railroad or scenario opens with the founding dialog: Enter founds
   your railroad on the usual terms.
@@ -87,6 +88,14 @@ there):
 - Zoom with the mouse wheel, a two-finger scroll or pinch on a trackpad,
   or Option (Alt) + Up/Down; arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
+
+Hand-made maps: any PNG in `data/maps/` appears under Landscape on the
+title screen. Brightness is height (black low, white the highest hills),
+and blue, or near-black, is water; the image is stretched over the chosen
+map size, and towns and industries are placed on its dry land. Draw one in
+any image editor, or see `tools/maps/make_maps.py`, which drew the three
+that come with the game (Two Rivers, Archipelago, Mountain Pass).
+`--landscape=IMAGE` uses one from the command line.
 
 Other ways to start, straight from the command line (any of these skips
 the title screen):

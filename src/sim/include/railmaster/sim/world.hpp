@@ -73,6 +73,9 @@ struct WorldConfig {
     // A scenario's towns, founding money and medal goals (scenario_config
     // fills in the rest of this config from it).
     std::optional<Scenario> scenario;
+    // A hand-made landscape for the map (its size must match), in place of
+    // generated hills and rivers.
+    std::optional<Landscape> landscape;
 };
 
 // The config for playing a scenario: its seed, start, map size, rivals,

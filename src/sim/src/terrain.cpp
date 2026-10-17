@@ -167,4 +167,91 @@ void Terrain::generate_rolling_hills(Random& rng, std::int32_t max_height_m) {
     }
 }
 
+Landscape landscape_from_image(const std::uint8_t* rgb, std::int32_t image_w, std::int32_t image_h, std::int32_t map_w,
+                               std::int32_t map_h, std::int32_t max_height_m, std::int32_t sea_level) {
+    if (image_w < 2 || image_h < 2 || map_w < 1 || map_h < 1) throw std::invalid_argument("landscape: image or map too small");
+    // Each pixel: its height in thousandths of the maximum, and whether it is water.
+    const auto pixels = static_cast<std::size_t>(image_w) * static_cast<std::size_t>(image_h);
+    std::vector<std::int32_t> level(pixels);
+    std::vector<std::uint8_t> wet(pixels);
+    for (std::size_t i = 0; i < pixels; ++i) {
+        const std::int32_t r = rgb[3 * i], g = rgb[3 * i + 1], b = rgb[3 * i + 2];
+        const std::int32_t grey = (r * 299 + g * 587 + b * 114) / 1000;
+        const bool blue = b > r + 40 && b > g + 20;
+        wet[i] = blue || grey <= sea_level ? 1 : 0;
+        // Water lies at the sea's level, whatever its shade of blue.
+        level[i] = (wet[i] ? std::min(grey, sea_level) : grey) * 1000 / 255;
+    }
+    // Sample the image at a map position (in pixels, fractional), bilinearly.
+    const auto sample = [&](std::int64_t x_milli, std::int64_t y_milli) {
+        const std::int64_t max_x = (image_w - 1) * std::int64_t{1000}, max_y = (image_h - 1) * std::int64_t{1000};
+        x_milli = std::clamp<std::int64_t>(x_milli, 0, max_x);
+        y_milli = std::clamp<std::int64_t>(y_milli, 0, max_y);
+        const auto x0 = static_cast<std::int32_t>(std::min<std::int64_t>(x_milli / 1000, image_w - 2));
+        const auto y0 = static_cast<std::int32_t>(std::min<std::int64_t>(y_milli / 1000, image_h - 2));
+        const std::int64_t fx = x_milli - std::int64_t{x0} * 1000, fy = y_milli - std::int64_t{y0} * 1000;
+        const auto at = [&](std::int32_t x, std::int32_t y) {
+            return std::int64_t{level[static_cast<std::size_t>(y) * static_cast<std::size_t>(image_w) + static_cast<std::size_t>(x)]};
+        };
+        const std::int64_t top = at(x0, y0) * (1000 - fx) + at(x0 + 1, y0) * fx;
+        const std::int64_t bot = at(x0, y0 + 1) * (1000 - fx) + at(x0 + 1, y0 + 1) * fx;
+        return (top * (1000 - fy) + bot * fy) / 1'000'000; // thousandths of the maximum
+    };
+    Landscape l;
+    l.width = map_w;
+    l.height = map_h;
+    const std::int32_t cw = map_w + 1, ch = map_h + 1;
+    std::vector<std::int64_t> raw(static_cast<std::size_t>(cw) * static_cast<std::size_t>(ch));
+    for (std::int32_t y = 0; y < ch; ++y) {
+        for (std::int32_t x = 0; x < cw; ++x) {
+            raw[static_cast<std::size_t>(y) * static_cast<std::size_t>(cw) + static_cast<std::size_t>(x)] =
+                sample(std::int64_t{x} * (image_w - 1) * 1000 / map_w, std::int64_t{y} * (image_h - 1) * 1000 / map_h);
+        }
+    }
+    // A light 3 x 3 smoothing.
+    l.corners.resize(raw.size());
+    for (std::int32_t y = 0; y < ch; ++y) {
+        for (std::int32_t x = 0; x < cw; ++x) {
+            std::int64_t sum = 0, n = 0;
+            for (std::int32_t dy = -1; dy <= 1; ++dy) {
+                for (std::int32_t dx = -1; dx <= 1; ++dx) {
+                    const std::int32_t nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue;
+                    const std::int64_t weight = (dx == 0 && dy == 0) ? 4 : (dx == 0 || dy == 0) ? 2 : 1;
+                    sum += raw[static_cast<std::size_t>(ny) * static_cast<std::size_t>(cw) + static_cast<std::size_t>(nx)] * weight;
+                    n += weight;
+                }
+            }
+            l.corners[static_cast<std::size_t>(y) * static_cast<std::size_t>(cw) + static_cast<std::size_t>(x)] =
+                static_cast<std::int32_t>(sum / n * max_height_m / 1000);
+        }
+    }
+    // Water: the pixel under each tile's middle.
+    l.water.resize(static_cast<std::size_t>(map_w) * static_cast<std::size_t>(map_h));
+    for (std::int32_t y = 0; y < map_h; ++y) {
+        for (std::int32_t x = 0; x < map_w; ++x) {
+            const auto px = static_cast<std::int32_t>(std::min<std::int64_t>((2 * std::int64_t{x} + 1) * image_w / (2 * map_w), image_w - 1));
+            const auto py = static_cast<std::int32_t>(std::min<std::int64_t>((2 * std::int64_t{y} + 1) * image_h / (2 * map_h), image_h - 1));
+            l.water[static_cast<std::size_t>(y) * static_cast<std::size_t>(map_w) + static_cast<std::size_t>(x)] =
+                wet[static_cast<std::size_t>(py) * static_cast<std::size_t>(image_w) + static_cast<std::size_t>(px)];
+        }
+    }
+    return l;
+}
+
+void Terrain::apply(const Landscape& l) {
+    if (l.width != width_ || l.height != height_) throw std::invalid_argument("landscape: not this map's size");
+    for (std::int32_t cy = 0; cy <= height_; ++cy) {
+        for (std::int32_t cx = 0; cx <= width_; ++cx) {
+            set_corner_height(cx, cy, l.corners[static_cast<std::size_t>(cy) * static_cast<std::size_t>(width_ + 1) + static_cast<std::size_t>(cx)]);
+        }
+    }
+    for (std::int32_t ty = 0; ty < height_; ++ty) {
+        for (std::int32_t tx = 0; tx < width_; ++tx) {
+            const bool water = l.water[static_cast<std::size_t>(ty) * static_cast<std::size_t>(width_) + static_cast<std::size_t>(tx)] != 0;
+            set_ground(tx, ty, water ? GroundType::Water : GroundType::Grass);
+        }
+    }
+}
+
 } // namespace railmaster::sim

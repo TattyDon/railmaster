@@ -8,6 +8,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -71,6 +72,15 @@ Title::Title(std::string data_dir, std::vector<std::pair<std::string, std::strin
             // A broken file is left off the list; the game says why when started from the command line.
         }
     }
+    // Hand-made landscapes: the images in data/maps, named after their files.
+    for (const auto& entry : std::filesystem::directory_iterator(data_dir_ + "/maps", ec)) {
+        if (entry.path().extension() != ".png") continue;
+        std::string name = entry.path().stem().string();
+        std::replace(name.begin(), name.end(), '_', ' ');
+        if (!name.empty()) name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+        maps_.emplace_back(entry.path().string(), name);
+    }
+    std::sort(maps_.begin(), maps_.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
     std::sort(scenarios_.begin(), scenarios_.end(),
               [](const ScenarioInfo& a, const ScenarioInfo& b) { return a.year != b.year ? a.year < b.year : a.name < b.name; });
     seed_ = SDL_GetPerformanceCounter() % 9000 + 1000;
@@ -85,7 +95,7 @@ void Title::show() {
 int Title::items() const {
     switch (page_) {
     case 0: return 4;
-    case 1: return 6; // map, rivals, territories, difficulty, map number, start
+    case 1: return 7; // map size, rivals, territories, difficulty, landscape, map number, start
     case 2: return static_cast<int>(scenarios_.size());
     default: return static_cast<int>(slots_.size());
     }
@@ -97,7 +107,12 @@ void Title::change(int step) {
     case 1: rivals_ = std::clamp(rivals_ + step, 0, kMaxRivals); break;
     case 2: territories_ = (territories_ + step + 3) % 3; break;
     case 3: difficulty_ = (difficulty_ + step + 4) % 4; break;
-    case 4: seed_ = seed_ + static_cast<std::uint64_t>(step + 1) * 7919 % 9000 + 1; break;
+    case 4: {
+        const int n = static_cast<int>(maps_.size()) + 1;
+        landscape_ = (landscape_ + step + n) % n;
+        break;
+    }
+    case 5: seed_ = seed_ + static_cast<std::uint64_t>(step + 1) * 7919 % 9000 + 1; break;
     default: break;
     }
 }
@@ -110,10 +125,10 @@ void Title::choose() {
             return;
         }
         page_ = sel_ + 1;
-        sel_ = page_ == 1 ? 5 : 0;
+        sel_ = page_ == 1 ? 6 : 0;
         return;
     case 1: {
-        if (sel_ != 5) {
+        if (sel_ != 6) {
             change(+1);
             return;
         }
@@ -124,6 +139,7 @@ void Title::choose() {
         r.config.territories = kTerritories[territories_];
         r.config.difficulty = static_cast<sim::Difficulty>(difficulty_);
         r.config.found_player_company = false; // the founding dialog sets the terms
+        if (landscape_ > 0) r.path = maps_[static_cast<std::size_t>(landscape_ - 1)].first;
         request_ = r;
         return;
     }
@@ -227,9 +243,11 @@ void Title::draw(float width, float height, const std::string& build) const {
         heading("New railroad");
         const std::string values[] = {kSizes[map_size_], rivals_ == 0 ? std::string("None") : std::to_string(rivals_),
                                       territories_ == 0 ? std::string("None") : std::to_string(kTerritories[territories_]),
-                                      kDifficulties[difficulty_], "#" + std::to_string(seed_)};
-        const char* labels[] = {"Map size", "Rival railroads", "Territories", "Difficulty", "Map"};
-        for (int i = 0; i < 5; ++i) {
+                                      kDifficulties[difficulty_],
+                                      landscape_ == 0 ? std::string("Generated") : maps_[static_cast<std::size_t>(landscape_ - 1)].second,
+                                      "#" + std::to_string(seed_)};
+        const char* labels[] = {"Map size", "Rival railroads", "Territories", "Difficulty", "Landscape", "Towns and industries"};
+        for (int i = 0; i < 6; ++i) {
             const float row = y;
             item(labels[i], i == sel_, 460, kScale);
             glColor3f(i == sel_ ? 1.0f : 0.85f, i == sel_ ? 0.9f : 0.8f, i == sel_ ? 0.6f : 0.7f);
@@ -237,7 +255,7 @@ void Title::draw(float width, float height, const std::string& build) const {
             draw_text(x0 + 440 - static_cast<float>(text_width(v, kScale)), row, v, kScale);
         }
         y += 10;
-        item("Start", sel_ == 5, 460, kScale + 1);
+        item("Start", sel_ == 6, 460, kScale + 1);
         foot = "Left/Right change   Enter starts   Esc back";
         break;
     }

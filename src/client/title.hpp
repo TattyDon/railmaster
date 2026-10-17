@@ -19,7 +19,7 @@ public:
     struct Request {
         enum class Kind { NewGame, Scenario, Load, Quit } kind;
         sim::WorldConfig config{}; // NewGame
-        std::string path;          // Scenario and Load
+        std::string path;          // Scenario and Load; for NewGame, a landscape image (none: generated)
     };
 
     // `data_dir` holds scenarios/; `slots` are the save files to offer, each
@@ -61,6 +61,8 @@ private:
     int rivals_ = 3;
     int territories_ = 0;  // none, 4, 8
     int difficulty_ = 1;   // easy, medium, hard, expert
+    int landscape_ = 0;    // 0 generated, else maps_[landscape_ - 1]
+    std::vector<std::pair<std::string, std::string>> maps_; // the images in data/maps: path, name
     std::uint64_t seed_ = 1;
 };
 

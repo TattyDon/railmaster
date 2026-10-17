@@ -21,6 +21,23 @@ enum class GroundType : std::uint8_t {
     Water,
 };
 
+// A landscape made by hand (from a heightmap image, say), for a new map in
+// place of the generated hills and rivers: heights at the tile corners and
+// which tiles are water.
+struct Landscape {
+    std::int32_t width = 0, height = 0;  // in tiles
+    std::vector<std::int32_t> corners{}; // metres, (width + 1) x (height + 1), row by row
+    std::vector<std::uint8_t> water{};   // width x height, 1 for water
+};
+
+// A landscape from an image (RGB, row by row from the top): brightness is
+// height, black at 0 and white at `max_height_m`; water is where the image
+// is clearly blue or its brightness is at or below `sea_level` (0-255).
+// The image is stretched over a map of `map_w` x `map_h` tiles and lightly
+// smoothed, so 8-bit heights do not show as terraces.
+Landscape landscape_from_image(const std::uint8_t* rgb, std::int32_t image_w, std::int32_t image_h, std::int32_t map_w,
+                               std::int32_t map_h, std::int32_t max_height_m, std::int32_t sea_level);
+
 // Heightfield terrain. Heights are sampled at tile *corners*, so a map of
 // W x H tiles has (W+1) x (H+1) height samples. Heights are whole metres
 // to keep slope computation in integer arithmetic.
@@ -66,6 +83,9 @@ public:
     // reaches water or the map edge, cutting through any hollow on the way
     // so it always runs downhill. River cells are water.
     void generate_rivers(Random& rng, std::int32_t count, std::int32_t source_percent);
+    // Take a hand-made landscape's heights and water (it must be this map's
+    // size); the rest of the ground is grass.
+    void apply(const Landscape& l);
 
     // Saving and loading (save.cpp) reads and writes every member.
     template <class Ar>

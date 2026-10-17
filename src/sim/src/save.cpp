@@ -25,12 +25,13 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 13; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 14; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
                                            // 12: train profits, station income and track traffic by month;
-                                           // 13: each train's accounts this year and last
+                                           // 13: each train's accounts this year and last;
+                                           // 14: a hand-made landscape in the config
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -596,7 +597,11 @@ void io(Ar& ar, WorldConfig& c) {
     fields(ar, c.seed, c.start_date, c.width_tiles, c.height_tiles, c.tile_size_m, c.cells_per_node, c.sandbox,
            c.found_player_company, c.founding, c.starting_cash, c.populate, c.difficulty, c.business_cycle, c.rivals);
     fields(ar, c.chairman_can_be_fired, c.chairman_can_resign, c.town_growth, c.industries_appear, c.territories,
-           c.rival_ai, c.scenario);
+           c.rival_ai, c.scenario, c.landscape);
+}
+template <class Ar>
+void io(Ar& ar, Landscape& l) {
+    fields(ar, l.width, l.height, l.corners, l.water);
 }
 
 template <class Ar>
