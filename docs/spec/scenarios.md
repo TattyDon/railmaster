@@ -46,6 +46,11 @@ deliver cargo, reach a book value, win the market.
 - `key`, `name`, `start` and `medals` are required. Everything else is
   optional and has the defaults shown.
 - `map` is `small`, `medium` or `large` (§3.1).
+- `landscape` (optional) names a hand-made map to play on: a heightmap
+  image, relative to the scenario's file (`"../maps/my_map_1.png"`), with
+  the industries and territories kept beside it in the map's `.json`.
+  The scenario's `towns` are then the map's only towns. The map editor
+  writes such scenarios (G).
 - The founding amounts replace `balance.json`'s `stock` values for every
   founder, rivals included.
 - `towns` are placed first, centred on the given map cell (0.5-mile cells;

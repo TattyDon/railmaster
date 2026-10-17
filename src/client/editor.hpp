@@ -5,6 +5,7 @@
 #include "railmaster/sim/world.hpp"
 
 #include <SDL.h>
+#include <nlohmann/json.hpp>
 
 #include <optional>
 #include <string>
@@ -19,7 +20,7 @@ class Editor {
 public:
     enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town, Industry, Territory };
     struct Request {
-        enum class Kind { Save, Play, Leave } kind;
+        enum class Kind { Save, Play, Leave, SaveScenario, PlayScenario } kind;
     };
 
     Editor(sim::World& world, const Camera& cam) : world_(world), cam_(cam) {}
@@ -29,6 +30,7 @@ public:
     void begin(std::string name, std::int32_t max_height_m);
     void end() { open_ = false; }
     void saved(const std::string& path); // the map was saved there
+    void note(std::string message);      // a line for the bottom bar
     std::optional<Request> take_request() { return std::exchange(request_, std::nullopt); }
     const std::string& name() const { return name_; }
     // The map's towns, in map cells (the Town brush places, names and sizes them).
@@ -44,6 +46,12 @@ public:
     // Typed text (SDL_TEXTINPUT), for a town's name.
     void text(const char* utf8);
 
+    // The scenario page (G): a name, briefing, start, rivals and a goal and
+    // deadline for each medal, made into a scenario file for this map
+    // (`landscape`: the map's image, relative to where the file goes).
+    nlohmann::json scenario_json(const std::string& key, const std::string& landscape, const std::string& map_size) const;
+    const std::string& scenario_name() const { return scen_.name; }
+
     // True if the event was the editor's.
     bool key(SDL_Keycode key);
     bool mouse_down(float sx, float sy, int button);
@@ -58,6 +66,26 @@ public:
 private:
     void apply(float seconds);
     void town_click();
+    struct ScenarioDraft {
+        std::string name = "My scenario";
+        std::string briefing = "Build a railroad to be proud of.";
+        int start_year = 1850;
+        int rivals = 1;
+        struct Medal {
+            int kind = 1;  // see kGoalNames
+            int level = 3; // the target, as a step on the kind's ladder
+            int years = 5; // the deadline, years after the start
+        };
+        Medal medals[3]{{0, 0, 5}, {1, 4, 10}, {1, 7, 20}};
+    };
+    ScenarioDraft scen_;
+    bool scen_open_ = false;
+    int scen_sel_ = 0;
+    int scen_text_ = 0; // typing: 1 the name, 2 the briefing
+    bool scen_key(SDL_Keycode key);
+    void scen_change(int step);
+    std::string goal_text(int medal) const;
+    void draw_scenario(float width, float height) const;
     void industry_click();
     static constexpr int kMaxTerritories = 8;
     sim::TerritoryMap terr_;

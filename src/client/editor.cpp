@@ -79,6 +79,11 @@ sim::TerritoryMap Editor::territories() const {
     return out;
 }
 
+void Editor::note(std::string message) {
+    message_ = std::move(message);
+    message_until_ = SDL_GetTicks() + 6000;
+}
+
 void Editor::saved(const std::string& path) {
     dirty_ = false;
     message_ = "Saved as " + path + ": it is on the title screen's list of landscapes";
@@ -87,6 +92,7 @@ void Editor::saved(const std::string& path) {
 
 bool Editor::key(SDL_Keycode key) {
     if (key != SDLK_ESCAPE) leave_armed_ = false;
+    if (scen_open_) return scen_key(key);
     // Naming a territory: the keys type.
     if (terr_naming_) {
         if (terr_sel_ < 0 || terr_sel_ >= static_cast<int>(terr_.territories.size())) {
@@ -150,6 +156,10 @@ bool Editor::key(SDL_Keycode key) {
     case SDLK_6:
     case SDLK_7:
     case SDLK_8: brush_ = static_cast<Brush>(key - SDLK_1); return true;
+    case SDLK_g:
+        scen_open_ = true;
+        town_sel_.reset();
+        return true;
     case SDLK_9:
         brush_ = Brush::Territory;
         if (terr_sel_ >= 0) ensure_territory(terr_sel_);
@@ -220,6 +230,7 @@ bool Editor::key(SDL_Keycode key) {
 }
 
 bool Editor::mouse_down(float sx, float sy, int button) {
+    if (scen_open_) return true;
     if (button != SDL_BUTTON_LEFT) return false;
     // The brush buttons along the top.
     if (sy >= kToolbarY && sy < kToolbarY + kButtonH) {
@@ -308,6 +319,11 @@ void Editor::industry_click() {
 
 void Editor::text(const char* utf8) {
     const std::string typed = utf8;
+    if (scen_open_) {
+        if (scen_text_ == 1 && scen_.name.size() < 40) scen_.name += typed;
+        if (scen_text_ == 2 && scen_.briefing.size() < 300) scen_.briefing += typed;
+        return;
+    }
     if (terr_naming_ && terr_sel_ >= 0 && terr_sel_ < static_cast<int>(terr_.territories.size())) {
         std::string& name = terr_.territories[static_cast<std::size_t>(terr_sel_)].name;
         if (fresh_name_) name.clear();
@@ -494,7 +510,7 @@ void Editor::draw_ui(float width, float height) const {
     glColor3f(0.85f, 0.85f, 0.85f);
     draw_text(8, height - kBottomH + 6,
               town_sel_ ? "Type the town's name   [ ] smaller or larger   Delete removes it   Enter done"
-                        : "Left-drag shapes the land.  1-9 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
+                        : "Left-drag shapes the land.  1-9 brush   [ ] size   S save   P play   G scenario   Esc leave",
               kScale);
     // The industries' names, close up.
     if (cam_.distance < 70.0f) {
@@ -542,6 +558,220 @@ void Editor::draw_ui(float width, float height) const {
     }
     glColor3f(0.6f, 0.95f, 0.6f);
     draw_text(8, height - kBottomH + 26, line2, kScale);
+    if (scen_open_) draw_scenario(width, height);
+}
+
+
+namespace {
+
+// The goals a scenario made in the editor can set, one a medal.
+constexpr const char* kGoalNames[] = {"Connect towns", "Book value",       "Revenue in a year", "Company cash",
+                                      "Your net worth", "Average train speed", "Only railroad left", "Highest value"};
+constexpr int kGoalKinds = 8;
+constexpr std::int64_t kMoneyLadder[] = {1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 75, 100}; // millions
+constexpr int kMoneySteps = 12;
+constexpr int kSpeedSteps = 14; // 15 to 80 mph
+
+int ladder_size(int kind, int towns) {
+    switch (kind) {
+    case 0: return std::max(1, towns - 1); // 2 towns up to all of them
+    case 5: return kSpeedSteps;
+    case 6:
+    case 7: return 1;
+    default: return kMoneySteps;
+    }
+}
+
+const char* map_size_name(std::int32_t width) {
+    // The presets' widths: small 256, medium 384, large 768 cells.
+    return width >= 700 ? "large" : width >= 350 ? "medium" : "small";
+}
+
+} // namespace
+
+std::string Editor::goal_text(int m) const {
+    const ScenarioDraft::Medal& md = scen_.medals[m];
+    const auto towns = static_cast<int>(towns_.size());
+    switch (md.kind) {
+    case 0: {
+        if (towns < 2) return "Connect towns (place two towns or more first)";
+        const int n = std::min(md.level + 2, towns);
+        std::string names;
+        for (int i = 0; i < n; ++i) names += (i ? (i + 1 == n ? " and " : ", ") : "") + towns_[static_cast<std::size_t>(i)].name;
+        return "Connect " + names;
+    }
+    case 5: return "Average train speed " + std::to_string(15 + 5 * std::min(md.level, kSpeedSteps - 1)) + " mph";
+    case 6:
+    case 7: return kGoalNames[md.kind];
+    default:
+        return std::string(kGoalNames[md.kind]) + " $" + std::to_string(kMoneyLadder[std::min(md.level, kMoneySteps - 1)]) + ",000,000";
+    }
+}
+
+nlohmann::json Editor::scenario_json(const std::string& key, const std::string& landscape, const std::string& map_size) const {
+    nlohmann::json towns = nlohmann::json::array();
+    for (const sim::ScenarioTown& t : towns_) towns.push_back({{"name", t.name}, {"x", t.x}, {"y", t.y}, {"houses", t.houses}});
+    nlohmann::json medals;
+    const char* tiers[] = {"bronze", "silver", "gold"};
+    int years = 0;
+    for (int m = 0; m < 3; ++m) {
+        const ScenarioDraft::Medal& md = scen_.medals[m];
+        years = std::max(years, md.years); // each medal's deadline no earlier than the last
+        nlohmann::json goal;
+        switch (md.kind) {
+        case 0: {
+            nlohmann::json names = nlohmann::json::array();
+            const int n = std::min(md.level + 2, static_cast<int>(towns_.size()));
+            for (int i = 0; i < n; ++i) names.push_back(towns_[static_cast<std::size_t>(i)].name);
+            goal = {{"kind", "connect_towns"}, {"towns", names}};
+            break;
+        }
+        case 1: goal = {{"kind", "book_value"}}; break;
+        case 2: goal = {{"kind", "revenue"}}; break;
+        case 3: goal = {{"kind", "company_cash"}}; break;
+        case 4: goal = {{"kind", "personal_net_worth"}}; break;
+        case 5: goal = {{"kind", "average_speed"}, {"count", 15 + 5 * std::min(md.level, kSpeedSteps - 1)}}; break;
+        case 6: goal = {{"kind", "only_railroad"}}; break;
+        default: goal = {{"kind", "highest_value"}}; break;
+        }
+        if (md.kind >= 1 && md.kind <= 4) goal["amount"] = kMoneyLadder[std::min(md.level, kMoneySteps - 1)] * 1'000'000;
+        medals[tiers[m]] = {{"by", std::to_string(scen_.start_year + years) + "-12-31"}, {"goals", nlohmann::json::array({goal})}};
+    }
+    return {{"key", key},
+            {"name", scen_.name},
+            {"briefing", scen_.briefing},
+            {"start", std::to_string(scen_.start_year) + "-01-01"},
+            {"seed", 1},
+            {"map", map_size.empty() ? std::string(map_size_name(world_.terrain().width())) : map_size},
+            {"rivals", scen_.rivals},
+            {"landscape", landscape},
+            {"towns", towns},
+            {"medals", medals}};
+}
+
+void Editor::scen_change(int step) {
+    const int towns = static_cast<int>(towns_.size());
+    switch (scen_sel_) {
+    case 2: scen_.start_year = std::clamp(scen_.start_year + step * 5, 1830, 2000); return;
+    case 3: scen_.rivals = std::clamp(scen_.rivals + step, 0, 5); return;
+    default: break;
+    }
+    if (scen_sel_ >= 4 && scen_sel_ <= 12) {
+        ScenarioDraft::Medal& md = scen_.medals[(scen_sel_ - 4) / 3];
+        switch ((scen_sel_ - 4) % 3) {
+        case 0:
+            md.kind = (md.kind + step + kGoalKinds) % kGoalKinds;
+            md.level = std::min(md.level, ladder_size(md.kind, towns) - 1);
+            break;
+        case 1: md.level = std::clamp(md.level + step, 0, ladder_size(md.kind, towns) - 1); break;
+        default: md.years = std::clamp(md.years + step, 1, 60); break;
+        }
+    }
+}
+
+bool Editor::scen_key(SDL_Keycode key) {
+    constexpr int kRows = 16; // name, briefing, start, rivals, 3 x (goal, target, by), save, play, close
+    if (scen_text_ != 0) {
+        std::string& s = scen_text_ == 1 ? scen_.name : scen_.briefing;
+        if (key == SDLK_BACKSPACE && !s.empty()) s.pop_back();
+        if (key == SDLK_RETURN || key == SDLK_KP_ENTER || key == SDLK_ESCAPE) {
+            if (s.empty()) s = scen_text_ == 1 ? "My scenario" : "Build a railroad to be proud of.";
+            scen_text_ = 0;
+        }
+        return true;
+    }
+    switch (key) {
+    case SDLK_UP: scen_sel_ = (scen_sel_ + kRows - 1) % kRows; return true;
+    case SDLK_DOWN: scen_sel_ = (scen_sel_ + 1) % kRows; return true;
+    case SDLK_LEFT: scen_change(-1); return true;
+    case SDLK_RIGHT: scen_change(+1); return true;
+    case SDLK_ESCAPE:
+    case SDLK_g: scen_open_ = false; return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+        if (scen_sel_ <= 1) {
+            scen_text_ = scen_sel_ + 1;
+            return true;
+        }
+        if (scen_sel_ == 13 || scen_sel_ == 14) {
+            // Connecting towns needs towns to connect.
+            for (const ScenarioDraft::Medal& md : scen_.medals) {
+                if (md.kind == 0 && towns_.size() < 2) {
+                    message_ = "A goal connects towns, but the map has fewer than two: place towns with the Town brush";
+                    message_until_ = SDL_GetTicks() + 5000;
+                    return true;
+                }
+            }
+            request_ = Request{scen_sel_ == 13 ? Request::Kind::SaveScenario : Request::Kind::PlayScenario};
+            if (scen_sel_ == 14) scen_open_ = false;
+            return true;
+        }
+        if (scen_sel_ == 15) scen_open_ = false;
+        else scen_change(+1);
+        return true;
+    default: return true;
+    }
+}
+
+void Editor::draw_scenario(float width, float height) const {
+    const float w = 720, x0 = (width - w) / 2;
+    const float y0 = std::max(50.0f, (height - 600) / 2);
+    ui::panel(x0, y0, x0 + w, y0 + 590);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 16, y0 + 10, "Scenario for this map", kScale + 1);
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 40);
+    float y = y0 + 50;
+    const bool blink = (SDL_GetTicks() / 500) % 2 == 0;
+    const auto row = [&](int i, const std::string& label, const std::string& value) {
+        const bool sel = scen_sel_ == i;
+        if (sel) ui::selection(x0 + 8, y - 3, x0 + w - 8, y + 23);
+        if (sel) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.9f, 0.88f, 0.82f);
+        draw_text(x0 + 20, y, label, kScale);
+        draw_text(x0 + 200, y, value, kScale);
+        y += 28;
+    };
+    row(0, "Name", scen_.name + (scen_text_ == 1 && blink ? "|" : ""));
+    {
+        // The briefing, wrapped over a few lines.
+        std::string b = scen_.briefing + (scen_text_ == 2 && blink ? "|" : "");
+        std::vector<std::string> lines;
+        while (!b.empty() && lines.size() < 3) {
+            std::size_t cut = b.size();
+            while (cut > 0 && text_width(b.substr(0, cut), kScale) > 480) {
+                const std::size_t sp = b.rfind(' ', cut - 1);
+                cut = sp == std::string::npos || sp == 0 ? cut - 1 : sp;
+            }
+            lines.push_back(b.substr(0, cut));
+            b = cut < b.size() ? b.substr(cut + (b[cut] == ' ' ? 1 : 0)) : "";
+        }
+        if (lines.empty()) lines.emplace_back();
+        row(1, "Briefing", lines[0]);
+        for (std::size_t i = 1; i < lines.size(); ++i) {
+            glColor3f(0.85f, 0.83f, 0.77f);
+            draw_text(x0 + 200, y - 6, lines[i], kScale);
+            y += 20;
+        }
+    }
+    row(2, "Starts", "<  " + std::to_string(scen_.start_year) + "  >");
+    row(3, "Rival railroads", "<  " + std::to_string(scen_.rivals) + "  >");
+    const char* tiers[] = {"Bronze", "Silver", "Gold"};
+    int years = 0;
+    for (int m = 0; m < 3; ++m) {
+        y += 6;
+        years = std::max(years, scen_.medals[m].years);
+        row(4 + 3 * m, std::string(tiers[m]) + " goal", "<  " + std::string(kGoalNames[scen_.medals[m].kind]) + "  >");
+        row(5 + 3 * m, "    target", "<  " + goal_text(m) + "  >");
+        row(6 + 3 * m, "    by", "<  the end of " + std::to_string(scen_.start_year + years) + "  >");
+    }
+    y += 6;
+    row(13, "Save the scenario", "");
+    row(14, "Save it and play it", "");
+    row(15, "Close", "");
+    glColor3f(0.6f, 0.58f, 0.54f);
+    draw_text(x0 + 20, y0 + 590 - 26,
+              scen_text_ ? "Type, then Enter" : "Up/Down choose   Left/Right change   Enter edits the name or briefing   G or Esc close",
+              kScale);
 }
 
 } // namespace railmaster::client

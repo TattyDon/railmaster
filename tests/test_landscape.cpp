@@ -175,3 +175,24 @@ TEST_CASE("a hand-made map's territories replace random ones and are saved") {
     CHECK(back.territories().territories[1].access_cost == Money::dollars(750'000));
     CHECK(back.config().territory_map.has_value());
 }
+
+TEST_CASE("a scenario on a hand-made map has its own towns and no others") {
+    const Scenario s = Scenario::from_json(R"({
+        "key": "on_my_map", "name": "On My Map", "start": "1850-01-01", "map": "small", "rivals": 0,
+        "landscape": "../maps/my_map_1.png",
+        "towns": [{"name": "Ashcombe", "x": 40, "y": 50, "houses": 25}, {"name": "Bexley", "x": 200, "y": 180, "houses": 15}],
+        "medals": {
+            "bronze": {"by": "1855-12-31", "goals": [{"kind": "connect_towns", "towns": ["Ashcombe", "Bexley"]}]},
+            "silver": {"by": "1860-12-31", "goals": [{"kind": "book_value", "amount": 5000000}]},
+            "gold": {"by": "1870-12-31", "goals": [{"kind": "highest_value"}]}
+        }
+    })");
+    CHECK(s.landscape == "../maps/my_map_1.png");
+    WorldConfig cfg = scenario_config(s);
+    cfg.landscape = flat_landscape(cfg.width_tiles, cfg.height_tiles, 60); // the client loads the image
+    World w(cfg, shipped());
+    REQUIRE(w.economy().towns().size() == 2);
+    CHECK(w.economy().towns()[1].name == "Bexley");
+    const World back = World::load(w.save(), shipped());
+    CHECK(back.scenario()->landscape == "../maps/my_map_1.png");
+}

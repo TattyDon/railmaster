@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 17; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 18; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -33,7 +33,8 @@ constexpr std::uint32_t kSaveVersion = 17; // 2: events, Grants; 3: restrictions
                                            // 13: each train's accounts this year and last;
                                            // 14: a hand-made landscape in the config;
                                            // 15: a hand-made map's towns in the config;
-                                           // 16: and its industries; 17: and its territories
+                                           // 16: and its industries; 17: and its territories;
+                                           // 18: a scenario's hand-made map
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -444,7 +445,7 @@ template <class Ar>
 void io(Ar& ar, Scenario& s) {
     fields(ar, s.key, s.name, s.briefing, s.start, s.seed, s.map_size, s.rivals, s.territories, s.founder_fortune,
            s.founder_investment, s.outside_investment);
-    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals, s.events, s.restrictions);
+    fields(ar, s.chairman_can_resign, s.chairman_can_be_fired, s.towns, s.medals, s.events, s.restrictions, s.landscape);
 }
 template <class Ar>
 void io(Ar& ar, ScenarioResult& r) {

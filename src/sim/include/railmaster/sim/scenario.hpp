@@ -143,6 +143,11 @@ struct Scenario {
     bool chairman_can_resign = true;
     bool chairman_can_be_fired = true;
     std::vector<ScenarioTown> towns{};
+    // A hand-made map to play on (a heightmap image, relative to the
+    // scenario's file; the client loads it, with the industries and
+    // territories kept beside it). Its towns are the scenario's own and no
+    // random ones are added.
+    std::string landscape{};
     std::array<MedalTier, 3> medals{}; // bronze, silver, gold
     std::vector<ScenarioEvent> events{};
     Restrictions restrictions{};

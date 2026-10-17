@@ -59,22 +59,11 @@ std::string read_file(const std::string& path) {
 
 } // namespace
 
-Title::Title(std::string data_dir, std::string maps_dir, std::vector<std::pair<std::string, std::string>> slots)
-    : maps_dir_(std::move(maps_dir)), data_dir_(std::move(data_dir)), slots_(std::move(slots)) {
-    // The scenarios shipped in data/scenarios, in order of their start.
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(data_dir_ + "/scenarios", ec)) {
-        if (entry.path().extension() != ".json") continue;
-        try {
-            const sim::Scenario s = sim::Scenario::from_json(read_file(entry.path().string()));
-            scenarios_.push_back({entry.path().string(), s.name, s.briefing, s.start.year()});
-        } catch (const std::exception&) {
-            // A broken file is left off the list; the game says why when started from the command line.
-        }
-    }
+Title::Title(std::string data_dir, std::string maps_dir, std::string scenarios_dir,
+             std::vector<std::pair<std::string, std::string>> slots)
+    : scenarios_dir_(std::move(scenarios_dir)), maps_dir_(std::move(maps_dir)), data_dir_(std::move(data_dir)), slots_(std::move(slots)) {
+    scan_scenarios();
     scan_maps();
-    std::sort(scenarios_.begin(), scenarios_.end(),
-              [](const ScenarioInfo& a, const ScenarioInfo& b) { return a.year != b.year ? a.year < b.year : a.name < b.name; });
     seed_ = SDL_GetPerformanceCounter() % 9000 + 1000;
 }
 
@@ -98,8 +87,30 @@ void Title::scan_maps() {
     editor_from_ = std::min(editor_from_, static_cast<int>(maps_.size()) + 1);
 }
 
+void Title::scan_scenarios() {
+    // The scenarios shipped in data/scenarios and the player's own, in order of their start.
+    scenarios_.clear();
+    std::error_code ec;
+    for (const std::string& dir : {data_dir_ + "/scenarios", scenarios_dir_}) {
+        if (dir.empty()) continue;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (entry.path().extension() != ".json") continue;
+            try {
+                const sim::Scenario s = sim::Scenario::from_json(read_file(entry.path().string()));
+                scenarios_.push_back({entry.path().string(), s.name, s.briefing, s.start.year()});
+            } catch (const std::exception&) {
+                // A broken file is left off the list; the game says why when started from the command line.
+            }
+        }
+    }
+    std::sort(scenarios_.begin(), scenarios_.end(),
+              [](const ScenarioInfo& a, const ScenarioInfo& b) { return a.year != b.year ? a.year < b.year : a.name < b.name; });
+    sel_ = page_ == 2 ? 0 : sel_;
+}
+
 void Title::show() {
     scan_maps();
+    scan_scenarios();
     open_ = true;
     page_ = 0;
     sel_ = 0;

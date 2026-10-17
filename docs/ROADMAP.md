@@ -354,8 +354,11 @@ Still to do:
   The map editor (title screen) shapes land with raise, lower, smooth
   and flatten brushes, paints water and land, saves maps as heightmap
   images and plays a railroad on them, and places, names and sizes towns
-  and places industries and paints territories (kept with the map).
-  Still to come: scenarios made in the editor.
+  and places industries and paints territories (kept with the map), and
+  makes scenarios on it: a name, briefing, start, rivals and a goal and
+  deadline for each medal (a scenario file's `landscape` names its map).
+  Still to come: several goals a medal, events and restrictions in the
+  editor (scenario files can already have them).
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

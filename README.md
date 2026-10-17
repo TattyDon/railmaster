@@ -101,8 +101,16 @@ it (one whose product does not exist yet waits idle until it does); and
 9 Territory: `,` and `.` choose territory 1 to 8 (or none, to erase),
 left-drag paints it with the brush, Enter renames it, O makes it free or
 priced again (the first is free; the rest get a price and modifiers as a
-generated map's do). A map with towns of its own has those towns and no
-others, and likewise its industries and territories (with none placed, the usual random ones and
+generated map's do). G opens the scenario page: a name and briefing
+(Enter to type them), the start year, rival railroads, and for Bronze,
+Silver and Gold a goal (connect the map's first towns, book value,
+revenue, cash, net worth, average speed, the only railroad or the
+highest value), its target and its deadline. Save the scenario, or save
+it and play it at once; saved scenarios (in a `scenarios/` folder beside
+your maps) are listed with the others on the title screen, and a
+scenario file names its map with `"landscape": "../maps/NAME.png"`. A map
+with towns of its own has those towns and no others, and likewise its
+industries and territories (with none placed, the usual random ones and
 ports go down); both are kept beside its image as a `.json` file, and a
 map from your own folder is saved back over itself; the arrows, wheel and
 right-drag move the view as in the game. S saves it as a map in your own

@@ -220,6 +220,23 @@ bool write_map_extras(const std::string& image, std::int32_t width, std::int32_t
     return static_cast<bool>(out);
 }
 
+// The config for a scenario file: the scenario's own, and, when it plays on
+// a hand-made map, that map (its image named relative to the file) with
+// its industries and territories. Throws on a bad file.
+sim::WorldConfig scenario_world_config(const std::string& path, std::int32_t max_height_m) {
+    const sim::Scenario s = sim::Scenario::from_json(read_file(path));
+    sim::WorldConfig cfg = sim::scenario_config(s);
+    if (!s.landscape.empty()) {
+        const std::string image = (std::filesystem::path(path).parent_path() / s.landscape).lexically_normal().string();
+        cfg.landscape = read_landscape(image, cfg, max_height_m);
+        if (!cfg.landscape) throw std::runtime_error("cannot read its map, " + image);
+        MapExtras extras = read_map_extras(image, cfg);
+        cfg.industries = std::move(extras.industries);
+        cfg.territory_map = std::move(extras.territories);
+    }
+    return cfg;
+}
+
 int main(int argc, char* argv[]) {
     std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
     bool empty = false;
@@ -277,7 +294,7 @@ int main(int argc, char* argv[]) {
     }
     if (!scenario_path.empty()) {
         try {
-            config = sim::scenario_config(sim::Scenario::from_json(read_file(scenario_path)));
+            config = scenario_world_config(scenario_path, data.balance.map.max_height_m);
         } catch (const std::exception& e) {
             std::fprintf(stderr, "Failed to load scenario %s: %s\n", scenario_path.c_str(), e.what());
             return 1;
@@ -476,7 +493,13 @@ int main(int argc, char* argv[]) {
         maps_dir = std::string(pref) + "maps";
         SDL_free(pref);
     }
-    client::Title title(data_dir, maps_dir, save_slots());
+    // And their scenarios.
+    std::string scenarios_dir;
+    if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+        scenarios_dir = std::string(pref) + "scenarios";
+        SDL_free(pref);
+    }
+    client::Title title(data_dir, maps_dir, scenarios_dir, save_slots());
     client::Editor editor(world, cam);
     std::string editor_path; // where the map being edited was last saved
     if (title_at_start) {
@@ -921,7 +944,7 @@ int main(int argc, char* argv[]) {
             }
             case client::Title::Request::Kind::Scenario:
                 try {
-                    sim::WorldConfig cfg = sim::scenario_config(sim::Scenario::from_json(read_file(req->path)));
+                    sim::WorldConfig cfg = scenario_world_config(req->path, load_game_data(data_dir).balance.map.max_height_m);
                     cfg.found_player_company = false;
                     start_world(cfg);
                 } catch (const std::exception& e) {
@@ -941,8 +964,8 @@ int main(int argc, char* argv[]) {
         // The map editor's requests.
         if (const auto req = editor.take_request()) {
             const std::int32_t max_h = world.data().balance.map.max_height_m;
-            switch (req->kind) {
-            case client::Editor::Request::Kind::Save: {
+            // Save the map (image and extras); false if it cannot be written.
+            const auto save_map = [&] {
                 if (editor_path.empty()) {
                     // A new name in the player's maps folder: my_map_1.png, my_map_2.png, ...
                     std::error_code ec;
@@ -957,8 +980,40 @@ int main(int argc, char* argv[]) {
                                                editor.territories().empty() ? std::nullopt
                                                                             : std::optional<sim::TerritoryMap>(editor.territories())})) {
                     editor.saved(editor_path);
+                    return true;
                 }
-                else std::fprintf(stderr, "Cannot write %s\n", editor_path.c_str());
+                std::fprintf(stderr, "Cannot write %s\n", editor_path.c_str());
+                return false;
+            };
+            // Save the map and a scenario on it, named after the map, in the
+            // player's scenarios folder; the scenario file, or empty.
+            const auto save_scenario = [&]() -> std::string {
+                if (!save_map()) return {};
+                std::error_code ec;
+                std::filesystem::create_directories(scenarios_dir, ec);
+                const std::string stem = std::filesystem::path(editor_path).stem().string();
+                const std::string file = scenarios_dir + "/" + stem + ".json";
+                const std::string landscape = std::filesystem::relative(editor_path, scenarios_dir, ec).generic_string();
+                std::ofstream out(file);
+                out << editor.scenario_json(stem, landscape, "").dump(2) << "\n";
+                if (!out) return {};
+                editor.note("Scenario \"" + editor.scenario_name() + "\" saved: it is on the title screen's list of scenarios");
+                return file;
+            };
+            switch (req->kind) {
+            case client::Editor::Request::Kind::Save: save_map(); break;
+            case client::Editor::Request::Kind::SaveScenario: save_scenario(); break;
+            case client::Editor::Request::Kind::PlayScenario: {
+                const std::string file = save_scenario();
+                if (file.empty()) break;
+                try {
+                    sim::WorldConfig cfg = scenario_world_config(file, max_h);
+                    cfg.found_player_company = false;
+                    editor.end();
+                    start_world(cfg);
+                } catch (const std::exception& e) {
+                    editor.note(std::string("Cannot play it: ") + e.what());
+                }
                 break;
             }
             case client::Editor::Request::Kind::Play: {

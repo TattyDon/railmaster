@@ -92,6 +92,7 @@ Scenario Scenario::from_json(std::string_view json_text) {
         s.start = parse_date(j.at("start").get<std::string>());
         s.seed = j.value("seed", std::uint64_t{1});
         s.map_size = j.value("map", std::string("small"));
+        s.landscape = j.value("landscape", std::string());
         if (s.map_size != "small" && s.map_size != "medium" && s.map_size != "large") {
             throw std::runtime_error("map must be small, medium or large");
         }

@@ -138,7 +138,7 @@ World::World(const WorldConfig& config, GameData data)
             fixed_sites.push_back({*type, {m.x / k, m.y / k}});
         }
         populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns,
-                         /*fill_towns=*/config.towns.empty(), fixed_sites);
+                         /*fill_towns=*/config.towns.empty() && !(scenario_ && !scenario_->landscape.empty()), fixed_sites);
         // Territories go down once the towns are placed, before trade starts across them.
         if (config.territory_map) set_territories(*config.territory_map);
         else if (config.territories > 0) make_territories(config.territories);
