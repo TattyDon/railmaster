@@ -215,6 +215,7 @@ void World::tick_inner() {
             data_.locomotives.get(t.loco).cost.scaled(data_.balance.breakdowns.repair_cost_percent, 100);
         if (!company(t.owner).defunct()) company(t.owner).post(Ledger::TrainMaintenance, repair);
         railway_.train_mut(id).profit_this_month -= repair;
+        railway_.train_mut(id).accounts.repairs += repair;
     }
     for (TrainId id : railway_.take_crashes()) {
         const Train& t = railway_.train(id);
@@ -229,6 +230,9 @@ void World::tick_inner() {
         Company& runner = company(t.owner);
         if (t.owner == company().id()) earned_ += e.total;
         t.profit_this_month += e.total;
+        for (const auto& [cargo, amount] : e.by_cargo) {
+            (data_.cargo.get(cargo).cargo_class == CargoClass::Express ? t.accounts.express : t.accounts.freight) += amount;
+        }
         railway_.station_mut(station).income_this_month += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
         for (const auto& [cargo, milli] : e.delivered) runner.record_delivery(cargo, milli);
@@ -402,7 +406,11 @@ void World::charge_running_costs() {
     const std::size_t n = market_.companies.size();
     std::vector<Money> maintenance(n), fuel(n);
     // Each train's own share, for its profit (cost levels applied below too).
-    std::vector<std::pair<TrainId, Money>> train_costs;
+    struct TrainCost {
+        TrainId id;
+        Money upkeep, fuel;
+    };
+    std::vector<TrainCost> train_costs;
     const std::int64_t reference_kg = reference_weight_kg(date_.year(), data_.balance) + std::int64_t{f.reference_engine_tons} * 1000;
     for (const Train& t : railway_.trains()) {
         if (!t.in_service()) continue;
@@ -413,7 +421,7 @@ void World::charge_running_costs() {
         // engine of the reference weight.
         const Money burnt = Money::dollars(fuel_per_km(f, loco)).scaled(t.fuel_kg_km, reference_kg);
         fuel[t.owner] += burnt;
-        train_costs.emplace_back(t.id, upkeep + burnt);
+        train_costs.push_back({t.id, upkeep, burnt});
         railway_.train_mut(t.id).fuel_kg_km = 0;
     }
     for (Company& c : market_.companies) {
@@ -433,10 +441,14 @@ void World::charge_running_costs() {
                                            .scaled(f.building_upkeep_bp_per_year * std::int64_t{cost_percent()}, 10000 * 12 * 100)
                                            .scaled(building_overhead, 100));
     }
-    for (const auto& [id, cost] : train_costs) {
-        Train& t = railway_.train_mut(id);
+    for (const TrainCost& c : train_costs) {
+        Train& t = railway_.train_mut(c.id);
         const bool easy = difficulty_ == Difficulty::Easy && t.owner == company().id();
-        t.profit_this_month -= cost.scaled((easy ? f.easy_cost_percent : 100) * cost_percent() / 100, 100);
+        const std::int64_t pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
+        const Money upkeep = c.upkeep.scaled(pct, 100), fuel_cost = c.fuel.scaled(pct, 100);
+        t.profit_this_month -= upkeep + fuel_cost;
+        t.accounts.maintenance += upkeep;
+        t.accounts.fuel += fuel_cost;
     }
 }
 
@@ -781,6 +793,10 @@ void World::on_new_year() {
     }
     for (Company& c : market_.companies) {
         if (!c.defunct()) c.close_year();
+    }
+    for (const Train& t : railway_.trains()) {
+        Train& m = railway_.train_mut(t.id);
+        m.accounts_last_year = std::exchange(m.accounts, TrainAccounts{});
     }
     review_chairmen();
     const Economy::YearEnd sites = economy_.close_year(data_.industries, data_.balance.industries, rng_);

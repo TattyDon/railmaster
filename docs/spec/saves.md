@@ -79,6 +79,7 @@ Format versions:
 - **10:** scenario questions waiting for an answer, average-speed samples, train running time.
 - **11:** compressed; the game's config and command log.
 - **12:** train profits, station income and track traffic by month.
+- **13:** each train's accounts, this year and last (the train window's cost window).
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

@@ -2148,6 +2148,7 @@ struct DetailRow {
     std::vector<std::string> cells{};
     float r = 0.9f, g = 0.88f, b = 0.82f;
     float fraction = 0; // gauges
+    bool inverted = false; // a gauge where full is bad
 };
 
 DetailRow title(std::string s) { return {DetailRow::Style::Title, {std::move(s)}, 1.0f, 0.86f, 0.5f}; }
@@ -2232,6 +2233,15 @@ void Tools::draw_detail_panel() const {
             if (loco.fuel == sim::Fuel::Steam) rows.push_back(gauge("Water", t.water));
             rows.push_back(gauge("Sand", t.sand));
             rows.push_back(gauge("Oil", t.oil));
+            {
+                // Breakdown risk against a new average engine: the bar fills at four times.
+                const std::int64_t risk = world_.railway().breakdown_risk_permille(t, loco);
+                DetailRow r = gauge("Breakdown risk", 0);
+                r.cells[1] = std::to_string(risk / 1000) + "." + std::to_string(risk % 1000 / 100) + "x";
+                r.fraction = static_cast<float>(std::min<std::int64_t>(risk, 4000)) / 4000.0f;
+                r.inverted = true;
+                rows.push_back(r);
+            }
             rows.push_back(heading("Route"));
             for (std::size_t i = 0; i < t.route.size(); ++i) {
                 std::string what;
@@ -2264,13 +2274,34 @@ void Tools::draw_detail_panel() const {
                 rows.push_back(dim({std::string(t.caboose ? "Caboose" : "") + (t.caboose && t.diner ? ", " : "") +
                                     (t.diner ? "dining car" : "")}));
             }
-            rows.push_back(heading("Money"));
-            rows.push_back(money_row("Profit this month", t.profit_this_month));
-            if (!t.profit_months.empty()) {
-                rows.push_back(money_row("Profit, last " + std::to_string(t.profit_months.size()) + " months", t.profit_last_year()));
+            // The cost window: this year's earnings and running costs, and last year's.
+            const sim::TrainAccounts& now = t.accounts;
+            const sim::TrainAccounts& last = t.accounts_last_year;
+            const std::int32_t year = world_.date().year();
+            // A train bought this year has no last year.
+            const bool had_last = sim::Date::from_days(t.built_day).year() < year;
+            const auto pair = [&](const std::string& label, sim::Money a, sim::Money b, bool cost) {
+                const auto cell = [&](sim::Money m) { return (cost && m != sim::Money{} ? "-" : "") + format_money(m); };
+                DetailRow r = line({label, cell(a), had_last ? cell(b) : std::string("-")});
+                if (cost) {
+                    r.r = 0.95f;
+                    r.g = 0.66f;
+                    r.b = 0.6f;
+                }
+                rows.push_back(r);
+            };
+            rows.push_back({DetailRow::Style::Heading, {"Money", std::to_string(year) + " so far", std::to_string(year - 1)}, 0.95f, 0.8f, 0.45f});
+            pair("Freight", now.freight, last.freight, false);
+            pair("Passengers and mail", now.express, last.express, false);
+            pair("Maintenance", now.maintenance, last.maintenance, true);
+            pair("Fuel", now.fuel, last.fuel, true);
+            pair("Repairs", now.repairs, last.repairs, true);
+            {
+                DetailRow r = line({"Profit", format_money(now.profit()), had_last ? format_money(last.profit()) : std::string("-")});
+                r.r = r.g = r.b = 1.0f;
+                rows.push_back(r);
             }
-            rows.push_back(money_row("Earned in all", t.revenue));
-            rows.push_back(line({"Engine upkeep", format_money(loco.maintenance_per_year) + " a year"}));
+            rows.push_back(money_row("Earned since bought", t.revenue));
         }
     } else if (detail_->kind == DetailKind::Station) {
         const sim::Station& s = rw.station(detail_->id);
@@ -2412,16 +2443,21 @@ void Tools::draw_detail_panel() const {
             y += 6;
             glColor3f(r.r, r.g, r.b);
             draw_text(x0 + 14, y, r.cells[0], kScale);
+            if (r.cells.size() == 3) {
+                draw_text(x0 + 250 - static_cast<float>(text_width(r.cells[1], kScale)), y, r.cells[1], kScale);
+                draw_text(x0 + kW - 14 - static_cast<float>(text_width(r.cells[2], kScale)), y, r.cells[2], kScale);
+            }
             y += kRow;
             break;
         case DetailRow::Style::Gauge: {
             glColor3f(r.r, r.g, r.b);
             draw_text(x0 + 24, y, r.cells[0], kScale);
-            const float gx0 = x0 + 110, gx1 = x0 + kW - 70, gy = y + 4;
+            const float gx0 = x0 + 150, gx1 = x0 + kW - 70, gy = y + 4;
             fill_rect(gx0, gy, gx1, gy + 9, 0.0f, 0.0f, 0.0f, 0.45f);
             const float f = std::clamp(r.fraction, 0.0f, 1.0f);
-            if (f < 0.25f) fill_rect(gx0, gy, gx0 + (gx1 - gx0) * f, gy + 9, 0.9f, 0.3f, 0.2f, 0.95f);
-            else if (f < 0.5f) fill_rect(gx0, gy, gx0 + (gx1 - gx0) * f, gy + 9, 0.95f, 0.75f, 0.25f, 0.95f);
+            const float health = r.inverted ? 1.0f - f : f;
+            if (health < 0.25f) fill_rect(gx0, gy, gx0 + (gx1 - gx0) * f, gy + 9, 0.9f, 0.3f, 0.2f, 0.95f);
+            else if (health < 0.5f) fill_rect(gx0, gy, gx0 + (gx1 - gx0) * f, gy + 9, 0.95f, 0.75f, 0.25f, 0.95f);
             else fill_rect(gx0, gy, gx0 + (gx1 - gx0) * f, gy + 9, 0.45f, 0.8f, 0.4f, 0.95f);
             glColor3f(r.r, r.g, r.b);
             draw_text(x0 + kW - 14 - static_cast<float>(text_width(r.cells[1], kScale)), y, r.cells[1], kScale);

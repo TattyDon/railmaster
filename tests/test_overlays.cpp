@@ -101,3 +101,36 @@ TEST_CASE("ratings: red at a loss, green at the good return for the months on re
     CHECK(rate(Money::dollars(6'000), 6, price, b) == Rating::Good); // half a year: 5%
     CHECK(rate(Money::dollars(12'000), 12, price, b) == Rating::Good);
 }
+
+TEST_CASE("each train keeps a year's accounts, closed at the year's end (§15.4 cost window)") {
+    WorldConfig cfg;
+    cfg.seed = 1;
+    World w(cfg, shipped());
+    (void)build_demo_network(w);
+    // A new engine with full oil is as likely to fail as its reliability says.
+    for (const Train& t : w.railway().trains()) {
+        const LocomotiveType& loco = w.data().locomotives.get(t.loco);
+        const std::int64_t expect = 100'000 / loco.reliability * (t.caboose ? 50 : 100) / 100;
+        CHECK(std::abs(w.railway().breakdown_risk_permille(t, loco) - expect) <= 5);
+    }
+    run_to(w, Date::from_ymd(1831, 1, 1));
+
+    Money freight, express, upkeep, fuel;
+    for (const Train& t : w.railway().trains()) {
+        const TrainAccounts& a = t.accounts_last_year;
+        CHECK(t.accounts.revenue() == Money{}); // the new year has just begun
+        // The year's accounts agree with its twelve months of profit.
+        CHECK(std::abs((a.profit() - t.profit_last_year()).in_cents()) <= 1);
+        freight += a.freight;
+        express += a.express;
+        upkeep += a.maintenance + a.repairs;
+        fuel += a.fuel;
+    }
+    const YearAccounts& y = w.company().history().front();
+    const auto line = [&](Ledger l) { return y.lines[static_cast<std::size_t>(l)]; };
+    CHECK(freight == line(Ledger::FreightRevenue));
+    CHECK(express == line(Ledger::PassengerRevenue) + line(Ledger::MailRevenue) + line(Ledger::TroopRevenue));
+    // Costs are scaled train by train rather than in total: allow cents.
+    CHECK(std::abs((upkeep - line(Ledger::TrainMaintenance)).in_cents()) <= 12 * 100);
+    CHECK(std::abs((fuel - line(Ledger::Fuel)).in_cents()) <= 12 * 100);
+}

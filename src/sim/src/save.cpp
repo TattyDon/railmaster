@@ -25,11 +25,12 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 12; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 13; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
-                                           // 12: train profits, station income and track traffic by month
+                                           // 12: train profits, station income and track traffic by month;
+                                           // 13: each train's accounts this year and last
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -320,6 +321,10 @@ void io(Ar& ar, Car& c) {
            c.loaded_tick, c.via);
 }
 template <class Ar>
+void io(Ar& ar, TrainAccounts& a) {
+    fields(ar, a.freight, a.express, a.maintenance, a.fuel, a.repairs);
+}
+template <class Ar>
 void io(Ar& ar, Train& t) {
     fields(ar, t.id, t.owner, t.loco, t.cars, t.priority, t.route, t.rules, t.service_stop, t.caboose, t.diner, t.holding, t.stop_index);
     fields(ar, t.state, t.at_node, t.path, t.step, t.offset_mm, t.speed_mm_per_tick, t.wait_ticks_left, t.yielding,
@@ -327,6 +332,7 @@ void io(Ar& ar, Train& t) {
     fields(ar, t.water, t.sand, t.oil, t.water_used_mm, t.sand_used_climb_mm, t.oil_used_mm);
     fields(ar, t.stops_made, t.service_stops, t.breakdowns, t.road_ticks, t.built_day, t.distance_mm, t.fuel_kg_km, t.leg_mm_by_owner);
     fields(ar, t.revenue, t.last_income, t.last_income_tick, t.profit_this_month, t.profit_months);
+    fields(ar, t.accounts, t.accounts_last_year);
 }
 
 // --- Economy ---

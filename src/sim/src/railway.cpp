@@ -428,6 +428,22 @@ void Railway::use_supplies(Train& t, const LocomotiveType& loco, std::int64_t di
 bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) {
     if (!rules_.breakdowns || distance_mm <= 0) return false;
     constexpr std::int64_t kBillion = 1'000'000'000;
+    return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < breakdown_ppb(t, loco, distance_mm);
+}
+
+std::int64_t Railway::breakdown_risk_permille(const Train& t, const LocomotiveType& loco) const {
+    // Over a long distance, so the parts per billion keep their precision.
+    constexpr std::int64_t kRun = 1'000'000'000;
+    Train reference;
+    reference.built_day = today_;
+    LocomotiveType average = loco;
+    average.reliability = 100;
+    const std::int64_t base = breakdown_ppb(reference, average, kRun);
+    return base > 0 ? breakdown_ppb(t, loco, kRun) * 1000 / base : 1000;
+}
+
+std::int64_t Railway::breakdown_ppb(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) const {
+    constexpr std::int64_t kBillion = 1'000'000'000;
     // Chance in parts per billion: distance over the mean distance between
     // failures, raised as oil runs low and scaled by reliability.
     const std::int64_t oil_factor_permille =
@@ -440,7 +456,7 @@ bool Railway::roll_breakdown(const Train& t, const LocomotiveType& loco, std::in
     const std::int64_t span = std::max(1, balance_.breakdowns.breakdown_age_years);
     ppb = ppb * (span + age_years) / span;
     if (t.caboose) ppb = ppb * kCabooseBreakdownPercent / 100;
-    return static_cast<std::int64_t>(rng_.below(static_cast<std::uint32_t>(kBillion))) < ppb;
+    return ppb;
 }
 
 bool Railway::service_at(Train& t, NodeId node, const LocomotiveType& loco, bool always) {

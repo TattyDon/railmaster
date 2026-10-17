@@ -148,6 +148,19 @@ struct Car {
     std::optional<std::uint32_t> via{};
 };
 
+// A train's own accounts for one year (rt3-clone-spec §15.4, the train
+// window's cost window): what it earned and what it cost to run.
+struct TrainAccounts {
+    Money freight{};
+    Money express{}; // passengers, mail and troops
+    Money maintenance{};
+    Money fuel{};
+    Money repairs{};
+    Money revenue() const { return freight + express; }
+    Money costs() const { return maintenance + fuel + repairs; }
+    Money profit() const { return revenue() - costs(); }
+};
+
 struct Train {
     TrainId id = 0;
     CompanyId owner = 0;
@@ -205,6 +218,8 @@ struct Train {
     Money profit_this_month{};
     std::vector<Money> profit_months{};
     Money profit_last_year() const;
+    TrainAccounts accounts{}; // since the books last closed
+    TrainAccounts accounts_last_year{};
     Money last_income;                // from the most recent stop
     std::uint64_t last_income_tick = 0;
 
@@ -361,6 +376,10 @@ public:
         year_ = Date::from_days(day).year();
     }
     const Train& train(TrainId id) const { return trains_.at(id); }
+    // How likely the train is to break down on the road now, against a new
+    // engine of average reliability with full oil and no caboose, in
+    // thousandths (1000: as likely; 2000: twice as likely).
+    std::int64_t breakdown_risk_permille(const Train& t, const LocomotiveType& loco) const;
     const std::vector<Train>& trains() const { return trains_; }
 
     // Advance every train by one tick, in id order.
@@ -387,6 +406,7 @@ private:
     };
     std::optional<Leader> leader_ahead(const Train& t) const;
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);
+    std::int64_t breakdown_ppb(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) const;
     bool roll_crash(const Train& t, const LocomotiveType& loco);
     // Refill at any support buildings at `node` the train needs. True if it stopped.
     bool service_at(Train& t, NodeId node, const LocomotiveType& loco, bool always = false);

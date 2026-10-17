@@ -328,9 +328,9 @@ Still to do:
   Company Detail's four tabs on F7, and the ledger on L (§12.7: overview,
   ten years of income statements, balance sheets, haulage, players),
   opening by itself at each year's end. News goes to a message history on M,
-  and headlines to a newspaper that pauses the game (§15.4). Still to come: a train panel's
-  cost window, and the ledger's train, station, industry and cargo
-  sub-reports.)
+  and headlines to a newspaper that pauses the game (§15.4). The train
+  panel has its cost window and breakdown-risk meter. Still to come: the
+  ledger's train, station, industry and cargo sub-reports.)
 - Original art and audio pipeline (`assets/`, credits).
 
 ## M5: Opponents and scenarios
