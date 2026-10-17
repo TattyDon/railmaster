@@ -49,25 +49,27 @@ TerritoryMap generate_territories(std::int32_t width, std::int32_t height, std::
     }
     const TerritoryId home = map.at(std::clamp(home_x, 0, width - 1), std::clamp(home_y, 0, height - 1));
     std::vector<std::string> used;
-    for (std::int32_t i = 0; i < count; ++i) {
-        Territory t;
-        do t.name = territory_name(rng);
-        while (std::find(used.begin(), used.end(), t.name) != used.end() && used.size() < 160);
-        used.push_back(t.name);
-        if (i != home) {
-            t.access_cost = rng.chance(static_cast<std::uint32_t>(b.territory_big_percent), 100)
-                                ? Money::dollars(b.territory_access_big)
-                                : Money::dollars(rng.between(static_cast<std::int32_t>(b.territory_access_min / 1000),
-                                                             static_cast<std::int32_t>(b.territory_access_max / 1000)) *
-                                                 std::int64_t{1000});
-            t.station_cost_percent = 100 + rng.between(0, b.territory_station_cost_max_percent);
-            t.overhead_percent = 100 + rng.between(0, b.territory_overhead_max_percent);
-            if (rng.chance(static_cast<std::uint32_t>(b.territory_credit_percent), 100)) t.credit_grades = rng.chance(1, 2) ? 1 : -1;
-            t.closed_border = rng.chance(static_cast<std::uint32_t>(b.territory_closed_percent), 100);
-        }
-        map.territories.push_back(std::move(t));
-    }
+    for (std::int32_t i = 0; i < count; ++i) map.territories.push_back(random_territory(rng, b, i == home, used));
     return map;
+}
+
+Territory random_territory(Random& rng, const Balance::MapGeneration& b, bool open, std::vector<std::string>& used) {
+    Territory t;
+    do t.name = territory_name(rng);
+    while (std::find(used.begin(), used.end(), t.name) != used.end() && used.size() < 160);
+    used.push_back(t.name);
+    if (!open) {
+        t.access_cost = rng.chance(static_cast<std::uint32_t>(b.territory_big_percent), 100)
+                            ? Money::dollars(b.territory_access_big)
+                            : Money::dollars(rng.between(static_cast<std::int32_t>(b.territory_access_min / 1000),
+                                                         static_cast<std::int32_t>(b.territory_access_max / 1000)) *
+                                             std::int64_t{1000});
+        t.station_cost_percent = 100 + rng.between(0, b.territory_station_cost_max_percent);
+        t.overhead_percent = 100 + rng.between(0, b.territory_overhead_max_percent);
+        if (rng.chance(static_cast<std::uint32_t>(b.territory_credit_percent), 100)) t.credit_grades = rng.chance(1, 2) ? 1 : -1;
+        t.closed_border = rng.chance(static_cast<std::uint32_t>(b.territory_closed_percent), 100);
+    }
+    return t;
 }
 
 } // namespace railmaster::sim

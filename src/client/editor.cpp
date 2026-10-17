@@ -16,8 +16,8 @@ namespace {
 constexpr int kScale = 2;
 constexpr double kPi = 3.14159265358979;
 constexpr float kBarH = 22.0f, kToolbarY = 26.0f, kButtonH = 22.0f, kBottomH = 44.0f;
-constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land", "7 Town", "8 Industry"};
-constexpr int kBrushes = 8;
+constexpr const char* kBrushNames[] = {"1 Raise", "2 Lower", "3 Smooth", "4 Flatten", "5 Water", "6 Land", "7 Town", "8 Industry", "9 Territory"};
+constexpr int kBrushes = 9;
 // Town sizes, in houses: village to city.
 constexpr std::int32_t kTownSizes[] = {8, 15, 25, 40, 60};
 
@@ -30,6 +30,53 @@ void Editor::begin(std::string name, std::int32_t max_height_m) {
     dirty_ = false;
     leave_armed_ = false;
     held_ = false;
+    towns_.clear();
+    industries_.clear();
+    town_sel_.reset();
+    terr_naming_ = false;
+    terr_sel_ = 0;
+    terr_used_.clear();
+    terr_ = {};
+    terr_.width = world_.terrain().width();
+    terr_.height = world_.terrain().height();
+    terr_.cells.assign(static_cast<std::size_t>(terr_.width) * static_cast<std::size_t>(terr_.height), sim::kNoTerritory);
+}
+
+void Editor::ensure_territory(int i) {
+    // Territories come into being as they are chosen: the first free to all,
+    // the rest priced as a generated map's are.
+    sim::Random rng(static_cast<std::uint64_t>(SDL_GetTicks()) + static_cast<std::uint64_t>(terr_.territories.size()) * 7919);
+    while (static_cast<int>(terr_.territories.size()) <= i) {
+        terr_.territories.push_back(
+            sim::random_territory(rng, world_.data().balance.map, terr_.territories.empty(), terr_used_));
+    }
+}
+
+void Editor::set_territories(sim::TerritoryMap map) {
+    if (map.width != terr_.width || map.height != terr_.height || map.cells.size() != terr_.cells.size()) return;
+    terr_ = std::move(map);
+    for (const sim::Territory& t : terr_.territories) terr_used_.push_back(t.name);
+    world_.set_territories(terr_);
+}
+
+sim::TerritoryMap Editor::territories() const {
+    // Only territories that hold cells, renumbered in order.
+    std::vector<sim::TerritoryId> remap(terr_.territories.size(), sim::kNoTerritory);
+    for (const sim::TerritoryId c : terr_.cells) {
+        if (c != sim::kNoTerritory && c < remap.size()) remap[c] = 0;
+    }
+    sim::TerritoryMap out;
+    for (std::size_t i = 0; i < remap.size(); ++i) {
+        if (remap[i] == sim::kNoTerritory) continue;
+        remap[i] = static_cast<sim::TerritoryId>(out.territories.size());
+        out.territories.push_back(terr_.territories[i]);
+    }
+    if (out.territories.empty()) return {};
+    out.width = terr_.width;
+    out.height = terr_.height;
+    out.cells.reserve(terr_.cells.size());
+    for (const sim::TerritoryId c : terr_.cells) out.cells.push_back(c == sim::kNoTerritory || c >= remap.size() ? sim::kNoTerritory : remap[c]);
+    return out;
 }
 
 void Editor::saved(const std::string& path) {
@@ -40,6 +87,25 @@ void Editor::saved(const std::string& path) {
 
 bool Editor::key(SDL_Keycode key) {
     if (key != SDLK_ESCAPE) leave_armed_ = false;
+    // Naming a territory: the keys type.
+    if (terr_naming_) {
+        if (terr_sel_ < 0 || terr_sel_ >= static_cast<int>(terr_.territories.size())) {
+            terr_naming_ = false;
+            return true;
+        }
+        std::string& name = terr_.territories[static_cast<std::size_t>(terr_sel_)].name;
+        if (key == SDLK_BACKSPACE) {
+            if (fresh_name_) name.clear();
+            else if (!name.empty()) name.pop_back();
+            fresh_name_ = false;
+        } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER || key == SDLK_ESCAPE) {
+            if (name.empty()) name = "Unnamed";
+            terr_naming_ = false;
+        }
+        world_.set_territories(terr_);
+        dirty_ = true;
+        return true;
+    }
     // Naming a town: the keys type (letters arrive as text).
     if (town_sel_ && *town_sel_ < towns_.size()) {
         std::string& name = towns_[*town_sel_].name;
@@ -84,14 +150,58 @@ bool Editor::key(SDL_Keycode key) {
     case SDLK_6:
     case SDLK_7:
     case SDLK_8: brush_ = static_cast<Brush>(key - SDLK_1); return true;
+    case SDLK_9:
+        brush_ = Brush::Territory;
+        if (terr_sel_ >= 0) ensure_territory(terr_sel_);
+        return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+        // Rename the territory being painted.
+        if (brush_ == Brush::Territory && terr_sel_ >= 0) {
+            ensure_territory(terr_sel_);
+            terr_naming_ = true;
+            fresh_name_ = true;
+        }
+        return true;
+    case SDLK_o:
+        // Free to all, or priced again.
+        if (brush_ == Brush::Territory && terr_sel_ >= 0) {
+            ensure_territory(terr_sel_);
+            sim::Territory& t = terr_.territories[static_cast<std::size_t>(terr_sel_)];
+            if (t.open()) {
+                sim::Random rng(static_cast<std::uint64_t>(SDL_GetTicks()));
+                std::vector<std::string> any;
+                const sim::Territory priced = sim::random_territory(rng, world_.data().balance.map, false, any);
+                t.access_cost = priced.access_cost;
+                t.station_cost_percent = priced.station_cost_percent;
+                t.overhead_percent = priced.overhead_percent;
+                t.credit_grades = priced.credit_grades;
+                t.closed_border = priced.closed_border;
+            } else {
+                t.access_cost = sim::Money{};
+                t.station_cost_percent = t.overhead_percent = 100;
+                t.credit_grades = 0;
+                t.closed_border = false;
+            }
+            world_.set_territories(terr_);
+            dirty_ = true;
+        }
+        return true;
     case SDLK_COMMA:
-    case SDLK_PERIOD: {
+    case SDLK_PERIOD:
+        if (brush_ == Brush::Territory) {
+            // The territory painted: none (erase), then 1 to 8.
+            terr_sel_ = (terr_sel_ + 1 + (key == SDLK_PERIOD ? 1 : kMaxTerritories)) % (kMaxTerritories + 1) - 1;
+            if (terr_sel_ >= 0) ensure_territory(terr_sel_);
+            return true;
+        }
+        {
         // The industry the brush puts down: the previous or next type.
         const std::size_t n = placeable().size();
         if (n > 0) industry_type_ = (industry_type_ + (key == SDLK_PERIOD ? 1 : n - 1)) % n;
         brush_ = Brush::Industry;
         return true;
-    }
+        }
     case SDLK_LEFTBRACKET: radius_ = std::max(1, radius_ - 1); return true;
     case SDLK_RIGHTBRACKET: radius_ = std::min(40, radius_ + 1); return true;
     case SDLK_s: request_ = Request{Request::Kind::Save}; return true;
@@ -116,6 +226,7 @@ bool Editor::mouse_down(float sx, float sy, int button) {
         for (std::size_t i = 0; i < buttons_.size(); ++i) {
             if (sx >= buttons_[i].first && sx < buttons_[i].second) brush_ = static_cast<Brush>(i);
         }
+        if (brush_ == Brush::Territory && terr_sel_ >= 0) ensure_territory(terr_sel_);
         return true;
     }
     mouse_move(sx, sy);
@@ -196,9 +307,18 @@ void Editor::industry_click() {
 }
 
 void Editor::text(const char* utf8) {
+    const std::string typed = utf8;
+    if (terr_naming_ && terr_sel_ >= 0 && terr_sel_ < static_cast<int>(terr_.territories.size())) {
+        std::string& name = terr_.territories[static_cast<std::size_t>(terr_sel_)].name;
+        if (fresh_name_) name.clear();
+        fresh_name_ = false;
+        if (name.size() < 28) name += typed;
+        world_.set_territories(terr_);
+        dirty_ = true;
+        return;
+    }
     if (!town_sel_ || *town_sel_ >= towns_.size()) return;
     // [ and ] size the town; they are not part of its name.
-    const std::string typed = utf8;
     if (typed == "[" || typed == "]") return;
     std::string& name = towns_[*town_sel_].name;
     if (fresh_name_) name.clear();
@@ -241,6 +361,19 @@ void Editor::apply(float seconds) {
         return k * k;
     };
     if (brush_ == Brush::Town || brush_ == Brush::Industry) return;
+    if (brush_ == Brush::Territory) {
+        if (terr_sel_ >= 0) ensure_territory(terr_sel_);
+        const sim::TerritoryId id = terr_sel_ < 0 ? sim::kNoTerritory : static_cast<sim::TerritoryId>(terr_sel_);
+        for (int y = ya; y < yb; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                if (weight(x + 0.5, y + 0.5) <= 0.05) continue;
+                terr_.cells[static_cast<std::size_t>(y) * static_cast<std::size_t>(terr_.width) + static_cast<std::size_t>(x)] = id;
+            }
+        }
+        world_.set_territories(terr_);
+        dirty_ = true;
+        return;
+    }
     if (brush_ == Brush::Water || brush_ == Brush::Land) {
         for (int y = ya; y < yb; ++y) {
             for (int x = x0; x < x1; ++x) {
@@ -340,6 +473,16 @@ void Editor::draw_ui(float width, float height) const {
     glColor3f(0.92f, 0.88f, 0.8f);
     std::string brush = "Brush " + std::to_string(radius_) + " cells  ([ ] to change)";
     if (brush_ == Brush::Town) brush = "Click land to found a town, or a town to pick it";
+    if (brush_ == Brush::Territory) {
+        if (terr_sel_ < 0 || terr_sel_ >= static_cast<int>(terr_.territories.size())) {
+            brush = "< none: erase >  (, and . to choose)";
+        } else {
+            const sim::Territory& tr = terr_.territories[static_cast<std::size_t>(terr_sel_)];
+            brush = "< " + std::to_string(terr_sel_ + 1) + " " + tr.name + (terr_naming_ && (SDL_GetTicks() / 500) % 2 == 0 ? "|" : "") +
+                    ", " + (tr.open() ? std::string("free") : "$" + std::to_string(tr.access_cost.whole_dollars() / 1000) + "K") +
+                    " >  , . choose   Enter rename   O free/priced   brush " + std::to_string(radius_);
+        }
+    }
     if (brush_ == Brush::Industry) {
         const auto types = placeable();
         brush = "< " + (types.empty() ? std::string("none") : types[industry_type_ % types.size()]->name) +
@@ -351,7 +494,7 @@ void Editor::draw_ui(float width, float height) const {
     glColor3f(0.85f, 0.85f, 0.85f);
     draw_text(8, height - kBottomH + 6,
               town_sel_ ? "Type the town's name   [ ] smaller or larger   Delete removes it   Enter done"
-                        : "Left-drag shapes the land.  1-8 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
+                        : "Left-drag shapes the land.  1-9 brush   [ ] size   S save the map   P play a railroad on it   Esc leave",
               kScale);
     // The industries' names, close up.
     if (cam_.distance < 70.0f) {

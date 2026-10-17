@@ -140,12 +140,14 @@ World::World(const WorldConfig& config, GameData data)
         populate_economy(economy_, data_.cargo, data_.industries, rng_, date_.year(), data_.balance, fixed_towns,
                          /*fill_towns=*/config.towns.empty(), fixed_sites);
         // Territories go down once the towns are placed, before trade starts across them.
-        if (config.territories > 0) make_territories(config.territories);
+        if (config.territory_map) set_territories(*config.territory_map);
+        else if (config.territories > 0) make_territories(config.territories);
         // History, so the map starts with prices and cargo in place.
         economy_.settle(data_.cargo, data_.industries, date_.year(), data_.balance.economy.history_days);
         // Industries start with a year of accounts, so they have a price.
         economy_.close_accounts(data_.cargo, data_.industries, data_.balance.industries, 12);
     }
+    if (config.territory_map && territories_.empty()) set_territories(*config.territory_map);
     if (config.territories > 0 && territories_.empty()) make_territories(config.territories);
     base_cargo_ = data_.cargo;
     base_industries_ = data_.industries;

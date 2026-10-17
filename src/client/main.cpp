@@ -121,6 +121,7 @@ bool save_map_image(const sim::Terrain& t, std::int32_t max_height_m, const std:
 struct MapExtras {
     std::vector<sim::ScenarioTown> towns;
     std::vector<sim::MapIndustry> industries;
+    std::optional<sim::TerritoryMap> territories;
 };
 
 MapExtras read_map_extras(const std::string& image, const sim::WorldConfig& cfg) {
@@ -142,6 +143,43 @@ MapExtras read_map_extras(const std::string& image, const sim::WorldConfig& cfg)
         for (const auto& i : doc.value("industries", nlohmann::json::array())) {
             m.industries.push_back({i.value("type", std::string()), fit_x(i), fit_y(i)});
         }
+        if (doc.contains("territories")) {
+            // Each territory's terms, and the cells as runs of [territory, count]
+            // (-1 for none), row by row at the saved size.
+            const nlohmann::json& t = doc["territories"];
+            sim::TerritoryMap tm;
+            for (const auto& j : t.value("list", nlohmann::json::array())) {
+                sim::Territory terr;
+                terr.name = j.value("name", std::string("Unnamed"));
+                terr.access_cost = sim::Money::dollars(j.value("access_cost", std::int64_t{0}));
+                terr.credit_grades = j.value("credit_grades", 0);
+                terr.station_cost_percent = j.value("station_cost_percent", 100);
+                terr.overhead_percent = j.value("overhead_percent", 100);
+                terr.closed_border = j.value("closed_border", false);
+                tm.territories.push_back(terr);
+            }
+            std::vector<sim::TerritoryId> saved;
+            saved.reserve(static_cast<std::size_t>(w) * static_cast<std::size_t>(h));
+            for (const auto& run : t.value("cells", nlohmann::json::array())) {
+                const int id = run.at(0).get<int>();
+                const auto count = run.at(1).get<std::size_t>();
+                const sim::TerritoryId v = id < 0 || static_cast<std::size_t>(id) >= tm.territories.size() ? sim::kNoTerritory
+                                                                                                          : static_cast<sim::TerritoryId>(id);
+                saved.insert(saved.end(), std::min(count, static_cast<std::size_t>(w) * static_cast<std::size_t>(h) - saved.size()), v);
+            }
+            saved.resize(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), sim::kNoTerritory);
+            tm.width = cfg.width_tiles;
+            tm.height = cfg.height_tiles;
+            tm.cells.resize(static_cast<std::size_t>(tm.width) * static_cast<std::size_t>(tm.height));
+            for (std::int32_t y = 0; y < tm.height; ++y) {
+                for (std::int32_t x = 0; x < tm.width; ++x) {
+                    const std::int64_t sx = std::int64_t{x} * w / tm.width, sy = std::int64_t{y} * h / tm.height;
+                    tm.cells[static_cast<std::size_t>(y) * static_cast<std::size_t>(tm.width) + static_cast<std::size_t>(x)] =
+                        saved[static_cast<std::size_t>(sy * w + sx)];
+                }
+            }
+            if (!tm.territories.empty()) m.territories = std::move(tm);
+        }
     } catch (const std::exception& e) {
         std::fprintf(stderr, "%s: %s\n", image.c_str(), e.what());
     }
@@ -150,7 +188,7 @@ MapExtras read_map_extras(const std::string& image, const sim::WorldConfig& cfg)
 
 bool write_map_extras(const std::string& image, std::int32_t width, std::int32_t height, const MapExtras& m) {
     const auto path = std::filesystem::path(image).replace_extension(".json");
-    if (m.towns.empty() && m.industries.empty()) {
+    if (m.towns.empty() && m.industries.empty() && !m.territories) {
         std::error_code ec;
         std::filesystem::remove(path, ec);
         return true;
@@ -158,6 +196,25 @@ bool write_map_extras(const std::string& image, std::int32_t width, std::int32_t
     nlohmann::json doc = {{"width", width}, {"height", height}, {"towns", nlohmann::json::array()}, {"industries", nlohmann::json::array()}};
     for (const sim::ScenarioTown& t : m.towns) doc["towns"].push_back({{"name", t.name}, {"x", t.x}, {"y", t.y}, {"houses", t.houses}});
     for (const sim::MapIndustry& i : m.industries) doc["industries"].push_back({{"type", i.type}, {"x", i.x}, {"y", i.y}});
+    if (m.territories) {
+        nlohmann::json list = nlohmann::json::array(), cells = nlohmann::json::array();
+        for (const sim::Territory& t : m.territories->territories) {
+            list.push_back({{"name", t.name},
+                            {"access_cost", t.access_cost.whole_dollars()},
+                            {"credit_grades", t.credit_grades},
+                            {"station_cost_percent", t.station_cost_percent},
+                            {"overhead_percent", t.overhead_percent},
+                            {"closed_border", t.closed_border}});
+        }
+        const auto& c = m.territories->cells;
+        for (std::size_t i = 0; i < c.size();) {
+            std::size_t j = i;
+            while (j < c.size() && c[j] == c[i]) ++j;
+            cells.push_back({c[i] == sim::kNoTerritory ? -1 : static_cast<int>(c[i]), j - i});
+            i = j;
+        }
+        doc["territories"] = {{"list", list}, {"cells", cells}};
+    }
     std::ofstream out(path);
     out << doc.dump(1) << "\n";
     return static_cast<bool>(out);
@@ -216,6 +273,7 @@ int main(int argc, char* argv[]) {
         MapExtras extras = read_map_extras(landscape_path, config);
         config.towns = std::move(extras.towns);
         config.industries = std::move(extras.industries);
+        config.territory_map = std::move(extras.territories);
     }
     if (!scenario_path.empty()) {
         try {
@@ -499,6 +557,7 @@ int main(int argc, char* argv[]) {
         editor.begin(name, max_h);
         editor.set_towns(extras.towns);
         editor.set_industries(extras.industries);
+        if (extras.territories) editor.set_territories(*extras.territories);
         title.hide();
     };
     // What happened while the game was set up (rivals founding) goes in the
@@ -855,6 +914,7 @@ int main(int argc, char* argv[]) {
                     MapExtras extras = read_map_extras(req->path, cfg);
                     cfg.towns = std::move(extras.towns);
                     cfg.industries = std::move(extras.industries);
+                    cfg.territory_map = std::move(extras.territories);
                 }
                 start_world(cfg);
                 break;
@@ -893,7 +953,9 @@ int main(int argc, char* argv[]) {
                 }
                 if (save_map_image(world.terrain(), max_h, editor_path) &&
                     write_map_extras(editor_path, world.terrain().width(), world.terrain().height(),
-                                     MapExtras{editor.towns(), editor.industries()})) {
+                                     MapExtras{editor.towns(), editor.industries(),
+                                               editor.territories().empty() ? std::nullopt
+                                                                            : std::optional<sim::TerritoryMap>(editor.territories())})) {
                     editor.saved(editor_path);
                 }
                 else std::fprintf(stderr, "Cannot write %s\n", editor_path.c_str());
@@ -910,6 +972,7 @@ int main(int argc, char* argv[]) {
                 cfg.landscape = sim::landscape_of(world.terrain());
                 cfg.towns = editor.towns();
                 cfg.industries = editor.industries();
+                if (const sim::TerritoryMap tm = editor.territories(); !tm.empty()) cfg.territory_map = tm;
                 editor.end();
                 start_world(cfg);
                 break;

@@ -97,8 +97,12 @@ to found a town (it gets a name; type to rename it, `[` `]` make it a
 village up to a city, Delete removes it, Enter is done), or click a town
 to pick it; and 8 Industry: `,` and `.` choose which (coal mine, steel
 mill, port, ...), a click on dry land places one, a click on one removes
-it. A map with towns of its own has those towns and no others, and
-likewise its industries (with none placed, the usual random ones and
+it (one whose product does not exist yet waits idle until it does); and
+9 Territory: `,` and `.` choose territory 1 to 8 (or none, to erase),
+left-drag paints it with the brush, Enter renames it, O makes it free or
+priced again (the first is free; the rest get a price and modifiers as a
+generated map's do). A map with towns of its own has those towns and no
+others, and likewise its industries and territories (with none placed, the usual random ones and
 ports go down); both are kept beside its image as a `.json` file, and a
 map from your own folder is saved back over itself; the arrows, wheel and
 right-drag move the view as in the game. S saves it as a map in your own

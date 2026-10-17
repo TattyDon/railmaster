@@ -82,6 +82,8 @@ struct WorldConfig {
     // Its industries likewise: when there are any, the map has these and
     // no others (no random industries or ports).
     std::vector<MapIndustry> industries{};
+    // And its territories, drawn by hand, in place of `territories` random ones.
+    std::optional<TerritoryMap> territory_map{};
 };
 
 // The config for playing a scenario: its seed, start, map size, rivals,

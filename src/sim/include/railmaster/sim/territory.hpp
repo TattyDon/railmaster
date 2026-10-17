@@ -44,5 +44,8 @@ struct TerritoryMap {
 // Balance::MapGeneration. Names are invented.
 TerritoryMap generate_territories(std::int32_t width, std::int32_t height, std::int32_t count, std::int32_t home_x,
                                   std::int32_t home_y, Random& rng, const Balance::MapGeneration& b);
+// One territory with an invented name not in `used` (which it joins), and,
+// unless `open`, a price and modifiers as generate_territories gives them.
+Territory random_territory(Random& rng, const Balance::MapGeneration& b, bool open, std::vector<std::string>& used);
 
 } // namespace railmaster::sim

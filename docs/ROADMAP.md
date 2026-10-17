@@ -354,8 +354,8 @@ Still to do:
   The map editor (title screen) shapes land with raise, lower, smooth
   and flatten brushes, paints water and land, saves maps as heightmap
   images and plays a railroad on them, and places, names and sizes towns
-  and places industries (kept with the map). Still to come: territories
-  by hand, and scenarios made in the editor.
+  and places industries and paints territories (kept with the map).
+  Still to come: scenarios made in the editor.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

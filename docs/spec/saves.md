@@ -87,6 +87,7 @@ Format versions:
 - **14:** a hand-made landscape in the game's config.
 - **15:** a hand-made map's towns in the game's config.
 - **16:** a hand-made map's industries in the game's config.
+- **17:** a hand-made map's territories in the game's config.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

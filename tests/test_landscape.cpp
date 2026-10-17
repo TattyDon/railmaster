@@ -143,3 +143,35 @@ TEST_CASE("a hand-made map's industries are its only industries, placed where th
     cfg.industries = {{"no_such_works", 10, 10}};
     CHECK_THROWS_AS(World(cfg, shipped()), std::invalid_argument);
 }
+
+TEST_CASE("a hand-made map's territories replace random ones and are saved") {
+    WorldConfig cfg;
+    cfg.seed = 7;
+    cfg.rivals = 0;
+    cfg.territories = 5; // ignored: the map draws its own
+    cfg.landscape = flat_landscape(cfg.width_tiles, cfg.height_tiles, 60);
+    TerritoryMap tm;
+    tm.width = cfg.width_tiles;
+    tm.height = cfg.height_tiles;
+    tm.cells.assign(static_cast<std::size_t>(tm.width) * static_cast<std::size_t>(tm.height), kNoTerritory);
+    for (std::int32_t y = 0; y < tm.height; ++y)
+        for (std::int32_t x = tm.width / 2; x < tm.width; ++x) tm.cells[static_cast<std::size_t>(y * tm.width + x)] = 1;
+    for (std::int32_t y = 0; y < 20; ++y)
+        for (std::int32_t x = 0; x < 20; ++x) tm.cells[static_cast<std::size_t>(y * tm.width + x)] = 0;
+    Territory home;
+    home.name = "Homeland";
+    Territory east;
+    east.name = "Eastmark";
+    east.access_cost = Money::dollars(750'000);
+    tm.territories = {home, east};
+    cfg.territory_map = tm;
+    World w(cfg, shipped());
+    REQUIRE(w.territories().territories.size() == 2);
+    CHECK(w.territories().territories[1].name == "Eastmark");
+    CHECK(w.territories().at(200, 10) == 1);
+    CHECK(w.territories().at(5, 5) == 0);
+    CHECK(w.territories().at(60, 200) == kNoTerritory);
+    const World back = World::load(w.save(), shipped());
+    CHECK(back.territories().territories[1].access_cost == Money::dollars(750'000));
+    CHECK(back.config().territory_map.has_value());
+}

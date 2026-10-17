@@ -17,7 +17,7 @@ namespace railmaster::client {
 // towns, industries or companies; the camera keys work as in the game.
 class Editor {
 public:
-    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town, Industry };
+    enum class Brush { Raise, Lower, Smooth, Flatten, Water, Land, Town, Industry, Territory };
     struct Request {
         enum class Kind { Save, Play, Leave } kind;
     };
@@ -37,6 +37,10 @@ public:
     // Its industries (the Industry brush places and removes them).
     const std::vector<sim::MapIndustry>& industries() const { return industries_; }
     void set_industries(std::vector<sim::MapIndustry> industries) { industries_ = std::move(industries); }
+    // Its territories (the Territory brush paints, names and prices them);
+    // empty if none are painted. Territories painted nowhere are left out.
+    sim::TerritoryMap territories() const;
+    void set_territories(sim::TerritoryMap map);
     // Typed text (SDL_TEXTINPUT), for a town's name.
     void text(const char* utf8);
 
@@ -55,6 +59,12 @@ private:
     void apply(float seconds);
     void town_click();
     void industry_click();
+    static constexpr int kMaxTerritories = 8;
+    sim::TerritoryMap terr_;
+    int terr_sel_ = 0;          // the territory painted; -1 erases
+    bool terr_naming_ = false;  // typing renames it
+    void ensure_territory(int i);
+    std::vector<std::string> terr_used_;
     std::vector<sim::MapIndustry> industries_;
     std::size_t industry_type_ = 0; // which of the placeable types the brush puts down
     std::vector<const sim::IndustryType*> placeable() const;
