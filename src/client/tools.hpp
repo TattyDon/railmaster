@@ -40,6 +40,8 @@ public:
 
     void on_mouse_move(float sx, float sy);
     void on_click(float sx, float sy, bool right_button);
+    // The mouse wheel over a list scrolls it; true if it did (else it zooms).
+    bool on_wheel(float sx, float sy, int steps);
     // True if the key was used. `mod` is the event's modifier state.
     bool on_key(SDL_Keycode key, Uint16 mod = KMOD_NONE);
     // Typed text (SDL_TEXTINPUT); true if a box took it.
@@ -265,6 +267,19 @@ private:
     int menu_page_ = 0; // 0 the menu, 1 save, 2 load, 3 quit?, 4 main menu?
     int menu_sel_ = 0;
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
+    // Rows a click can choose, put down as the panels draw each frame: one
+    // click selects a row, a click on the chosen row acts as Enter would.
+    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market };
+    struct RowBox {
+        float x0, y0, x1, y1;
+        RowPanel panel;
+        std::size_t index;
+    };
+    mutable std::vector<RowBox> row_boxes_;
+    void add_row(float x0, float y0, float x1, float y1, RowPanel panel, std::size_t index) const {
+        row_boxes_.push_back({x0, y0, x1, y1, panel, index});
+    }
+    bool click_row(float sx, float sy);
     std::vector<std::string> slot_info_;      // what each slot holds, read when its page opens
     std::optional<MenuRequest> menu_request_;
     std::string save_dir_, quick_save_ = "railmaster.sav";

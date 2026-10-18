@@ -681,6 +681,11 @@ int main(int argc, char* argv[]) {
 #else
                 const float amount = static_cast<float>(std::clamp(ev.wheel.y, -3, 3));
 #endif
+                // Over a list, the wheel scrolls it instead.
+                if (!editor.open() && ev.wheel.y != 0 &&
+                    tools.on_wheel(static_cast<float>(mx), static_cast<float>(my), ev.wheel.y)) {
+                    break;
+                }
                 if (amount != 0.0f) cam.zoom_at(static_cast<float>(mx), static_cast<float>(my), std::pow(1.15f, amount));
                 tools.on_mouse_move(static_cast<float>(mx), static_cast<float>(my));
                 break;

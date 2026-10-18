@@ -233,6 +233,7 @@ void Tools::draw_finance_panel() const {
             const auto percent_text = [](std::int32_t p) {
                 return p == 100 ? std::string("normal") : (p > 100 ? "+" : "") + std::to_string(p - 100) + "%";
             };
+            add_row(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3, RowPanel::Territories, i);
             if (i == territory_sel_) ui::selection(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3);
             const float bright = i == territory_sel_ ? 1.0f : 0.9f;
             t.line(tr.name,
@@ -463,6 +464,7 @@ void Tools::draw_ledger_panel() const {
         }
         for (std::size_t i = from; i < items.size() && t.y < bottom; ++i) {
             const std::uint32_t id = items[i];
+            add_row(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3, RowPanel::Ledger, i);
             if (i == sel) ui::selection(x0 + 6, t.y - 2, x0 + w - 6, t.y + t.row - 3);
             const float b = i == sel ? 1.0f : 0.9f;
             std::vector<std::string> cells;
@@ -787,6 +789,9 @@ bool Tools::find_key(SDL_Keycode key) {
             if (h.station) {
                 select(Tool::Inspect);
                 open_detail(DetailKind::Station, *h.station);
+            } else {
+                detail_.reset(); // a town: whatever was open no longer applies
+                follow_ = false;
             }
             show(h.name, true);
             find_open_ = false;
@@ -869,6 +874,7 @@ void Tools::draw_console() const {
     float y = y0 + 44;
     const sim::OperatingRules& rules = world_.railway().rules();
     for (const ConsoleCheat& c : kCheats) {
+        add_row(x0 + 8, y - 3, x0 + w - 8, y + kRow - 3, RowPanel::Console, static_cast<std::size_t>(&c - kCheats));
         glColor3f(1.0f, 0.86f, 0.5f);
         draw_text(x0 + 18, y, std::string(1, static_cast<char>(std::toupper(static_cast<int>(c.key)))), kScale);
         glColor3f(0.9f, 0.88f, 0.82f);
@@ -885,6 +891,64 @@ void Tools::draw_console() const {
     }
     glColor3f(0.6f, 0.58f, 0.54f);
     draw_text(x0 + 14, y0 + h - 26, "A key uses its cheat   . or Esc close", kScale);
+}
+
+bool Tools::click_row(float sx, float sy) {
+    const auto hit = std::find_if(row_boxes_.rbegin(), row_boxes_.rend(), [&](const RowBox& r) {
+        return sx >= r.x0 && sx < r.x1 && sy >= r.y0 && sy < r.y1;
+    });
+    if (hit == row_boxes_.rend()) return false;
+    const std::size_t i = hit->index;
+    switch (hit->panel) {
+    case RowPanel::Find:
+        if (find_sel_ == i) find_key(SDLK_RETURN);
+        else find_sel_ = i;
+        break;
+    case RowPanel::Console: console_key(kCheats[i].key); break;
+    case RowPanel::Lists:
+        if (list_sel_ == i) lists_key(SDLK_RETURN);
+        else list_sel_ = i;
+        break;
+    case RowPanel::Ledger:
+        if (ledger_sel_ == i) ledger_key(SDLK_RETURN);
+        else ledger_sel_ = i;
+        break;
+    case RowPanel::Territories: territory_sel_ = i; break;
+    case RowPanel::Market: market_choice_ = static_cast<sim::CompanyId>(i); break;
+    }
+    return true;
+}
+
+bool Tools::on_wheel(float sx, float sy, int steps) {
+    // Over a list's rows (or between them), the wheel moves its choice.
+    float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+    std::optional<RowPanel> panel;
+    for (const RowBox& r : row_boxes_) {
+        if (r.panel == RowPanel::Console) continue;
+        if (panel && *panel != r.panel) continue;
+        panel = r.panel;
+        x0 = std::min(x0, r.x0), x1 = std::max(x1, r.x1), y0 = std::min(y0, r.y0), y1 = std::max(y1, r.y1);
+    }
+    if (!panel || sx < x0 || sx >= x1 || sy < y0 - 20 || sy >= y1 + 20) return false;
+    const SDL_Keycode key = steps > 0 ? SDLK_UP : SDLK_DOWN;
+    for (int k = 0; k < std::abs(steps); ++k) {
+        switch (*panel) {
+        case RowPanel::Find: find_key(key); break;
+        case RowPanel::Lists: lists_key(key); break;
+        case RowPanel::Ledger: ledger_key(key); break;
+        case RowPanel::Territories:
+            if (key == SDLK_UP && territory_sel_ > 0) --territory_sel_;
+            if (key == SDLK_DOWN && territory_sel_ + 1 < world_.territories().territories.size()) ++territory_sel_;
+            break;
+        case RowPanel::Market: {
+            const auto n = static_cast<sim::CompanyId>(world_.companies().size());
+            market_choice_ = static_cast<sim::CompanyId>((market_choice_ + (key == SDLK_UP ? n - 1 : 1)) % n);
+            break;
+        }
+        case RowPanel::Console: break;
+        }
+    }
+    return true;
 }
 
 bool Tools::on_text(const char* text) {
@@ -917,6 +981,7 @@ void Tools::draw_find_panel() const {
     // Scroll so the chosen one is in view.
     const std::size_t first = find_sel_ >= kShown ? find_sel_ + 1 - kShown : 0;
     for (std::size_t i = first; i < hits.size() && i < first + kShown; ++i) {
+        add_row(x0 + 10, y - 3, x0 + w - 10, y + kRow - 3, RowPanel::Find, i);
         if (i == find_sel_) ui::selection(x0 + 10, y - 3, x0 + w - 10, y + kRow - 3);
         if (i == find_sel_) glColor3f(1.0f, 0.95f, 0.7f);
         else glColor3f(0.9f, 0.88f, 0.82f);
@@ -926,7 +991,7 @@ void Tools::draw_find_panel() const {
         y += kRow;
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 14, y0 + h - 22, "Type to narrow   Up/Down choose   Enter go there   Esc close", kScale);
+    draw_text(x0 + 14, y0 + h - 22, "Type to narrow   Up/Down or click choose   Enter or click again: go   Esc close", kScale);
 }
 
 void Tools::draw_newspaper() const {
@@ -1246,6 +1311,11 @@ void Tools::on_click(float sx, float sy, bool right_button) {
                 menu_choose();
             }
         }
+        return;
+    }
+    if (!right_button && click_row(sx, sy)) return;
+    if (find_open_) {
+        find_open_ = false; // a click away from the box closes it
         return;
     }
     if (right_button) {
@@ -2179,6 +2249,7 @@ void Tools::draw_market_panel() const {
         const auto& hist = c.history();
         const sim::Money last = hist.size() > 1 ? hist[hist.size() - 2].profit() : hist.back().profit();
         const bool sel = c.id() == chosen;
+        add_row(x0 + 6, y - 2, x0 + w - 6, y + kRow - 3, RowPanel::Market, c.id());
         float r, g, b;
         owner_rgb(c.id(), world_.player_company(), r, g, b);
         const float swatch = cols[0] + static_cast<float>(text_width("> ", kScale));
@@ -2543,6 +2614,7 @@ void Tools::draw_lists_panel() const {
     };
     const auto row_colour = [&](std::size_t i, bool mine, const std::vector<std::string>& v) {
         const bool sel = i == list_sel_;
+        add_row(x0 + 6, y - 2, x0 + w - 6, y + kRow - 3, RowPanel::Lists, i);
         if (sel) ui::selection(x0 + 6, y - 2, x0 + w - 6, y + kRow - 3);
         cells(v, sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 1.0f : (mine ? 0.9f : 0.65f), sel ? 0.7f : (mine ? 0.9f : 0.7f));
     };
@@ -2737,7 +2809,7 @@ std::string Tools::hint() const {
     case Tool::Status:
         return world_.scenario() ? "Scenario goals, checked at each month end" : "No scenario: a free game";
     case Tool::Lists:
-        return "Tab trains/stations/companies   Up/Down, PgUp/PgDn choose   Enter go to it";
+        return "Tab trains/stations/companies   Up/Down, PgUp/PgDn, wheel or click choose   Enter or click again: go to it";
     case Tool::Finance:
         if (company_tab_ == 3) return "Tab next page   Up/Down choose a territory   T buy access to it";
         return "Tab next page   B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   "
@@ -3216,6 +3288,7 @@ std::string Tools::inspect_text() const {
 }
 
 void Tools::draw_ui(const std::string& status) const {
+    row_boxes_.clear();
     const auto w = static_cast<float>(cam_.width_px);
     const auto h = static_cast<float>(cam_.height_px);
     if (founding_) {
