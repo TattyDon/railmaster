@@ -124,6 +124,8 @@ uniform float u_texel;
 uniform float u_snow;   // 0 to 1: winter's snow on open ground and leaves
 uniform float u_autumn; // 0 to 1: leaves turning
 uniform int u_foliage;  // 1 while drawing trees: their leaves turn fully, grass only fades
+uniform float u_time;   // seconds, for the water's ripples
+uniform vec3 u_campos;  // the eye, on the map
 varying vec3 v_world;
 varying vec3 v_normal;
 varying vec4 v_color;
@@ -181,6 +183,29 @@ void main() {
         // Sky light from above, warmer light bounced off the ground below.
         vec3 ambient = mix(u_ground, u_sky, n.z * 0.5 + 0.5);
         rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
+        // Open water (flat and blue): ripples drifting with the wind, the sky
+        // mirrored at low angles and the sun glinting; in midwinter it ices over.
+        if (n.z > 0.95 && v_color.b > v_color.r + 0.25 && v_color.b > v_color.g + 0.15) {
+            vec2 p = v_world.xy;
+            float t = u_time;
+            float e = 0.04;
+            vec2 a = vec2(t * 0.21, t * 0.13), b = vec2(-t * 0.17, t * 0.26);
+            float h0 = noise(p * 3.0 + a) + 0.5 * noise(p * 7.5 + b);
+            float hx = noise((p + vec2(e, 0.0)) * 3.0 + a) + 0.5 * noise((p + vec2(e, 0.0)) * 7.5 + b);
+            float hy = noise((p + vec2(0.0, e)) * 3.0 + a) + 0.5 * noise((p + vec2(0.0, e)) * 7.5 + b);
+            float ice = smoothstep(0.6, 0.95, u_snow);
+            float bump = 0.022 * (1.0 - ice) * (1.0 - smoothstep(25.0, 90.0, v_depth)); // calmer far off
+            vec3 wn = normalize(vec3(-(hx - h0) / e * bump, -(hy - h0) / e * bump, 1.0));
+            vec3 view = normalize(u_campos - v_world);
+            float facing = max(dot(wn, view), 0.0);
+            float fresnel = 0.08 + 0.6 * pow(1.0 - facing, 4.0);
+            vec3 water = base.rgb * (ambient + u_sun_colour * max(dot(wn, u_sun), 0.0) * sun);
+            water = mix(water, u_sky * 1.05, fresnel);
+            float glint = pow(max(dot(reflect(-u_sun, wn), view), 0.0), 300.0);
+            water += u_sun_colour * glint * sun * 0.6 * (1.0 - ice);
+            vec3 frozen = vec3(0.78, 0.86, 0.92) * (ambient + u_sun_colour * ndl * sun) * (0.92 + 0.08 * h0);
+            rgb = mix(water, frozen, ice * 0.85);
+        }
     }
     float haze = clamp((gl_Fog.end - v_depth) / (gl_Fog.end - gl_Fog.start), 0.0, 1.0);
     gl_FragColor = vec4(mix(gl_Fog.color.rgb, rgb, haze), base.a);
@@ -190,8 +215,8 @@ void main() {
 bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
-GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1;
-float g_snow = 0.0f, g_autumn = 0.0f;
+GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1, u_time = -1, u_campos = -1;
+float g_snow = 0.0f, g_autumn = 0.0f, g_clock = 0.0f;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
 
@@ -266,6 +291,8 @@ bool init(bool wanted) {
     u_snow = p_get_uniform_location(g_program, "u_snow");
     u_autumn = p_get_uniform_location(g_program, "u_autumn");
     u_foliage = p_get_uniform_location(g_program, "u_foliage");
+    u_time = p_get_uniform_location(g_program, "u_time");
+    u_campos = p_get_uniform_location(g_program, "u_campos");
 
     // The shadow map: a depth texture as a framebuffer's only attachment.
     glGenTextures(1, &g_shadow_tex);
@@ -397,7 +424,12 @@ void begin_world(const Camera& cam) {
     p_uniform1f(u_snow, g_snow);
     p_uniform1f(u_autumn, g_autumn);
     p_uniform1i(u_foliage, 0);
+    p_uniform1f(u_time, g_clock);
+    const auto& vi = cam.view_inverse();
+    p_uniform3f(u_campos, vi[12], vi[13], vi[14]);
 }
+
+void set_clock(float seconds) { g_clock = seconds; }
 
 void set_foliage(bool on) {
     if (g_active && g_in_world) p_uniform1i(u_foliage, on ? 1 : 0);

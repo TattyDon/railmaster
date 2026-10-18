@@ -362,6 +362,66 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
         }
     }
     glEnd();
+    // Each water tile's level: its lowest corner, then lowered to its water
+    // neighbours' where they are close, so a lake lies at one level while a
+    // river still steps down its rapids.
+    std::vector<float> level(static_cast<std::size_t>(w) * static_cast<std::size_t>(hgt), 0.0f);
+    const auto at = [&](int x, int y) -> float& { return level[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)]; };
+    for (int ty = 0; ty < hgt; ++ty)
+        for (int tx = 0; tx < w; ++tx)
+            if (t.ground(tx, ty) == sim::GroundType::Water)
+                at(tx, ty) = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
+    constexpr float kSameWater = 0.3f; // tiles of height
+    for (bool changed = true; changed;) {
+        changed = false;
+        for (int ty = 0; ty < hgt; ++ty) {
+            for (int tx = 0; tx < w; ++tx) {
+                if (t.ground(tx, ty) != sim::GroundType::Water) continue;
+                const int nb[4][2] = {{tx - 1, ty}, {tx + 1, ty}, {tx, ty - 1}, {tx, ty + 1}};
+                for (const auto& n : nb) {
+                    if (n[0] < 0 || n[1] < 0 || n[0] >= w || n[1] >= hgt || t.ground(n[0], n[1]) != sim::GroundType::Water) continue;
+                    const float other = at(n[0], n[1]);
+                    if (other < at(tx, ty) - 1e-4f && at(tx, ty) - other < kSameWater) {
+                        at(tx, ty) = other;
+                        changed = true;
+                    }
+                }
+            }
+        }
+    }
+    // Banks: water lies flat at its tile's lowest corner, so where the
+    // ground round it stands higher, an earth bank runs up from the water
+    // to the ground along each edge; no gap to the sky shows between them.
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
+    glBegin(GL_QUADS);
+    glColor3f(0.42f, 0.36f, 0.26f);
+    for (int ty = 0; ty < hgt; ++ty) {
+        for (int tx = 0; tx < w; ++tx) {
+            if (t.ground(tx, ty) != sim::GroundType::Water) continue;
+            const float wz = at(tx, ty);
+            // The four edges, corner to corner, with the way out of the tile.
+            const int edges[4][6] = {{tx, ty, tx + 1, ty, 0, -1},
+                                     {tx + 1, ty, tx + 1, ty + 1, 1, 0},
+                                     {tx + 1, ty + 1, tx, ty + 1, 0, 1},
+                                     {tx, ty + 1, tx, ty, -1, 0}};
+            for (const auto& e : edges) {
+                float za = z(e[0], e[1]), zb = z(e[2], e[3]);
+                // Next to more water, only the step up to its level.
+                const int nx = tx + e[4], ny = ty + e[5];
+                if (nx >= 0 && ny >= 0 && nx < w && ny < hgt && t.ground(nx, ny) == sim::GroundType::Water) {
+                    za = zb = std::min(at(nx, ny), std::max(za, zb));
+                }
+                if (za <= wz + 1e-4f && zb <= wz + 1e-4f) continue;
+                glNormal3f(static_cast<float>(-e[4]), static_cast<float>(-e[5]), 0.6f); // facing the water
+                glVertex3f(static_cast<float>(e[0]), static_cast<float>(e[1]), wz);
+                glVertex3f(static_cast<float>(e[2]), static_cast<float>(e[3]), wz);
+                glVertex3f(static_cast<float>(e[2]), static_cast<float>(e[3]), zb);
+                glVertex3f(static_cast<float>(e[0]), static_cast<float>(e[1]), za);
+            }
+        }
+    }
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, ground_texture());
     // Water lies flat, at its lowest corner.
     glBindTexture(GL_TEXTURE_2D, water_texture());
     glBegin(GL_QUADS);
@@ -370,7 +430,7 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
         for (int tx = 0; tx < w; ++tx) {
             if (t.ground(tx, ty) != sim::GroundType::Water) continue;
             const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
-            const float wz = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
+            const float wz = at(tx, ty);
             const float* c = &tile_rgb[(static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)) * 3];
             glColor3f(c[0], c[1], c[2]);
             const float u = fx / kGroundTextureTiles, v = fy / kGroundTextureTiles, step = 1 / kGroundTextureTiles;

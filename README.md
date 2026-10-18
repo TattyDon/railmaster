@@ -274,7 +274,8 @@ and checks the economy against the spec's targets
 | V | Switch between the 3D view and the flat top-down map |
 | Sound | Made in code, no recordings: a steam whistle's chord as trains near the view leave a station (diesels and electrics a deeper horn), a bell as they arrive, the engine nearest the middle of the view chuffing at its speed, a cash register when your trains are paid, and clicks. Closer views are louder; the menu's Settings set the volume |
 | N | Time of day: day, dusk, night, dawn, or a slow round of all four while the game runs |
-| Seasons | The land follows the calendar: from mid September the broadleaf trees turn gold, orange and red (conifers stay green) and the grass fades; from late November snow lies on open ground and on the trees into March. Track, roads, roofs and water keep their colours. The menu's Settings turn it off |
+| Water | Rivers, lakes and the sea ripple in the wind (even while paused), mirror the sky at low angles and glint in the sun; a lake lies at one level inside earth banks, and rivers step down their rapids |
+| Seasons | The land follows the calendar: from mid September the broadleaf trees turn gold, orange and red (conifers stay green) and the grass fades; from late November snow lies on open ground and on the trees into March, and in midwinter the water ices over. Track, roads, roofs and water keep their colours. The menu's Settings turn it off |
 | F12 | Show frames a second and the time a frame takes (bottom right) |
 | `--look=X,Y` | Start with the view close over map tile (X, Y) |
 | Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |

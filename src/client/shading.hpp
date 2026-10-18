@@ -36,6 +36,8 @@ void set_time_of_day(float phase);
 void set_season(float snow, float autumn);
 // Around drawing trees, so their leaves turn in autumn (grass only fades).
 void set_foliage(bool on);
+// Seconds of real time, for what moves while paused too (the water).
+void set_clock(float seconds);
 // How dark it is: 0 in daylight, 1 at night (lights come on).
 float night();
 // The light for fixed-function drawing: towards the sun, its colour, ambient.

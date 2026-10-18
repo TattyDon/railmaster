@@ -298,6 +298,11 @@ are placed nearest first, left out where they would overlap, and fade with
 distance. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
+Water (shaders): ripples drifting with the wind, the sky mirrored at low
+angles and the sun glinting, calmer far off; ice in midwinter. A body of
+water lies at one level (lowered across neighbours within a small step),
+with earth banks up to the shore and between rapids, so no gaps show.
+
 Seasons (shaders only; off in Settings): autumn turns the broadleaf trees
 gold to red and fades the grass from mid September, and snow lies on
 open ground and the trees from late November into March, patchy at the
