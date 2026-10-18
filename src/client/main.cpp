@@ -443,6 +443,7 @@ int main(int argc, char* argv[]) {
             else if (name == "show_fps") st.show_fps = value != 0;
             else if (name == "cheats") st.cheats = value != 0;
             else if (name == "seasons") st.seasons = value != 0;
+            else if (name == "clouds") st.clouds = value != 0;
         }
     }
     const auto save_settings = [&] {
@@ -450,7 +451,7 @@ int main(int argc, char* argv[]) {
         const client::Tools::Settings& st = tools.settings();
         std::ofstream out(settings_path);
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
-            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\n";
+            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\n";
     };
     const auto save_game = [&](const std::string& file) {
         try {
@@ -877,6 +878,7 @@ int main(int argc, char* argv[]) {
             float autumn = ramp(doy, 253, 288) * (1.0f - ramp(doy, 314, 344));
             if (!tools.settings().seasons || editor.open()) snow = autumn = 0;
             client::shading::set_season(snow, autumn);
+            client::shading::set_clouds(tools.settings().clouds && !editor.open());
         }
         // Smoke drifts only while the game runs.
         if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);

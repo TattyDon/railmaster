@@ -993,7 +993,7 @@ namespace {
 // The game menu's pages, and the items on its first.
 enum MenuPage { kMenuMain, kMenuSave, kMenuLoad, kMenuQuit, kMenuLeave, kMenuSettings };
 enum MenuItem { kItemResume, kItemSave, kItemLoad, kItemBriefing, kItemSettings, kItemMainMenu, kItemQuit, kMainItems };
-constexpr int kSettingRows = 7; // sound, edge scrolling, time of day, seasons, frames a second, debug console, back
+constexpr int kSettingRows = 8; // sound, edge scrolling, time of day, seasons, clouds, frames a second, debug console, back
 constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
 
 } // namespace
@@ -1014,8 +1014,9 @@ void Tools::change_setting(int step) {
     case 1: settings_.edge_scroll = !settings_.edge_scroll; break;
     case 2: settings_.time_mode = (settings_.time_mode + step + 5) % 5; break;
     case 3: settings_.seasons = !settings_.seasons; break;
-    case 4: settings_.show_fps = !settings_.show_fps; break;
-    case 5: settings_.cheats = !settings_.cheats; break;
+    case 4: settings_.clouds = !settings_.clouds; break;
+    case 5: settings_.show_fps = !settings_.show_fps; break;
+    case 6: settings_.cheats = !settings_.cheats; break;
     default: return;
     }
     settings_changed_ = true;
@@ -1132,11 +1133,11 @@ void Tools::draw_menu() const {
         break;
     case kMenuSettings:
         title = "Settings";
-        items = {"Sound", "Scroll at the window's edge", "Time of day", "Seasons (snow, autumn leaves)", "Frames a second",
-                 "Debug console (. key, cheats)", "Back"};
+        items = {"Sound", "Scroll at the window's edge", "Time of day", "Seasons (snow, autumn leaves)", "Clouds' shadows",
+                 "Frames a second", "Debug console (. key, cheats)", "Back"};
         notes = {settings_.volume == 0 ? std::string("Off") : std::to_string(settings_.volume * 10) + "%",
                  settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.seasons ? "On" : "Off",
-                 settings_.show_fps ? "On" : "Off", settings_.cheats ? "On" : "Off", ""};
+                 settings_.clouds ? "On" : "Off", settings_.show_fps ? "On" : "Off", settings_.cheats ? "On" : "Off", ""};
         break;
     default:
         title = menu_page_ == kMenuLeave ? "Leave without saving?" : "Quit without saving?";

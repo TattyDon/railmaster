@@ -38,6 +38,8 @@ void set_season(float snow, float autumn);
 void set_foliage(bool on);
 // Seconds of real time, for what moves while paused too (the water).
 void set_clock(float seconds);
+// Clouds' shadows drifting over the land.
+void set_clouds(bool on);
 // How dark it is: 0 in daylight, 1 at night (lights come on).
 float night();
 // The light for fixed-function drawing: towards the sun, its colour, ambient.
