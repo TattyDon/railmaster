@@ -114,9 +114,8 @@ std::vector<float> click() {
     return out;
 }
 
-// Music: an original tune in the manner of the period (a march-time rag in
-// C), synthesised as piano over an oom-pah bass and rendered once into a
-// loop of about 74 seconds.
+// Music: original tunes in the manner of the period, synthesised as piano
+// over a left-hand accompaniment and rendered once, then played in turn.
 struct Note {
     float beat, beats; // start and length, in beats
     int midi;          // -1: a rest
@@ -153,47 +152,105 @@ struct Chord {
     int root, fifth;
     std::array<int, 3> triad;
 };
-
-std::vector<float> render_music() {
-    constexpr float kBpm = 104.0f;
-    constexpr float kBeat = 60.0f / kBpm;
-    // The bars: melody and the chord under it.
-    const Chord C{48, 43, {52, 55, 60}}, F{41, 48, {53, 57, 60}}, G7{43, 50, {53, 55, 59}}, D7{50, 45, {54, 57, 60}},
-        A7{45, 52, {55, 57, 61}}, Dm{50, 45, {53, 57, 62}};
-    struct Bar {
-        const char* tune;
-        Chord chord;
-    };
-    const Bar a[6] = {{"E5:.5 G5:.5 C6:1 B5:.5 A5:.5 G5:1", C}, {"E5:1 D5:.5 E5:.5 C5:2", C},
-                      {"F5:.5 A5:.5 C6:1 A5:.5 F5:.5 A5:1", F}, {"G5:1.5 E5:.5 C5:1 E5:1", C},
-                      {"D5:.5 F5:.5 G5:1 B5:.5 A5:.5 G5:1", G7}, {"E5:.5 G5:.5 C6:1 G5:1 E5:1", C}};
-    const Bar half_close[2] = {{"F#5:.5 A5:.5 D6:1 C6:.5 A5:.5 F#5:1", D7}, {"G5:3 R:1", G7}};
-    const Bar full_close[2] = {{"D5:.5 F5:.5 B5:1 A5:.5 F5:.5 D5:1", G7}, {"C5:3 R:1", C}};
-    const Bar b[8] = {{"A5:1 C6:.5 A5:.5 F5:1 A5:1", F},       {"G5:.5 A5:.5 C6:1 A5:2", F},
-                      {"G5:1 E5:.5 G5:.5 C6:2", C},            {"C#6:.5 B5:.5 A5:1 G5:1 E5:1", A7},
-                      {"F5:1 A5:.5 D6:.5 C6:1 A5:1", Dm},       {"G5:1 B5:.5 D6:.5 F6:1 D6:1", G7},
-                      {"E6:1.5 D6:.5 C6:1 G5:1", C},            {"F5:.5 E5:.5 D5:1 B4:1 G4:1", G7}};
+struct Bar {
+    const char* tune;
+    Chord chord;
+};
+// How the left hand goes under the tune.
+enum class Accompany {
+    Stride, // 4/4 oom-pah: root, chord, fifth, chord
+    Waltz,  // 3/4 oom-pah-pah: root, chord, chord
+    Hymn,   // 4/4: root and fifth held, the chord sustained softly
+};
+struct Score {
+    float bpm;
+    int beats;
+    Accompany accompany;
     std::vector<Bar> bars;
-    for (const Bar& x : a) bars.push_back(x);
-    bars.insert(bars.end(), std::begin(half_close), std::end(half_close));
-    for (const Bar& x : a) bars.push_back(x);
-    bars.insert(bars.end(), std::begin(full_close), std::end(full_close));
-    for (const Bar& x : b) bars.push_back(x);
-    for (const Bar& x : a) bars.push_back(x);
-    bars.insert(bars.end(), std::begin(full_close), std::end(full_close));
+};
 
+// The tunes, all original: a march-time rag in C, a waltz in F and a folk
+// air in G.
+std::vector<Score> scores() {
+    std::vector<Score> out;
+    {
+        const Chord C{48, 43, {52, 55, 60}}, F{41, 48, {53, 57, 60}}, G7{43, 50, {53, 55, 59}}, D7{50, 45, {54, 57, 60}},
+            A7{45, 52, {55, 57, 61}}, Dm{50, 45, {53, 57, 62}};
+        const std::vector<Bar> a = {{"E5:.5 G5:.5 C6:1 B5:.5 A5:.5 G5:1", C}, {"E5:1 D5:.5 E5:.5 C5:2", C},
+                                    {"F5:.5 A5:.5 C6:1 A5:.5 F5:.5 A5:1", F}, {"G5:1.5 E5:.5 C5:1 E5:1", C},
+                                    {"D5:.5 F5:.5 G5:1 B5:.5 A5:.5 G5:1", G7}, {"E5:.5 G5:.5 C6:1 G5:1 E5:1", C}};
+        const std::vector<Bar> half_close = {{"F#5:.5 A5:.5 D6:1 C6:.5 A5:.5 F#5:1", D7}, {"G5:3 R:1", G7}};
+        const std::vector<Bar> full_close = {{"D5:.5 F5:.5 B5:1 A5:.5 F5:.5 D5:1", G7}, {"C5:3 R:1", C}};
+        const std::vector<Bar> b = {{"A5:1 C6:.5 A5:.5 F5:1 A5:1", F}, {"G5:.5 A5:.5 C6:1 A5:2", F},
+                                    {"G5:1 E5:.5 G5:.5 C6:2", C},      {"C#6:.5 B5:.5 A5:1 G5:1 E5:1", A7},
+                                    {"F5:1 A5:.5 D6:.5 C6:1 A5:1", Dm}, {"G5:1 B5:.5 D6:.5 F6:1 D6:1", G7},
+                                    {"E6:1.5 D6:.5 C6:1 G5:1", C},      {"F5:.5 E5:.5 D5:1 B4:1 G4:1", G7}};
+        Score rag{104, 4, Accompany::Stride, {}};
+        for (const auto* part : {&a, &half_close, &a, &full_close, &b, &a, &full_close}) {
+            rag.bars.insert(rag.bars.end(), part->begin(), part->end());
+        }
+        out.push_back(rag);
+    }
+    {
+        const Chord F{41, 48, {53, 57, 60}}, C7{48, 43, {52, 55, 58}}, Bb{46, 41, {53, 58, 62}}, Gm{43, 50, {55, 58, 62}},
+            Dm{38, 45, {53, 57, 62}};
+        const std::vector<Bar> a = {{"C5:1 F5:1 A5:1", F},  {"C6:2 A5:1", F},   {"G5:1 Bb5:1 G5:1", C7}, {"E5:2 C5:1", C7},
+                                    {"Bb4:1 E5:1 G5:1", C7}, {"Bb5:2 G5:1", C7}, {"A5:1 G5:1 F5:1", F},   {"F5:2 C5:1", F}};
+        const std::vector<Bar> close = {{"D5:1 F5:1 Bb5:1", Bb}, {"D6:2 Bb5:1", Bb},    {"C6:1 A5:1 F5:1", F},
+                                        {"D5:2 F5:1", Dm},       {"G5:1 Bb5:1 D6:1", Gm}, {"C6:1 Bb5:1 G5:1", C7},
+                                        {"A5:1 C6:1 F5:1", F},   {"F5:2 R:1", F}};
+        const std::vector<Bar> b = {{"F5:1.5 G5:.5 F5:1", Bb}, {"D5:2 F5:1", Bb},     {"A5:1.5 Bb5:.5 A5:1", F},
+                                    {"F5:2 A5:1", F},          {"G5:1 A5:1 Bb5:1", C7}, {"C6:2 E5:1", C7},
+                                    {"F5:1 A5:1 C6:1", F},     {"F6:2 R:1", F}};
+        Score waltz{138, 3, Accompany::Waltz, {}};
+        for (const auto* part : {&a, &close, &b, &close, &a, &close}) waltz.bars.insert(waltz.bars.end(), part->begin(), part->end());
+        out.push_back(waltz);
+    }
+    {
+        const Chord G{43, 50, {55, 59, 62}}, C{48, 43, {55, 60, 64}}, Em{40, 47, {55, 59, 64}}, Am{45, 40, {57, 60, 64}},
+            D7{50, 45, {54, 57, 60}}, D{50, 45, {54, 57, 62}};
+        const std::vector<Bar> a = {{"B4:1 D5:1 G5:1.5 F#5:.5", G}, {"E5:1 D5:1 B4:2", G},        {"C5:1 E5:1 G5:1 E5:1", C},
+                                    {"D5:3 R:1", G},                {"E5:1 G5:1 B5:1.5 A5:.5", Em}, {"A5:1 G5:1 E5:2", Am},
+                                    {"F#5:1 A5:1 C6:1 A5:1", D7},   {"G5:3 R:1", G}};
+        const std::vector<Bar> b = {{"D6:1.5 B5:.5 G5:1 B5:1", G}, {"E6:2 B5:2", Em},           {"C6:1 B5:1 A5:1 G5:1", C},
+                                    {"A5:3 R:1", D},               {"B5:1 A5:1 G5:1 D5:1", G}, {"E5:1 G5:1 C6:2", C},
+                                    {"B5:1 A5:1 F#5:1 A5:1", D7},  {"G5:3 R:1", G}};
+        Score air{84, 4, Accompany::Hymn, {}};
+        for (const auto* part : {&a, &b, &a}) air.bars.insert(air.bars.end(), part->begin(), part->end());
+        out.push_back(air);
+    }
+    return out;
+}
+
+std::vector<float> render_music(const Score& score) {
+    const float kBeat = 60.0f / score.bpm;
+    const auto& bars = score.bars;
+    const auto per_bar = static_cast<float>(score.beats);
     std::vector<Note> tune, bass, chords;
     for (std::size_t i = 0; i < bars.size(); ++i) {
-        const float start = static_cast<float>(i) * 4;
+        const float start = static_cast<float>(i) * per_bar;
         melody_bar(tune, start, bars[i].tune);
-        // Oom-pah: the root, the chord, the fifth, the chord.
         const Chord& c = bars[i].chord;
-        bass.push_back({start, 0.9f, c.root});
-        bass.push_back({start + 2, 0.9f, c.fifth});
-        for (const float beat : {1.0f, 3.0f})
-            for (const int m : c.triad) chords.push_back({start + beat, 0.45f, m});
+        switch (score.accompany) {
+        case Accompany::Stride:
+            bass.push_back({start, 0.9f, c.root});
+            bass.push_back({start + 2, 0.9f, c.fifth});
+            for (const float beat : {1.0f, 3.0f})
+                for (const int m : c.triad) chords.push_back({start + beat, 0.45f, m});
+            break;
+        case Accompany::Waltz:
+            bass.push_back({start, 0.9f, c.root});
+            for (const float beat : {1.0f, 2.0f})
+                for (const int m : c.triad) chords.push_back({start + beat, 0.5f, m});
+            break;
+        case Accompany::Hymn:
+            bass.push_back({start, 1.9f, c.root});
+            bass.push_back({start + 2, 1.9f, c.fifth});
+            for (const int m : c.triad) chords.push_back({start, 3.8f, m});
+            break;
+        }
     }
-    const float seconds = static_cast<float>(bars.size()) * 4 * kBeat;
+    const float seconds = static_cast<float>(bars.size()) * per_bar * kBeat + 1.5f; // and a breath before the next
     std::vector<float> out = make(seconds);
 
     // A struck string: overtones decaying, the higher faster, two strings a
@@ -226,7 +283,7 @@ std::vector<float> render_music() {
     };
     for (const Note& n : tune) strike(n, 0.2f);
     for (const Note& n : bass) strike(n, 0.17f);
-    for (const Note& n : chords) strike(n, 0.05f);
+    for (const Note& n : chords) strike(n, score.accompany == Accompany::Hymn ? 0.035f : 0.05f);
 
     // A little room: two feedback echoes, mixed in lightly.
     std::vector<float> wet(out.size(), 0.0f);
@@ -255,11 +312,12 @@ struct Mixer {
     float engine_rate = 0, engine_volume = 0, engine_pan = 0;
     double engine_clock = 0;
     int engine_beat = 0;
-    // The music, made on its own thread; played once it is ready.
-    std::vector<float> music;
-    std::atomic<bool> music_ready{false};
+    // The tunes, made on their own thread; each played once it is ready,
+    // in turn.
+    std::array<std::vector<float>, 3> music;
+    std::atomic<int> music_ready{0};
     std::thread music_maker;
-    std::size_t music_pos = 0;
+    std::size_t music_track = 0, music_pos = 0;
     float music_volume = 0.4f;
     SDL_AudioDeviceID device = 0;
 };
@@ -310,9 +368,15 @@ void callback(void* user, Uint8* stream, int bytes) {
             v.pos += v.step;
         }
         float tune = 0;
-        if (m.music_ready.load(std::memory_order_acquire) && !m.music.empty() && m.music_volume > 0.001f) {
-            tune = m.music[m.music_pos] * m.music_volume;
-            if (++m.music_pos >= m.music.size()) m.music_pos = 0;
+        const auto ready = static_cast<std::size_t>(m.music_ready.load(std::memory_order_acquire));
+        if (ready > 0 && m.music_volume > 0.001f) {
+            if (m.music_track >= ready) m.music_track = 0;
+            const std::vector<float>& track = m.music[m.music_track];
+            tune = track[m.music_pos] * m.music_volume;
+            if (++m.music_pos >= track.size()) {
+                m.music_pos = 0;
+                m.music_track = (m.music_track + 1) % m.music.size();
+            }
         }
         // A gentle limit, so many sounds at once do not crack.
         out[2 * f] = std::tanh(l * m.master + tune);
@@ -353,8 +417,11 @@ bool init() {
     }
     g_mixer = m;
     m->music_maker = std::thread([m] {
-        m->music = render_music();
-        m->music_ready.store(true, std::memory_order_release);
+        const std::vector<Score> all = scores();
+        for (std::size_t i = 0; i < all.size() && i < m->music.size(); ++i) {
+            m->music[i] = render_music(all[i]);
+            m->music_ready.store(static_cast<int>(i + 1), std::memory_order_release);
+        }
     });
     SDL_PauseAudioDevice(m->device, 0);
     return true;
@@ -395,6 +462,9 @@ void set_music_volume(float v) {
     g_mixer->music_volume = std::clamp(v, 0.0f, 1.0f);
 }
 
-std::vector<float> music() { return render_music(); }
+std::vector<float> music(int tune) {
+    const std::vector<Score> all = scores();
+    return render_music(all[static_cast<std::size_t>(tune) % all.size()]);
+}
 
 } // namespace railmaster::client::audio

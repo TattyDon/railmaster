@@ -351,9 +351,10 @@ Still to do:
   territories, difficulty), a scenario or a saved game.)
 - Original art and audio pipeline (`assets/`, credits). Sound so far is
   synthesised in the client (`src/client/audio.cpp`): whistles, chuffs,
-  bells, the cash register and clicks; and music: one original tune (a
-  march-time rag in C, 32 bars), rendered at start-up as piano with an
-  oom-pah bass and looped, with its own volume. More tunes to come.
+  bells, the cash register and clicks; and music: three original tunes (a
+  march-time rag in C, a waltz in F, a folk air in G), rendered at
+  start-up as piano over stride, waltz or hymn-like accompaniment and
+  played in turn, with their own volume.
 
 ## M5: Opponents and scenarios
 - AI chairmen with personality traits: done (data/tycoons.json: expansion,
