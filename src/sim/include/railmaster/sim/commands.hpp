@@ -262,11 +262,17 @@ enum class CheatKind : std::uint8_t {
     AllEngines,       // every engine available from today
     DoubleProduction, // every industry makes twice as much, for good
     BreakDown,        // train `train` breaks down where it is
+    DoubleSpeed,      // every train runs twice as fast; again to undo
+    NoCrashes,        // trains no longer crash; again to undo
+    Crash,            // train `train` crashes where it is
+    ForceWin,         // the scenario is won with medal `tier` (0 Bronze to 2 Gold)
+    ForceLoss,        // the scenario is over, lost
 };
 struct Cheat {
     CheatKind kind = CheatKind::PlayerMoney;
     Money amount{};
     TrainId train = 0;
+    std::int32_t tier = 0;
 };
 
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,

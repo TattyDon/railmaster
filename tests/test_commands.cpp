@@ -267,10 +267,23 @@ TEST_CASE("cheats work and mark the game as assisted, kept in saves") {
     const StationId b = w.execute(BuildStation{.at = at(12)}).created_id;
     CHECK_FALSE(w.execute(BuyTrain{.loco = 1, .cars = 2, .route = {a, b}}).ok);
     REQUIRE(w.execute(Cheat{.kind = CheatKind::AllEngines}).ok);
-    CHECK(w.execute(BuyTrain{.loco = 1, .cars = 2, .route = {a, b}}).ok);
+    const CommandResult bought = w.execute(BuyTrain{.loco = 1, .cars = 2, .route = {a, b}});
+    REQUIRE(bought.ok);
+    for (int i = 0; i < 5000 && w.railway().train(bought.created_id).state != TrainState::Moving; ++i) w.tick();
+    for (int i = 0; i < 50; ++i) w.tick();
+    REQUIRE(w.execute(Cheat{.kind = CheatKind::Crash, .train = bought.created_id}).ok);
+    CHECK(w.railway().train(bought.created_id).state == TrainState::Crashed);
 
     CHECK_FALSE(w.execute(Cheat{.kind = CheatKind::BreakDown, .train = 42}).ok);
+    CHECK_FALSE(w.execute(Cheat{.kind = CheatKind::Crash, .train = 42}).ok);
+    CHECK_FALSE(w.execute(Cheat{.kind = CheatKind::ForceWin}).ok); // no scenario
+    REQUIRE(w.execute(Cheat{.kind = CheatKind::DoubleSpeed}).ok);
+    REQUIRE(w.execute(Cheat{.kind = CheatKind::NoCrashes}).ok);
+    CHECK(w.railway().rules().speed_percent == 200);
+    CHECK_FALSE(w.railway().rules().crashes);
 
     const World loaded = World::load(w.save(), test_data());
     CHECK(loaded.assisted());
+    CHECK(loaded.railway().rules().speed_percent == 200);
+    CHECK_FALSE(loaded.railway().rules().crashes);
 }

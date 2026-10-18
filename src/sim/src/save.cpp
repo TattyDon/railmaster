@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 20; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 21; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -35,7 +35,7 @@ constexpr std::uint32_t kSaveVersion = 20; // 2: events, Grants; 3: restrictions
                                            // 15: a hand-made map's towns in the config;
                                            // 16: and its industries; 17: and its territories;
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
-                                           // 20: cheats (assisted games)
+                                           // 20: cheats (assisted games); 21: more cheats
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -487,7 +487,7 @@ template <class Ar>
 void io(Ar& ar, Railway& r) {
     fields(ar, r.track_, r.stations_, r.service_buildings_, r.station_buildings_, r.trains_, r.arrivals_, r.crashes_,
            r.breakdowns_, r.crossings_, r.traffic_, r.traffic_last_, r.held_, r.held_last_,
-           r.today_, r.year_, r.rules_.breakdowns, r.rng_);
+           r.today_, r.year_, r.rules_.breakdowns, r.rules_.crashes, r.rules_.speed_percent, r.rng_);
 }
 
 template <class Ar>
@@ -586,7 +586,7 @@ void io(Ar& ar, AnswerChoice& c) { fields(ar, c.choice, c.option); }
 template <class Ar>
 void io(Ar& ar, UpgradeStation& c) { fields(ar, c.station); }
 template <class Ar>
-void io(Ar& ar, Cheat& c) { fields(ar, c.kind, c.amount, c.train); }
+void io(Ar& ar, Cheat& c) { fields(ar, c.kind, c.amount, c.train, c.tier); }
 // Commands with nothing to say.
 template <class Ar>
 void io(Ar&, UndoTrack&) {}

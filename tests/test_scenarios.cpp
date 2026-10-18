@@ -633,3 +633,18 @@ TEST_CASE("sabotage stops trains out on the line; average speed and counter goal
     if (sabotaged) CHECK(w.railway().train(bought.created_id).breakdowns > before);
     else MESSAGE("the train was at a station when the saboteurs came");
 }
+
+TEST_CASE("the debug console can force a medal or a loss") {
+    const std::string goal = R"({"by": "1851-12-31", "goals": [{"kind": "book_value", "amount": 900000000}]})";
+    World win = small_world(Scenario::from_json(scenario_json(goal, goal, goal)));
+    REQUIRE(win.execute(Cheat{.kind = CheatKind::ForceWin, .tier = 1}).ok);
+    CHECK(win.scenario_result().finished);
+    CHECK(win.scenario_result().medal == Medal::Silver);
+    CHECK(win.assisted());
+    CHECK_FALSE(win.execute(Cheat{.kind = CheatKind::ForceLoss}).ok); // already over
+
+    World loss = small_world(Scenario::from_json(scenario_json(goal, goal, goal)));
+    REQUIRE(loss.execute(Cheat{.kind = CheatKind::ForceLoss}).ok);
+    CHECK(loss.scenario_result().finished);
+    CHECK_FALSE(loss.scenario_result().medal.has_value());
+}

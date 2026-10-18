@@ -798,23 +798,31 @@ bool Tools::find_key(SDL_Keycode key) {
 
 namespace {
 
-// The debug console's cheats, one a number key (rt3-clone-spec §15.8).
+// The debug console's cheats, each on its own key (rt3-clone-spec §15.8).
 struct ConsoleCheat {
+    SDL_Keycode key;
     const char* label;
     sim::CheatKind kind;
     std::int64_t dollars;
+    std::int32_t tier;
 };
 constexpr ConsoleCheat kCheats[] = {
-    {"$1,000,000 to you", sim::CheatKind::PlayerMoney, 1'000'000},
-    {"$10,000,000 to you", sim::CheatKind::PlayerMoney, 10'000'000},
-    {"$1,000,000 to your company", sim::CheatKind::CompanyMoney, 1'000'000},
-    {"$10,000,000 to your company", sim::CheatKind::CompanyMoney, 10'000'000},
-    {"Access to every territory", sim::CheatKind::AllTerritories, 0},
-    {"Every engine available", sim::CheatKind::AllEngines, 0},
-    {"Twice the production, for good", sim::CheatKind::DoubleProduction, 0},
-    {"Break down the train shown", sim::CheatKind::BreakDown, 0},
+    {SDLK_1, "$1,000,000 to you", sim::CheatKind::PlayerMoney, 1'000'000, 0},
+    {SDLK_2, "$10,000,000 to you", sim::CheatKind::PlayerMoney, 10'000'000, 0},
+    {SDLK_3, "$1,000,000 to your company", sim::CheatKind::CompanyMoney, 1'000'000, 0},
+    {SDLK_4, "$10,000,000 to your company", sim::CheatKind::CompanyMoney, 10'000'000, 0},
+    {SDLK_5, "Access to every territory", sim::CheatKind::AllTerritories, 0, 0},
+    {SDLK_6, "Every engine available", sim::CheatKind::AllEngines, 0, 0},
+    {SDLK_7, "Twice the production, for good", sim::CheatKind::DoubleProduction, 0, 0},
+    {SDLK_8, "Twice the train speed", sim::CheatKind::DoubleSpeed, 0, 0},
+    {SDLK_9, "No crashes", sim::CheatKind::NoCrashes, 0, 0},
+    {SDLK_k, "Break down the train shown", sim::CheatKind::BreakDown, 0, 0},
+    {SDLK_c, "Crash the train shown", sim::CheatKind::Crash, 0, 0},
+    {SDLK_b, "Win the scenario: Bronze", sim::CheatKind::ForceWin, 0, 0},
+    {SDLK_s, "Win the scenario: Silver", sim::CheatKind::ForceWin, 0, 1},
+    {SDLK_g, "Win the scenario: Gold", sim::CheatKind::ForceWin, 0, 2},
+    {SDLK_l, "Lose the scenario", sim::CheatKind::ForceLoss, 0, 0},
 };
-constexpr int kCheatCount = 8;
 
 } // namespace
 
@@ -823,10 +831,10 @@ bool Tools::console_key(SDL_Keycode key) {
         console_open_ = false;
         return true;
     }
-    if (key < SDLK_1 || key >= SDLK_1 + kCheatCount) return true;
-    const ConsoleCheat& c = kCheats[key - SDLK_1];
-    sim::Cheat cmd{.kind = c.kind, .amount = sim::Money::dollars(c.dollars), .train = 0};
-    if (c.kind == sim::CheatKind::BreakDown) {
+    const auto c = std::find_if(std::begin(kCheats), std::end(kCheats), [&](const ConsoleCheat& x) { return x.key == key; });
+    if (c == std::end(kCheats)) return true;
+    sim::Cheat cmd{.kind = c->kind, .amount = sim::Money::dollars(c->dollars), .train = 0, .tier = c->tier};
+    if (c->kind == sim::CheatKind::BreakDown || c->kind == sim::CheatKind::Crash) {
         const auto id = detail_train();
         if (!id) {
             show("Cannot: open a train's panel first (click it in the Look tool)", false);
@@ -835,15 +843,22 @@ bool Tools::console_key(SDL_Keycode key) {
         cmd.train = *id;
     }
     const sim::CommandResult r = world_.execute(cmd);
-    if (r.ok) show(std::string("Cheat: ") + c.label + "  (this game is now marked as assisted)", true);
-    else show("Cannot: " + r.error, false);
+    if (!r.ok) {
+        show("Cannot: " + r.error, false);
+        return true;
+    }
+    std::string done = c->label;
+    if (c->kind == sim::CheatKind::DoubleSpeed) done += world_.railway().rules().speed_percent > 100 ? ": on" : ": off";
+    if (c->kind == sim::CheatKind::NoCrashes) done += world_.railway().rules().crashes ? ": off" : ": on";
+    show("Cheat: " + done + "  (this game is now marked as assisted)", true);
     return true;
 }
 
 void Tools::draw_console() const {
-    constexpr float kRow = 22.0f;
-    const float w = 440, x0 = static_cast<float>(cam_.width_px) - w - 16, y0 = 56;
-    const float h = 84 + kRow * kCheatCount;
+    constexpr float kRow = 21.0f;
+    constexpr auto kCount = static_cast<float>(std::size(kCheats));
+    const float w = 460, x0 = static_cast<float>(cam_.width_px) - w - 16, y0 = 56;
+    const float h = 84 + kRow * kCount;
     ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 14, y0 + 8, "Debug console", kScale + 1);
@@ -852,15 +867,24 @@ void Tools::draw_console() const {
     draw_text(x0 + w - 14 - static_cast<float>(text_width(note, kScale)), y0 + 12, note, kScale);
     ui::rule(x0 + 10, x0 + w - 10, y0 + 36);
     float y = y0 + 44;
-    for (int i = 0; i < kCheatCount; ++i) {
+    const sim::OperatingRules& rules = world_.railway().rules();
+    for (const ConsoleCheat& c : kCheats) {
         glColor3f(1.0f, 0.86f, 0.5f);
-        draw_text(x0 + 18, y, std::to_string(i + 1), kScale);
+        draw_text(x0 + 18, y, std::string(1, static_cast<char>(std::toupper(static_cast<int>(c.key)))), kScale);
         glColor3f(0.9f, 0.88f, 0.82f);
-        draw_text(x0 + 44, y, kCheats[i].label, kScale);
+        draw_text(x0 + 44, y, c.label, kScale);
+        std::string state;
+        if (c.kind == sim::CheatKind::DoubleSpeed) state = rules.speed_percent > 100 ? "On" : "Off";
+        if (c.kind == sim::CheatKind::NoCrashes) state = rules.crashes ? "Off" : "On";
+        if (!state.empty()) {
+            if (state == "On") glColor3f(0.6f, 0.95f, 0.6f);
+            else glColor3f(0.68f, 0.66f, 0.62f);
+            draw_text(x0 + w - 18 - static_cast<float>(text_width(state, kScale)), y, state, kScale);
+        }
         y += kRow;
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 14, y0 + h - 26, "1-8 use a cheat   . or Esc close", kScale);
+    draw_text(x0 + 14, y0 + h - 26, "A key uses its cheat   . or Esc close", kScale);
 }
 
 bool Tools::on_text(const char* text) {

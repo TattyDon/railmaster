@@ -369,10 +369,10 @@ Still to do:
 - Save/load: done ([spec/saves.md](spec/saves.md)), compressed, with the
   game's config and a command log that replays it exactly
   (`railmaster_replay`).
-- Debug console (§15.8): done for money, territories, engines, production
-  and breakdowns, behind a setting; using it marks the game as assisted
-  (kept in saves). Still to come: twice the train speed, no crashes,
-  crashing trains, forcing a medal or a loss.
+- Debug console (§15.8): done, behind a setting: money, territories,
+  engines, production, train speed, no crashes, breaking down or crashing
+  a train, forcing a medal or a loss. Using it marks the game as assisted
+  (kept in saves).
 - Replay viewing in the client, localisation, packaging for Windows/macOS/Linux.
 
 ## Research backlog

@@ -906,6 +906,38 @@ CommandResult World::run(const Cheat& cmd) {
         for (const IndustryType& t : base_industries_.all()) modifiers_.push_back({EffectKind::Production, t.key, 200, 0});
         apply_modifiers();
         break;
+    case CheatKind::DoubleSpeed: {
+        OperatingRules rules = railway_.rules();
+        rules.speed_percent = rules.speed_percent == 100 ? 200 : 100;
+        railway_.set_rules(rules);
+        break;
+    }
+    case CheatKind::NoCrashes: {
+        OperatingRules rules = railway_.rules();
+        rules.crashes = !rules.crashes;
+        railway_.set_rules(rules);
+        break;
+    }
+    case CheatKind::Crash:
+        if (cmd.train >= railway_.trains().size()) return fail("no such train");
+        if (!railway_.crash(cmd.train)) return fail("the train is not out on the line");
+        break;
+    case CheatKind::ForceWin:
+    case CheatKind::ForceLoss:
+        if (!scenario_) return fail("this game has no scenario");
+        if (scenario_result_.finished) return fail("the scenario is already over");
+        scenario_result_.finished = true;
+        if (cmd.kind == CheatKind::ForceWin) {
+            const auto medal = static_cast<Medal>(std::clamp(cmd.tier, 0, 2));
+            scenario_result_.medal = medal;
+            scenario_result_.won_on = date_;
+            headline(std::string(medal_name(medal)) + " medal won: " + scenario_->name);
+        } else {
+            scenario_result_.medal.reset();
+            scenario_result_.won_on.reset();
+            headline(scenario_->name + ": the scenario is lost");
+        }
+        break;
     case CheatKind::BreakDown: {
         if (cmd.train >= railway_.trains().size()) return fail("no such train");
         const Balance::Breakdowns& b = data_.balance.breakdowns;

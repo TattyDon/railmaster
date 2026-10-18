@@ -586,7 +586,7 @@ std::vector<TrainId> Railway::take_crashes() {
 }
 
 bool Railway::roll_crash(const Train& t, const LocomotiveType& loco) {
-    if (!rules_.breakdowns) return false;
+    if (!rules_.breakdowns || !rules_.crashes) return false;
     const std::int64_t age_years = std::max(0, today_ - t.built_day) / 365;
     std::int64_t ppb = balance_.breakdowns.crash_ppb_per_tick * 100 / loco.reliability;
     const std::int64_t span = std::max(1, balance_.breakdowns.crash_age_years);
@@ -734,7 +734,7 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
 
     const PathStep here = t.path[t.step];
     std::int64_t target = target_speed_mm_per_tick(loco, t, year_, track_.grade_bp(here), balance_) *
-                          bridge_speed_permille(track_.edge(here.edge), balance_) / 1000;
+                          bridge_speed_permille(track_.edge(here.edge), balance_) / 1000 * rules_.speed_percent / 100;
     if (t.step > 0) {
         const PathStep before = t.path[t.step - 1];
         target = target *
@@ -814,13 +814,24 @@ void Railway::tick_train(Train& t, const LocomotiveRegistry& locos) {
         ++t.breakdowns;
         breakdowns_.push_back(t.id);
     } else if (travelled > 0 && roll_crash(t, loco)) {
-        t.state = TrainState::Crashed;
-        t.at_node = track_.step_start(t.path[t.step]); // wreck shown at the last node passed
-        t.path.clear();
-        t.speed_mm_per_tick = 0;
-        for (Car& car : t.cars) car = Car{};
-        crashes_.push_back(t.id);
+        wreck(t);
     }
+}
+
+void Railway::wreck(Train& t) {
+    t.state = TrainState::Crashed;
+    t.at_node = track_.step_start(t.path[t.step]); // wreck shown at the last node passed
+    t.path.clear();
+    t.speed_mm_per_tick = 0;
+    for (Car& car : t.cars) car = Car{};
+    crashes_.push_back(t.id);
+}
+
+bool Railway::crash(TrainId id) {
+    Train& t = trains_.at(id);
+    if (t.state != TrainState::Moving || t.path.empty()) return false;
+    wreck(t);
+    return true;
 }
 
 MapPoint Railway::train_position(TrainId id) const {

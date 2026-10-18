@@ -252,6 +252,8 @@ struct OperatingRules {
     // RT3's sandbox has "allow breakdown/crash for locomotives", off by
     // default; normal play has breakdowns. Crashes are not modelled yet.
     bool breakdowns = true;
+    bool crashes = true;              // the debug console can stop them
+    std::int32_t speed_percent = 100; // and double every train's speed
 };
 
 // Convert a speed in miles per hour into distance per simulation tick.
@@ -334,6 +336,8 @@ public:
     // Stop a train out on the line for `days`, as a breakdown (with the
     // repair bill); false if it is not on the line.
     bool break_down(TrainId id, std::int32_t days);
+    // Wreck a train out on the line, as a crash; false if it is not on the line.
+    bool crash(TrainId id);
     void add_crossing(Crossing c) { crossings_.push_back(c); }
     const std::vector<Crossing>& crossings() const { return crossings_; }
     // The train standing or running on a piece of track, if any.
@@ -414,6 +418,7 @@ private:
     bool roll_breakdown(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm);
     std::int64_t breakdown_ppb(const Train& t, const LocomotiveType& loco, std::int64_t distance_mm) const;
     bool roll_crash(const Train& t, const LocomotiveType& loco);
+    void wreck(Train& t);
     // Refill at any support buildings at `node` the train needs. True if it stopped.
     bool service_at(Train& t, NodeId node, const LocomotiveType& loco, bool always = false);
     void arrive_at_stop(Train& t);
