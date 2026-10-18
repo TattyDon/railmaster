@@ -225,3 +225,28 @@ TEST_CASE("station age counts from a town's first station; open country gets hal
     CHECK(w.revenue_permille(second.created_id) == w.revenue_permille(in_town.created_id));
     CHECK(w.revenue_permille(second.created_id) < 1100);
 }
+
+TEST_CASE("a station can be enlarged a size at a time for the difference in price") {
+    World w = flat_world();
+    REQUIRE(w.execute(track(free_at(2, 5), free_at(12, 5))).ok);
+    const TrackNetwork& net = w.railway().track();
+    const CommandResult s =
+        w.execute(BuildStation{.at = pick_track_end(net, {2 * kKm, 5 * kKm}, 600'000), .size = StationSize::Small});
+    REQUIRE(s.ok);
+    const StationId id = s.created_id;
+
+    const Money expected = station_cost(StationSize::Medium) - station_cost(StationSize::Small);
+    CHECK(w.station_upgrade_cost(id) == expected);
+    const Money cash = w.company().cash();
+    const CommandResult up = w.execute(UpgradeStation{.station = id});
+    REQUIRE(up.ok);
+    CHECK(up.cost == expected);
+    CHECK(w.company().cash() == cash - expected);
+    CHECK(w.railway().station(id).size == StationSize::Medium);
+
+    REQUIRE(w.execute(UpgradeStation{.station = id}).ok);
+    CHECK(w.railway().station(id).size == StationSize::Large);
+    CHECK(w.station_upgrade_cost(id) == Money{});
+    CHECK_FALSE(w.execute(UpgradeStation{.station = id}).ok); // already large
+    CHECK_FALSE(w.execute(UpgradeStation{.station = 99}).ok);
+}

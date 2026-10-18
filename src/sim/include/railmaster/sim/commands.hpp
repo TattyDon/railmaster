@@ -246,12 +246,19 @@ struct AnswerChoice {
     std::size_t option = 0;
 };
 
+// Enlarge one of your stations a size (small to medium to large: a wider
+// catchment and more room; rt3-clone-spec §15.4 station detail, upgrade)
+// for the difference in their prices, at today's costs and the territory's.
+struct UpgradeStation {
+    StationId station = 0;
+};
+
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              SetRoute, SetPriority,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation>;
 
 struct CommandResult {
     bool ok = false;

@@ -399,6 +399,11 @@ private:
     CommandResult run(const FoundCompany& cmd);
     CommandResult run(const DeclareBankruptcy& cmd);
     CommandResult run(const AnswerChoice& cmd);
+    CommandResult run(const UpgradeStation& cmd);
+public:
+    // What enlarging a station a size costs now (nothing if it is large).
+    Money station_upgrade_cost(StationId id) const;
+private:
     CommandResult run(const BuyIndustry& cmd);
     CommandResult run(const BuildIndustry& cmd);
     CommandResult run(const UpgradeIndustry& cmd);

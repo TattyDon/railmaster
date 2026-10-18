@@ -855,6 +855,32 @@ void World::merge(Company& buyer, CompanyId tid, Money offer) {
     }
 }
 
+// The price of making a station `to` from `from`: the difference in their
+// prices, at today's costs and its territory's.
+Money World::station_upgrade_cost(StationId id) const {
+    const Station& s = railway_.station(id);
+    if (s.size == StationSize::Large) return Money{};
+    const auto to = static_cast<StationSize>(static_cast<int>(s.size) + 1);
+    const MapPoint at = railway_.track().node(s.node).pos;
+    const TerritoryId terr = territory_at(at);
+    const std::int64_t terr_pct =
+        terr < territories_.territories.size() ? territories_.territories[terr].station_cost_percent : 100;
+    return construction_cost(station_cost(to, data_.balance) - station_cost(s.size, data_.balance)).scaled(terr_pct, 100);
+}
+
+CommandResult World::run(const UpgradeStation& cmd) {
+    if (cmd.station >= railway_.stations().size()) return fail("no such station");
+    const Station& s = railway_.station(cmd.station);
+    if (s.owner != acting().id()) return fail("you can only enlarge your own stations");
+    if (s.size == StationSize::Large) return fail("it is already a large station");
+    const Money cost = station_upgrade_cost(cmd.station);
+    if (auto why = cannot_afford(cost)) return fail(*why);
+    acting().invest_buildings(cost);
+    Station& st = railway_.station_mut(cmd.station);
+    st.size = static_cast<StationSize>(static_cast<int>(st.size) + 1);
+    return success(cost, cmd.station);
+}
+
 CommandResult World::run(const AnswerChoice& cmd) {
     if (actor_ != kHumanPlayer) return fail("only the player answers scenario questions");
     if (cmd.choice >= pending_choices_.size()) return fail("no such question");

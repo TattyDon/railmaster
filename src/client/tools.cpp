@@ -1390,6 +1390,19 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             follow_ = !follow_;
             return true;
         }
+        if (key == SDLK_u && detail_ && detail_->kind == DetailKind::Station) {
+            // Enlarge the station shown (rt3-clone-spec §15.4).
+            const sim::Station& s = world_.railway().station(detail_->id);
+            const sim::CommandResult r = world_.execute(sim::UpgradeStation{.station = s.id});
+            if (r.ok) {
+                show(as_written(world_.railway().station(s.id).name) + " is now a " +
+                         size_name(world_.railway().station(s.id).size) + " station, for " + format_money(r.cost),
+                     true);
+            } else {
+                show("Cannot: " + r.error, false);
+            }
+            return true;
+        }
         // Keys act on the detail panel's train, else the train under the
         // cursor (rt3-clone-spec §9.3).
         const sim::Railway& rw = world_.railway();
@@ -2462,6 +2475,7 @@ std::string Tools::hint() const {
         }
         if (detail_) {
             std::string keys = "Click another to show it  Esc close";
+            if (detail_->kind == DetailKind::Station) keys = "U enlarge  Click another to show it  Esc close";
             if (detail_train()) keys = "E route  H priority  F filter  W full  [ ] cars  C caboose  D diner  Y copy  XX retire  R engine  Space follow  Esc close";
             return keys;
         }
@@ -2734,6 +2748,11 @@ void Tools::draw_detail_panel() const {
         rows.push_back(rule_row());
         rows.push_back(line({"Size", std::string(size_name(s.size)) + ", reaches " +
                                          std::to_string(sim::catchment_radius(s.size, world_.data().balance)) + " cells"}));
+        if (s.size != sim::StationSize::Large && s.owner == world_.company().id()) {
+            const auto next = static_cast<sim::StationSize>(static_cast<int>(s.size) + 1);
+            rows.push_back(dim({std::string("Enlarge to ") + size_name(next) + ": " +
+                                format_money(world_.station_upgrade_cost(s.id)) + " (U)"}));
+        }
         rows.push_back(line({"Town", s.town ? as_written(eco.towns()[*s.town].name) : std::string("open country")}));
         rows.push_back(line({"Age", years(today - s.built_day)}));
         std::size_t calling = 0;

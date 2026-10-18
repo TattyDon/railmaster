@@ -582,6 +582,8 @@ template <class Ar>
 void io(Ar& ar, SetPortMode& c) { fields(ar, c.site, c.mode, c.convert_from, c.convert_to); }
 template <class Ar>
 void io(Ar& ar, AnswerChoice& c) { fields(ar, c.choice, c.option); }
+template <class Ar>
+void io(Ar& ar, UpgradeStation& c) { fields(ar, c.station); }
 // Commands with nothing to say.
 template <class Ar>
 void io(Ar&, UndoTrack&) {}
