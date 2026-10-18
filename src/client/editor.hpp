@@ -86,14 +86,26 @@ private:
             int years = 5; // the deadline, years after the start
         };
         Medal medals[3]{{{0, 0}, {-1, 0}, 5}, {{1, 4}, {-1, 0}, 10}, {{1, 7}, {-1, 0}, 20}};
+        // Events (rt3-clone-spec §14.4), each from a template; see kEventNames.
+        struct Event {
+            int kind = 0;
+            int year = 2, month = 0; // when: years after the start, and the month
+            int what = 0;            // the cargo, industry, town or engine
+            int amount = 3;          // a step on the kind's ladder
+            int months = 2;          // how long, a step on the duration ladder
+            std::string text = "Big news on the line";
+        };
+        std::vector<Event> events;
     };
     ScenarioDraft scen_;
     bool scen_open_ = false;
-    int scen_page_ = 0; // 0 medals, 1 rules
+    int scen_page_ = 0; // 0 scenario and rules, 1 medals, 2 events
     int scen_sel_ = 0;
-    int scen_text_ = 0; // typing: 1 the name, 2 the briefing
+    int scen_text_ = 0; // typing: 1 the name, 2 the briefing, 3 an event's headline
+    std::size_t scen_text_event_ = 0; // the event whose headline is typed
     enum class ScenRow { Name, Briefing, Start, Rivals, Money, Budget, Connected, OneCompany, ChairLocked,
-                         Goal, Target, Also, AlsoTarget, By, Save, Play, Close };
+                         Goal, Target, Also, AlsoTarget, By, EventKind, EventWhen, EventWhat, EventAmount, EventFor,
+                         EventText, AddEvent, Save, Play, Close };
     struct ScenLine {
         ScenRow row;
         int medal = 0;
@@ -102,6 +114,10 @@ private:
     bool scen_key(SDL_Keycode key);
     void scen_change(int step);
     std::string goal_text(const ScenarioDraft::Goal& g) const;
+    std::vector<std::string> event_choices(int kind) const; // what an event kind can name
+    std::string event_amount_text(const ScenarioDraft::Event& e) const;
+    std::string event_headline(const ScenarioDraft::Event& e) const;
+    nlohmann::json events_json() const;
     nlohmann::json goal_json(const ScenarioDraft::Goal& g) const;
     int territory_count() const;
     void draw_scenario(float width, float height) const;

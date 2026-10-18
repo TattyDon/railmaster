@@ -378,8 +378,10 @@ Still to do:
   deadline for each medal (a scenario file's `landscape` names its map).
   The scenario page also sets founding money, a track budget and the
   restrictions, and up to two goals a medal (industry profit and
-  territories among them). Still to come: events in the editor (scenario
-  files can already have them).
+  territories among them). Events come from templates on an Events tab
+  (headline, cargo price, industry output, building costs, grant,
+  earthquake, early engine), dated; conditions and choices are still
+  written by hand in the file.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

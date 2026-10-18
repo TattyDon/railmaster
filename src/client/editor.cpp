@@ -322,6 +322,9 @@ void Editor::text(const char* utf8) {
     if (scen_open_) {
         if (scen_text_ == 1 && scen_.name.size() < 40) scen_.name += typed;
         if (scen_text_ == 2 && scen_.briefing.size() < 300) scen_.briefing += typed;
+        if (scen_text_ == 3 && scen_text_event_ < scen_.events.size() && scen_.events[scen_text_event_].text.size() < 80) {
+            scen_.events[scen_text_event_].text += typed;
+        }
         return;
     }
     if (terr_naming_ && terr_sel_ >= 0 && terr_sel_ < static_cast<int>(terr_.territories.size())) {
@@ -598,6 +601,25 @@ constexpr int kBudgetStart[] = {0, 300, 500, 800, 1200};
 constexpr int kBudgetYear[] = {0, 50, 80, 100, 150};
 constexpr int kBudgetSteps = 5;
 
+// The events the editor makes, each a template (rt3-clone-spec §14.4).
+enum EventKind { kNews, kCargoPrice, kOutput, kBuildCost, kGrant, kQuake, kEngine, kEventKinds };
+constexpr const char* kEventNames[] = {"Headline", "Cargo price", "Industry output", "Building costs",
+                                       "Grant to your company", "Earthquake", "Engine arrives early"};
+constexpr std::int32_t kEventPercent[] = {50, 75, 125, 150, 200};
+constexpr std::int64_t kEventGrant[] = {100'000, 250'000, 500'000, 1'000'000, 2'000'000};
+constexpr std::int32_t kEventMonths[] = {6, 12, 24, 36, 0}; // 0: for good
+constexpr const char* kMonthNames[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+constexpr int kMaxEvents = 8;
+
+std::string with_commas(std::int64_t n) {
+    std::string d = std::to_string(n), out;
+    for (std::size_t i = 0; i < d.size(); ++i) {
+        if (i > 0 && (d.size() - i) % 3 == 0) out += ',';
+        out += d[i];
+    }
+    return out;
+}
+
 const char* map_size_name(std::int32_t width) {
     // The presets' widths: small 256, medium 384, large 768 cells.
     return width >= 700 ? "large" : width >= 350 ? "medium" : "small";
@@ -701,7 +723,98 @@ nlohmann::json Editor::scenario_json(const std::string& key, const std::string& 
     if (scen_.connected_track) rules["no_unconnected_track"] = true;
     if (scen_.one_company) rules["one_company_only"] = true;
     if (!rules.empty()) j["restrictions"] = rules;
+    if (!scen_.events.empty()) j["events"] = events_json();
     return j;
+}
+
+std::vector<std::string> Editor::event_choices(int kind) const {
+    std::vector<std::string> out;
+    switch (kind) {
+    case kCargoPrice:
+        for (const sim::CargoType& c : world_.data().cargo.all()) out.push_back(c.name);
+        break;
+    case kOutput:
+        for (const sim::IndustryType& t : world_.data().industries.all())
+            if (t.kind != sim::IndustryKind::Sink) out.push_back(t.name);
+        break;
+    case kQuake:
+        for (const sim::ScenarioTown& t : towns_) out.push_back(t.name);
+        break;
+    case kEngine:
+        for (const sim::LocomotiveType& l : world_.data().locomotives.all()) out.push_back(l.name);
+        break;
+    default: break;
+    }
+    return out;
+}
+
+std::string Editor::event_amount_text(const ScenarioDraft::Event& e) const {
+    if (e.kind == kGrant) return "$" + with_commas(kEventGrant[e.amount]);
+    const std::int32_t p = kEventPercent[e.amount];
+    return (p > 100 ? "+" : "") + std::to_string(p - 100) + "%";
+}
+
+std::string Editor::event_headline(const ScenarioDraft::Event& e) const {
+    const std::vector<std::string> what = event_choices(e.kind);
+    const std::string name = what.empty() ? std::string() : what[static_cast<std::size_t>(e.what) % what.size()];
+    const bool up = kEventPercent[e.amount] > 100;
+    switch (e.kind) {
+    case kNews: return e.text;
+    case kCargoPrice: return name + (up ? " prices soar" : " prices slump");
+    case kOutput: return name + (up ? " output booms" : " output falls");
+    case kBuildCost: return up ? "Building costs rise" : "Building costs fall";
+    case kGrant: return "The government grants the railroad " + event_amount_text(e);
+    case kEngine: return "The " + name + " arrives early";
+    default: return "";
+    }
+}
+
+nlohmann::json Editor::events_json() const {
+    nlohmann::json out = nlohmann::json::array();
+    for (std::size_t i = 0; i < scen_.events.size(); ++i) {
+        const ScenarioDraft::Event& e = scen_.events[i];
+        const std::string date = std::to_string(scen_.start_year + e.year) + (e.month < 9 ? "-0" : "-") +
+                                 std::to_string(e.month + 1) + "-01";
+        nlohmann::json effects = nlohmann::json::array();
+        // News first, so the player knows what happened (an earthquake reports itself).
+        if (e.kind != kQuake) effects.push_back({{"kind", "news"}, {"text", event_headline(e)}});
+        const std::int32_t percent = kEventPercent[e.amount], months = kEventMonths[e.months];
+        const auto key_of = [&](auto&& list, auto&& keep) {
+            std::vector<std::string> keys;
+            for (const auto& x : list)
+                if (keep(x)) keys.push_back(x.key);
+            return keys.empty() ? std::string() : keys[static_cast<std::size_t>(e.what) % keys.size()];
+        };
+        const auto all = [](const auto&) { return true; };
+        switch (e.kind) {
+        case kCargoPrice:
+            effects.push_back({{"kind", "cargo_price"}, {"target", key_of(world_.data().cargo.all(), all)}, {"percent", percent},
+                               {"months", months}});
+            break;
+        case kOutput:
+            effects.push_back({{"kind", "production"},
+                               {"target", key_of(world_.data().industries.all(),
+                                                 [](const sim::IndustryType& t) { return t.kind != sim::IndustryKind::Sink; })},
+                               {"percent", percent},
+                               {"months", months}});
+            break;
+        case kBuildCost: effects.push_back({{"kind", "build_cost"}, {"percent", percent}, {"months", months}}); break;
+        case kGrant: effects.push_back({{"kind", "company_cash"}, {"amount", kEventGrant[e.amount]}}); break;
+        case kQuake: {
+            const std::vector<std::string> towns = event_choices(kQuake);
+            if (!towns.empty()) {
+                effects.push_back({{"kind", "earthquake"},
+                                   {"target", towns[static_cast<std::size_t>(e.what) % towns.size()]},
+                                   {"percent", 50}});
+            }
+            break;
+        }
+        case kEngine: effects.push_back({{"kind", "unlock_engine"}, {"target", key_of(world_.data().locomotives.all(), all)}}); break;
+        default: break;
+        }
+        out.push_back({{"id", "event_" + std::to_string(i + 1)}, {"when", {{"after", date}}}, {"effects", effects}});
+    }
+    return out;
 }
 
 std::vector<Editor::ScenLine> Editor::scen_lines() const {
@@ -711,6 +824,18 @@ std::vector<Editor::ScenLine> Editor::scen_lines() const {
                           ScenRow::Connected, ScenRow::OneCompany, ScenRow::ChairLocked}) {
             lines.push_back({r});
         }
+    } else if (scen_page_ == 2) {
+        for (std::size_t i = 0; i < scen_.events.size(); ++i) {
+            const int e = static_cast<int>(i);
+            const int kind = scen_.events[i].kind;
+            lines.push_back({ScenRow::EventKind, e});
+            lines.push_back({ScenRow::EventWhen, e});
+            if (kind == kNews) lines.push_back({ScenRow::EventText, e});
+            if (kind == kCargoPrice || kind == kOutput || kind == kQuake || kind == kEngine) lines.push_back({ScenRow::EventWhat, e});
+            if (kind == kCargoPrice || kind == kOutput || kind == kBuildCost || kind == kGrant) lines.push_back({ScenRow::EventAmount, e});
+            if (kind == kCargoPrice || kind == kOutput || kind == kBuildCost) lines.push_back({ScenRow::EventFor, e});
+        }
+        if (scen_.events.size() < kMaxEvents) lines.push_back({ScenRow::AddEvent});
     } else {
         for (int m = 0; m < 3; ++m) {
             lines.push_back({ScenRow::Goal, m});
@@ -731,7 +856,8 @@ void Editor::scen_change(int step) {
     const int terr = territory_count();
     const std::vector<ScenLine> lines = scen_lines();
     const ScenLine at = lines[static_cast<std::size_t>(std::clamp(scen_sel_, 0, static_cast<int>(lines.size()) - 1))];
-    ScenarioDraft::Medal& md = scen_.medals[at.medal];
+    ScenarioDraft::Medal& md = scen_.medals[std::clamp(at.medal, 0, 2)];
+    ScenarioDraft::Event* ev = at.medal < static_cast<int>(scen_.events.size()) ? &scen_.events[static_cast<std::size_t>(at.medal)] : nullptr;
     const auto next_kind = [&](ScenarioDraft::Goal& g, bool allow_none) {
         const int first = allow_none ? -1 : 0;
         const int span = kGoalKinds - first;
@@ -753,16 +879,45 @@ void Editor::scen_change(int step) {
         md.also.level = std::clamp(md.also.level + step, 0, ladder_size(md.also.kind, towns, terr) - 1);
         break;
     case ScenRow::By: md.years = std::clamp(md.years + step, 1, 60); break;
+    case ScenRow::EventKind:
+        if (ev) {
+            ev->kind = (ev->kind + step + kEventKinds) % kEventKinds;
+            ev->what = 0;
+        }
+        break;
+    case ScenRow::EventWhen:
+        if (ev) {
+            const int at_month = std::clamp(ev->year * 12 + ev->month + step, 0, 60 * 12 - 1);
+            ev->year = at_month / 12;
+            ev->month = at_month % 12;
+        }
+        break;
+    case ScenRow::EventWhat:
+        if (ev) {
+            const auto n = static_cast<int>(event_choices(ev->kind).size());
+            if (n > 0) ev->what = (ev->what + step + n) % n;
+        }
+        break;
+    case ScenRow::EventAmount:
+        if (ev) ev->amount = std::clamp(ev->amount + step, 0, 4);
+        break;
+    case ScenRow::EventFor:
+        if (ev) ev->months = std::clamp(ev->months + step, 0, 4);
+        break;
     default: break;
     }
 }
 
 bool Editor::scen_key(SDL_Keycode key) {
     if (scen_text_ != 0) {
-        std::string& s = scen_text_ == 1 ? scen_.name : scen_.briefing;
+        if (scen_text_ == 3 && scen_text_event_ >= scen_.events.size()) {
+            scen_text_ = 0;
+            return true;
+        }
+        std::string& s = scen_text_ == 1 ? scen_.name : scen_text_ == 2 ? scen_.briefing : scen_.events[scen_text_event_].text;
         if (key == SDLK_BACKSPACE && !s.empty()) s.pop_back();
         if (key == SDLK_RETURN || key == SDLK_KP_ENTER || key == SDLK_ESCAPE) {
-            if (s.empty()) s = scen_text_ == 1 ? "My scenario" : "Build a railroad to be proud of.";
+            if (s.empty()) s = scen_text_ == 1 ? "My scenario" : scen_text_ == 2 ? "Build a railroad to be proud of." : "Big news on the line";
             scen_text_ = 0;
         }
         return true;
@@ -771,9 +926,20 @@ bool Editor::scen_key(SDL_Keycode key) {
     scen_sel_ = std::clamp(scen_sel_, 0, rows - 1);
     switch (key) {
     case SDLK_TAB:
-        scen_page_ = 1 - scen_page_;
+        scen_page_ = (scen_page_ + 1) % 3;
         scen_sel_ = 0;
         return true;
+    case SDLK_DELETE:
+    case SDLK_BACKSPACE: {
+        // Remove the event the chosen row belongs to.
+        const ScenLine at = scen_lines()[static_cast<std::size_t>(scen_sel_)];
+        if (scen_page_ == 2 && at.row != ScenRow::AddEvent && at.row != ScenRow::Save && at.row != ScenRow::Play &&
+            at.row != ScenRow::Close && at.medal < static_cast<int>(scen_.events.size())) {
+            scen_.events.erase(scen_.events.begin() + at.medal);
+            scen_sel_ = std::min(scen_sel_, static_cast<int>(scen_lines().size()) - 1);
+        }
+        return true;
+    }
     case SDLK_UP: scen_sel_ = (scen_sel_ + rows - 1) % rows; return true;
     case SDLK_DOWN: scen_sel_ = (scen_sel_ + 1) % rows; return true;
     case SDLK_LEFT: scen_change(-1); return true;
@@ -785,6 +951,17 @@ bool Editor::scen_key(SDL_Keycode key) {
         const ScenRow row = scen_lines()[static_cast<std::size_t>(scen_sel_)].row;
         if (row == ScenRow::Name || row == ScenRow::Briefing) {
             scen_text_ = row == ScenRow::Name ? 1 : 2;
+            return true;
+        }
+        if (row == ScenRow::EventText) {
+            scen_text_ = 3;
+            scen_text_event_ = static_cast<std::size_t>(scen_lines()[static_cast<std::size_t>(scen_sel_)].medal);
+            return true;
+        }
+        if (row == ScenRow::AddEvent) {
+            ScenarioDraft::Event e;
+            if (!scen_.events.empty()) e.year = std::min(59, scen_.events.back().year + 1);
+            scen_.events.push_back(e);
             return true;
         }
         if (row == ScenRow::Save || row == ScenRow::Play) {
@@ -803,6 +980,13 @@ bool Editor::scen_key(SDL_Keycode key) {
                         message_until_ = SDL_GetTicks() + 5000;
                         return true;
                     }
+                }
+            }
+            for (const ScenarioDraft::Event& e : scen_.events) {
+                if (e.kind == kQuake && towns_.empty()) {
+                    message_ = "An earthquake needs a town to strike near: place towns with the Town brush";
+                    message_until_ = SDL_GetTicks() + 5000;
+                    return true;
                 }
             }
             request_ = Request{row == ScenRow::Save ? Request::Kind::SaveScenario : Request::Kind::PlayScenario};
@@ -824,9 +1008,9 @@ void Editor::draw_scenario(float width, float height) const {
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 16, y0 + 10, "Scenario for this map", kScale + 1);
     // The two pages, as tabs.
-    const char* pages[] = {"Scenario and rules", "Medals"};
+    const char* pages[] = {"Scenario and rules", "Medals", "Events"};
     float tx = x0 + w - 16;
-    for (int p = 1; p >= 0; --p) {
+    for (int p = 2; p >= 0; --p) {
         const float tw = static_cast<float>(text_width(pages[p], kScale)) + 20;
         tx -= tw;
         if (p == scen_page_) ui::selection(tx, y0 + 10, tx + tw - 6, y0 + 34);
@@ -840,9 +1024,14 @@ void Editor::draw_scenario(float width, float height) const {
     const std::vector<ScenLine> lines = scen_lines();
     const char* tiers[] = {"Bronze", "Silver", "Gold"};
     const auto onoff = [](bool b) { return std::string("<  ") + (b ? "Yes" : "No") + "  >"; };
-    for (std::size_t i = 0; i < lines.size(); ++i) {
+    // The events page can hold more rows than fit: scroll to the chosen one.
+    constexpr int kFit = 18;
+    const std::size_t first = scen_page_ == 2 && scen_sel_ >= kFit ? static_cast<std::size_t>(scen_sel_ - kFit + 1) : 0;
+    for (std::size_t i = first; i < lines.size(); ++i) {
         const ScenLine& ln = lines[i];
-        const ScenarioDraft::Medal& md = scen_.medals[ln.medal];
+        const ScenarioDraft::Medal& md = scen_.medals[std::clamp(ln.medal, 0, 2)];
+        const ScenarioDraft::Event* ev =
+            ln.medal < static_cast<int>(scen_.events.size()) ? &scen_.events[static_cast<std::size_t>(ln.medal)] : nullptr;
         std::string label, value;
         std::vector<std::string> more; // further lines of a wrapped value
         switch (ln.row) {
@@ -897,6 +1086,41 @@ void Editor::draw_scenario(float width, float height) const {
             label = "    by", value = "<  the end of " + std::to_string(scen_.start_year + years) + "  >";
             break;
         }
+        case ScenRow::EventKind:
+            if (i > first) y += 6;
+            label = "Event " + std::to_string(ln.medal + 1);
+            value = ev ? "<  " + std::string(kEventNames[ev->kind]) + "  >" : "";
+            break;
+        case ScenRow::EventWhen:
+            label = "    when";
+            if (ev) value = "<  " + std::string(kMonthNames[ev->month]) + " " + std::to_string(scen_.start_year + ev->year) + "  >";
+            break;
+        case ScenRow::EventWhat: {
+            label = ev && ev->kind == kQuake ? "    near" : "    which";
+            const std::vector<std::string> what = ev ? event_choices(ev->kind) : std::vector<std::string>{};
+            value = what.empty() ? std::string("(place towns first)")
+                                 : "<  " + what[static_cast<std::size_t>(ev->what) % what.size()] + "  >";
+            break;
+        }
+        case ScenRow::EventAmount:
+            label = "    by";
+            if (ev) value = "<  " + event_amount_text(*ev) + "  >";
+            break;
+        case ScenRow::EventFor:
+            label = "    for";
+            if (ev) {
+                const std::int32_t m = kEventMonths[ev->months];
+                value = "<  " + (m == 0 ? std::string("good") : std::to_string(m) + " months") + "  >";
+            }
+            break;
+        case ScenRow::EventText:
+            label = "    headline";
+            if (ev) value = ev->text + (scen_text_ == 3 && scen_text_event_ == static_cast<std::size_t>(ln.medal) && blink ? "|" : "");
+            break;
+        case ScenRow::AddEvent:
+            y += 6;
+            label = scen_.events.empty() ? "Add an event (none yet)" : "Add an event";
+            break;
         case ScenRow::Save:
             y += 6;
             label = "Save the scenario";
@@ -920,7 +1144,8 @@ void Editor::draw_scenario(float width, float height) const {
     glColor3f(0.6f, 0.58f, 0.54f);
     draw_text(x0 + 20, y0 + h - 26,
               scen_text_ ? "Type, then Enter"
-                         : "Tab page   Up/Down choose   Left/Right change   Enter edits the name or briefing   G or Esc close",
+                         : scen_page_ == 2 ? "Tab page   Up/Down choose   Left/Right change   Enter types a headline   Delete removes   G/Esc close"
+                                           : "Tab page   Up/Down choose   Left/Right change   Enter edits the name or briefing   G or Esc close",
               kScale);
 }
 
