@@ -38,6 +38,7 @@ struct Camera {
     // at a map's distance.
     float height_exaggeration = 4.0f;
     const sim::Terrain* terrain = nullptr;
+    bool show_trees = true; // Ctrl+H hides them, to see the track
 
     // Height of the ground at a point, in tiles (0 in 2D or with no terrain).
     float ground_z(float tx, float ty) const;

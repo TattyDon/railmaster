@@ -604,6 +604,7 @@ int main(int argc, char* argv[]) {
         float x = 0, y = 0, distance = 0, yaw = 0, pitch = 0;
     };
     Bookmark bookmarks[10];
+    bool hide_ui = false; // Tab: only the world, for a clean look
     // The radar, bottom left above the tool bar.
     constexpr float kRadar = 170.0f;
     const auto radar_x = [] { return 8.0f; };
@@ -729,6 +730,12 @@ int main(int argc, char* argv[]) {
                     else load_game(kQuickSave);
                     break;
                 }
+                // Ctrl+H hides the trees, to see the track and towns (rt3-clone-spec §15.7).
+                if ((ev.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)) != 0 && ev.key.keysym.sym == SDLK_h) {
+                    cam.show_trees = !cam.show_trees;
+                    tools.show(cam.show_trees ? "Trees shown" : "Trees hidden (Ctrl+H shows them)", true);
+                    break;
+                }
                 // (Not in the Company and Ledger screens, where Shift+Tab turns back a page.)
                 if (tools.tool() != client::Tool::Finance && tools.tool() != client::Tool::Ledger &&
                     tutorial.key(ev.key.keysym.sym, ev.key.keysym.mod)) {
@@ -768,6 +775,11 @@ int main(int argc, char* argv[]) {
                     }
                     break;
                 }
+                case SDLK_TAB:
+                    // Hide the interface, to look at the railway (rt3-clone-spec §15.7).
+                    hide_ui = !hide_ui;
+                    if (!hide_ui) tools.show("Interface shown (Tab hides it)", true);
+                    break;
                 case SDLK_F12:
                     tools.settings().show_fps = !tools.settings().show_fps;
                     save_settings();
@@ -1195,6 +1207,12 @@ int main(int argc, char* argv[]) {
         status += tiles ? "  track budget " + std::to_string(*tiles) : std::string("  +/- speed, pause");
         if (title.open()) {
             title.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px), build_label);
+            SDL_GL_SwapWindow(window);
+            continue;
+        }
+        // With the interface hidden, only what asks for an answer still shows.
+        if (hide_ui && !editor.open() && !tools.founding_open() && !tools.menu_open() && !tools.newspaper_open() &&
+            world.pending_choices().empty()) {
             SDL_GL_SwapWindow(window);
             continue;
         }
