@@ -118,7 +118,7 @@ void Title::show() {
 
 int Title::items() const {
     switch (page_) {
-    case 0: return 5;
+    case 0: return 6;
     case 4: return 3; // map size, start from, open
     case 1: return 7; // map size, rivals, territories, difficulty, landscape, map number, start
     case 2: return static_cast<int>(scenarios_.size());
@@ -154,6 +154,10 @@ void Title::choose() {
     switch (page_) {
     case 0:
         if (sel_ == 4) {
+            request_ = Request{Request::Kind::Tutorial, {}, {}};
+            return;
+        }
+        if (sel_ == 5) {
             request_ = Request{Request::Kind::Quit, {}, {}};
             return;
         }
@@ -280,8 +284,8 @@ void Title::draw(float width, float height, const std::string& build) const {
     std::string foot;
     switch (page_) {
     case 0: {
-        const char* names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor", "Quit"};
-        for (int i = 0; i < 5; ++i) item(names[i], i == sel_, 380, kScale + 1);
+        const char* names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor", "Tutorial", "Quit"};
+        for (int i = 0; i < 6; ++i) item(names[i], i == sel_, 380, kScale + 1);
         foot = "Up/Down and Enter, or click";
         break;
     }

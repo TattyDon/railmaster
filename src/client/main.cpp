@@ -25,6 +25,7 @@
 #include "shading.hpp"
 #include "ui.hpp"
 #include "tools.hpp"
+#include "tutorial.hpp"
 
 #include "railmaster/sim/demo.hpp"
 #include "railmaster/sim/game_speed.hpp"
@@ -501,6 +502,7 @@ int main(int argc, char* argv[]) {
     }
     client::Title title(data_dir, maps_dir, scenarios_dir, save_slots());
     client::Editor editor(world, cam);
+    client::Tutorial tutorial;
     std::string editor_path; // where the map being edited was last saved
     if (title_at_start) {
         title.show();
@@ -508,6 +510,7 @@ int main(int argc, char* argv[]) {
     }
     // A new game from the title screen: a fresh world and fresh tools.
     const auto start_world = [&](const sim::WorldConfig& cfg) {
+        tutorial.end();
         try {
             world = sim::World(cfg, load_game_data(data_dir));
         } catch (const std::exception& e) {
@@ -720,6 +723,11 @@ int main(int argc, char* argv[]) {
                     else load_game(kQuickSave);
                     break;
                 }
+                // (Not in the Company and Ledger screens, where Shift+Tab turns back a page.)
+                if (tools.tool() != client::Tool::Finance && tools.tool() != client::Tool::Ledger &&
+                    tutorial.key(ev.key.keysym.sym, ev.key.keysym.mod)) {
+                    break;
+                }
                 if (tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod)) break;
                 // Game speed: + and - step through the six speeds, Pause
                 // stops and resumes [D]. Space pauses too.
@@ -921,6 +929,7 @@ int main(int argc, char* argv[]) {
             case client::Tools::MenuRequest::Kind::Save: save_game(req->path); break;
             case client::Tools::MenuRequest::Kind::Load: load_game(req->path); break;
             case client::Tools::MenuRequest::Kind::MainMenu:
+                tutorial.end();
                 title.set_slots(save_slots());
                 title.show();
                 break;
@@ -958,6 +967,16 @@ int main(int argc, char* argv[]) {
                 title.hide();
                 break;
             case client::Title::Request::Kind::Editor: start_editor(*req); break;
+            case client::Title::Request::Kind::Tutorial: {
+                // A small, quiet map, your railroad founded, and the steps on screen.
+                sim::WorldConfig cfg;
+                cfg.seed = 7;
+                cfg.rivals = 0;
+                cfg.found_player_company = true;
+                start_world(cfg);
+                tutorial.begin(cam);
+                break;
+            }
             case client::Title::Request::Kind::Quit: running = false; break;
             }
         }
@@ -1175,6 +1194,10 @@ int main(int argc, char* argv[]) {
         if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
         if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         else tools.draw_ui(status);
+        if (!editor.open() && !tools.founding_open() && !tools.menu_open() && !tools.newspaper_open()) {
+            tutorial.update(world, cam, tools);
+            tutorial.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
+        }
         // Which build this is, bottom right above the hint bar, so players
         // can tell whether they are on the latest commit.
         {

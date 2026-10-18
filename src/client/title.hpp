@@ -17,7 +17,7 @@ namespace railmaster::client {
 class Title {
 public:
     struct Request {
-        enum class Kind { NewGame, Scenario, Load, Editor, Quit } kind;
+        enum class Kind { NewGame, Scenario, Load, Editor, Tutorial, Quit } kind;
         sim::WorldConfig config{}; // NewGame
         std::string path;          // Scenario and Load; for NewGame and Editor, a landscape image (none: generated)
         bool flat = false;         // Editor: start from flat land

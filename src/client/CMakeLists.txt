@@ -15,6 +15,7 @@ add_executable(railmaster
     third_party_impl.cpp
     title.cpp
     tools.cpp
+    tutorial.cpp
     ui.cpp
 )
 

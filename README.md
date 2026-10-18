@@ -63,7 +63,10 @@ there):
 - The game opens on the title screen, over a demo railway running on its
   own: **New railroad** (choose the map size, rival railroads, territories,
   difficulty, the landscape (generated, or one of the hand-made maps in
-  `data/maps`) and the seed for towns and industries, then Start), **Scenarios** (each with its briefing),
+  `data/maps`) and the seed for towns and industries, then Start),
+  **Tutorial** (a short guided first railroad: moving the view, track
+  between two towns, a station at each end, a train, the clock and the
+  books; each step passes when you have done it, Shift+Tab skips one), **Scenarios** (each with its briefing),
   **Load a saved game**, or **Quit**. Up/Down and Enter, or click.
 - A new railroad or scenario opens with the founding dialog: Enter founds
   your railroad on the usual terms.
