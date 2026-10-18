@@ -39,8 +39,10 @@ add_custom_target(railmaster_build_info
 add_dependencies(railmaster railmaster_build_info)
 target_include_directories(railmaster PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
+find_package(Threads REQUIRED)
 target_link_libraries(railmaster PRIVATE
     railmaster::sim
+    Threads::Threads
     SDL2::SDL2
     OpenGL::GL
     ZLIB::ZLIB

@@ -444,6 +444,7 @@ int main(int argc, char* argv[]) {
             else if (name == "cheats") st.cheats = value != 0;
             else if (name == "seasons") st.seasons = value != 0;
             else if (name == "clouds") st.clouds = value != 0;
+            else if (name == "music") st.music = std::clamp(value, 0, 10);
         }
     }
     const auto save_settings = [&] {
@@ -451,7 +452,7 @@ int main(int argc, char* argv[]) {
         const client::Tools::Settings& st = tools.settings();
         std::ofstream out(settings_path);
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
-            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\n";
+            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\nmusic " << st.music << "\n";
     };
     const auto save_game = [&](const std::string& file) {
         try {
@@ -870,6 +871,7 @@ int main(int argc, char* argv[]) {
             save_settings();
         }
         client::audio::set_master(static_cast<float>(tools.settings().volume) / 10.0f);
+        client::audio::set_music_volume(static_cast<float>(tools.settings().music) / 10.0f);
         if (tools.settings().time_mode == 4 && speed.speed() != sim::GameSpeed::Paused) time_phase += static_cast<float>(dt) / 360.0f;
         client::shading::set_time_of_day(time_phase);
         {

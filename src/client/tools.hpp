@@ -88,6 +88,7 @@ public:
     // F12 and N); main applies them and keeps them between games.
     struct Settings {
         int volume = 7; // 0 (off) to 10
+        int music = 4;  // the music's volume, 0 (off) to 10
         bool edge_scroll = true;
         int time_mode = 0; // day, dusk, night, dawn, the whole day round
         bool show_fps = false;

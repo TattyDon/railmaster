@@ -6,7 +6,10 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <atomic>
+#include <cstdlib>
 #include <mutex>
+#include <thread>
 
 namespace railmaster::client::audio {
 
@@ -111,6 +114,132 @@ std::vector<float> click() {
     return out;
 }
 
+// Music: an original tune in the manner of the period (a march-time rag in
+// C), synthesised as piano over an oom-pah bass and rendered once into a
+// loop of about 74 seconds.
+struct Note {
+    float beat, beats; // start and length, in beats
+    int midi;          // -1: a rest
+};
+
+// One bar of melody: "E5:.5 G5:.5 C6:1 ...", note names with sharps (#)
+// and flats (b) and lengths in beats; R is a rest.
+void melody_bar(std::vector<Note>& out, float bar_start, const char* text) {
+    static const int kSemitone[7] = {9, 11, 0, 2, 4, 5, 7}; // A B C D E F G
+    float at = bar_start;
+    for (const char* p = text; *p;) {
+        while (*p == ' ') ++p;
+        if (!*p) break;
+        int midi = -1;
+        if (*p == 'R') {
+            ++p;
+        } else {
+            int n = kSemitone[*p - 'A'];
+            ++p;
+            if (*p == '#') ++n, ++p;
+            else if (*p == 'b') --n, ++p;
+            const int octave = *p++ - '0';
+            midi = 12 * (octave + 1) + n;
+        }
+        ++p; // ':'
+        const float beats = std::strtof(p, nullptr);
+        while (*p && *p != ' ') ++p;
+        if (midi >= 0) out.push_back({at, beats, midi});
+        at += beats;
+    }
+}
+
+struct Chord {
+    int root, fifth;
+    std::array<int, 3> triad;
+};
+
+std::vector<float> render_music() {
+    constexpr float kBpm = 104.0f;
+    constexpr float kBeat = 60.0f / kBpm;
+    // The bars: melody and the chord under it.
+    const Chord C{48, 43, {52, 55, 60}}, F{41, 48, {53, 57, 60}}, G7{43, 50, {53, 55, 59}}, D7{50, 45, {54, 57, 60}},
+        A7{45, 52, {55, 57, 61}}, Dm{50, 45, {53, 57, 62}};
+    struct Bar {
+        const char* tune;
+        Chord chord;
+    };
+    const Bar a[6] = {{"E5:.5 G5:.5 C6:1 B5:.5 A5:.5 G5:1", C}, {"E5:1 D5:.5 E5:.5 C5:2", C},
+                      {"F5:.5 A5:.5 C6:1 A5:.5 F5:.5 A5:1", F}, {"G5:1.5 E5:.5 C5:1 E5:1", C},
+                      {"D5:.5 F5:.5 G5:1 B5:.5 A5:.5 G5:1", G7}, {"E5:.5 G5:.5 C6:1 G5:1 E5:1", C}};
+    const Bar half_close[2] = {{"F#5:.5 A5:.5 D6:1 C6:.5 A5:.5 F#5:1", D7}, {"G5:3 R:1", G7}};
+    const Bar full_close[2] = {{"D5:.5 F5:.5 B5:1 A5:.5 F5:.5 D5:1", G7}, {"C5:3 R:1", C}};
+    const Bar b[8] = {{"A5:1 C6:.5 A5:.5 F5:1 A5:1", F},       {"G5:.5 A5:.5 C6:1 A5:2", F},
+                      {"G5:1 E5:.5 G5:.5 C6:2", C},            {"C#6:.5 B5:.5 A5:1 G5:1 E5:1", A7},
+                      {"F5:1 A5:.5 D6:.5 C6:1 A5:1", Dm},       {"G5:1 B5:.5 D6:.5 F6:1 D6:1", G7},
+                      {"E6:1.5 D6:.5 C6:1 G5:1", C},            {"F5:.5 E5:.5 D5:1 B4:1 G4:1", G7}};
+    std::vector<Bar> bars;
+    for (const Bar& x : a) bars.push_back(x);
+    bars.insert(bars.end(), std::begin(half_close), std::end(half_close));
+    for (const Bar& x : a) bars.push_back(x);
+    bars.insert(bars.end(), std::begin(full_close), std::end(full_close));
+    for (const Bar& x : b) bars.push_back(x);
+    for (const Bar& x : a) bars.push_back(x);
+    bars.insert(bars.end(), std::begin(full_close), std::end(full_close));
+
+    std::vector<Note> tune, bass, chords;
+    for (std::size_t i = 0; i < bars.size(); ++i) {
+        const float start = static_cast<float>(i) * 4;
+        melody_bar(tune, start, bars[i].tune);
+        // Oom-pah: the root, the chord, the fifth, the chord.
+        const Chord& c = bars[i].chord;
+        bass.push_back({start, 0.9f, c.root});
+        bass.push_back({start + 2, 0.9f, c.fifth});
+        for (const float beat : {1.0f, 3.0f})
+            for (const int m : c.triad) chords.push_back({start + beat, 0.45f, m});
+    }
+    const float seconds = static_cast<float>(bars.size()) * 4 * kBeat;
+    std::vector<float> out = make(seconds);
+
+    // A struck string: overtones decaying, the higher faster, two strings a
+    // hair apart in tune, damped when the key is let go.
+    const auto strike = [&](const Note& n, float volume) {
+        const float f = 440.0f * std::pow(2.0f, static_cast<float>(n.midi - 69) / 12.0f);
+        const float held = n.beats * kBeat;
+        const auto first = static_cast<std::size_t>(n.beat * kBeat * kRate);
+        const auto length = static_cast<std::size_t>((held + 0.35f) * kRate);
+        const float brightness = std::pow(261.6f / f, 0.3f);
+        for (int k = 1; k <= 6; ++k) {
+            const float amp = volume / std::pow(static_cast<float>(k), 1.4f);
+            const float decay = 1.4f * brightness / (1.0f + 0.5f * static_cast<float>(k));
+            for (const float detune : {0.9993f, 1.0007f}) {
+                const float w = 2 * kPi * f * static_cast<float>(k) * detune / kRate;
+                // Turning a phasor is much cheaper than calling sin per sample.
+                float re = 1, im = 0;
+                const float cw = std::cos(w), sw = std::sin(w);
+                for (std::size_t i = 0; i < length && first + i < out.size(); ++i) {
+                    const float t = static_cast<float>(i) / kRate;
+                    float env = std::exp(-t / decay) * std::min(1.0f, t / 0.004f);
+                    if (t > held) env *= std::exp(-(t - held) / 0.07f);
+                    out[first + i] += amp * 0.5f * im * env;
+                    const float nre = re * cw - im * sw;
+                    im = re * sw + im * cw;
+                    re = nre;
+                }
+            }
+        }
+    };
+    for (const Note& n : tune) strike(n, 0.2f);
+    for (const Note& n : bass) strike(n, 0.17f);
+    for (const Note& n : chords) strike(n, 0.05f);
+
+    // A little room: two feedback echoes, mixed in lightly.
+    std::vector<float> wet(out.size(), 0.0f);
+    for (const auto& [delay, gain] : {std::pair{0.0297f, 0.4f}, std::pair{0.0411f, 0.37f}}) {
+        const auto d = static_cast<std::size_t>(delay * kRate);
+        std::vector<float> comb(out.size(), 0.0f);
+        for (std::size_t i = 0; i < out.size(); ++i) comb[i] = out[i] + (i >= d ? comb[i - d] * gain : 0.0f);
+        for (std::size_t i = 0; i < out.size(); ++i) wet[i] += comb[i] * 0.5f;
+    }
+    for (std::size_t i = 0; i < out.size(); ++i) out[i] = out[i] * 0.8f + wet[i] * 0.2f;
+    return out;
+}
+
 struct Voice {
     const std::vector<float>* sound = nullptr;
     double pos = 0;
@@ -126,6 +255,12 @@ struct Mixer {
     float engine_rate = 0, engine_volume = 0, engine_pan = 0;
     double engine_clock = 0;
     int engine_beat = 0;
+    // The music, made on its own thread; played once it is ready.
+    std::vector<float> music;
+    std::atomic<bool> music_ready{false};
+    std::thread music_maker;
+    std::size_t music_pos = 0;
+    float music_volume = 0.4f;
     SDL_AudioDeviceID device = 0;
 };
 Mixer* g_mixer = nullptr;
@@ -174,9 +309,14 @@ void callback(void* user, Uint8* stream, int bytes) {
             r += s * v.right;
             v.pos += v.step;
         }
+        float tune = 0;
+        if (m.music_ready.load(std::memory_order_acquire) && !m.music.empty() && m.music_volume > 0.001f) {
+            tune = m.music[m.music_pos] * m.music_volume;
+            if (++m.music_pos >= m.music.size()) m.music_pos = 0;
+        }
         // A gentle limit, so many sounds at once do not crack.
-        out[2 * f] = std::tanh(l * m.master);
-        out[2 * f + 1] = std::tanh(r * m.master);
+        out[2 * f] = std::tanh(l * m.master + tune);
+        out[2 * f + 1] = std::tanh(r * m.master + tune);
     }
 }
 
@@ -212,6 +352,10 @@ bool init() {
         return false;
     }
     g_mixer = m;
+    m->music_maker = std::thread([m] {
+        m->music = render_music();
+        m->music_ready.store(true, std::memory_order_release);
+    });
     SDL_PauseAudioDevice(m->device, 0);
     return true;
 }
@@ -219,6 +363,7 @@ bool init() {
 void shutdown() {
     if (!g_mixer) return;
     SDL_CloseAudioDevice(g_mixer->device);
+    if (g_mixer->music_maker.joinable()) g_mixer->music_maker.join();
     delete g_mixer;
     g_mixer = nullptr;
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
@@ -243,5 +388,13 @@ void set_master(float v) {
     std::lock_guard<std::mutex> guard(g_mixer->lock);
     g_mixer->master = std::clamp(v, 0.0f, 1.0f);
 }
+
+void set_music_volume(float v) {
+    if (!g_mixer) return;
+    std::lock_guard<std::mutex> guard(g_mixer->lock);
+    g_mixer->music_volume = std::clamp(v, 0.0f, 1.0f);
+}
+
+std::vector<float> music() { return render_music(); }
 
 } // namespace railmaster::client::audio

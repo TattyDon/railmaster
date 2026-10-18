@@ -26,6 +26,11 @@ void set_engine(float chuffs_per_second, float volume, float pan);
 // Master volume, 0 to 1.
 void set_master(float v);
 
+// The music's volume, 0 (off) to 1: an original tune, synthesised, looping.
+void set_music_volume(float v);
+// The music's samples (mono, 44.1 kHz), for tests and tools.
+std::vector<float> music();
+
 // The samples of a sound (mono, 44.1 kHz), as made, for tests and tools.
 std::vector<float> samples(Sound s);
 constexpr int kRate = 44100;
