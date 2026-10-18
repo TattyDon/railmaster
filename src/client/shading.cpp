@@ -121,6 +121,9 @@ uniform vec3 u_ground;
 uniform int u_lit;
 uniform int u_shadows;
 uniform float u_texel;
+uniform float u_snow;   // 0 to 1: winter's snow on open ground and leaves
+uniform float u_autumn; // 0 to 1: leaves turning
+uniform int u_foliage;  // 1 while drawing trees: their leaves turn fully, grass only fades
 varying vec3 v_world;
 varying vec3 v_normal;
 varying vec4 v_color;
@@ -141,11 +144,38 @@ float sunlit(vec3 n) {
     return mix(lit / 9.0, 1.0, smoothstep(0.4, 0.5, edge));
 }
 
+// Smooth value noise over the map, for patchy seasons.
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
 void main() {
     vec4 base = v_color * texture2D(u_tex, v_uv);
     vec3 rgb = base.rgb;
     if (u_lit == 1) {
         vec3 n = length(v_normal) > 0.0001 ? normalize(v_normal) : vec3(0.0, 0.0, 1.0);
+        // The seasons touch only what is green (grass and leaves), so track,
+        // roads, roofs and water stay as they are.
+        float green = smoothstep(0.02, 0.1, base.g - max(base.r, base.b * 1.1));
+        if (green > 0.0 && (u_snow > 0.0 || u_autumn > 0.0)) {
+            float patch = noise(v_world.xy * 1.3) * 0.6 + noise(v_world.xy * 5.0) * 0.4;
+            if (u_foliage == 1) {
+                // Each tree its own shade, from gold through orange to red.
+                float hue = hash(floor(v_world.xy * 6.0));
+                vec3 turned = mix(vec3(0.85, 0.62, 0.16), vec3(0.72, 0.22, 0.1), hue) * (0.55 + base.g * 1.2);
+                // Conifers (the darker greens) keep their needles.
+                float broadleaf = smoothstep(0.37, 0.43, base.g);
+                base.rgb = mix(base.rgb, turned, green * broadleaf * u_autumn * smoothstep(0.2, 0.55, patch + hue * 0.3));
+            } else {
+                vec3 straw = vec3(base.g * 0.95, base.g * 0.85, base.b * 0.6);
+                base.rgb = mix(base.rgb, straw, green * u_autumn * 0.45 * smoothstep(0.3, 0.7, patch));
+            }
+            float lying = smoothstep(0.35, 0.8, n.z) * smoothstep(1.0 - u_snow, 1.25 - u_snow * 0.5, patch + 0.2);
+            base.rgb = mix(base.rgb, vec3(0.9, 0.93, 0.97), green * u_snow * lying);
+        }
         float ndl = max(dot(n, u_sun), 0.0);
         float sun = (u_shadows == 1 && ndl > 0.0) ? sunlit(n) : 1.0;
         // Sky light from above, warmer light bounced off the ground below.
@@ -160,7 +190,8 @@ void main() {
 bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
-GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1;
+GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1;
+float g_snow = 0.0f, g_autumn = 0.0f;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
 
@@ -232,6 +263,9 @@ bool init(bool wanted) {
     u_lit = p_get_uniform_location(g_program, "u_lit");
     u_shadows = p_get_uniform_location(g_program, "u_shadows");
     u_texel = p_get_uniform_location(g_program, "u_texel");
+    u_snow = p_get_uniform_location(g_program, "u_snow");
+    u_autumn = p_get_uniform_location(g_program, "u_autumn");
+    u_foliage = p_get_uniform_location(g_program, "u_foliage");
 
     // The shadow map: a depth texture as a framebuffer's only attachment.
     glGenTextures(1, &g_shadow_tex);
@@ -360,6 +394,18 @@ void begin_world(const Camera& cam) {
     p_uniform1i(u_lit, 0);
     p_uniform1i(u_shadows, g_shadows_ready ? 1 : 0);
     p_uniform1f(u_texel, 1.0f / kShadowSize);
+    p_uniform1f(u_snow, g_snow);
+    p_uniform1f(u_autumn, g_autumn);
+    p_uniform1i(u_foliage, 0);
+}
+
+void set_foliage(bool on) {
+    if (g_active && g_in_world) p_uniform1i(u_foliage, on ? 1 : 0);
+}
+
+void set_season(float snow, float autumn) {
+    g_snow = std::clamp(snow, 0.0f, 1.0f);
+    g_autumn = std::clamp(autumn, 0.0f, 1.0f);
 }
 
 void set_lit(bool lit) {

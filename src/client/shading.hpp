@@ -31,6 +31,11 @@ void end_shadow_pass(Camera& cam);
 // 0.75 dawn, easing between. Sets the sun (or moon), its colour, the
 // ambient light and the sky, for the shaders and the fixed-function path.
 void set_time_of_day(float phase);
+// The season, each 0 to 1: snow lying on open ground and leaves in winter,
+// leaves turning in autumn. Only green surfaces change.
+void set_season(float snow, float autumn);
+// Around drawing trees, so their leaves turn in autumn (grass only fades).
+void set_foliage(bool on);
 // How dark it is: 0 in daylight, 1 at night (lights come on).
 float night();
 // The light for fixed-function drawing: towards the sun, its colour, ambient.

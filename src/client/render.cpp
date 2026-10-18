@@ -3123,7 +3123,11 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             draw_turning();
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
             town_lights(towns, cam);
-            if (cam.terrain && cam.show_trees) draw_trees(*cam.terrain, sc, cam);
+            if (cam.terrain && cam.show_trees) {
+                shading::set_foliage(true);
+                draw_trees(*cam.terrain, sc, cam);
+                shading::set_foliage(false);
+            }
             end_lit();
             return;
         }
@@ -3201,7 +3205,11 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         list_turning = g_turning_build;
         draw_turning();
         town_lights(towns, cam);
-        if (cam.terrain && cam.show_trees) draw_trees(*cam.terrain, sc, cam);
+        if (cam.terrain && cam.show_trees) {
+                shading::set_foliage(true);
+                draw_trees(*cam.terrain, sc, cam);
+                shading::set_foliage(false);
+            }
         end_lit();
         return;
     }

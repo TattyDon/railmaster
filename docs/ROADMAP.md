@@ -298,6 +298,12 @@ are placed nearest first, left out where they would overlap, and fade with
 distance. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
+Seasons (shaders only; off in Settings): autumn turns the broadleaf trees
+gold to red and fades the grass from mid September, and snow lies on
+open ground and the trees from late November into March, patchy at the
+edges. Only green surfaces change, so track, roads, roofs and water stay
+readable; conifers keep their needles.
+
 Time of day (N): day, dusk, night and dawn, or a slow round of all four
 (six minutes while the game runs). The sun (or moon), its colour, the sky
 and ground ambient, the sky gradient and the haze change with it, in the

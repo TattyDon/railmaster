@@ -90,6 +90,7 @@ public:
         int time_mode = 0; // day, dusk, night, dawn, the whole day round
         bool show_fps = false;
         bool cheats = false; // the debug console (.) is allowed
+        bool seasons = true; // snow in winter, leaves turning in autumn
     };
     Settings& settings() { return settings_; }
     // Whether the menu changed them since the last call (to save them).
