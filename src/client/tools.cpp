@@ -796,6 +796,73 @@ bool Tools::find_key(SDL_Keycode key) {
     }
 }
 
+namespace {
+
+// The debug console's cheats, one a number key (rt3-clone-spec §15.8).
+struct ConsoleCheat {
+    const char* label;
+    sim::CheatKind kind;
+    std::int64_t dollars;
+};
+constexpr ConsoleCheat kCheats[] = {
+    {"$1,000,000 to you", sim::CheatKind::PlayerMoney, 1'000'000},
+    {"$10,000,000 to you", sim::CheatKind::PlayerMoney, 10'000'000},
+    {"$1,000,000 to your company", sim::CheatKind::CompanyMoney, 1'000'000},
+    {"$10,000,000 to your company", sim::CheatKind::CompanyMoney, 10'000'000},
+    {"Access to every territory", sim::CheatKind::AllTerritories, 0},
+    {"Every engine available", sim::CheatKind::AllEngines, 0},
+    {"Twice the production, for good", sim::CheatKind::DoubleProduction, 0},
+    {"Break down the train shown", sim::CheatKind::BreakDown, 0},
+};
+constexpr int kCheatCount = 8;
+
+} // namespace
+
+bool Tools::console_key(SDL_Keycode key) {
+    if (key == SDLK_ESCAPE || key == SDLK_PERIOD) {
+        console_open_ = false;
+        return true;
+    }
+    if (key < SDLK_1 || key >= SDLK_1 + kCheatCount) return true;
+    const ConsoleCheat& c = kCheats[key - SDLK_1];
+    sim::Cheat cmd{.kind = c.kind, .amount = sim::Money::dollars(c.dollars), .train = 0};
+    if (c.kind == sim::CheatKind::BreakDown) {
+        const auto id = detail_train();
+        if (!id) {
+            show("Cannot: open a train's panel first (click it in the Look tool)", false);
+            return true;
+        }
+        cmd.train = *id;
+    }
+    const sim::CommandResult r = world_.execute(cmd);
+    if (r.ok) show(std::string("Cheat: ") + c.label + "  (this game is now marked as assisted)", true);
+    else show("Cannot: " + r.error, false);
+    return true;
+}
+
+void Tools::draw_console() const {
+    constexpr float kRow = 22.0f;
+    const float w = 440, x0 = static_cast<float>(cam_.width_px) - w - 16, y0 = 56;
+    const float h = 84 + kRow * kCheatCount;
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y0 + 8, "Debug console", kScale + 1);
+    glColor3f(0.95f, 0.65f, 0.6f);
+    const std::string note = world_.assisted() ? "assisted game" : "marks the game assisted";
+    draw_text(x0 + w - 14 - static_cast<float>(text_width(note, kScale)), y0 + 12, note, kScale);
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 36);
+    float y = y0 + 44;
+    for (int i = 0; i < kCheatCount; ++i) {
+        glColor3f(1.0f, 0.86f, 0.5f);
+        draw_text(x0 + 18, y, std::to_string(i + 1), kScale);
+        glColor3f(0.9f, 0.88f, 0.82f);
+        draw_text(x0 + 44, y, kCheats[i].label, kScale);
+        y += kRow;
+    }
+    glColor3f(0.6f, 0.58f, 0.54f);
+    draw_text(x0 + 14, y0 + h - 26, "1-8 use a cheat   . or Esc close", kScale);
+}
+
 bool Tools::on_text(const char* text) {
     if (!find_open_) return false;
     if (find_text_.size() < 30) find_text_ += text;
@@ -902,7 +969,7 @@ namespace {
 // The game menu's pages, and the items on its first.
 enum MenuPage { kMenuMain, kMenuSave, kMenuLoad, kMenuQuit, kMenuLeave, kMenuSettings };
 enum MenuItem { kItemResume, kItemSave, kItemLoad, kItemBriefing, kItemSettings, kItemMainMenu, kItemQuit, kMainItems };
-constexpr int kSettingRows = 5; // sound, edge scrolling, time of day, frames a second, back
+constexpr int kSettingRows = 6; // sound, edge scrolling, time of day, frames a second, debug console, back
 constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
 
 } // namespace
@@ -923,6 +990,7 @@ void Tools::change_setting(int step) {
     case 1: settings_.edge_scroll = !settings_.edge_scroll; break;
     case 2: settings_.time_mode = (settings_.time_mode + step + 5) % 5; break;
     case 3: settings_.show_fps = !settings_.show_fps; break;
+    case 4: settings_.cheats = !settings_.cheats; break;
     default: return;
     }
     settings_changed_ = true;
@@ -1039,9 +1107,10 @@ void Tools::draw_menu() const {
         break;
     case kMenuSettings:
         title = "Settings";
-        items = {"Sound", "Scroll at the window's edge", "Time of day", "Frames a second", "Back"};
+        items = {"Sound", "Scroll at the window's edge", "Time of day", "Frames a second", "Debug console (. key, cheats)", "Back"};
         notes = {settings_.volume == 0 ? std::string("Off") : std::to_string(settings_.volume * 10) + "%",
-                 settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.show_fps ? "On" : "Off", ""};
+                 settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.show_fps ? "On" : "Off",
+                 settings_.cheats ? "On" : "Off", ""};
         break;
     default:
         title = menu_page_ == kMenuLeave ? "Leave without saving?" : "Quit without saving?";
@@ -1388,6 +1457,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     }
     if (menu_open_) return menu_key(key);
     if (find_open_) return find_key(key);
+    if (console_open_) return console_key(key);
+    if (key == SDLK_PERIOD && settings_.cheats && tool_ != Tool::Train && (mod & (KMOD_CTRL | KMOD_GUI)) == 0) {
+        console_open_ = true;
+        return true;
+    }
     if (key == SDLK_f && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
         find_open_ = true;
         find_text_.clear();
@@ -1978,6 +2052,7 @@ void Tools::draw_status_panel() const {
     if (!sc) {
         rows.push_back({"Game status", 0});
         rows.push_back({"A free game: no goals and no deadline. Start one with --scenario=file.", 1});
+        if (world_.assisted()) rows.push_back({"Assisted: the debug console has been used in this game", 1});
     } else {
         const sim::ScenarioResult& res = world_.scenario_result();
         rows.push_back({sc->name, 0});
@@ -2011,6 +2086,7 @@ void Tools::draw_status_panel() const {
         rule(!sc->chairman_can_resign, "You cannot resign");
         rule(!sc->chairman_can_be_fired, "You cannot be fired");
         if (!rules.empty()) rows.push_back({"Rules: " + rules, 1});
+        if (world_.assisted()) rows.push_back({"Assisted: the debug console has been used in this game", 1});
         rows.push_back({"", 1});
         for (int m = 0; m < 3; ++m) {
             const auto medal = static_cast<sim::Medal>(m);
@@ -3212,6 +3288,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
     if (find_open_) draw_find_panel();
+    if (console_open_) draw_console();
     draw_choice_dialog();
     if (paper_open_) draw_newspaper();
     if (menu_open_) draw_menu();

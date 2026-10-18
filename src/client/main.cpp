@@ -441,6 +441,7 @@ int main(int argc, char* argv[]) {
             else if (name == "edge_scroll") st.edge_scroll = value != 0;
             else if (name == "time_of_day") st.time_mode = std::clamp(value, 0, 4);
             else if (name == "show_fps") st.show_fps = value != 0;
+            else if (name == "cheats") st.cheats = value != 0;
         }
     }
     const auto save_settings = [&] {
@@ -448,7 +449,7 @@ int main(int argc, char* argv[]) {
         const client::Tools::Settings& st = tools.settings();
         std::ofstream out(settings_path);
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
-            << "\nshow_fps " << st.show_fps << "\n";
+            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\n";
     };
     const auto save_game = [&](const std::string& file) {
         try {
@@ -459,7 +460,8 @@ int main(int argc, char* argv[]) {
             std::ofstream about(file + ".txt");
             about << world.date().month_year_label() << ", "
                   << (world.player_company() ? world.company().name() : std::string("no company")) << ", net worth "
-                  << client::format_money(sim::net_worth(world.investor(), world.market())) << "\n";
+                  << client::format_money(sim::net_worth(world.investor(), world.market()))
+                  << (world.assisted() ? ", assisted" : "") << "\n";
             tools.show("Game saved to " + file, true);
         } catch (const std::exception& e) {
             tools.show(e.what(), false);

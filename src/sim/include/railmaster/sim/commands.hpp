@@ -253,12 +253,28 @@ struct UpgradeStation {
     StationId station = 0;
 };
 
+// The debug console's cheats (rt3-clone-spec §15.8, mirroring the original's).
+// Using one marks the game as assisted, for good.
+enum class CheatKind : std::uint8_t {
+    PlayerMoney,      // `amount` to the player's own account
+    CompanyMoney,     // `amount` to the player's company, booked as Grants
+    AllTerritories,   // access rights to every territory, free
+    AllEngines,       // every engine available from today
+    DoubleProduction, // every industry makes twice as much, for good
+    BreakDown,        // train `train` breaks down where it is
+};
+struct Cheat {
+    CheatKind kind = CheatKind::PlayerMoney;
+    Money amount{};
+    TrainId train = 0;
+};
+
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              SetRoute, SetPriority,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat>;
 
 struct CommandResult {
     bool ok = false;

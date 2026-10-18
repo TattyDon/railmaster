@@ -89,6 +89,7 @@ public:
         bool edge_scroll = true;
         int time_mode = 0; // day, dusk, night, dawn, the whole day round
         bool show_fps = false;
+        bool cheats = false; // the debug console (.) is allowed
     };
     Settings& settings() { return settings_; }
     // Whether the menu changed them since the last call (to save them).
@@ -239,6 +240,9 @@ private:
         sim::MapPoint at{};
         std::optional<sim::StationId> station{};
     };
+    bool console_open_ = false; // the debug console (rt3-clone-spec §15.8)
+    bool console_key(SDL_Keycode key);
+    void draw_console() const;
     bool find_open_ = false;
     std::string find_text_;
     std::size_t find_sel_ = 0;

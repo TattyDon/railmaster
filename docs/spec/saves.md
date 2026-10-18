@@ -90,6 +90,7 @@ Format versions:
 - **17:** a hand-made map's territories in the game's config.
 - **18:** a scenario's hand-made map (`landscape`).
 - **19:** express made and lost each month at each station, and travellers avoiding it.
+- **20:** whether a cheat from the debug console has been used (an assisted game).
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

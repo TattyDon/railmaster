@@ -881,6 +881,44 @@ CommandResult World::run(const UpgradeStation& cmd) {
     return success(cost, cmd.station);
 }
 
+CommandResult World::run(const Cheat& cmd) {
+    const auto co = player_company();
+    switch (cmd.kind) {
+    case CheatKind::PlayerMoney: investor().cash += cmd.amount; break;
+    case CheatKind::CompanyMoney:
+        if (!co) return fail("you run no company");
+        company().post(Ledger::Grants, cmd.amount);
+        break;
+    case CheatKind::AllTerritories:
+        if (!co) return fail("you run no company");
+        for (std::size_t t = 0; t < territories_.territories.size(); ++t) {
+            const Territory& terr = territories_.territories[t];
+            if (!terr.open() && !company().has_access(static_cast<TerritoryId>(t))) {
+                company().grant_access(static_cast<TerritoryId>(t), terr.credit_grades);
+            }
+        }
+        break;
+    case CheatKind::AllEngines:
+        for (const LocomotiveType& l : base_locos_.all()) modifiers_.push_back({EffectKind::UnlockEngine, l.key, 100, 0});
+        apply_modifiers();
+        break;
+    case CheatKind::DoubleProduction:
+        for (const IndustryType& t : base_industries_.all()) modifiers_.push_back({EffectKind::Production, t.key, 200, 0});
+        apply_modifiers();
+        break;
+    case CheatKind::BreakDown: {
+        if (cmd.train >= railway_.trains().size()) return fail("no such train");
+        const Balance::Breakdowns& b = data_.balance.breakdowns;
+        if (!railway_.break_down(cmd.train, rng_.between(b.breakdown_min_days, b.breakdown_max_days))) {
+            return fail("the train is not out on the line");
+        }
+        break;
+    }
+    }
+    assisted_ = true;
+    return success(Money{}, 0);
+}
+
 CommandResult World::run(const AnswerChoice& cmd) {
     if (actor_ != kHumanPlayer) return fail("only the player answers scenario questions");
     if (cmd.choice >= pending_choices_.size()) return fail("no such question");

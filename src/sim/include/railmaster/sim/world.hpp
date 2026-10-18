@@ -197,6 +197,8 @@ public:
     // --- Scenario goals (rt3-clone-spec §14.3) ---
     // The scenario being played, if any; checked on the 1st of each month.
     const std::optional<Scenario>& scenario() const { return scenario_; }
+    // A cheat has been used in this game (rt3-clone-spec §15.8).
+    bool assisted() const { return assisted_; }
     const ScenarioResult& scenario_result() const { return scenario_result_; }
     // Questions scenario events have put to the player, waiting for an
     // answer (AnswerChoice) until their month runs out.
@@ -315,6 +317,7 @@ private:
     };
     std::vector<std::vector<TrackUndo>> track_undo_;
     std::optional<Scenario> scenario_;
+    bool assisted_ = false;
     ScenarioResult scenario_result_;
     void check_scenario();
 
@@ -400,6 +403,7 @@ private:
     CommandResult run(const DeclareBankruptcy& cmd);
     CommandResult run(const AnswerChoice& cmd);
     CommandResult run(const UpgradeStation& cmd);
+    CommandResult run(const Cheat& cmd);
 public:
     // What enlarging a station a size costs now (nothing if it is large).
     Money station_upgrade_cost(StationId id) const;

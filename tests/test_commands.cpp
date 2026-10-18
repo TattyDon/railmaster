@@ -250,3 +250,27 @@ TEST_CASE("a station can be enlarged a size at a time for the difference in pric
     CHECK_FALSE(w.execute(UpgradeStation{.station = id}).ok); // already large
     CHECK_FALSE(w.execute(UpgradeStation{.station = 99}).ok);
 }
+
+TEST_CASE("cheats work and mark the game as assisted, kept in saves") {
+    World w = flat_world();
+    CHECK_FALSE(w.assisted());
+    const Money cash = w.company().cash();
+    REQUIRE(w.execute(Cheat{.kind = CheatKind::CompanyMoney, .amount = Money::dollars(1'000'000)}).ok);
+    CHECK(w.company().cash() == cash + Money::dollars(1'000'000));
+    CHECK(w.assisted());
+
+    // "New" is from 1900; with every engine unlocked it can be bought in 1835.
+    REQUIRE(w.execute(track(free_at(2, 5), free_at(12, 5))).ok);
+    const TrackNetwork& net = w.railway().track();
+    const auto at = [&](std::int64_t x_km) { return pick_track_end(net, {x_km * kKm, 5 * kKm}, 600'000); };
+    const StationId a = w.execute(BuildStation{.at = at(2)}).created_id;
+    const StationId b = w.execute(BuildStation{.at = at(12)}).created_id;
+    CHECK_FALSE(w.execute(BuyTrain{.loco = 1, .cars = 2, .route = {a, b}}).ok);
+    REQUIRE(w.execute(Cheat{.kind = CheatKind::AllEngines}).ok);
+    CHECK(w.execute(BuyTrain{.loco = 1, .cars = 2, .route = {a, b}}).ok);
+
+    CHECK_FALSE(w.execute(Cheat{.kind = CheatKind::BreakDown, .train = 42}).ok);
+
+    const World loaded = World::load(w.save(), test_data());
+    CHECK(loaded.assisted());
+}
