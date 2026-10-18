@@ -974,7 +974,7 @@ int main(int argc, char* argv[]) {
                 cfg.rivals = 0;
                 cfg.found_player_company = true;
                 start_world(cfg);
-                tutorial.begin(cam);
+                tutorial.begin(world, cam);
                 break;
             }
             case client::Title::Request::Kind::Quit: running = false; break;
@@ -1171,6 +1171,7 @@ int main(int argc, char* argv[]) {
         client::draw_lights(cam);
         if (editor.open()) editor.draw_world_overlay();
         else tools.draw_world_overlay();
+        tutorial.draw_world_overlay(cam);
         if (shaded) client::shading::end_world();
         glDisable(GL_FOG);
         glDisable(GL_DEPTH_TEST);

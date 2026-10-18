@@ -18,7 +18,10 @@ namespace railmaster::client {
 class Tutorial {
 public:
     bool open() const { return open_; }
-    void begin(const Camera& cam);
+    // Picks the two nearest towns for the first line and frames them in `cam`.
+    void begin(const sim::World& world, Camera& cam);
+    // Rings on the two towns, while the line is being built.
+    void draw_world_overlay(const Camera& cam) const;
     void end() { open_ = false; }
     // Check the step against the game; call once a frame.
     void update(const sim::World& world, const Camera& cam, const Tools& tools);
@@ -31,6 +34,8 @@ private:
     int step_ = 0;
     float start_distance_ = 0, start_x_ = 0, start_y_ = 0, start_yaw_ = 0;
     Uint32 step_since_ = 0; // when this step began, for the "well done" flash
+    std::string town_a_, town_b_;   // the first line's towns
+    sim::MapPoint at_a_{}, at_b_{};
 };
 
 } // namespace railmaster::client
