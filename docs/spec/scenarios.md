@@ -50,7 +50,8 @@ deliver cargo, reach a book value, win the market.
   image, relative to the scenario's file (`"../maps/my_map_1.png"`), with
   the industries and territories kept beside it in the map's `.json`.
   The scenario's `towns` are then the map's only towns. The map editor
-  writes such scenarios (G).
+  writes such scenarios (G), with up to two goals a medal, founding money
+  and the restrictions below; events are written by hand.
 - The founding amounts replace `balance.json`'s `stock` values for every
   founder, rivals included.
 - `towns` are placed first, centred on the given map cell (0.5-mile cells;

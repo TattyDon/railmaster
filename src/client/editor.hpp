@@ -71,20 +71,39 @@ private:
         std::string briefing = "Build a railroad to be proud of.";
         int start_year = 1850;
         int rivals = 1;
-        struct Medal {
-            int kind = 1;  // see kGoalNames
+        int money = 1;        // founding money: lean, usual, rich
+        int track_budget = 0; // a step on the budget ladder; 0 none
+        bool connected_track = false;
+        bool one_company = false;
+        bool chair_locked = false; // the chairman may neither resign nor be fired
+        struct Goal {
+            int kind = 1;  // see kGoalNames; -1 none (a second goal only)
             int level = 3; // the target, as a step on the kind's ladder
+        };
+        struct Medal {
+            Goal goal;
+            Goal also{-1, 0};
             int years = 5; // the deadline, years after the start
         };
-        Medal medals[3]{{0, 0, 5}, {1, 4, 10}, {1, 7, 20}};
+        Medal medals[3]{{{0, 0}, {-1, 0}, 5}, {{1, 4}, {-1, 0}, 10}, {{1, 7}, {-1, 0}, 20}};
     };
     ScenarioDraft scen_;
     bool scen_open_ = false;
+    int scen_page_ = 0; // 0 medals, 1 rules
     int scen_sel_ = 0;
     int scen_text_ = 0; // typing: 1 the name, 2 the briefing
+    enum class ScenRow { Name, Briefing, Start, Rivals, Money, Budget, Connected, OneCompany, ChairLocked,
+                         Goal, Target, Also, AlsoTarget, By, Save, Play, Close };
+    struct ScenLine {
+        ScenRow row;
+        int medal = 0;
+    };
+    std::vector<ScenLine> scen_lines() const;
     bool scen_key(SDL_Keycode key);
     void scen_change(int step);
-    std::string goal_text(int medal) const;
+    std::string goal_text(const ScenarioDraft::Goal& g) const;
+    nlohmann::json goal_json(const ScenarioDraft::Goal& g) const;
+    int territory_count() const;
     void draw_scenario(float width, float height) const;
     void industry_click();
     static constexpr int kMaxTerritories = 8;

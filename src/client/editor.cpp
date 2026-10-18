@@ -564,23 +564,39 @@ void Editor::draw_ui(float width, float height) const {
 
 namespace {
 
-// The goals a scenario made in the editor can set, one a medal.
-constexpr const char* kGoalNames[] = {"Connect towns", "Book value",       "Revenue in a year", "Company cash",
-                                      "Your net worth", "Average train speed", "Only railroad left", "Highest value"};
-constexpr int kGoalKinds = 8;
+// The goals a scenario made in the editor can set, two a medal at most.
+constexpr const char* kGoalNames[] = {"Connect towns",    "Book value",         "Revenue in a year",  "Company cash",
+                                      "Your net worth",   "Average train speed", "Only railroad left", "Highest value",
+                                      "Industry profit",  "Stations in territories"};
+constexpr int kGoalKinds = 10;
 constexpr std::int64_t kMoneyLadder[] = {1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 75, 100}; // millions
 constexpr int kMoneySteps = 12;
 constexpr int kSpeedSteps = 14; // 15 to 80 mph
 
-int ladder_size(int kind, int towns) {
+bool money_goal(int kind) { return (kind >= 1 && kind <= 4) || kind == 8; }
+
+int ladder_size(int kind, int towns, int territories) {
     switch (kind) {
     case 0: return std::max(1, towns - 1); // 2 towns up to all of them
     case 5: return kSpeedSteps;
     case 6:
     case 7: return 1;
+    case 9: return std::max(1, territories - 1); // 2 territories up to all of them
     default: return kMoneySteps;
     }
 }
+
+// Founding money: each founder's fortune, what they put in, and what
+// outside investors match it with. The middle step is balance.json's.
+constexpr const char* kMoneyNames[] = {"Lean: $1,500,000 each founder", "Usual: $3,500,000 each founder",
+                                       "Rich: $7,000,000 each founder"};
+constexpr std::int64_t kMoneyFortune[] = {1'500'000, 0, 7'000'000};
+constexpr std::int64_t kMoneyInvest[] = {1'000'000, 0, 6'000'000};
+
+// Track budgets in map cells: to start with, and more each year.
+constexpr int kBudgetStart[] = {0, 300, 500, 800, 1200};
+constexpr int kBudgetYear[] = {0, 50, 80, 100, 150};
+constexpr int kBudgetSteps = 5;
 
 const char* map_size_name(std::int32_t width) {
     // The presets' widths: small 256, medium 384, large 768 cells.
@@ -589,23 +605,61 @@ const char* map_size_name(std::int32_t width) {
 
 } // namespace
 
-std::string Editor::goal_text(int m) const {
-    const ScenarioDraft::Medal& md = scen_.medals[m];
+int Editor::territory_count() const {
+    // Only the territories that hold a cell count.
+    int n = 0;
+    for (std::size_t t = 0; t < terr_.territories.size(); ++t) {
+        n += std::find(terr_.cells.begin(), terr_.cells.end(), static_cast<sim::TerritoryId>(t)) != terr_.cells.end();
+    }
+    return n;
+}
+
+std::string Editor::goal_text(const ScenarioDraft::Goal& g) const {
     const auto towns = static_cast<int>(towns_.size());
-    switch (md.kind) {
+    switch (g.kind) {
+    case -1: return "";
     case 0: {
         if (towns < 2) return "Connect towns (place two towns or more first)";
-        const int n = std::min(md.level + 2, towns);
+        const int n = std::min(g.level + 2, towns);
         std::string names;
         for (int i = 0; i < n; ++i) names += (i ? (i + 1 == n ? " and " : ", ") : "") + towns_[static_cast<std::size_t>(i)].name;
         return "Connect " + names;
     }
-    case 5: return "Average train speed " + std::to_string(15 + 5 * std::min(md.level, kSpeedSteps - 1)) + " mph";
+    case 5: return "Average train speed " + std::to_string(15 + 5 * std::min(g.level, kSpeedSteps - 1)) + " mph";
     case 6:
-    case 7: return kGoalNames[md.kind];
-    default:
-        return std::string(kGoalNames[md.kind]) + " $" + std::to_string(kMoneyLadder[std::min(md.level, kMoneySteps - 1)]) + ",000,000";
+    case 7: return kGoalNames[g.kind];
+    case 9: {
+        const int terr = territory_count();
+        if (terr < 2) return "Stations in territories (paint two territories or more first)";
+        return "Stations in " + std::to_string(std::min(g.level + 2, terr)) + " territories";
     }
+    default:
+        return std::string(kGoalNames[g.kind]) + " $" + std::to_string(kMoneyLadder[std::min(g.level, kMoneySteps - 1)]) + ",000,000";
+    }
+}
+
+nlohmann::json Editor::goal_json(const ScenarioDraft::Goal& g) const {
+    nlohmann::json goal;
+    switch (g.kind) {
+    case 0: {
+        nlohmann::json names = nlohmann::json::array();
+        const int n = std::min(g.level + 2, static_cast<int>(towns_.size()));
+        for (int i = 0; i < n; ++i) names.push_back(towns_[static_cast<std::size_t>(i)].name);
+        goal = {{"kind", "connect_towns"}, {"towns", names}};
+        break;
+    }
+    case 1: goal = {{"kind", "book_value"}}; break;
+    case 2: goal = {{"kind", "revenue"}}; break;
+    case 3: goal = {{"kind", "company_cash"}}; break;
+    case 4: goal = {{"kind", "personal_net_worth"}}; break;
+    case 5: goal = {{"kind", "average_speed"}, {"count", 15 + 5 * std::min(g.level, kSpeedSteps - 1)}}; break;
+    case 6: goal = {{"kind", "only_railroad"}}; break;
+    case 7: goal = {{"kind", "highest_value"}}; break;
+    case 8: goal = {{"kind", "industry_profit"}}; break;
+    default: goal = {{"kind", "territories"}, {"count", std::min(g.level + 2, territory_count())}}; break;
+    }
+    if (money_goal(g.kind)) goal["amount"] = kMoneyLadder[std::min(g.level, kMoneySteps - 1)] * 1'000'000;
+    return goal;
 }
 
 nlohmann::json Editor::scenario_json(const std::string& key, const std::string& landscape, const std::string& map_size) const {
@@ -617,60 +671,93 @@ nlohmann::json Editor::scenario_json(const std::string& key, const std::string& 
     for (int m = 0; m < 3; ++m) {
         const ScenarioDraft::Medal& md = scen_.medals[m];
         years = std::max(years, md.years); // each medal's deadline no earlier than the last
-        nlohmann::json goal;
-        switch (md.kind) {
-        case 0: {
-            nlohmann::json names = nlohmann::json::array();
-            const int n = std::min(md.level + 2, static_cast<int>(towns_.size()));
-            for (int i = 0; i < n; ++i) names.push_back(towns_[static_cast<std::size_t>(i)].name);
-            goal = {{"kind", "connect_towns"}, {"towns", names}};
-            break;
-        }
-        case 1: goal = {{"kind", "book_value"}}; break;
-        case 2: goal = {{"kind", "revenue"}}; break;
-        case 3: goal = {{"kind", "company_cash"}}; break;
-        case 4: goal = {{"kind", "personal_net_worth"}}; break;
-        case 5: goal = {{"kind", "average_speed"}, {"count", 15 + 5 * std::min(md.level, kSpeedSteps - 1)}}; break;
-        case 6: goal = {{"kind", "only_railroad"}}; break;
-        default: goal = {{"kind", "highest_value"}}; break;
-        }
-        if (md.kind >= 1 && md.kind <= 4) goal["amount"] = kMoneyLadder[std::min(md.level, kMoneySteps - 1)] * 1'000'000;
-        medals[tiers[m]] = {{"by", std::to_string(scen_.start_year + years) + "-12-31"}, {"goals", nlohmann::json::array({goal})}};
+        nlohmann::json goals = nlohmann::json::array({goal_json(md.goal)});
+        if (md.also.kind >= 0) goals.push_back(goal_json(md.also));
+        medals[tiers[m]] = {{"by", std::to_string(scen_.start_year + years) + "-12-31"}, {"goals", goals}};
     }
-    return {{"key", key},
-            {"name", scen_.name},
-            {"briefing", scen_.briefing},
-            {"start", std::to_string(scen_.start_year) + "-01-01"},
-            {"seed", 1},
-            {"map", map_size.empty() ? std::string(map_size_name(world_.terrain().width())) : map_size},
-            {"rivals", scen_.rivals},
-            {"landscape", landscape},
-            {"towns", towns},
-            {"medals", medals}};
+    nlohmann::json j = {{"key", key},
+                        {"name", scen_.name},
+                        {"briefing", scen_.briefing},
+                        {"start", std::to_string(scen_.start_year) + "-01-01"},
+                        {"seed", 1},
+                        {"map", map_size.empty() ? std::string(map_size_name(world_.terrain().width())) : map_size},
+                        {"rivals", scen_.rivals},
+                        {"landscape", landscape},
+                        {"towns", towns},
+                        {"medals", medals}};
+    if (kMoneyFortune[scen_.money] != 0) {
+        j["founder_fortune"] = kMoneyFortune[scen_.money];
+        j["founder_investment"] = kMoneyInvest[scen_.money];
+        j["outside_investment"] = kMoneyInvest[scen_.money];
+    }
+    if (scen_.chair_locked) {
+        j["chairman_can_resign"] = false;
+        j["chairman_can_be_fired"] = false;
+    }
+    nlohmann::json rules = nlohmann::json::object();
+    if (scen_.track_budget > 0) {
+        rules["track_budget"] = {{"initial", kBudgetStart[scen_.track_budget]}, {"per_year", kBudgetYear[scen_.track_budget]}};
+    }
+    if (scen_.connected_track) rules["no_unconnected_track"] = true;
+    if (scen_.one_company) rules["one_company_only"] = true;
+    if (!rules.empty()) j["restrictions"] = rules;
+    return j;
+}
+
+std::vector<Editor::ScenLine> Editor::scen_lines() const {
+    std::vector<ScenLine> lines;
+    if (scen_page_ == 0) {
+        for (ScenRow r : {ScenRow::Name, ScenRow::Briefing, ScenRow::Start, ScenRow::Rivals, ScenRow::Money, ScenRow::Budget,
+                          ScenRow::Connected, ScenRow::OneCompany, ScenRow::ChairLocked}) {
+            lines.push_back({r});
+        }
+    } else {
+        for (int m = 0; m < 3; ++m) {
+            lines.push_back({ScenRow::Goal, m});
+            lines.push_back({ScenRow::Target, m});
+            lines.push_back({ScenRow::Also, m});
+            if (scen_.medals[m].also.kind >= 0) lines.push_back({ScenRow::AlsoTarget, m});
+            lines.push_back({ScenRow::By, m});
+        }
+    }
+    lines.push_back({ScenRow::Save});
+    lines.push_back({ScenRow::Play});
+    lines.push_back({ScenRow::Close});
+    return lines;
 }
 
 void Editor::scen_change(int step) {
     const int towns = static_cast<int>(towns_.size());
-    switch (scen_sel_) {
-    case 2: scen_.start_year = std::clamp(scen_.start_year + step * 5, 1830, 2000); return;
-    case 3: scen_.rivals = std::clamp(scen_.rivals + step, 0, 5); return;
+    const int terr = territory_count();
+    const std::vector<ScenLine> lines = scen_lines();
+    const ScenLine at = lines[static_cast<std::size_t>(std::clamp(scen_sel_, 0, static_cast<int>(lines.size()) - 1))];
+    ScenarioDraft::Medal& md = scen_.medals[at.medal];
+    const auto next_kind = [&](ScenarioDraft::Goal& g, bool allow_none) {
+        const int first = allow_none ? -1 : 0;
+        const int span = kGoalKinds - first;
+        g.kind = (g.kind - first + step + span) % span + first;
+        g.level = std::clamp(g.level, 0, ladder_size(g.kind, towns, terr) - 1);
+    };
+    switch (at.row) {
+    case ScenRow::Start: scen_.start_year = std::clamp(scen_.start_year + step * 5, 1830, 2000); break;
+    case ScenRow::Rivals: scen_.rivals = std::clamp(scen_.rivals + step, 0, 5); break;
+    case ScenRow::Money: scen_.money = std::clamp(scen_.money + step, 0, 2); break;
+    case ScenRow::Budget: scen_.track_budget = std::clamp(scen_.track_budget + step, 0, kBudgetSteps - 1); break;
+    case ScenRow::Connected: scen_.connected_track = !scen_.connected_track; break;
+    case ScenRow::OneCompany: scen_.one_company = !scen_.one_company; break;
+    case ScenRow::ChairLocked: scen_.chair_locked = !scen_.chair_locked; break;
+    case ScenRow::Goal: next_kind(md.goal, false); break;
+    case ScenRow::Also: next_kind(md.also, true); break;
+    case ScenRow::Target: md.goal.level = std::clamp(md.goal.level + step, 0, ladder_size(md.goal.kind, towns, terr) - 1); break;
+    case ScenRow::AlsoTarget:
+        md.also.level = std::clamp(md.also.level + step, 0, ladder_size(md.also.kind, towns, terr) - 1);
+        break;
+    case ScenRow::By: md.years = std::clamp(md.years + step, 1, 60); break;
     default: break;
-    }
-    if (scen_sel_ >= 4 && scen_sel_ <= 12) {
-        ScenarioDraft::Medal& md = scen_.medals[(scen_sel_ - 4) / 3];
-        switch ((scen_sel_ - 4) % 3) {
-        case 0:
-            md.kind = (md.kind + step + kGoalKinds) % kGoalKinds;
-            md.level = std::min(md.level, ladder_size(md.kind, towns) - 1);
-            break;
-        case 1: md.level = std::clamp(md.level + step, 0, ladder_size(md.kind, towns) - 1); break;
-        default: md.years = std::clamp(md.years + step, 1, 60); break;
-        }
     }
 }
 
 bool Editor::scen_key(SDL_Keycode key) {
-    constexpr int kRows = 16; // name, briefing, start, rivals, 3 x (goal, target, by), save, play, close
     if (scen_text_ != 0) {
         std::string& s = scen_text_ == 1 ? scen_.name : scen_.briefing;
         if (key == SDLK_BACKSPACE && !s.empty()) s.pop_back();
@@ -680,97 +767,160 @@ bool Editor::scen_key(SDL_Keycode key) {
         }
         return true;
     }
+    const auto rows = static_cast<int>(scen_lines().size());
+    scen_sel_ = std::clamp(scen_sel_, 0, rows - 1);
     switch (key) {
-    case SDLK_UP: scen_sel_ = (scen_sel_ + kRows - 1) % kRows; return true;
-    case SDLK_DOWN: scen_sel_ = (scen_sel_ + 1) % kRows; return true;
+    case SDLK_TAB:
+        scen_page_ = 1 - scen_page_;
+        scen_sel_ = 0;
+        return true;
+    case SDLK_UP: scen_sel_ = (scen_sel_ + rows - 1) % rows; return true;
+    case SDLK_DOWN: scen_sel_ = (scen_sel_ + 1) % rows; return true;
     case SDLK_LEFT: scen_change(-1); return true;
     case SDLK_RIGHT: scen_change(+1); return true;
     case SDLK_ESCAPE:
     case SDLK_g: scen_open_ = false; return true;
     case SDLK_RETURN:
-    case SDLK_KP_ENTER:
-        if (scen_sel_ <= 1) {
-            scen_text_ = scen_sel_ + 1;
+    case SDLK_KP_ENTER: {
+        const ScenRow row = scen_lines()[static_cast<std::size_t>(scen_sel_)].row;
+        if (row == ScenRow::Name || row == ScenRow::Briefing) {
+            scen_text_ = row == ScenRow::Name ? 1 : 2;
             return true;
         }
-        if (scen_sel_ == 13 || scen_sel_ == 14) {
-            // Connecting towns needs towns to connect.
+        if (row == ScenRow::Save || row == ScenRow::Play) {
+            // Connecting towns needs towns to connect, and territories painted.
             for (const ScenarioDraft::Medal& md : scen_.medals) {
-                if (md.kind == 0 && towns_.size() < 2) {
-                    message_ = "A goal connects towns, but the map has fewer than two: place towns with the Town brush";
-                    message_until_ = SDL_GetTicks() + 5000;
-                    return true;
+                for (const ScenarioDraft::Goal& g : {md.goal, md.also}) {
+                    std::string why;
+                    if (g.kind == 0 && towns_.size() < 2) {
+                        why = "A goal connects towns, but the map has fewer than two: place towns with the Town brush";
+                    }
+                    if (g.kind == 9 && territory_count() < 2) {
+                        why = "A goal counts territories, but the map has fewer than two: paint them with the Territory brush";
+                    }
+                    if (!why.empty()) {
+                        message_ = why;
+                        message_until_ = SDL_GetTicks() + 5000;
+                        return true;
+                    }
                 }
             }
-            request_ = Request{scen_sel_ == 13 ? Request::Kind::SaveScenario : Request::Kind::PlayScenario};
-            if (scen_sel_ == 14) scen_open_ = false;
+            request_ = Request{row == ScenRow::Save ? Request::Kind::SaveScenario : Request::Kind::PlayScenario};
+            if (row == ScenRow::Play) scen_open_ = false;
             return true;
         }
-        if (scen_sel_ == 15) scen_open_ = false;
+        if (row == ScenRow::Close) scen_open_ = false;
         else scen_change(+1);
         return true;
+    }
     default: return true;
     }
 }
 
 void Editor::draw_scenario(float width, float height) const {
-    const float w = 720, x0 = (width - w) / 2;
-    const float y0 = std::max(50.0f, (height - 600) / 2);
-    ui::panel(x0, y0, x0 + w, y0 + 590);
+    const float w = 720, h = 640, x0 = (width - w) / 2;
+    const float y0 = std::max(40.0f, (height - h) / 2);
+    ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 16, y0 + 10, "Scenario for this map", kScale + 1);
+    // The two pages, as tabs.
+    const char* pages[] = {"Scenario and rules", "Medals"};
+    float tx = x0 + w - 16;
+    for (int p = 1; p >= 0; --p) {
+        const float tw = static_cast<float>(text_width(pages[p], kScale)) + 20;
+        tx -= tw;
+        if (p == scen_page_) ui::selection(tx, y0 + 10, tx + tw - 6, y0 + 34);
+        if (p == scen_page_) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.65f, 0.63f, 0.58f);
+        draw_text(tx + 7, y0 + 13, pages[p], kScale);
+    }
     ui::rule(x0 + 10, x0 + w - 10, y0 + 40);
     float y = y0 + 50;
     const bool blink = (SDL_GetTicks() / 500) % 2 == 0;
-    const auto row = [&](int i, const std::string& label, const std::string& value) {
-        const bool sel = scen_sel_ == i;
+    const std::vector<ScenLine> lines = scen_lines();
+    const char* tiers[] = {"Bronze", "Silver", "Gold"};
+    const auto onoff = [](bool b) { return std::string("<  ") + (b ? "Yes" : "No") + "  >"; };
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        const ScenLine& ln = lines[i];
+        const ScenarioDraft::Medal& md = scen_.medals[ln.medal];
+        std::string label, value;
+        std::vector<std::string> more; // further lines of a wrapped value
+        switch (ln.row) {
+        case ScenRow::Name: label = "Name", value = scen_.name + (scen_text_ == 1 && blink ? "|" : ""); break;
+        case ScenRow::Briefing: {
+            // The briefing, wrapped over a few lines.
+            label = "Briefing";
+            std::string b = scen_.briefing + (scen_text_ == 2 && blink ? "|" : "");
+            while (!b.empty() && more.size() < 4) {
+                std::size_t cut = b.size();
+                while (cut > 0 && text_width(b.substr(0, cut), kScale) > 480) {
+                    const std::size_t sp = b.rfind(' ', cut - 1);
+                    cut = sp == std::string::npos || sp == 0 ? cut - 1 : sp;
+                }
+                more.push_back(b.substr(0, cut));
+                b = cut < b.size() ? b.substr(cut + (b[cut] == ' ' ? 1 : 0)) : "";
+            }
+            if (!more.empty()) {
+                value = more.front();
+                more.erase(more.begin());
+            }
+            break;
+        }
+        case ScenRow::Start: label = "Starts", value = "<  " + std::to_string(scen_.start_year) + "  >"; break;
+        case ScenRow::Rivals: label = "Rival railroads", value = "<  " + std::to_string(scen_.rivals) + "  >"; break;
+        case ScenRow::Money: label = "Founding money", value = "<  " + std::string(kMoneyNames[scen_.money]) + "  >"; break;
+        case ScenRow::Budget:
+            label = "Track budget";
+            value = "<  " +
+                    (scen_.track_budget == 0 ? std::string("None")
+                                             : std::to_string(kBudgetStart[scen_.track_budget]) + " cells, " +
+                                                   std::to_string(kBudgetYear[scen_.track_budget]) + " more a year") +
+                    "  >";
+            break;
+        case ScenRow::Connected: label = "Track must join", value = onoff(scen_.connected_track); break;
+        case ScenRow::OneCompany: label = "One company only", value = onoff(scen_.one_company); break;
+        case ScenRow::ChairLocked: label = "Chairman stays", value = onoff(scen_.chair_locked); break;
+        case ScenRow::Goal:
+            y += 6;
+            label = std::string(tiers[ln.medal]) + " goal";
+            value = "<  " + std::string(kGoalNames[md.goal.kind]) + "  >";
+            break;
+        case ScenRow::Target: label = "    target", value = "<  " + goal_text(md.goal) + "  >"; break;
+        case ScenRow::Also:
+            label = "    and also";
+            value = "<  " + std::string(md.also.kind < 0 ? "Nothing more" : kGoalNames[md.also.kind]) + "  >";
+            break;
+        case ScenRow::AlsoTarget: label = "    target", value = "<  " + goal_text(md.also) + "  >"; break;
+        case ScenRow::By: {
+            int years = 0;
+            for (int m = 0; m <= ln.medal; ++m) years = std::max(years, scen_.medals[m].years);
+            label = "    by", value = "<  the end of " + std::to_string(scen_.start_year + years) + "  >";
+            break;
+        }
+        case ScenRow::Save:
+            y += 6;
+            label = "Save the scenario";
+            break;
+        case ScenRow::Play: label = "Save it and play it"; break;
+        case ScenRow::Close: label = "Close"; break;
+        }
+        const bool sel = scen_sel_ == static_cast<int>(i);
         if (sel) ui::selection(x0 + 8, y - 3, x0 + w - 8, y + 23);
         if (sel) glColor3f(1.0f, 0.95f, 0.7f);
         else glColor3f(0.9f, 0.88f, 0.82f);
         draw_text(x0 + 20, y, label, kScale);
         draw_text(x0 + 200, y, value, kScale);
         y += 28;
-    };
-    row(0, "Name", scen_.name + (scen_text_ == 1 && blink ? "|" : ""));
-    {
-        // The briefing, wrapped over a few lines.
-        std::string b = scen_.briefing + (scen_text_ == 2 && blink ? "|" : "");
-        std::vector<std::string> lines;
-        while (!b.empty() && lines.size() < 3) {
-            std::size_t cut = b.size();
-            while (cut > 0 && text_width(b.substr(0, cut), kScale) > 480) {
-                const std::size_t sp = b.rfind(' ', cut - 1);
-                cut = sp == std::string::npos || sp == 0 ? cut - 1 : sp;
-            }
-            lines.push_back(b.substr(0, cut));
-            b = cut < b.size() ? b.substr(cut + (b[cut] == ' ' ? 1 : 0)) : "";
-        }
-        if (lines.empty()) lines.emplace_back();
-        row(1, "Briefing", lines[0]);
-        for (std::size_t i = 1; i < lines.size(); ++i) {
+        for (const std::string& m : more) {
             glColor3f(0.85f, 0.83f, 0.77f);
-            draw_text(x0 + 200, y - 6, lines[i], kScale);
+            draw_text(x0 + 200, y - 6, m, kScale);
             y += 20;
         }
     }
-    row(2, "Starts", "<  " + std::to_string(scen_.start_year) + "  >");
-    row(3, "Rival railroads", "<  " + std::to_string(scen_.rivals) + "  >");
-    const char* tiers[] = {"Bronze", "Silver", "Gold"};
-    int years = 0;
-    for (int m = 0; m < 3; ++m) {
-        y += 6;
-        years = std::max(years, scen_.medals[m].years);
-        row(4 + 3 * m, std::string(tiers[m]) + " goal", "<  " + std::string(kGoalNames[scen_.medals[m].kind]) + "  >");
-        row(5 + 3 * m, "    target", "<  " + goal_text(m) + "  >");
-        row(6 + 3 * m, "    by", "<  the end of " + std::to_string(scen_.start_year + years) + "  >");
-    }
-    y += 6;
-    row(13, "Save the scenario", "");
-    row(14, "Save it and play it", "");
-    row(15, "Close", "");
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 20, y0 + 590 - 26,
-              scen_text_ ? "Type, then Enter" : "Up/Down choose   Left/Right change   Enter edits the name or briefing   G or Esc close",
+    draw_text(x0 + 20, y0 + h - 26,
+              scen_text_ ? "Type, then Enter"
+                         : "Tab page   Up/Down choose   Left/Right change   Enter edits the name or briefing   G or Esc close",
               kScale);
 }
 

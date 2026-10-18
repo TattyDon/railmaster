@@ -359,8 +359,10 @@ Still to do:
   and places industries and paints territories (kept with the map), and
   makes scenarios on it: a name, briefing, start, rivals and a goal and
   deadline for each medal (a scenario file's `landscape` names its map).
-  Still to come: several goals a medal, events and restrictions in the
-  editor (scenario files can already have them).
+  The scenario page also sets founding money, a track budget and the
+  restrictions, and up to two goals a medal (industry profit and
+  territories among them). Still to come: events in the editor (scenario
+  files can already have them).
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

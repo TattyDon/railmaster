@@ -104,11 +104,15 @@ it (one whose product does not exist yet waits idle until it does); and
 9 Territory: `,` and `.` choose territory 1 to 8 (or none, to erase),
 left-drag paints it with the brush, Enter renames it, O makes it free or
 priced again (the first is free; the rest get a price and modifiers as a
-generated map's do). G opens the scenario page: a name and briefing
-(Enter to type them), the start year, rival railroads, and for Bronze,
-Silver and Gold a goal (connect the map's first towns, book value,
-revenue, cash, net worth, average speed, the only railroad or the
-highest value), its target and its deadline. Save the scenario, or save
+generated map's do). G opens the scenario page, in two tabs (Tab switches). Scenario and
+rules: a name and briefing (Enter to type them), the start year, rival
+railroads, founding money (lean, usual or rich), a track budget, and
+whether new track must join your own, only one company may be run, and
+the chairman may neither resign nor be fired. Medals: for Bronze, Silver
+and Gold a goal and, if you like, a second one (connect the map's first
+towns, book value, revenue, cash, net worth, average speed, the only
+railroad, the highest value, industry profit, or stations in so many of
+the painted territories), each with its target, and the deadline. Save the scenario, or save
 it and play it at once; saved scenarios (in a `scenarios/` folder beside
 your maps) are listed with the others on the title screen, and a
 scenario file names its map with `"landscape": "../maps/NAME.png"`. A map
