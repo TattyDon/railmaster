@@ -42,6 +42,10 @@ public:
     void on_click(float sx, float sy, bool right_button);
     // True if the key was used. `mod` is the event's modifier state.
     bool on_key(SDL_Keycode key, Uint16 mod = KMOD_NONE);
+    // Typed text (SDL_TEXTINPUT); true if a box took it.
+    bool on_text(const char* text);
+    // A box is taking typed keys (the arrows should not pan).
+    bool typing() const { return find_open_; }
 
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
@@ -228,6 +232,19 @@ private:
     };
     std::vector<LogEntry> log_;
     bool log_open_ = false;
+    // Find (Ctrl+F, rt3-clone-spec §15.7 Find city): type part of a name,
+    // pick a town or station, and the view goes there.
+    struct FindHit {
+        std::string name, kind;
+        sim::MapPoint at{};
+        std::optional<sim::StationId> station{};
+    };
+    bool find_open_ = false;
+    std::string find_text_;
+    std::size_t find_sel_ = 0;
+    std::vector<FindHit> find_hits() const;
+    bool find_key(SDL_Keycode key);
+    void draw_find_panel() const;
     std::size_t log_scroll_ = 0; // entries skipped from the newest
     void draw_log_panel() const;
     struct Paper {

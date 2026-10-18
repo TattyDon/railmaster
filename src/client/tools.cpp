@@ -738,6 +738,106 @@ void Tools::draw_log_panel() const {
     }
 }
 
+std::vector<Tools::FindHit> Tools::find_hits() const {
+    // Names holding the typed text, ignoring case; those starting with it first.
+    const auto lower = [](std::string t) {
+        for (char& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return t;
+    };
+    const std::string want = lower(find_text_);
+    std::vector<std::pair<int, FindHit>> found;
+    const auto consider = [&](const std::string& name, const std::string& kind, sim::MapPoint at, std::optional<sim::StationId> st) {
+        const std::size_t pos = lower(name).find(want);
+        if (pos == std::string::npos) return;
+        found.push_back({pos == 0 ? 0 : 1, FindHit{name, kind, at, st}});
+    };
+    const sim::Economy& eco = world_.economy();
+    for (const sim::Town& t : eco.towns()) consider(as_written(t.name), "town", eco.node_centre(t.cx, t.cy), std::nullopt);
+    const sim::Railway& rw = world_.railway();
+    for (const sim::Station& s : rw.stations()) {
+        const std::string kind = s.owner == world_.company().id() ? std::string("your station")
+                                                                    : as_written(world_.company(s.owner).name()) + " station";
+        consider(as_written(s.name), kind, rw.track().node(s.node).pos, s.id);
+    }
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) {
+        if (a.first != b.first) return a.first < b.first;
+        return a.second.name < b.second.name;
+    });
+    std::vector<FindHit> hits;
+    for (auto& f : found) hits.push_back(std::move(f.second));
+    return hits;
+}
+
+bool Tools::find_key(SDL_Keycode key) {
+    const std::vector<FindHit> hits = find_hits();
+    switch (key) {
+    case SDLK_ESCAPE: find_open_ = false; return true;
+    case SDLK_BACKSPACE:
+        if (!find_text_.empty()) find_text_.pop_back();
+        find_sel_ = 0;
+        return true;
+    case SDLK_UP: find_sel_ = find_sel_ > 0 ? find_sel_ - 1 : 0; return true;
+    case SDLK_DOWN: find_sel_ = hits.empty() ? 0 : std::min(hits.size() - 1, find_sel_ + 1); return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+        if (find_sel_ < hits.size()) {
+            const FindHit& h = hits[find_sel_];
+            jump_ = h.at;
+            hover_ = h.at;
+            if (h.station) {
+                select(Tool::Inspect);
+                open_detail(DetailKind::Station, *h.station);
+            }
+            show(h.name, true);
+            find_open_ = false;
+        }
+        return true;
+    default: return true; // letters arrive as text
+    }
+}
+
+bool Tools::on_text(const char* text) {
+    if (!find_open_) return false;
+    if (find_text_.size() < 30) find_text_ += text;
+    find_sel_ = 0;
+    return true;
+}
+
+void Tools::draw_find_panel() const {
+    constexpr float kRow = 22.0f;
+    constexpr std::size_t kShown = 12;
+    const std::vector<FindHit> hits = find_hits();
+    const float w = 460, x0 = (static_cast<float>(cam_.width_px) - w) / 2, y0 = 90;
+    const std::size_t shown = std::min(hits.size(), kShown);
+    const float h = 108 + kRow * static_cast<float>(std::max<std::size_t>(shown, 1));
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y0 + 8, "Find a town or station", kScale + 1);
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 36);
+    const bool blink = (SDL_GetTicks() / 500) % 2 == 0;
+    fill_rect(x0 + 12, y0 + 44, x0 + w - 12, y0 + 68, 0.08f, 0.07f, 0.06f, 0.9f);
+    glColor3f(1.0f, 0.97f, 0.88f);
+    draw_text(x0 + 18, y0 + 47, find_text_ + (blink ? "|" : ""), kScale);
+    float y = y0 + 76;
+    if (hits.empty()) {
+        glColor3f(0.68f, 0.66f, 0.62f);
+        draw_text(x0 + 18, y, "Nothing by that name", kScale);
+    }
+    // Scroll so the chosen one is in view.
+    const std::size_t first = find_sel_ >= kShown ? find_sel_ + 1 - kShown : 0;
+    for (std::size_t i = first; i < hits.size() && i < first + kShown; ++i) {
+        if (i == find_sel_) ui::selection(x0 + 10, y - 3, x0 + w - 10, y + kRow - 3);
+        if (i == find_sel_) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.9f, 0.88f, 0.82f);
+        draw_text(x0 + 18, y, hits[i].name, kScale);
+        glColor3f(0.68f, 0.66f, 0.62f);
+        draw_text(x0 + w - 18 - static_cast<float>(text_width(hits[i].kind, kScale)), y, hits[i].kind, kScale);
+        y += kRow;
+    }
+    glColor3f(0.6f, 0.58f, 0.54f);
+    draw_text(x0 + 14, y0 + h - 22, "Type to narrow   Up/Down choose   Enter go there   Esc close", kScale);
+}
+
 void Tools::draw_newspaper() const {
     // A front page: newsprint, a masthead, the date and the headline.
     const float w = 640, cx = static_cast<float>(cam_.width_px) / 2;
@@ -1287,6 +1387,13 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (menu_open_) return menu_key(key);
+    if (find_open_) return find_key(key);
+    if (key == SDLK_f && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
+        find_open_ = true;
+        find_text_.clear();
+        find_sel_ = 0;
+        return true;
+    }
     if (log_open_) {
         const std::size_t n = log_.size();
         switch (key) {
@@ -2479,7 +2586,7 @@ std::string Tools::hint() const {
             if (detail_train()) keys = "E route  H priority  F filter  W full  [ ] cars  C caboose  D diner  Y copy  XX retire  R engine  Space follow  Esc close";
             return keys;
         }
-        return cargo_map + "   Click a train, station or industry for its details.  Train: E route H priority Y copy XX retire R engine";
+        return cargo_map + "   Click a train, station or industry for its details.  Ctrl+F find.  Train: E route H priority Y copy XX retire R engine";
     }
     case Tool::Track:
         return std::string(track_start_ ? "Right-click stops" : "Click to start") + "  D double " +
@@ -3104,6 +3211,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
+    if (find_open_) draw_find_panel();
     draw_choice_dialog();
     if (paper_open_) draw_newspaper();
     if (menu_open_) draw_menu();

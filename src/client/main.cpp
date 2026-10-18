@@ -715,7 +715,13 @@ int main(int argc, char* argv[]) {
                     tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), true);
                 }
                 break;
+            case SDL_TEXTINPUT: tools.on_text(ev.text.text); break;
             case SDL_KEYDOWN:
+                // A box being typed in (Find) takes every key.
+                if (tools.typing()) {
+                    tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod);
+                    break;
+                }
                 // Ctrl+S saves the game, Ctrl+L loads the last save.
                 if ((ev.key.keysym.mod & KMOD_CTRL) != 0 &&
                     (ev.key.keysym.sym == SDLK_s || ev.key.keysym.sym == SDLK_l)) {
@@ -800,7 +806,7 @@ int main(int argc, char* argv[]) {
         // down tilt it (rt3-clone-spec §15.6).
         // Behind the title screen the view circles slowly, and the keys are the title's.
         if (title.open() && cam.three_d) cam.orbit(static_cast<float>(dt) * 0.03f, 0);
-        const Uint8* keys = title.open() ? kNoKeys : SDL_GetKeyboardState(nullptr);
+        const Uint8* keys = title.open() || tools.typing() ? kNoKeys : SDL_GetKeyboardState(nullptr);
         const float pan_speed = static_cast<float>(dt) * 400.0f / cam.zoom;
         const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
         const bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
