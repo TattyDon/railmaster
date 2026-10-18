@@ -18,10 +18,13 @@ PACK = "kenney-fantasy-town"
 FRONT, BACK, LEFT, RIGHT = 90, 270, 180, 0  # turns for each face
 
 
-def piece(name, x, y, z, turn=0, scale=None):
+def piece(name, x, y, z, turn=0, scale=None, spin=None):
     p = {"file": f"{PACK}/{name}.glb", "at": [x, y, z], "turn": turn}
     if scale:
         p["scale"] = scale
+    if spin:
+        # A part the client turns each frame: about its own axis, at rpm.
+        p["spin"] = spin
     return p
 
 
@@ -90,14 +93,14 @@ def windmill():
     """A stone tower mill, its sails on the front."""
     b = {"texture": f"{PACK}/Textures/colormap-slate.png", "pieces": []}
     tower(b, 0, 0, 3, roof="roof-high-point")
-    b["pieces"].append(piece("windmill", 0, 0.78, 2.4, FRONT))
+    b["pieces"].append(piece("windmill", 0, 0.78, 2.4, FRONT, spin={"axis": "x", "rpm": 8}))
     return b
 
 
 def watermill():
     """A timber mill with its wheel turning at one end."""
     b = building(3, 1, "wood", "terracotta")
-    b["pieces"].append(piece("watermill", 2.95, 0, 0.75, RIGHT))
+    b["pieces"].append(piece("watermill", 2.95, 0, 0.75, RIGHT, spin={"axis": "x", "rpm": 5}))
     return b
 
 

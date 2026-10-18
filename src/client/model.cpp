@@ -220,6 +220,7 @@ std::optional<Model> assemble(const std::filesystem::path& root, const std::stri
         float at[3];
         float turn;
         float scale[3];
+        std::optional<Spinner> spin{};
     };
     std::vector<Placed> placed;
     for (const auto& p : spec.value("pieces", nlohmann::json::array())) {
@@ -231,6 +232,19 @@ std::optional<Model> assemble(const std::filesystem::path& root, const std::stri
         }
         if (p.contains("scale") && p["scale"].is_array() && p["scale"].size() == 3) {
             for (std::size_t k = 0; k < 3; ++k) pl.scale[k] = p["scale"][k].get<float>();
+        }
+        if (p.contains("spin")) {
+            // A turning part: {"axis": "x" | "y" | "z", "rpm": turns a minute}.
+            const nlohmann::json& sp = p["spin"];
+            Spinner s;
+            s.part = m;
+            std::copy(std::begin(pl.at), std::end(pl.at), s.at);
+            s.turn = pl.turn;
+            std::copy(std::begin(pl.scale), std::end(pl.scale), s.scale);
+            const std::string axis = sp.value("axis", std::string("y"));
+            s.axis = axis == "x" ? 0 : axis == "z" ? 2 : 1;
+            s.rpm = sp.value("rpm", 6.0f);
+            pl.spin = s;
         }
         placed.push_back(pl);
     }
@@ -244,12 +258,16 @@ std::optional<Model> assemble(const std::filesystem::path& root, const std::stri
     m.list = glGenLists(1);
     glNewList(m.list, GL_COMPILE);
     for (const Placed& pl : placed) {
+        if (pl.spin) {
+            m.spinners.push_back(*pl.spin); // drawn each frame, but counted in the bounds
+        } else {
         glPushMatrix();
         glTranslatef(pl.at[0], pl.at[1], pl.at[2]);
         glRotatef(pl.turn, 0, 0, 1);
         glScalef(pl.scale[0], pl.scale[1], pl.scale[2]);
         glCallList(pl.model->list);
         glPopMatrix();
+        }
         // The piece's bounds, scaled, turned and moved.
         const float c = std::cos(pl.turn * 0.0174532925f), sn = std::sin(pl.turn * 0.0174532925f);
         for (int corner = 0; corner < 4; ++corner) {
@@ -356,6 +374,39 @@ void draw(const Model& m, float x, float y, float z, float fx, float fy, float w
 void draw_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height) {
     const float k = height / std::max(1e-4f, m.max[2] - m.min[2]);
     draw(m, x, y, z, fx, fy, (m.max[0] - m.min[0]) * k);
+}
+
+void draw_spinners(const Model& m, float x, float y, float z, float fx, float fy, float width, float seconds) {
+    if (m.spinners.empty()) return;
+    const float mw = std::max(1e-4f, m.max[0] - m.min[0]);
+    const float sx = width / mw;
+    const float angle = std::atan2(fy, fx) * 57.2957795f - 90.0f;
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glRotatef(angle, 0, 0, 1);
+    glScalef(sx, sx, sx);
+    glTranslatef(-(m.min[0] + m.max[0]) / 2, -(m.min[1] + m.max[1]) / 2, -m.min[2]);
+    for (const Spinner& s : m.spinners) {
+        const Model& p = *s.part;
+        const float c[3] = {(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2, (p.min[2] + p.max[2]) / 2};
+        glPushMatrix();
+        glTranslatef(s.at[0], s.at[1], s.at[2]);
+        glRotatef(s.turn, 0, 0, 1);
+        glScalef(s.scale[0], s.scale[1], s.scale[2]);
+        // Turned about its middle.
+        glTranslatef(c[0], c[1], c[2]);
+        glRotatef(std::fmod(seconds * s.rpm * 6.0f, 360.0f), s.axis == 0 ? 1.0f : 0.0f, s.axis == 1 ? 1.0f : 0.0f,
+                  s.axis == 2 ? 1.0f : 0.0f);
+        glTranslatef(-c[0], -c[1], -c[2]);
+        glCallList(p.list);
+        glPopMatrix();
+    }
+    glPopMatrix();
+}
+
+void draw_spinners_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height, float seconds) {
+    const float k = height / std::max(1e-4f, m.max[2] - m.min[2]);
+    draw_spinners(m, x, y, z, fx, fy, (m.max[0] - m.min[0]) * k, seconds);
 }
 
 } // namespace railmaster::client::models

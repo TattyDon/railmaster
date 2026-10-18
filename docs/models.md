@@ -65,6 +65,12 @@ every piece's palette:
 }
 ```
 
+A piece may turn: `"spin": {"axis": "x", "rpm": 8}` leaves it out of the
+prefab's compiled model and draws it each frame turning about its own
+middle, about the piece's x, y or z axis at that many turns a minute (the
+windmill's sails and the watermill's wheel). It still counts in the
+prefab's size.
+
 Prefabs can sit in `models.json` or in `prefabs.json` beside it, and roles
 name them as `"prefab:cottage"`. The town's houses, terraces, shops and
 church are prefabs written by `tools/models/town_prefabs.py` (edit the

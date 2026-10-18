@@ -1109,6 +1109,7 @@ int main(int argc, char* argv[]) {
         SDL_GL_GetDrawableSize(window, &cam.drawable_w, &cam.drawable_h);
         client::set_pixel_ratio(static_cast<float>(cam.drawable_w) / static_cast<float>(std::max(1, cam.width_px)));
         cam.apply();
+        client::set_animation_clock(smoke_clock);
         const bool shaded = cam.three_d && client::shading::active();
         if (shaded) {
             // Shadows first: what casts them, seen from the sun.

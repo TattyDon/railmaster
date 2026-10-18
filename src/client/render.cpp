@@ -32,6 +32,15 @@ struct SmokeSource {
     float seed;
 };
 std::vector<SmokeSource> g_smoke;
+// Turning parts (windmill sails, water wheels): recorded as the scene's
+// display list is made, drawn each frame against the animation clock.
+struct Turning {
+    const models::Model* model;
+    float x, y, z, fx, fy, size;
+    bool to_height;
+};
+std::vector<Turning> g_turning_build;
+float g_animation_seconds = 0;
 
 // Lights seen this frame (tiles), shown after dark: a glow at each, and
 // for headlamps a pool of light on the ground ahead.
@@ -3100,10 +3109,18 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         static GLuint list = 0;
         static std::uint64_t list_key = 0;
         static std::vector<SmokeSource> list_smoke;
+        static std::vector<Turning> list_turning;
+        const auto draw_turning = [&] {
+            for (const Turning& t : list_turning) {
+                if (t.to_height) models::draw_spinners_to_height(*t.model, t.x, t.y, t.z, t.fx, t.fy, t.size, g_animation_seconds);
+                else models::draw_spinners(*t.model, t.x, t.y, t.z, t.fx, t.fy, t.size, g_animation_seconds);
+            }
+        };
         const std::uint64_t key = sc.version * 4 + (year < 1890 ? 0u : year < 1930 ? 1u : 2u);
         begin_lit();
         if (list != 0 && list_key == key) {
             glCallList(list);
+            draw_turning();
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
             town_lights(towns, cam);
             if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
@@ -3112,6 +3129,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         }
         if (list == 0) list = glGenLists(1);
         const std::size_t smoke_before = g_smoke.size();
+        g_turning_build.clear();
         glNewList(list, GL_COMPILE_AND_EXECUTE);
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
@@ -3141,6 +3159,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
                 // In place of the shapes drawn in code, in proportion.
                 glEnd();
                 models::draw(*m, x0, y0, cam.ground_z(x0, y0) - 0.01f, 0, 1, 0.7f * k);
+                if (!m->spinners.empty()) g_turning_build.push_back({m, x0, y0, cam.ground_z(x0, y0) - 0.01f, 0, 1, 0.7f * k, false});
                 glBegin(GL_QUADS);
             } else {
                 industry_3d(t, x0, y0, k, seed, cam);
@@ -3157,6 +3176,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
                 const float bx = x0 + 0.3f * k, by = y0 - 0.3f * k;
                 glEnd();
                 models::draw_to_height(*m, bx, by, cam.ground_z(bx, by) - 0.01f, 1, 0, 0.55f * k);
+                if (!m->spinners.empty()) g_turning_build.push_back({m, bx, by, cam.ground_z(bx, by) - 0.01f, 1, 0, 0.55f * k, true});
                 glBegin(GL_QUADS);
             }
         }
@@ -3178,6 +3198,8 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glEndList();
         list_key = key;
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
+        list_turning = g_turning_build;
+        draw_turning();
         town_lights(towns, cam);
         if (cam.terrain) draw_trees(*cam.terrain, sc, cam);
         end_lit();
@@ -3518,6 +3540,8 @@ void draw_lights(const Camera& cam) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     g_lights.clear();
 }
+
+void set_animation_clock(float seconds) { g_animation_seconds = seconds; }
 
 void draw_smoke(const Camera& cam, float seconds) {
     if (!cam.three_d) {

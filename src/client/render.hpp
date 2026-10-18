@@ -26,6 +26,8 @@ void draw_railway(const sim::World& w, const Camera& cam);
 // move, works and power stations); `seconds` animates it. Call it after the
 // railway and sites, last in the world pass.
 void draw_smoke(const Camera& cam, float seconds);
+// Seconds of play, for what turns (windmill sails, water wheels).
+void set_animation_clock(float seconds);
 // Lights after dark (lit windows, station lamps, headlamps), registered
 // as the town, stations and trains are drawn; after the world pass.
 void draw_lights(const Camera& cam);

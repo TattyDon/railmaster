@@ -15,11 +15,25 @@ namespace railmaster::client::models {
 // glTF is y-up and right-handed; models are turned into map axes (x east,
 // y south, z up) as they load, so a model's front (glTF +z) faces map +y.
 
+struct Model;
+// A part of a prefab that turns (windmill sails, a water wheel): left out
+// of the prefab's display list and drawn each frame by draw_spinners,
+// turning about its own middle.
+struct Spinner {
+    const Model* part = nullptr;
+    float at[3] = {0, 0, 0};
+    float turn = 0;
+    float scale[3] = {1, 1, 1};
+    int axis = 1;    // 0 x, 1 y, 2 z: the piece's own axis it turns about
+    float rpm = 6;   // turns a minute
+};
+
 struct Model {
     unsigned list = 0;           // display list: the model in map axes, in its own units
     float min[3] = {0, 0, 0};    // bounds, map axes
     float max[3] = {0, 0, 0};
     std::size_t triangles = 0;
+    std::vector<Spinner> spinners{};
 };
 
 // After the GL context exists: read the manifest under `data_dir` and load
@@ -38,5 +52,9 @@ bool has(const std::string& role);
 void draw(const Model& m, float x, float y, float z, float fx, float fy, float width, float depth = 0.0f);
 // The same, scaled evenly so it stands `height` tiles tall.
 void draw_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height);
+// A model's turning parts, placed as draw() or draw_to_height() places the
+// rest, turned for `seconds` of running. Not inside glBegin/glEnd.
+void draw_spinners(const Model& m, float x, float y, float z, float fx, float fy, float width, float seconds);
+void draw_spinners_to_height(const Model& m, float x, float y, float z, float fx, float fy, float height, float seconds);
 
 } // namespace railmaster::client::models
