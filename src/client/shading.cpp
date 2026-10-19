@@ -4,6 +4,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -411,6 +412,57 @@ void draw_sky(Camera& cam) {
     glVertex2f(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
     glVertex2f(0, static_cast<float>(cam.height_px));
     glEnd();
+    // Stars and the moon after dark, fixed in the sky as the view turns.
+    if (g_night > 0.05f) {
+        const auto w = static_cast<float>(cam.width_px), h = static_cast<float>(cam.height_px);
+        const float span = w * 4.0f; // the whole sky round, in pixels
+        const float turned = cam.yaw / (2.0f * 3.14159265f) * span;
+        const auto unit = [](std::uint32_t k) {
+            k ^= k >> 16;
+            k *= 0x7FEB352Du;
+            k ^= k >> 15;
+            k *= 0x846CA68Bu;
+            k ^= k >> 16;
+            return static_cast<float>(k & 0xFFFF) / 65535.0f;
+        };
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBegin(GL_QUADS);
+        for (std::uint32_t i = 0; i < 900; ++i) {
+            const float x = std::fmod(unit(i * 3 + 1) * span - turned + span * 4, span);
+            if (x > w) continue;
+            const float y = unit(i * 3 + 2) * unit(i * 3 + 2) * h * 0.55f; // thicker overhead
+            const float bright = 0.35f + 0.65f * unit(i * 3 + 3);
+            const float twinkle = 0.75f + 0.25f * std::sin(g_clock * (1.5f + bright * 2.0f) + static_cast<float>(i));
+            const float a = g_night * bright * twinkle * (1.0f - y / (h * 0.62f));
+            const float r = bright > 0.9f ? 1.3f : 0.8f;
+            glColor4f(0.92f, 0.94f, 1.0f, a);
+            glVertex2f(x - r, y - r);
+            glVertex2f(x + r, y - r);
+            glVertex2f(x + r, y + r);
+            glVertex2f(x - r, y + r);
+        }
+        glEnd();
+        // The moon: a pale disc with a soft glow, low in the south-east.
+        const float mx = std::fmod(span * 0.19f - turned + span * 4, span), my = h * 0.12f;
+        if (mx < w + 60) {
+            const auto disc = [&](float radius, float r, float g, float b, float a_mid, float a_edge) {
+                glBegin(GL_TRIANGLE_FAN);
+                glColor4f(r, g, b, a_mid * g_night);
+                glVertex2f(mx, my);
+                glColor4f(r, g, b, a_edge * g_night);
+                for (int k = 0; k <= 32; ++k) {
+                    const float t = static_cast<float>(k) / 32.0f * 6.2831853f;
+                    glVertex2f(mx + std::cos(t) * radius, my + std::sin(t) * radius);
+                }
+                glEnd();
+            };
+            disc(70, 0.75f, 0.8f, 0.95f, 0.18f, 0.0f); // glow
+            disc(16, 0.96f, 0.95f, 0.88f, 1.0f, 0.95f);
+            disc(5, 0.82f, 0.82f, 0.78f, 0.5f, 0.3f); // a sea on its face
+        }
+        glDisable(GL_BLEND);
+    }
     glDepthMask(GL_TRUE);
     cam.apply();
 }

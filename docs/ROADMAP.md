@@ -318,6 +318,8 @@ Time of day (N): day, dusk, night and dawn, or a slow round of all four
 (six minutes while the game runs). The sun (or moon), its colour, the sky
 and ground ambient, the sky gradient and the haze change with it, in the
 shaders and the fixed-function path alike; shadows follow the light.
+After dark the sky has twinkling stars and a moon with a soft glow,
+turning with the view.
 After dark, windows light up along the town's streets, station lamps
 glow, and engines carry headlamps with a pool of light on the track
 ahead; smoke and track darken with the rest.
