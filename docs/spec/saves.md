@@ -112,3 +112,9 @@ The spec (§16 [I]) suggests a zip holding the scenario, the full
 simulation state, the random state and a command log for replays. Ours
 holds the first three, uncompressed. The command log, and replays with
 it, are not done yet.
+
+## Autosave
+
+At the start of every game year the client writes the game to
+`autosave.sav` in the player's folder (beside `game1.sav` to `game6.sav`),
+without a message. The Load pages list it last, as the Autosave.

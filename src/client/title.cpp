@@ -361,7 +361,9 @@ void Title::draw(float width, float height, const std::string& build) const {
         heading("Load a saved game");
         for (std::size_t i = 0; i < slots_.size(); ++i) {
             const float row = y;
-            const std::string name = i == 0 ? std::string("Quick save") : "Game " + std::to_string(i);
+            const std::string name = i == 0 ? std::string("Quick save")
+                                     : i + 1 == slots_.size() ? std::string("Autosave")
+                                                             : "Game " + std::to_string(i);
             item(name, static_cast<int>(i) == sel_, 620, kScale);
             if (slots_[i].second == "Empty") glColor3f(0.5f, 0.48f, 0.45f);
             else glColor3f(0.85f, 0.82f, 0.75f);

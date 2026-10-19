@@ -101,6 +101,8 @@ public:
     bool take_settings_changed() { return std::exchange(settings_changed_, false); }
     // The save slots: the quick save first, then the named games.
     static constexpr int kSaveSlots = 6;
+    // After the named games, the autosave made at each new year (loading only).
+    static constexpr int kAutosaveSlot = kSaveSlots + 1;
     std::string slot_path(int slot) const;
 
 private:

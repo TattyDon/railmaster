@@ -1044,6 +1044,7 @@ void Tools::draw_newspaper() const {
 
 std::string Tools::slot_path(int slot) const {
     if (slot == 0) return quick_save_;
+    if (slot == kAutosaveSlot) return save_dir_ + "autosave.sav";
     return save_dir_ + "game" + std::to_string(slot) + ".sav";
 }
 
@@ -1067,7 +1068,7 @@ int Tools::menu_items() const {
     switch (menu_page_) {
     case kMenuMain: return kMainItems;
     case kMenuSave:
-    case kMenuLoad: return kSaveSlots + 1;
+    case kMenuLoad: return menu_page_ == kMenuLoad ? kAutosaveSlot + 1 : kSaveSlots + 1;
     case kMenuSettings: return kSettingRows;
     default: return 2;
     }
@@ -1091,7 +1092,7 @@ void Tools::change_setting(int step) {
 void Tools::menu_choose() {
     const auto read_slots = [&] {
         slot_info_.clear();
-        for (int i = 0; i <= kSaveSlots; ++i) slot_info_.push_back(save_summary(slot_path(i)));
+        for (int i = 0; i <= kAutosaveSlot; ++i) slot_info_.push_back(save_summary(slot_path(i)));
     };
     switch (menu_page_) {
     case kMenuMain:
@@ -1192,8 +1193,10 @@ void Tools::draw_menu() const {
     case kMenuSave:
     case kMenuLoad:
         title = menu_page_ == kMenuSave ? "Save game" : "Load game";
-        for (int i = 0; i <= kSaveSlots; ++i) {
-            items.push_back(i == 0 ? std::string("Quick save (Ctrl+S)") : "Game " + std::to_string(i));
+        for (int i = 0; i <= (menu_page_ == kMenuLoad ? kAutosaveSlot : kSaveSlots); ++i) {
+            items.push_back(i == 0 ? std::string("Quick save (Ctrl+S)")
+                            : i == kAutosaveSlot ? std::string("Autosave (each new year)")
+                                                 : "Game " + std::to_string(i));
             notes.push_back(static_cast<std::size_t>(i) < slot_info_.size() ? slot_info_[static_cast<std::size_t>(i)] : "");
         }
         break;

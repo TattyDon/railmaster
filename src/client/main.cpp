@@ -454,7 +454,7 @@ int main(int argc, char* argv[]) {
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
             << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\nmusic " << st.music << "\n";
     };
-    const auto save_game = [&](const std::string& file) {
+    const auto save_game = [&](const std::string& file, bool quiet = false) {
         try {
             std::ofstream out(file, std::ios::binary);
             const std::string bytes = world.save();
@@ -465,7 +465,7 @@ int main(int argc, char* argv[]) {
                   << (world.player_company() ? world.company().name() : std::string("no company")) << ", net worth "
                   << client::format_money(sim::net_worth(world.investor(), world.market()))
                   << (world.assisted() ? ", assisted" : "") << "\n";
-            tools.show("Game saved to " + file, true);
+            if (!quiet) tools.show("Game saved to " + file, true);
         } catch (const std::exception& e) {
             tools.show(e.what(), false);
         }
@@ -487,7 +487,7 @@ int main(int argc, char* argv[]) {
     };
     const auto save_slots = [&] {
         std::vector<std::pair<std::string, std::string>> slots;
-        for (int i = 0; i <= client::Tools::kSaveSlots; ++i) {
+        for (int i = 0; i <= client::Tools::kAutosaveSlot; ++i) {
             const std::string path = tools.slot_path(i);
             slots.emplace_back(path, client::save_summary(path));
         }
@@ -945,6 +945,10 @@ int main(int argc, char* argv[]) {
         // The year's books are closed: show the ledger, paused, as RT3 does.
         if (world.date().year() != ledger_year) {
             ledger_year = world.date().year();
+            // Keep the game safe: save it at every new year, quietly.
+            if (world.player_company() && !title.open() && !editor.open()) {
+                save_game(tools.slot_path(client::Tools::kAutosaveSlot), true);
+            }
             if (world.player_company() && !tools.founding_open()) {
                 tools.open_ledger();
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
