@@ -610,6 +610,8 @@ int main(int argc, char* argv[]) {
     };
     Bookmark bookmarks[10];
     bool hide_ui = false; // Tab: only the world, for a clean look
+    float rain = 0;       // how hard it rains or snows now, 0 to 1
+    bool snowing = false;
     // The radar, bottom left above the tool bar.
     constexpr float kRadar = 170.0f;
     const auto radar_x = [] { return 8.0f; };
@@ -885,7 +887,14 @@ int main(int argc, char* argv[]) {
             float autumn = ramp(doy, 253, 288) * (1.0f - ramp(doy, 314, 344));
             if (!tools.settings().seasons || editor.open()) snow = autumn = 0;
             client::shading::set_season(snow, autumn);
-            client::shading::set_clouds(tools.settings().clouds && !editor.open());
+            const bool weather = tools.settings().clouds && !editor.open();
+            client::shading::set_clouds(weather);
+            // Rain (or snow in winter) when the clouds are thickest.
+            const float cover = client::shading::cloud_cover(static_cast<float>(std::fmod(clock_s, 3600.0)));
+            rain = weather ? std::clamp((cover - 0.43f) / 0.06f, 0.0f, 1.0f) : 0.0f;
+            snowing = snow > 0.5f;
+            client::shading::set_rain(rain);
+            client::audio::set_rain(rain * (snowing ? 0.0f : 1.0f));
         }
         // Smoke drifts only while the game runs.
         if (speed.speed() != sim::GameSpeed::Paused) smoke_clock += static_cast<float>(dt);
@@ -1220,6 +1229,7 @@ int main(int argc, char* argv[]) {
         glDisable(GL_DEPTH_TEST);
 
         cam.apply_screen();
+        if (cam.three_d) client::draw_weather(cam, rain, snowing, static_cast<float>(std::fmod(clock_s, 3600.0)));
         client::draw_town_names(world.economy(), cam, world.data().balance.towns);
         client::draw_territory_names(world.territories(), cam,
                                      world.player_company() ? &world.company(*world.player_company()) : nullptr);

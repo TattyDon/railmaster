@@ -29,6 +29,8 @@ void set_master(float v);
 // The music's volume, 0 (off) to 1: three original tunes, synthesised,
 // played in turn.
 void set_music_volume(float v);
+// The sound of rain, 0 (none) to 1; it eases in and out.
+void set_rain(float level);
 // A tune's samples (mono, 44.1 kHz), for tests and tools.
 std::vector<float> music(int tune);
 

@@ -26,6 +26,9 @@ void draw_railway(const sim::World& w, const Camera& cam);
 // move, works and power stations); `seconds` animates it. Call it after the
 // railway and sites, last in the world pass.
 void draw_smoke(const Camera& cam, float seconds);
+// Rain streaks or snowflakes falling across the screen, `amount` 0 to 1;
+// `seconds` of real time moves them. In screen coordinates, over the world.
+void draw_weather(const Camera& cam, float amount, bool snow, float seconds);
 // Seconds of play, for what turns (windmill sails, water wheels).
 void set_animation_clock(float seconds);
 // Lights after dark (lit windows, station lamps, headlamps), registered

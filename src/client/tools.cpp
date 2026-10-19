@@ -1199,7 +1199,7 @@ void Tools::draw_menu() const {
         break;
     case kMenuSettings:
         title = "Settings";
-        items = {"Sound", "Music", "Scroll at the window's edge", "Time of day", "Seasons (snow, autumn leaves)", "Clouds' shadows",
+        items = {"Sound", "Music", "Scroll at the window's edge", "Time of day", "Seasons (snow, autumn leaves)", "Clouds and weather",
                  "Frames a second", "Debug console (. key, cheats)", "Back"};
         notes = {settings_.volume == 0 ? std::string("Off") : std::to_string(settings_.volume * 10) + "%",
                  settings_.music == 0 ? std::string("Off") : std::to_string(settings_.music * 10) + "%", settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.seasons ? "On" : "Off",

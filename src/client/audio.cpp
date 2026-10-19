@@ -319,6 +319,9 @@ struct Mixer {
     std::thread music_maker;
     std::size_t music_track = 0, music_pos = 0;
     float music_volume = 0.4f;
+    // Rain: filtered noise, easing towards the wanted level.
+    float rain_want = 0, rain_level = 0, rain_lp_l = 0, rain_lp_r = 0;
+    Noise rain_l, rain_r{0x9E3779B9u};
     SDL_AudioDeviceID device = 0;
 };
 Mixer* g_mixer = nullptr;
@@ -377,6 +380,14 @@ void callback(void* user, Uint8* stream, int bytes) {
                 m.music_pos = 0;
                 m.music_track = (m.music_track + 1) % m.music.size();
             }
+        }
+        // Rain on the roofs: soft noise, a little different in each ear.
+        m.rain_level += (m.rain_want - m.rain_level) * (1.0f / kRate);
+        if (m.rain_level > 0.0005f) {
+            m.rain_lp_l += (m.rain_l.next() - m.rain_lp_l) * 0.35f;
+            m.rain_lp_r += (m.rain_r.next() - m.rain_lp_r) * 0.35f;
+            l += m.rain_lp_l * m.rain_level * 0.18f;
+            r += m.rain_lp_r * m.rain_level * 0.18f;
         }
         // A gentle limit, so many sounds at once do not crack.
         out[2 * f] = std::tanh(l * m.master + tune);
@@ -465,6 +476,12 @@ void set_music_volume(float v) {
 std::vector<float> music(int tune) {
     const std::vector<Score> all = scores();
     return render_music(all[static_cast<std::size_t>(tune) % all.size()]);
+}
+
+void set_rain(float level) {
+    if (!g_mixer) return;
+    std::lock_guard<std::mutex> guard(g_mixer->lock);
+    g_mixer->rain_want = std::clamp(level, 0.0f, 1.0f);
 }
 
 } // namespace railmaster::client::audio

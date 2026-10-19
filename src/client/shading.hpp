@@ -40,6 +40,11 @@ void set_foliage(bool on);
 void set_clock(float seconds);
 // Clouds' shadows drifting over the land.
 void set_clouds(bool on);
+// The cloud cover the shader draws at `seconds` of the clock, 0.22 to 0.5;
+// it rains (or snows) when it is thickest.
+float cloud_cover(float seconds);
+// How hard it rains or snows, 0 to 1: the sunlight dulls.
+void set_rain(float amount);
 // How dark it is: 0 in daylight, 1 at night (lights come on).
 float night();
 // The light for fixed-function drawing: towards the sun, its colour, ambient.

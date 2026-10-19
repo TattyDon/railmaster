@@ -299,7 +299,9 @@ distance. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Clouds' shadows (shaders; off in Settings) drift over the land, dimming
-only the sunlight; cover comes and goes over a few minutes.
+only the sunlight; cover comes and goes over a few minutes, and at its
+thickest it rains (streaks, a duller light and the sound of rain) or, in
+winter, snows.
 
 Water (shaders): ripples drifting with the wind, the sky mirrored at low
 angles and the sun glinting, calmer far off; ice in midwinter. A body of

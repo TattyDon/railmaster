@@ -127,6 +127,7 @@ uniform int u_foliage;  // 1 while drawing trees: their leaves turn fully, grass
 uniform float u_time;   // seconds, for the water's ripples
 uniform vec3 u_campos;  // the eye, on the map
 uniform int u_clouds;   // 1: clouds' shadows drift over the land
+uniform float u_rain;   // 0 to 1: how hard it rains (or snows)
 varying vec3 v_world;
 varying vec3 v_normal;
 varying vec4 v_color;
@@ -189,6 +190,7 @@ void main() {
             float c = noise((v_world.xy + drift) * 0.055) * 0.7 + noise((v_world.xy + drift * 1.2) * 0.15) * 0.3;
             sun *= 1.0 - 0.6 * smoothstep(1.0 - cover, 1.07 - cover, c);
         }
+        sun *= 1.0 - 0.5 * u_rain; // a dull light while it rains or snows
         // Sky light from above, warmer light bounced off the ground below.
         vec3 ambient = mix(u_ground, u_sky, n.z * 0.5 + 0.5);
         rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
@@ -224,8 +226,9 @@ void main() {
 bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
-GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1, u_time = -1, u_campos = -1, u_clouds = -1;
+GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1, u_time = -1, u_campos = -1, u_clouds = -1, u_rain = -1;
 bool g_clouds = true;
+float g_rain = 0.0f;
 float g_snow = 0.0f, g_autumn = 0.0f, g_clock = 0.0f;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
@@ -304,6 +307,7 @@ bool init(bool wanted) {
     u_time = p_get_uniform_location(g_program, "u_time");
     u_campos = p_get_uniform_location(g_program, "u_campos");
     u_clouds = p_get_uniform_location(g_program, "u_clouds");
+    u_rain = p_get_uniform_location(g_program, "u_rain");
 
     // The shadow map: a depth texture as a framebuffer's only attachment.
     glGenTextures(1, &g_shadow_tex);
@@ -439,6 +443,14 @@ void begin_world(const Camera& cam) {
     const auto& vi = cam.view_inverse();
     p_uniform3f(u_campos, vi[12], vi[13], vi[14]);
     p_uniform1i(u_clouds, g_clouds ? 1 : 0);
+    p_uniform1f(u_rain, g_rain);
+}
+
+void set_rain(float amount) { g_rain = std::clamp(amount, 0.0f, 1.0f); }
+
+float cloud_cover(float seconds) {
+    // As the shader has it: thin to thick and back over about ten minutes.
+    return 0.22f + 0.28f * (0.5f + 0.5f * std::sin(seconds * 0.011f));
 }
 
 void set_clouds(bool on) { g_clouds = on; }

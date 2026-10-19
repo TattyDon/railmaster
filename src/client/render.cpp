@@ -3650,4 +3650,47 @@ void draw_smoke(const Camera& cam, float seconds) {
     g_smoke.clear();
 }
 
+void draw_weather(const Camera& cam, float amount, bool snow, float seconds) {
+    if (amount <= 0.01f) return;
+    const auto w = static_cast<float>(cam.width_px), h = static_cast<float>(cam.height_px);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (snow) {
+        // Flakes drifting down, each swaying on its own.
+        const int n = static_cast<int>(420.0f * amount);
+        glBegin(GL_QUADS);
+        for (int i = 0; i < n; ++i) {
+            const auto k = static_cast<std::uint32_t>(i);
+            const float speed = 0.05f + 0.07f * unit(hash(k, 1, 77));
+            const float y = std::fmod(unit(hash(k, 2, 77)) + seconds * speed, 1.0f) * (h + 20) - 10;
+            const float sway = std::sin(seconds * (0.8f + unit(hash(k, 3, 77))) + static_cast<float>(i)) * 10.0f;
+            const float x = std::fmod(unit(hash(k, 4, 77)) * w + seconds * 6.0f + sway + w, w);
+            const float r = 1.0f + 1.6f * unit(hash(k, 5, 77));
+            glColor4f(1.0f, 1.0f, 1.0f, 0.55f + 0.35f * unit(hash(k, 6, 77)));
+            glVertex2f(x - r, y - r);
+            glVertex2f(x + r, y - r);
+            glVertex2f(x + r, y + r);
+            glVertex2f(x - r, y + r);
+        }
+        glEnd();
+    } else {
+        // Streaks slanting with the wind.
+        const int n = static_cast<int>(650.0f * amount);
+        glLineWidth(1.0f);
+        glBegin(GL_LINES);
+        for (int i = 0; i < n; ++i) {
+            const auto k = static_cast<std::uint32_t>(i);
+            const float speed = 1.4f + 0.8f * unit(hash(k, 1, 78));
+            const float y = std::fmod(unit(hash(k, 2, 78)) + seconds * speed, 1.0f) * (h + 60) - 30;
+            const float x = std::fmod(unit(hash(k, 4, 78)) * w + y * 0.25f + w, w);
+            const float len = 12.0f + 10.0f * unit(hash(k, 5, 78));
+            glColor4f(0.78f, 0.82f, 0.9f, 0.0f);
+            glVertex2f(x - len * 0.25f, y - len);
+            glColor4f(0.78f, 0.82f, 0.9f, 0.4f);
+            glVertex2f(x, y);
+        }
+        glEnd();
+    }
+}
+
 } // namespace railmaster::client
