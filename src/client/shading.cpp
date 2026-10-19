@@ -181,6 +181,16 @@ void main() {
             float lying = smoothstep(0.35, 0.8, n.z) * smoothstep(1.0 - u_snow, 1.25 - u_snow * 0.5, patch + 0.2);
             base.rgb = mix(base.rgb, vec3(0.9, 0.93, 0.97), green * u_snow * lying);
         }
+        // Snow on roofs and rocky slopes too: sloped surfaces only, so flat
+        // track, roads, platforms and water stay clear.
+        float roof_snow = 0.0;
+        if (u_snow > 0.0 && green <= 0.0 && u_foliage == 0) {
+            bool wet = v_color.b > v_color.r + 0.25 && v_color.b > v_color.g + 0.15;
+            float sloped = smoothstep(0.4, 0.55, n.z) * (1.0 - smoothstep(0.9, 0.96, n.z));
+            float drift = noise(v_world.xy * 4.0) * 0.3 + 0.7;
+            if (!wet) roof_snow = sloped * smoothstep(0.3, 0.9, u_snow) * 0.9 * drift;
+            base.rgb = mix(base.rgb, vec3(0.92, 0.94, 0.98), roof_snow);
+        }
         float ndl = max(dot(n, u_sun), 0.0);
         float sun = (u_shadows == 1 && ndl > 0.0) ? sunlit(n) : 1.0;
         // Clouds' shadows drifting over the land; the sky clears and clouds
@@ -195,6 +205,7 @@ void main() {
         // Sky light from above, warmer light bounced off the ground below.
         vec3 ambient = mix(u_ground, u_sky, n.z * 0.5 + 0.5);
         rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
+        rgb *= 1.0 + 0.45 * roof_snow; // snow stays bright out of the sun
         // Open water (flat and blue): ripples drifting with the wind, the sky
         // mirrored at low angles and the sun glinting; in midwinter it ices over.
         if (n.z > 0.95 && v_color.b > v_color.r + 0.25 && v_color.b > v_color.g + 0.15) {

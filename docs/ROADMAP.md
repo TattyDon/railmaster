@@ -310,8 +310,8 @@ with earth banks up to the shore and between rapids, so no gaps show.
 
 Seasons (shaders only; off in Settings): autumn turns the broadleaf trees
 gold to red and fades the grass from mid September, and snow lies on
-open ground and the trees from late November into March, patchy at the
-edges. Only green surfaces change, so track, roads, roofs and water stay
+open ground, the trees and sloped roofs from late November into March,
+patchy at the edges. Only green surfaces change, so track, roads, roofs and water stay
 readable; conifers keep their needles.
 
 Time of day (N): day, dusk, night and dawn, or a slow round of all four
