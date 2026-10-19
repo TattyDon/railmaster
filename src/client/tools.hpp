@@ -47,7 +47,8 @@ public:
     // Typed text (SDL_TEXTINPUT); true if a box took it.
     bool on_text(const char* text);
     // A box is taking typed keys (the arrows should not pan).
-    bool typing() const { return find_open_; }
+    bool typing() const { return find_open_ || guide_open_; }
+    bool guide_open() const { return guide_open_; }
 
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
@@ -250,6 +251,26 @@ private:
     bool console_open_ = false; // the debug console (rt3-clone-spec §15.8)
     bool console_key(SDL_Keycode key);
     void draw_console() const;
+    // The Guide (Ctrl+G): what each cargo is made by and wanted by, and the
+    // best-paying links between industries not yet served.
+    struct Opportunity {
+        sim::CargoId cargo = 0;
+        sim::SiteId from = 0, to = 0;
+        std::int64_t per_load = 0;    // dollars: the price there less the price here
+        std::int64_t loads_milli = 0; // a year, at the source's rate
+        std::int64_t tenths_of_miles = 0;
+        bool served = false; // both ends already within reach of your stations
+    };
+    bool guide_open_ = false;
+    int guide_tab_ = 0; // 0 opportunities, 1 supply chains
+    std::size_t guide_sel_ = 0;
+    std::vector<Opportunity> guide_opps_;
+    void open_guide();
+    std::vector<Opportunity> find_opportunities() const;
+    bool guide_key(SDL_Keycode key);
+    void draw_guide() const;
+    std::string site_name(sim::SiteId id) const;
+    std::array<float, 4> guide_button() const;
     bool help_open_ = false; // the help card (?)
     void draw_help() const;
     // The help button, after the tool buttons.
@@ -276,7 +297,7 @@ private:
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
     // Rows a click can choose, put down as the panels draw each frame: one
     // click selects a row, a click on the chosen row acts as Enter would.
-    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market };
+    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide };
     struct RowBox {
         float x0, y0, x1, y1;
         RowPanel panel;

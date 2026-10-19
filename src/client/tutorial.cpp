@@ -43,8 +43,9 @@ constexpr Step kSteps[] = {
      "Press L for the Ledger, or F7 for your Company's accounts. Click any train, station or industry in the Look "
      "tool (F1) for its details, and press M for the news."},
     {"Well done",
-     "You are running a railroad. Connect more towns, carry coal to the steel mill, buy industries, and watch the "
-     "share price. Esc opens the menu for saving. Press Enter to close this."},
+     "You are running a railroad. Ctrl+G opens the Guide: who wants each cargo, and the best-paying links near you "
+     "(Enter goes there). Connect more towns, carry freight where it sells for more, buy industries, and watch the "
+     "share price. ? shows the keys; Esc opens the menu for saving. Press Enter to close this."},
 };
 constexpr int kStepCount = sizeof(kSteps) / sizeof(kSteps[0]);
 

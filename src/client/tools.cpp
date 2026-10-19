@@ -915,6 +915,10 @@ bool Tools::click_row(float sx, float sy) {
         break;
     case RowPanel::Territories: territory_sel_ = i; break;
     case RowPanel::Market: market_choice_ = static_cast<sim::CompanyId>(i); break;
+    case RowPanel::Guide:
+        if (guide_sel_ == i) guide_key(SDLK_RETURN);
+        else guide_sel_ = i;
+        break;
     }
     return true;
 }
@@ -945,6 +949,7 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
             market_choice_ = static_cast<sim::CompanyId>((market_choice_ + (key == SDLK_UP ? n - 1 : 1)) % n);
             break;
         }
+        case RowPanel::Guide: guide_key(key); break;
         case RowPanel::Console: break;
         }
     }
@@ -1321,11 +1326,20 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         help_open_ = false; // any click closes the card
         return;
     }
+    if (const auto gb = guide_button(); !right_button && sx >= gb[0] && sx < gb[2] && sy >= gb[1] && sy < gb[3]) {
+        if (guide_open_) guide_open_ = false;
+        else open_guide();
+        return;
+    }
     if (const auto hb = help_button(); !right_button && sx >= hb[0] && sx < hb[2] && sy >= hb[1] && sy < hb[3]) {
         help_open_ = true;
         return;
     }
     if (!right_button && click_row(sx, sy)) return;
+    if (guide_open_) {
+        guide_open_ = false; // a click away from the guide closes it
+        return;
+    }
     if (find_open_) {
         find_open_ = false; // a click away from the box closes it
         return;
@@ -1565,6 +1579,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (menu_open_) return menu_key(key);
+    if (guide_open_) return guide_key(key);
+    if (key == SDLK_g && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
+        open_guide();
+        return true;
+    }
     if (help_open_) {
         if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_SLASH || key == SDLK_QUESTION || key == SDLK_F1) {
             help_open_ = false;
@@ -2857,7 +2876,7 @@ void Tools::draw_help() const {
           {"F7", "Company: bonds, shares, dividend, territories"},
           {"F8", "Market: shares, takeovers, mergers"},
           {"L  F10  F11", "Ledger, goals, lists"},
-          {"M", "Messages"}}},
+          {"M  Ctrl+G", "Messages; the Guide: who wants what, best links"}}},
         {"Getting around",
          {{"Arrows", "Pan (or the mouse at the window's edge)"},
           {"Wheel", "Zoom"},
@@ -3476,6 +3495,13 @@ void Tools::draw_ui(const std::string& status) const {
         draw_text(b.x0 + 4, b.y0 + 4, b.label, kScale);
     }
     {
+        const auto gb = guide_button();
+        ui::tab(gb[0], gb[1], gb[2], gb[3], guide_open_);
+        if (guide_open_) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(gb[0] + 4, gb[1] + 4, "Ctrl+G Guide", kScale);
+    }
+    {
         const auto hb = help_button();
         ui::tab(hb[0], hb[1], hb[2], hb[3], help_open_);
         if (help_open_) glColor3f(0.12f, 0.08f, 0.03f);
@@ -3560,6 +3586,7 @@ void Tools::draw_ui(const std::string& status) const {
         glColor3f(0.95f, 0.93f, 0.86f);
         draw_text(tx + 8, ty + 4, tip, kScale);
     }
+    if (guide_open_) draw_guide();
     if (help_open_) draw_help();
     if (console_open_) draw_console();
     draw_choice_dialog();
@@ -3574,6 +3601,261 @@ void Tools::draw_ui(const std::string& status) const {
         else glColor3f(1.0f, 0.45f, 0.4f);
         draw_text(hover_sx_ + 14, hover_sy_ + 10, label, kScale);
     }
+}
+
+std::array<float, 4> Tools::guide_button() const {
+    const auto hb = help_button();
+    const float x = hb[2] + 3.0f;
+    return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+G Guide", kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+std::string Tools::site_name(sim::SiteId id) const {
+    const sim::Economy& eco = world_.economy();
+    const sim::Site& s = eco.sites()[id];
+    // Its nearest town.
+    const sim::Town* near = nullptr;
+    std::int64_t best = 0;
+    for (const sim::Town& t : eco.towns()) {
+        const std::int64_t d = std::int64_t{t.cx - s.cx} * (t.cx - s.cx) + std::int64_t{t.cy - s.cy} * (t.cy - s.cy);
+        if (!near || d < best) near = &t, best = d;
+    }
+    const std::string town = near ? as_written(near->name) : std::string("the wilds");
+    if (s.kind == sim::IndustryKind::House) return town;
+    return as_written(world_.data().industries.get(s.type).name) + " near " + town;
+}
+
+std::vector<Tools::Opportunity> Tools::find_opportunities() const {
+    const sim::Economy& eco = world_.economy();
+    const sim::IndustryRegistry& types = world_.data().industries;
+    const sim::Railway& rw = world_.railway();
+    const std::int32_t year = world_.date().year();
+    const auto me = world_.player_company();
+    // Whether one of your stations reaches a site.
+    const auto served = [&](const sim::Site& site) {
+        for (const sim::Station& st : rw.stations()) {
+            if (!me || st.owner != *me) continue;
+            const sim::MapPoint at = rw.track().node(st.node).pos;
+            const std::int32_t r = sim::catchment_radius(st.size, world_.data().balance);
+            if (std::abs(eco.cell_x(at) - site.cx) <= r && std::abs(eco.cell_y(at) - site.cy) <= r) return true;
+        }
+        return false;
+    };
+    const auto wants = [&](const sim::Site& d, sim::CargoId c) {
+        if (d.closed || d.kind == sim::IndustryKind::Raw) return false;
+        for (const sim::IndustryInput& in : types.get(d.type).inputs) {
+            if (in.cargo == c && (!in.until_year || year <= *in.until_year)) return true;
+        }
+        return false;
+    };
+    const sim::MapPoint one = eco.node_centre(0, 0), next = eco.node_centre(1, 0);
+    const double cell_miles = static_cast<double>(sim::distance_mm(one, next)) / 1'609'344.0;
+    std::vector<Opportunity> out;
+    for (const sim::Site& from : eco.sites()) {
+        if (from.closed || from.kind == sim::IndustryKind::House || from.kind == sim::IndustryKind::Sink) continue;
+        const sim::IndustryType& t = types.get(from.type);
+        for (const sim::CargoId c : t.outputs) {
+            const sim::CargoType& cargo = world_.data().cargo.get(c);
+            if (cargo.cargo_class != sim::CargoClass::Freight || cargo.available_year > year) continue;
+            // Mines, farms and camps always produce; works and ports only as
+            // far as they are running (fed, or trading).
+            std::int64_t made = t.rate_milli * std::max(1, from.level);
+            if (from.kind != sim::IndustryKind::Raw) made = made * from.utilisation_permille / 1000;
+            if (made <= 0) continue;
+            std::optional<Opportunity> best;
+            for (const sim::Site& to : eco.sites()) {
+                if (to.id == from.id || !wants(to, c)) continue;
+                const double dx = to.cx - from.cx, dy = to.cy - from.cy;
+                const double miles = std::sqrt(dx * dx + dy * dy) * cell_miles;
+                if (miles < 3.0 || miles > 35.0) continue;
+                const std::int64_t gain = eco.price(c, to.cx, to.cy) - eco.price(c, from.cx, from.cy);
+                if (gain <= 0) continue;
+                if (!best || gain * made > best->per_load * best->loads_milli) {
+                    best = Opportunity{c, from.id, to.id, gain, made, static_cast<std::int64_t>(miles * 10), false};
+                }
+            }
+            if (best) {
+                best->served = served(from) && served(eco.sites()[best->to]);
+                out.push_back(*best);
+            }
+        }
+    }
+    // Unserved first, then by what a year of it would bring.
+    std::sort(out.begin(), out.end(), [](const Opportunity& a, const Opportunity& b) {
+        if (a.served != b.served) return !a.served;
+        const std::int64_t va = a.per_load * a.loads_milli / 1000 / 1000, vb = b.per_load * b.loads_milli / 1000 / 1000;
+        if (va != vb) return va > vb; // to the thousand dollars
+        return a.tenths_of_miles < b.tenths_of_miles; // then the shorter line, cheaper to build
+    });
+    if (out.size() > 40) out.resize(40);
+    return out;
+}
+
+void Tools::open_guide() {
+    guide_open_ = true;
+    guide_sel_ = 0;
+    guide_opps_ = find_opportunities();
+}
+
+bool Tools::guide_key(SDL_Keycode key) {
+    const std::size_t n = guide_tab_ == 0 ? guide_opps_.size() : world_.data().cargo.all().size();
+    switch (key) {
+    case SDLK_ESCAPE:
+    case SDLK_g: guide_open_ = false; return true;
+    case SDLK_TAB:
+        guide_tab_ = 1 - guide_tab_;
+        guide_sel_ = 0;
+        return true;
+    case SDLK_UP: guide_sel_ = guide_sel_ > 0 ? guide_sel_ - 1 : 0; return true;
+    case SDLK_DOWN: guide_sel_ = n == 0 ? 0 : std::min(n - 1, guide_sel_ + 1); return true;
+    case SDLK_PAGEUP: guide_sel_ = guide_sel_ > 10 ? guide_sel_ - 10 : 0; return true;
+    case SDLK_PAGEDOWN: guide_sel_ = n == 0 ? 0 : std::min(n - 1, guide_sel_ + 10); return true;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER:
+        if (guide_tab_ == 0 && guide_sel_ < guide_opps_.size()) {
+            // Go to where the cargo is made, its panel open, and say where it sells.
+            const Opportunity& o = guide_opps_[guide_sel_];
+            const sim::Site& from = world_.economy().sites()[o.from];
+            jump_ = world_.economy().node_centre(from.cx, from.cy);
+            hover_ = *jump_;
+            select(Tool::Inspect);
+            open_detail(DetailKind::Industry, o.from);
+            const bool town = world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
+            show(as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ") +
+                     site_name(o.to) + ", " +
+                     std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) + " more a load",
+                 true);
+            guide_open_ = false;
+        }
+        return true;
+    default: return true;
+    }
+}
+
+void Tools::draw_guide() const {
+    constexpr float kRow = 19.0f;
+    constexpr std::size_t kShown = 24;
+    const float w = std::min(1180.0f, static_cast<float>(cam_.width_px) - 20), x0 = (static_cast<float>(cam_.width_px) - w) / 2;
+    const float y0 = 56, h = 120 + kRow * kShown;
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 16, y0 + 10, "Guide", kScale + 1);
+    // The two tabs.
+    const char* tabs[] = {"Opportunities", "Who wants what"};
+    float tx = x0 + 120;
+    for (int i = 0; i < 2; ++i) {
+        const float tw = static_cast<float>(text_width(tabs[i], kScale)) + 20;
+        if (i == guide_tab_) ui::selection(tx, y0 + 10, tx + tw - 6, y0 + 34);
+        if (i == guide_tab_) glColor3f(1.0f, 0.95f, 0.7f);
+        else glColor3f(0.65f, 0.63f, 0.58f);
+        draw_text(tx + 7, y0 + 13, tabs[i], kScale);
+        tx += tw + 4;
+    }
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 40);
+    float y = y0 + 48;
+    const auto& cargo = world_.data().cargo;
+    const std::size_t first = guide_sel_ >= kShown ? guide_sel_ + 1 - kShown : 0;
+    const auto right = [&](float x, float yy, const std::string& t) {
+        draw_text(x - static_cast<float>(text_width(t, kScale)), yy, t, kScale);
+    };
+    if (guide_tab_ == 0) {
+        glColor3f(0.75f, 0.73f, 0.68f);
+        draw_text(x0 + 16, y,
+                  "Freight that sells for more nearby: carry it from the first place to the second. Works count only while fed. Served links last.",
+                  kScale);
+        y += kRow + 4;
+        const float c_from = x0 + 120, c_to = x0 + 470, c_miles = x0 + 860, c_load = x0 + 960, c_loads = x0 + 1060,
+                    c_year = x0 + w - 16;
+        glColor3f(0.68f, 0.66f, 0.62f);
+        draw_text(x0 + 16, y, "Cargo", kScale);
+        draw_text(c_from, y, "From", kScale);
+        draw_text(c_to, y, "To", kScale);
+        right(c_miles, y, "Miles");
+        right(c_load, y, "A load");
+        right(c_loads, y, "Loads/yr");
+        right(c_year, y, "A year");
+        y += kRow;
+        if (guide_opps_.empty()) {
+            glColor3f(0.68f, 0.66f, 0.62f);
+            draw_text(x0 + 16, y, "Nothing found within 35 miles yet: look again as industries open and prices move", kScale);
+        }
+        for (std::size_t i = first; i < guide_opps_.size() && i < first + kShown; ++i) {
+            const Opportunity& o = guide_opps_[i];
+            add_row(x0 + 8, y - 2, x0 + w - 8, y + kRow - 3, RowPanel::Guide, i);
+            const bool sel = i == guide_sel_;
+            if (sel) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRow - 3);
+            if (sel) glColor3f(1.0f, 0.95f, 0.7f);
+            else if (o.served) glColor3f(0.6f, 0.58f, 0.55f);
+            else glColor3f(0.9f, 0.88f, 0.82f);
+            draw_text(x0 + 16, y, as_written(cargo.get(o.cargo).name), kScale);
+            draw_text(c_from, y, site_name(o.from), kScale);
+            draw_text(c_to, y, site_name(o.to) + (o.served ? "  (served)" : ""), kScale);
+            right(c_miles, y, std::to_string(o.tenths_of_miles / 10));
+            right(c_load, y, "+" + price_k(o.per_load));
+            right(c_loads, y, loads(o.loads_milli));
+            right(c_year, y, price_k(o.per_load * o.loads_milli / 1000));
+            y += kRow;
+        }
+    } else {
+        glColor3f(0.75f, 0.73f, 0.68f);
+        draw_text(x0 + 16, y, "Each cargo: who makes it and who pays for it. Towns want passengers and mail, and goods as they grow.",
+                  kScale);
+        y += kRow + 4;
+        const float c_made = x0 + 190, c_wanted = x0 + 610;
+        glColor3f(0.68f, 0.66f, 0.62f);
+        draw_text(x0 + 16, y, "Cargo", kScale);
+        draw_text(c_made, y, "Made by", kScale);
+        draw_text(c_wanted, y, "Wanted by", kScale);
+        y += kRow;
+        const auto& types = world_.data().industries.all();
+        const std::int32_t year = world_.date().year();
+        const auto names = [&](sim::CargoId c, bool made) {
+            std::string out;
+            bool towns = false;
+            for (const sim::IndustryType& t : types) {
+                bool has = false;
+                if (made) {
+                    has = std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end();
+                } else if (t.kind != sim::IndustryKind::Raw) {
+                    for (const sim::IndustryInput& in : t.inputs) has = has || (in.cargo == c && (!in.until_year || year <= *in.until_year));
+                }
+                if (!has) continue;
+                if (t.kind == sim::IndustryKind::House) {
+                    towns = true;
+                    continue;
+                }
+                out += (out.empty() ? "" : ", ") + as_written(t.name);
+            }
+            if (towns) out = std::string("towns") + (out.empty() ? "" : ", ") + out;
+            return out.empty() ? std::string("-") : out;
+        };
+        const auto clip = [&](std::string t, float width) {
+            bool cut = false;
+            while (!t.empty() && static_cast<float>(text_width(t + (cut ? "..." : ""), kScale)) > width) {
+                t.pop_back();
+                cut = true;
+            }
+            return cut ? t + "..." : t;
+        };
+        for (std::size_t i = first; i < cargo.all().size() && i < first + kShown; ++i) {
+            const sim::CargoType& c = cargo.all()[i];
+            add_row(x0 + 8, y - 2, x0 + w - 8, y + kRow - 3, RowPanel::Guide, i);
+            const bool sel = i == guide_sel_;
+            if (sel) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRow - 3);
+            const bool later = c.available_year > year;
+            if (sel) glColor3f(1.0f, 0.95f, 0.7f);
+            else if (later) glColor3f(0.55f, 0.53f, 0.5f);
+            else glColor3f(0.9f, 0.88f, 0.82f);
+            draw_text(x0 + 16, y, as_written(c.name) + (later ? " (" + std::to_string(c.available_year) + ")" : ""), kScale);
+            draw_text(c_made, y, clip(names(c.id, true), c_wanted - c_made - 16), kScale);
+            draw_text(c_wanted, y, clip(names(c.id, false), x0 + w - 16 - c_wanted), kScale);
+            y += kRow;
+        }
+    }
+    glColor3f(0.6f, 0.58f, 0.54f);
+    draw_text(x0 + 16, y0 + h - 26,
+              guide_tab_ == 0 ? "Tab other page   Up/Down, wheel or click choose   Enter or click again: go there   Esc close"
+                              : "Tab other page   Up/Down or wheel scroll   Esc close",
+              kScale);
 }
 
 } // namespace railmaster::client
