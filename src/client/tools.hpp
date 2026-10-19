@@ -56,6 +56,14 @@ public:
     // Warn once when one of your steam trains runs out of water (it crawls
     // until it passes a service tower). Call each frame.
     void check_trains();
+    // Money rising from your trains as they are paid (+$12,345), fading out.
+    struct Floater {
+        sim::MapPoint at;
+        std::string text;
+        Uint32 born;
+    };
+    std::vector<Floater> floaters_;
+    std::vector<sim::Money> last_revenue_;
     // Flash a message in the top bar for a few seconds.
     void show(std::string message, bool good);
     // The founding dialog: how much to invest and how much outside money to

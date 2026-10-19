@@ -673,6 +673,19 @@ void Tools::check_trains() {
     const auto me = world_.player_company();
     if (!me) return;
     const auto& trains = world_.railway().trains();
+    // Payments since last frame float up from the train.
+    if (last_revenue_.size() < trains.size()) {
+        const std::size_t old = last_revenue_.size();
+        last_revenue_.resize(trains.size());
+        for (std::size_t i = old; i < trains.size(); ++i) last_revenue_[i] = trains[i].revenue;
+    }
+    for (const sim::Train& t : trains) {
+        const sim::Money paid = t.revenue - last_revenue_[t.id];
+        last_revenue_[t.id] = t.revenue;
+        if (t.owner != *me || paid < sim::Money::dollars(1)) continue;
+        floaters_.push_back({world_.railway().train_position(t.id), "+" + format_money(paid), SDL_GetTicks()});
+    }
+    std::erase_if(floaters_, [](const Floater& f) { return SDL_GetTicks() - f.born > 2600; });
     if (dry_warned_.size() < trains.size()) dry_warned_.resize(trains.size(), false);
     for (const sim::Train& t : trains) {
         if (t.owner != *me || !t.in_service() || world_.data().locomotives.get(t.loco).fuel != sim::Fuel::Steam) continue;
@@ -3670,6 +3683,23 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
+    // Money rising from paid trains.
+    for (const Floater& f : floaters_) {
+        float sx = 0, sy = 0;
+        if (!cam_.to_screen(f.at, sx, sy)) continue;
+        const float age = static_cast<float>(SDL_GetTicks() - f.born) / 2600.0f;
+        sy -= 40 + 50 * age;
+        const float fade = age < 0.7f ? 1.0f : 1.0f - (age - 0.7f) / 0.3f;
+        const float tw = static_cast<float>(text_width(f.text, kScale + 1));
+        glEnable(GL_BLEND);
+        // A dark outline, so it reads on snow and grass alike.
+        glColor4f(0.05f, 0.1f, 0.03f, 0.85f * fade);
+        for (const auto& [ox, oy] : {std::pair{-1.5f, 0.0f}, std::pair{1.5f, 0.0f}, std::pair{0.0f, -1.5f}, std::pair{0.0f, 1.5f}}) {
+            draw_text(sx - tw / 2 + ox, sy + oy, f.text, kScale + 1);
+        }
+        glColor4f(0.5f, 1.0f, 0.4f, fade);
+        draw_text(sx - tw / 2, sy, f.text, kScale + 1);
+    }
     // Your trains in trouble: a "!" badge floating over each, pulsing red when
     // stuck or crawling, amber when slowed.
     if (const auto me = world_.player_company(); me && !menu_open_) {
