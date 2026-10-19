@@ -261,6 +261,21 @@ private:
         std::int64_t tenths_of_miles = 0;
         bool served = false; // both ends already within reach of your stations
     };
+    // The link chosen in the Guide: marked on the map until built or let go;
+    // B builds it (track, a station at each end, a train), the second B
+    // confirming the price the first one showed.
+    std::optional<Opportunity> link_;
+    Uint32 link_armed_until_ = 0;
+    struct LinkPlan {
+        sim::BuildTrack track;
+        sim::Money track_cost{}, stations_cost{}, train_cost{};
+        std::optional<sim::LocoTypeId> loco;
+        std::string error;
+        sim::Money total() const { return track_cost + stations_cost + train_cost; }
+    };
+    LinkPlan plan_link(const Opportunity& o) const;
+    void build_link();
+    void draw_link() const;
     bool guide_open_ = false;
     int guide_tab_ = 0; // 0 opportunities, 1 supply chains
     std::size_t guide_sel_ = 0;

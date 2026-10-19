@@ -1670,6 +1670,9 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         else if (detail_) {
             detail_.reset();
             follow_ = false;
+        } else if (link_ && tool_ == Tool::Inspect) {
+            link_.reset();
+            show("The planned line is cleared", true);
         } else if (tool_ == Tool::Inspect) {
             open_menu();
         } else {
@@ -1694,6 +1697,10 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             show("Train " + std::to_string(id + 1) + " (" + std::to_string(page_train_ + 1) + " of " +
                      std::to_string(mine.size()) + ")",
                  true);
+            return true;
+        }
+        if (key == SDLK_b && link_) {
+            build_link();
             return true;
         }
         if (key == SDLK_t) {
@@ -2485,6 +2492,7 @@ std::string Tools::cell_text() const {
 
 void Tools::draw_world_overlay() const {
     if (founding_) return;
+    if (link_) draw_link();
     const sim::TrackNetwork& net = world_.railway().track();
     switch (tool_) {
     case Tool::Track:
@@ -2929,8 +2937,10 @@ std::string Tools::hint() const {
         case MapOverlay::Traffic: cargo_map += "Traffic"; break;
         case MapOverlay::Cargo: cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "Off"; break;
         }
+        if (link_ && !detail_) return "B build the planned line (gold) for you   Esc let it go   " + cargo_map;
         if (detail_) {
-            std::string keys = "Click another to show it  Esc close";
+            std::string keys = link_ ? "B build the planned line   Click another to show it  Esc close"
+                                     : "Click another to show it  Esc close";
             if (detail_->kind == DetailKind::Station) keys = "U enlarge  Click another to show it  Esc close";
             if (detail_train()) keys = "E route  H priority  F filter  W full  [ ] cars  C caboose  D diner  Y copy  XX retire  R engine  Space follow  Esc close";
             return keys;
@@ -3719,10 +3729,13 @@ bool Tools::guide_key(SDL_Keycode key) {
             hover_ = *jump_;
             select(Tool::Inspect);
             open_detail(DetailKind::Industry, o.from);
+            link_ = o;
+            link_armed_until_ = 0;
             const bool town = world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
             show(as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ") +
                      site_name(o.to) + ", " +
-                     std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) + " more a load",
+                     std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) +
+                     " more a load.  B builds the line for you",
                  true);
             guide_open_ = false;
         }
@@ -3856,6 +3869,131 @@ void Tools::draw_guide() const {
               guide_tab_ == 0 ? "Tab other page   Up/Down, wheel or click choose   Enter or click again: go there   Esc close"
                               : "Tab other page   Up/Down or wheel scroll   Esc close",
               kScale);
+}
+
+
+namespace {
+
+// Where a planned line ends near a site: one cell short of it, towards the
+// other end, so the station sits beside the works rather than on it.
+sim::MapPoint beside(const sim::Economy& eco, const sim::Site& s, const sim::Site& other) {
+    const int dx = other.cx > s.cx ? 1 : other.cx < s.cx ? -1 : 0;
+    const int dy = other.cy > s.cy ? 1 : other.cy < s.cy ? -1 : 0;
+    return eco.node_centre(s.cx + dx, s.cy + dy);
+}
+
+} // namespace
+
+Tools::LinkPlan Tools::plan_link(const Opportunity& o) const {
+    LinkPlan out;
+    const sim::Economy& eco = world_.economy();
+    const sim::Railway& rw = world_.railway();
+    const sim::Site& a = eco.sites()[o.from];
+    const sim::Site& b = eco.sites()[o.to];
+    const auto me = world_.player_company();
+    if (!me) {
+        out.error = "you run no company";
+        return out;
+    }
+    // Each end: one of your stations already near it, else track there to join, else open ground.
+    std::int32_t new_stations = 0;
+    const auto end_for = [&](const sim::Site& s, const sim::Site& other) -> sim::TrackEnd {
+        for (const sim::Station& st : rw.stations()) {
+            if (st.owner != *me) continue;
+            const sim::MapPoint at = rw.track().node(st.node).pos;
+            if (std::abs(eco.cell_x(at) - s.cx) <= 2 && std::abs(eco.cell_y(at) - s.cy) <= 2) {
+                return {sim::TrackEnd::Kind::Node, st.node, 0, at};
+            }
+        }
+        ++new_stations;
+        return sim::pick_track_end(rw.track(), beside(eco, s, other), 300'000);
+    };
+    out.track.start = end_for(a, b);
+    out.track.end = end_for(b, a);
+    const sim::PlanResult plan = world_.preview(out.track);
+    if (!plan.plan) {
+        out.error = plan.error.empty() ? "no way through for track" : plan.error;
+        return out;
+    }
+    out.track_cost = plan.plan->total_cost;
+    out.stations_cost = world_.construction_cost(sim::station_cost(sim::StationSize::Medium, world_.data().balance)) *
+                        new_stations;
+    // The fastest engine the money left will buy.
+    const sim::Money left = world_.company().cash() - out.track_cost - out.stations_cost;
+    std::int32_t best_speed = -1;
+    for (const sim::LocomotiveType& l : world_.data().locomotives.all()) {
+        if (!l.available_in(world_.date().year()) || l.fuel == sim::Fuel::Electric || l.cost > left) continue;
+        if (l.top_speed_mph > best_speed) best_speed = l.top_speed_mph, out.loco = l.id, out.train_cost = l.cost;
+    }
+    if (!out.loco) out.error = "not enough money left for an engine";
+    return out;
+}
+
+void Tools::build_link() {
+    const LinkPlan plan = plan_link(*link_);
+    if (!plan.error.empty()) {
+        show("Cannot build the line: " + plan.error, false);
+        return;
+    }
+    if (SDL_GetTicks() > link_armed_until_) {
+        link_armed_until_ = SDL_GetTicks() + 6000;
+        show("Build it all for " + format_money(plan.total()) + "? Track " + format_money(plan.track_cost) + ", stations " +
+                 format_money(plan.stations_cost) + ", train " + format_money(plan.train_cost) + ".  B again to build",
+             true);
+        return;
+    }
+    link_armed_until_ = 0;
+    const sim::CommandResult track = world_.execute(plan.track);
+    if (!track.ok) {
+        show("Cannot build the track: " + track.error, false);
+        return;
+    }
+    world_.execute(sim::EndTrackUndo{});
+    const sim::TrackNetwork& net = world_.railway().track();
+    const auto station_at = [&](const sim::TrackEnd& end, sim::NodeId fallback) -> std::optional<sim::StationId> {
+        const sim::NodeId node = end.kind == sim::TrackEnd::Kind::Node ? end.node : fallback;
+        for (const sim::Station& st : world_.railway().stations())
+            if (st.node == node) return st.id;
+        const sim::CommandResult r = world_.execute(
+            sim::BuildStation{.at = {sim::TrackEnd::Kind::Node, node, 0, net.node(node).pos}, .size = sim::StationSize::Medium});
+        if (!r.ok) {
+            show("Cannot build a station: " + r.error, false);
+            return std::nullopt;
+        }
+        return r.created_id;
+    };
+    const sim::NodeId start_node =
+        plan.track.start.kind == sim::TrackEnd::Kind::Node ? plan.track.start.node : *net.nearest_node(plan.track.start.pos, 1);
+    const auto sa = station_at(plan.track.start, start_node);
+    const auto sb = station_at(plan.track.end, track.created_id);
+    if (!sa || !sb) return;
+    const sim::CommandResult train = world_.execute(sim::BuyTrain{.loco = *plan.loco, .cars = 4, .route = {*sa, *sb}});
+    if (!train.ok) {
+        show("Line built, but cannot buy the train: " + train.error, false);
+        return;
+    }
+    show("Line built: " + as_written(world_.data().cargo.get(link_->cargo).name) + " from the " + site_name(link_->from) +
+             " to " + site_name(link_->to) + ", with Train " + std::to_string(train.created_id + 1) +
+             ". Start the clock (Space) to run it",
+         true);
+    link_.reset();
+}
+
+void Tools::draw_link() const {
+    const sim::Economy& eco = world_.economy();
+    const sim::Site& a = eco.sites()[link_->from];
+    const sim::Site& b = eco.sites()[link_->to];
+    const sim::MapPoint pa = eco.node_centre(a.cx, a.cy), pb = eco.node_centre(b.cx, b.cy);
+    // Rings at both ends, and gold dots along the way, gently pulsing.
+    const float pulse = 0.75f + 0.25f * std::sin(static_cast<float>(SDL_GetTicks()) / 300.0f);
+    draw_marker(pa, cam_, 16, 1.0f, 0.85f * pulse, 0.3f);
+    draw_marker(pb, cam_, 16, 1.0f, 0.85f * pulse, 0.3f);
+    const std::int64_t length = sim::distance_mm(pa, pb);
+    const std::int64_t step = 400'000;
+    for (std::int64_t d = step; d < length; d += step) {
+        const sim::MapPoint p{pa.x_mm + (pb.x_mm - pa.x_mm) * d / length, pa.y_mm + (pb.y_mm - pa.y_mm) * d / length};
+        draw_marker(p, cam_, 4, 1.0f, 0.8f, 0.25f);
+    }
 }
 
 } // namespace railmaster::client
