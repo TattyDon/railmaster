@@ -211,6 +211,9 @@ private:
     // Whether a service tower stands by any of these stations (any owner's:
     // trains passing it fill up).
     bool tower_near(const std::vector<sim::StationId>& route) const;
+    // What is wrong with a train, if anything, and how bad: 2 stuck or
+    // crawling (red), 1 slowed (amber), 0 fine. `advice` says what to do.
+    int train_trouble(const sim::Train& t, std::string* advice = nullptr) const;
     std::vector<bool> pending_service() const;
     // Give the train each pending stop's consist; false (with a message) on refusal.
     bool apply_consists(sim::TrainId id);

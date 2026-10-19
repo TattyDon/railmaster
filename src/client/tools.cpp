@@ -2522,6 +2522,7 @@ std::string Tools::cell_text() const {
 void Tools::draw_world_overlay() const {
     if (founding_) return;
     if (link_) draw_link();
+
     const sim::TrackNetwork& net = world_.railway().track();
     switch (tool_) {
     case Tool::Track:
@@ -2786,6 +2787,35 @@ void Tools::draw_lists_panel() const {
         }
     }
     if (n == 0) cells({"None yet"}, 0.7f, 0.7f, 0.7f);
+}
+
+int Tools::train_trouble(const sim::Train& t, std::string* advice) const {
+    if (!t.in_service()) return 0;
+    const sim::LocomotiveType& loco = world_.data().locomotives.get(t.loco);
+    const auto say = [&](const char* text) {
+        if (advice) *advice = text;
+    };
+    if (t.state == sim::TrainState::NoRoute) {
+        say("No way to its next stop: lay the missing track, or change its route (E)");
+        return 2;
+    }
+    if (loco.fuel == sim::Fuel::Steam && t.water == 0) {
+        say("Out of water, so it crawls: build a service tower (F4) by one of its stations");
+        return 2;
+    }
+    if (t.state == sim::TrainState::BrokenDown) {
+        say("Broken down: it will be repaired where it stands. A maintenance shed (F5) on the line means fewer");
+        return 1;
+    }
+    if (t.sand == 0) {
+        say("Out of sand, so hills slow it badly: a service tower (F4) on its line refills it");
+        return 1;
+    }
+    if (t.oil == 0) {
+        say("Out of oil: it breaks down more often. A maintenance shed (F5) on its line refills it");
+        return 1;
+    }
+    return 0;
 }
 
 bool Tools::tower_near(const std::vector<sim::StationId>& route) const {
@@ -3173,6 +3203,16 @@ void Tools::draw_detail_panel() const {
             }
             if (t.holding) state += ", waiting for a full load";
             rows.push_back(line({"Status", state}));
+            if (std::string advice; train_trouble(t, &advice) > 0) {
+                // The trouble and what to do, wrapped across the panel, in red.
+                for (const std::string& l : wrap("Problem: " + advice, kScale, 370.0f)) {
+                    DetailRow problem = line({l});
+                    problem.r = 1.0f;
+                    problem.g = 0.55f;
+                    problem.b = 0.45f;
+                    rows.push_back(problem);
+                }
+            }
             rows.push_back(line({"Engine", as_written(loco.name)}));
             rows.push_back(line({"Age", years(today - t.built_day)}));
             rows.push_back(line({"Reliability", std::string(reliability_name(loco.reliability)) + ", " +
@@ -3630,6 +3670,27 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
+    // Your trains in trouble: a "!" badge floating over each, pulsing red when
+    // stuck or crawling, amber when slowed.
+    if (const auto me = world_.player_company(); me && !menu_open_) {
+        const float pulse = 0.65f + 0.35f * std::sin(static_cast<float>(SDL_GetTicks()) / 220.0f);
+        for (const sim::Train& t : world_.railway().trains()) {
+            if (t.owner != *me) continue;
+            const int trouble = train_trouble(t);
+            if (trouble == 0) continue;
+            float sx = 0, sy = 0;
+            if (!cam_.to_screen(world_.railway().train_position(t.id), sx, sy)) continue;
+            sy -= 30;
+            if (sy < kToolbarY + kButtonH || sy > h - kBottomBarH) continue;
+            const float r = 10.0f;
+            const float cr = 1.0f, cg = trouble == 2 ? 0.22f + 0.2f * pulse : 0.62f, cb = trouble == 2 ? 0.15f : 0.1f;
+            fill_rect(sx - 1, sy + r - 2, sx + 1, sy + 28, cr, cg, cb, 0.8f); // a stalk down to the train
+            fill_rect(sx - r - 2, sy - r - 2, sx + r + 2, sy + r + 2, 0.1f, 0.06f, 0.04f, 0.85f);
+            fill_rect(sx - r, sy - r, sx + r, sy + r, cr * (trouble == 2 ? pulse : 1.0f), cg, cb, 1.0f);
+            glColor3f(1.0f, 1.0f, 1.0f);
+            draw_text(sx - static_cast<float>(text_width("!", kScale)) / 2, sy - 9, "!", kScale);
+        }
+    }
     if (find_open_) draw_find_panel();
     // A tooltip under the toolbar button the mouse is on.
     for (const Button& b : layout_buttons()) {
