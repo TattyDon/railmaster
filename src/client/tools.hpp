@@ -53,6 +53,9 @@ public:
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
     void draw_ui(const std::string& status) const;
+    // Warn once when one of your steam trains runs out of water (it crawls
+    // until it passes a service tower). Call each frame.
+    void check_trains();
     // Flash a message in the top bar for a few seconds.
     void show(std::string message, bool good);
     // The founding dialog: how much to invest and how much outside money to
@@ -260,18 +263,28 @@ private:
         std::int64_t loads_milli = 0; // a year, at the source's rate
         std::int64_t tenths_of_miles = 0;
         bool served = false; // both ends already within reach of your stations
+        // Passengers and mail between two towns (cargo is then passengers):
+        // from and to name the towns, not sites.
+        bool towns = false;
     };
+    std::string opp_from_name(const Opportunity& o) const;
+    std::string opp_to_name(const Opportunity& o) const;
+    // Each end's map cell, and where its station should go.
+    std::pair<std::int32_t, std::int32_t> opp_cell(const Opportunity& o, bool from) const;
+    sim::MapPoint opp_station_point(const Opportunity& o, bool from) const;
     // The link chosen in the Guide: marked on the map until built or let go;
     // B builds it (track, a station at each end, a train), the second B
     // confirming the price the first one showed.
     std::optional<Opportunity> link_;
+    std::vector<bool> dry_warned_; // trains already warned of running out of water
     Uint32 link_armed_until_ = 0;
     struct LinkPlan {
         sim::BuildTrack track;
-        sim::Money track_cost{}, stations_cost{}, train_cost{};
+        sim::Money track_cost{}, stations_cost{}, train_cost{}, tower_cost{};
+        bool tower = false; // a service tower is wanted at the first station
         std::optional<sim::LocoTypeId> loco;
         std::string error;
-        sim::Money total() const { return track_cost + stations_cost + train_cost; }
+        sim::Money total() const { return track_cost + stations_cost + train_cost + tower_cost; }
     };
     LinkPlan plan_link(const Opportunity& o) const;
     void build_link();

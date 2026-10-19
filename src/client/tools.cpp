@@ -669,6 +669,27 @@ void Tools::show(std::string message, bool good) {
     message_until_ = SDL_GetTicks() + 4000;
 }
 
+void Tools::check_trains() {
+    const auto me = world_.player_company();
+    if (!me) return;
+    const auto& trains = world_.railway().trains();
+    if (dry_warned_.size() < trains.size()) dry_warned_.resize(trains.size(), false);
+    for (const sim::Train& t : trains) {
+        if (t.owner != *me || !t.in_service() || world_.data().locomotives.get(t.loco).fuel != sim::Fuel::Steam) continue;
+        if (t.water > 0) {
+            dry_warned_[t.id] = false;
+            continue;
+        }
+        if (dry_warned_[t.id]) continue;
+        dry_warned_[t.id] = true;
+        const std::string text = "Train " + std::to_string(t.id + 1) +
+                                 " is out of water and crawls: build a service tower (F4) on its line, by a station";
+        show(text, false);
+        message_until_ = SDL_GetTicks() + 9000;
+        log(text, false);
+    }
+}
+
 void Tools::log(const std::string& text, bool good) {
     log_.push_back({world_.date().month_year_label(), text, good});
     if (log_.size() > 500) log_.erase(log_.begin());
@@ -3689,6 +3710,53 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
             }
         }
     }
+    // Passengers and mail between towns: what both towns' houses make a
+    // year, at the fare for the distance (a fair floor: a fast line between
+    // towns that also feed others does better).
+    {
+        const auto& towns = eco.towns();
+        const std::int32_t reach = sim::catchment_radius(sim::StationSize::Medium, world_.data().balance);
+        std::vector<std::int64_t> houses(towns.size(), 0);
+        std::int64_t house_rate = 0;
+        for (const sim::IndustryType& t : types.all())
+            if (t.kind == sim::IndustryKind::House) house_rate = t.rate_milli;
+        for (const sim::Site& s : eco.sites()) {
+            if (s.kind != sim::IndustryKind::House) continue;
+            for (std::size_t i = 0; i < towns.size(); ++i) {
+                if (std::abs(s.cx - towns[i].cx) <= reach && std::abs(s.cy - towns[i].cy) <= reach) houses[i] += s.level;
+            }
+        }
+        const std::int32_t era = sim::express_era_percent(year, world_.data().balance);
+        const auto served_town = [&](const sim::Town& t) {
+            sim::Site probe;
+            probe.cx = t.cx;
+            probe.cy = t.cy;
+            return served(probe);
+        };
+        for (std::size_t i = 0; i < towns.size(); ++i) {
+            for (std::size_t j = i + 1; j < towns.size(); ++j) {
+                const double dx = towns[j].cx - towns[i].cx, dy = towns[j].cy - towns[i].cy;
+                const double miles = std::sqrt(dx * dx + dy * dy) * cell_miles;
+                if (miles < 5.0 || miles > 30.0) continue;
+                const std::int64_t made = (houses[i] + houses[j]) * house_rate * era / 100; // milli-loads, each of passengers and mail
+                if (made <= 0) continue;
+                const std::int64_t length = sim::distance_mm(eco.node_centre(towns[i].cx, towns[i].cy), eco.node_centre(towns[j].cx, towns[j].cy));
+                std::int64_t fares = 0; // a load of each, dollars
+                std::int32_t kinds = 0;
+                for (const sim::CargoType& c : world_.data().cargo.all()) {
+                    if (c.cargo_class != sim::CargoClass::Express || c.available_year > year || c.key == "troops") continue;
+                    fares += sim::express_base_fare(c, length, world_.data().balance).whole_dollars();
+                    ++kinds;
+                }
+                if (kinds == 0) continue;
+                // Bigger first: from the larger town.
+                const bool swap = houses[j] > houses[i];
+                Opportunity o{*world_.data().cargo.find("passengers"), static_cast<sim::SiteId>(swap ? j : i), static_cast<sim::SiteId>(swap ? i : j), fares / kinds,
+                              made * kinds, static_cast<std::int64_t>(miles * 10), served_town(towns[i]) && served_town(towns[j]), true};
+                out.push_back(o);
+            }
+        }
+    }
     // Unserved first, then by what a year of it would bring.
     std::sort(out.begin(), out.end(), [](const Opportunity& a, const Opportunity& b) {
         if (a.served != b.served) return !a.served;
@@ -3724,16 +3792,21 @@ bool Tools::guide_key(SDL_Keycode key) {
         if (guide_tab_ == 0 && guide_sel_ < guide_opps_.size()) {
             // Go to where the cargo is made, its panel open, and say where it sells.
             const Opportunity& o = guide_opps_[guide_sel_];
-            const sim::Site& from = world_.economy().sites()[o.from];
-            jump_ = world_.economy().node_centre(from.cx, from.cy);
+            const auto [cx, cy] = opp_cell(o, true);
+            jump_ = world_.economy().node_centre(cx, cy);
             hover_ = *jump_;
             select(Tool::Inspect);
-            open_detail(DetailKind::Industry, o.from);
+            if (o.towns) {
+                detail_.reset();
+            } else {
+                open_detail(DetailKind::Industry, o.from);
+            }
             link_ = o;
             link_armed_until_ = 0;
-            const bool town = world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
-            show(as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ") +
-                     site_name(o.to) + ", " +
+            const bool town = o.towns || world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
+            show((o.towns ? "Passengers and mail from " + opp_from_name(o) + " to "
+                          : as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ")) +
+                     opp_to_name(o) + ", " +
                      std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) +
                      " more a load.  B builds the line for you",
                  true);
@@ -3773,10 +3846,10 @@ void Tools::draw_guide() const {
     if (guide_tab_ == 0) {
         glColor3f(0.75f, 0.73f, 0.68f);
         draw_text(x0 + 16, y,
-                  "Freight that sells for more nearby: carry it from the first place to the second. Works count only while fed. Served links last.",
+                  "Lines worth building: passengers and mail between towns, and freight to where it sells for more. Estimates; served ones last.",
                   kScale);
         y += kRow + 4;
-        const float c_from = x0 + 120, c_to = x0 + 470, c_miles = x0 + 860, c_load = x0 + 960, c_loads = x0 + 1060,
+        const float c_from = x0 + 165, c_to = x0 + 500, c_miles = x0 + 860, c_load = x0 + 960, c_loads = x0 + 1060,
                     c_year = x0 + w - 16;
         glColor3f(0.68f, 0.66f, 0.62f);
         draw_text(x0 + 16, y, "Cargo", kScale);
@@ -3799,9 +3872,9 @@ void Tools::draw_guide() const {
             if (sel) glColor3f(1.0f, 0.95f, 0.7f);
             else if (o.served) glColor3f(0.6f, 0.58f, 0.55f);
             else glColor3f(0.9f, 0.88f, 0.82f);
-            draw_text(x0 + 16, y, as_written(cargo.get(o.cargo).name), kScale);
-            draw_text(c_from, y, site_name(o.from), kScale);
-            draw_text(c_to, y, site_name(o.to) + (o.served ? "  (served)" : ""), kScale);
+            draw_text(x0 + 16, y, o.towns ? std::string("Passengers, mail") : as_written(cargo.get(o.cargo).name), kScale);
+            draw_text(c_from, y, opp_from_name(o), kScale);
+            draw_text(c_to, y, opp_to_name(o) + (o.served ? "  (served)" : ""), kScale);
             right(c_miles, y, std::to_string(o.tenths_of_miles / 10));
             right(c_load, y, "+" + price_k(o.per_load));
             right(c_loads, y, loads(o.loads_milli));
@@ -3884,12 +3957,31 @@ sim::MapPoint beside(const sim::Economy& eco, const sim::Site& s, const sim::Sit
 
 } // namespace
 
+std::string Tools::opp_from_name(const Opportunity& o) const {
+    return o.towns ? as_written(world_.economy().towns()[o.from].name) : site_name(o.from);
+}
+std::string Tools::opp_to_name(const Opportunity& o) const {
+    return o.towns ? as_written(world_.economy().towns()[o.to].name) : site_name(o.to);
+}
+std::pair<std::int32_t, std::int32_t> Tools::opp_cell(const Opportunity& o, bool from) const {
+    const sim::Economy& eco = world_.economy();
+    const std::size_t i = from ? o.from : o.to;
+    if (o.towns) return {eco.towns()[i].cx, eco.towns()[i].cy};
+    return {eco.sites()[i].cx, eco.sites()[i].cy};
+}
+sim::MapPoint Tools::opp_station_point(const Opportunity& o, bool from) const {
+    const sim::Economy& eco = world_.economy();
+    if (o.towns) {
+        const auto [cx, cy] = opp_cell(o, from);
+        return eco.node_centre(cx, cy); // in the middle of town
+    }
+    return beside(eco, eco.sites()[from ? o.from : o.to], eco.sites()[from ? o.to : o.from]);
+}
+
 Tools::LinkPlan Tools::plan_link(const Opportunity& o) const {
     LinkPlan out;
     const sim::Economy& eco = world_.economy();
     const sim::Railway& rw = world_.railway();
-    const sim::Site& a = eco.sites()[o.from];
-    const sim::Site& b = eco.sites()[o.to];
     const auto me = world_.player_company();
     if (!me) {
         out.error = "you run no company";
@@ -3897,19 +3989,20 @@ Tools::LinkPlan Tools::plan_link(const Opportunity& o) const {
     }
     // Each end: one of your stations already near it, else track there to join, else open ground.
     std::int32_t new_stations = 0;
-    const auto end_for = [&](const sim::Site& s, const sim::Site& other) -> sim::TrackEnd {
+    const auto end_for = [&](bool from) -> sim::TrackEnd {
+        const auto [cx, cy] = opp_cell(o, from);
         for (const sim::Station& st : rw.stations()) {
             if (st.owner != *me) continue;
             const sim::MapPoint at = rw.track().node(st.node).pos;
-            if (std::abs(eco.cell_x(at) - s.cx) <= 2 && std::abs(eco.cell_y(at) - s.cy) <= 2) {
+            if (std::abs(eco.cell_x(at) - cx) <= 2 && std::abs(eco.cell_y(at) - cy) <= 2) {
                 return {sim::TrackEnd::Kind::Node, st.node, 0, at};
             }
         }
         ++new_stations;
-        return sim::pick_track_end(rw.track(), beside(eco, s, other), 300'000);
+        return sim::pick_track_end(rw.track(), opp_station_point(o, from), 300'000);
     };
-    out.track.start = end_for(a, b);
-    out.track.end = end_for(b, a);
+    out.track.start = end_for(true);
+    out.track.end = end_for(false);
     const sim::PlanResult plan = world_.preview(out.track);
     if (!plan.plan) {
         out.error = plan.error.empty() ? "no way through for track" : plan.error;
@@ -3918,8 +4011,21 @@ Tools::LinkPlan Tools::plan_link(const Opportunity& o) const {
     out.track_cost = plan.plan->total_cost;
     out.stations_cost = world_.construction_cost(sim::station_cost(sim::StationSize::Medium, world_.data().balance)) *
                         new_stations;
+    // Water and sand: a service tower at the first station, unless one of
+    // yours already stands near either end (without one, steam engines crawl).
+    out.tower = true;
+    for (const sim::ServiceBuilding& sb : rw.service_buildings()) {
+        if (sb.owner != *me || sb.type != sim::ServiceType::ServiceTower) continue;
+        const sim::MapPoint at = rw.track().node(sb.node).pos;
+        for (const sim::MapPoint end : {out.track.start.pos, out.track.end.pos}) {
+            if (sim::distance_mm(at, end) <= eco.cells_mm(3)) out.tower = false;
+        }
+    }
+    if (out.tower) {
+        out.tower_cost = world_.construction_cost(sim::service_building_cost(sim::ServiceType::ServiceTower, world_.data().balance));
+    }
     // The fastest engine the money left will buy.
-    const sim::Money left = world_.company().cash() - out.track_cost - out.stations_cost;
+    const sim::Money left = world_.company().cash() - out.track_cost - out.stations_cost - out.tower_cost;
     std::int32_t best_speed = -1;
     for (const sim::LocomotiveType& l : world_.data().locomotives.all()) {
         if (!l.available_in(world_.date().year()) || l.fuel == sim::Fuel::Electric || l.cost > left) continue;
@@ -3938,7 +4044,8 @@ void Tools::build_link() {
     if (SDL_GetTicks() > link_armed_until_) {
         link_armed_until_ = SDL_GetTicks() + 6000;
         show("Build it all for " + format_money(plan.total()) + "? Track " + format_money(plan.track_cost) + ", stations " +
-                 format_money(plan.stations_cost) + ", train " + format_money(plan.train_cost) + ".  B again to build",
+                 format_money(plan.stations_cost) + (plan.tower ? ", service tower " + format_money(plan.tower_cost) : "") +
+                 ", train " + format_money(plan.train_cost) + ".  B again to build",
              true);
         return;
     }
@@ -3967,13 +4074,19 @@ void Tools::build_link() {
     const auto sa = station_at(plan.track.start, start_node);
     const auto sb = station_at(plan.track.end, track.created_id);
     if (!sa || !sb) return;
+    if (plan.tower) {
+        const sim::NodeId node = world_.railway().station(*sa).node;
+        const sim::CommandResult t = world_.execute(sim::BuildServiceBuilding{
+            .at = {sim::TrackEnd::Kind::Node, node, 0, net.node(node).pos}, .type = sim::ServiceType::ServiceTower});
+        if (!t.ok) show("Line built, but no service tower: " + t.error, false);
+    }
     const sim::CommandResult train = world_.execute(sim::BuyTrain{.loco = *plan.loco, .cars = 4, .route = {*sa, *sb}});
     if (!train.ok) {
         show("Line built, but cannot buy the train: " + train.error, false);
         return;
     }
-    show("Line built: " + as_written(world_.data().cargo.get(link_->cargo).name) + " from the " + site_name(link_->from) +
-             " to " + site_name(link_->to) + ", with Train " + std::to_string(train.created_id + 1) +
+    show("Line built: " + (link_->towns ? std::string("passengers and mail") : as_written(world_.data().cargo.get(link_->cargo).name)) +
+             " from " + opp_from_name(*link_) + " to " + opp_to_name(*link_) + ", with Train " + std::to_string(train.created_id + 1) +
              ". Start the clock (Space) to run it",
          true);
     link_.reset();
@@ -3981,9 +4094,9 @@ void Tools::build_link() {
 
 void Tools::draw_link() const {
     const sim::Economy& eco = world_.economy();
-    const sim::Site& a = eco.sites()[link_->from];
-    const sim::Site& b = eco.sites()[link_->to];
-    const sim::MapPoint pa = eco.node_centre(a.cx, a.cy), pb = eco.node_centre(b.cx, b.cy);
+    const auto [ax, ay] = opp_cell(*link_, true);
+    const auto [bx, by] = opp_cell(*link_, false);
+    const sim::MapPoint pa = eco.node_centre(ax, ay), pb = eco.node_centre(bx, by);
     // Rings at both ends, and gold dots along the way, gently pulsing.
     const float pulse = 0.75f + 0.25f * std::sin(static_cast<float>(SDL_GetTicks()) / 300.0f);
     draw_marker(pa, cam_, 16, 1.0f, 0.85f * pulse, 0.3f);

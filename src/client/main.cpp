@@ -938,6 +938,7 @@ int main(int argc, char* argv[]) {
         }
         // The lists and train paging move the view.
         if (const auto p = tools.take_jump()) cam.center_on(*p);
+        if (!title.open() && !editor.open()) tools.check_trains();
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
         if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();

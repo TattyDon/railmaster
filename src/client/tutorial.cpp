@@ -33,6 +33,9 @@ constexpr Step kSteps[] = {
      "mail and goods of the houses and industries around it."},
     {"A second station",
      "Now click on your track in {B} (still the Station tool), so the line has a station at each end."},
+    {"Water for the engines",
+     "Steam engines need water and sand, or they crawl. Press F4 for the Service tower tool and click on your track "
+     "by one of the stations: trains passing it fill up."},
     {"Buy a train",
      "Press F6 for the Train tool, click your two stations in turn, then press Enter to buy the train. It will run "
      "between them and back."},
@@ -113,6 +116,8 @@ void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& t
         paid |= t.revenue > sim::Money{};
     }
     for (const sim::TrackEdge& e : rw.track().edges()) edges += !e.removed && e.owner == me;
+    std::size_t towers = 0;
+    for (const sim::ServiceBuilding& sb : rw.service_buildings()) towers += sb.owner == me && sb.type == sim::ServiceType::ServiceTower;
     bool done = false;
     switch (step_) {
     case 0:
@@ -122,9 +127,10 @@ void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& t
     case 1: done = edges >= 1; break;
     case 2: done = stations >= 1; break;
     case 3: done = stations >= 2; break;
-    case 4: done = trains >= 1; break;
-    case 5: done = paid; break;
-    case 6: done = tools.tool() == Tool::Ledger || tools.tool() == Tool::Finance; break;
+    case 4: done = towers >= 1; break;
+    case 5: done = trains >= 1; break;
+    case 6: done = paid; break;
+    case 7: done = tools.tool() == Tool::Ledger || tools.tool() == Tool::Finance; break;
     default: break;
     }
     if (done) {
