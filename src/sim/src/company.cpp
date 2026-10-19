@@ -439,4 +439,10 @@ void Company::start_year(std::int32_t year) {
     issues_this_year_ = 0;
 }
 
+void Company::record_price() {
+    constexpr std::size_t kMonths = 120;
+    price_months_.push_back(price_);
+    if (price_months_.size() > kMonths) price_months_.erase(price_months_.begin());
+}
+
 } // namespace railmaster::sim

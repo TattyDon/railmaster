@@ -92,6 +92,7 @@ Format versions:
 - **19:** express made and lost each month at each station, and travellers avoiding it.
 - **20:** whether a cheat from the debug console has been used (an assisted game).
 - **21:** the debug console's train speed and no-crash switches, and a medal tier in its commands.
+- **22:** each company's share price at every month end, the last ten years (the Market chart).
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

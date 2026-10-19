@@ -287,3 +287,15 @@ TEST_CASE("cheats work and mark the game as assisted, kept in saves") {
     CHECK(loaded.railway().rules().speed_percent == 200);
     CHECK_FALSE(loaded.railway().rules().crashes);
 }
+
+TEST_CASE("each company's share price is kept at every month end, for the Market chart") {
+    World w = flat_world();
+    CHECK(w.company().price_months().empty());
+    for (int d = 0; d < 95; ++d)
+        for (int i = 0; i < World::kTicksPerDay; ++i) w.tick();
+    // January, February and March have ended.
+    REQUIRE(w.company().price_months().size() == 3);
+    CHECK(w.company().price_months().back() == w.company().share_price());
+    const World loaded = World::load(w.save(), test_data());
+    CHECK(loaded.company().price_months() == w.company().price_months());
+}

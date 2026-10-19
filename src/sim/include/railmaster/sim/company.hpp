@@ -229,6 +229,10 @@ public:
     std::int32_t unbroken_dividend_years() const;
     // Monthly: remember the running profit total, for trailing_profit().
     void record_month();
+    // The share price at each month end, oldest first, the last ten years
+    // (the Market screen's chart, rt3-clone-spec §15.4).
+    void record_price();
+    const std::vector<Money>& price_months() const { return price_months_; }
 
     // At year end, before start_year: record the shareholders' return.
     void close_year();
@@ -282,6 +286,7 @@ private:
     Money lifetime_profit_, lifetime_revenue_;
     // lifetime_profit_ and lifetime_revenue_ at each month end, newest last
     std::vector<Money> month_marks_, revenue_marks_;
+    std::vector<Money> price_months_;
 };
 
 } // namespace railmaster::sim

@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 21; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 22; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -35,7 +35,8 @@ constexpr std::uint32_t kSaveVersion = 21; // 2: events, Grants; 3: restrictions
                                            // 15: a hand-made map's towns in the config;
                                            // 16: and its industries; 17: and its territories;
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
-                                           // 20: cheats (assisted games); 21: more cheats
+                                           // 20: cheats (assisted games); 21: more cheats;
+                                           // 22: share prices by month
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -513,7 +514,7 @@ void io(Ar& ar, Company& c) {
     fields(ar, c.name_, c.id_, c.merged_into_, c.months_above_split_, c.bankrupt_year_, c.state_, c.cash_, c.track_,
            c.buildings_, c.rolling_stock_, c.industries_, c.bonds_, c.access_, c.delivered_, c.history_);
     fields(ar, c.shares_, c.price_, c.dividend_, c.issues_this_year_, c.pressure_, c.lifetime_profit_,
-           c.lifetime_revenue_, c.month_marks_, c.revenue_marks_);
+           c.lifetime_revenue_, c.month_marks_, c.revenue_marks_, c.price_months_);
     if constexpr (Ar::loading) {
         const Balance& b = *ar.balance;
         c.finance_ = b.finance;

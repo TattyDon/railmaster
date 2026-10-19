@@ -499,6 +499,8 @@ void World::on_new_month() {
     for (const auto& [id, ratio] : apply_splits(market_)) {
         news_.push_back(company(id).name() + " shares split " + std::to_string(ratio) + " for 1");
     }
+    for (Company& c : market_.companies)
+        if (!c.defunct()) c.record_price();
     // Bond interest [D] and dividends are paid at the end of each quarter.
     if ((date_.month() - 1) % 3 == 0) {
         for (Company& c : market_.companies) {

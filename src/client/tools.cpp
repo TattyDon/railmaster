@@ -2292,6 +2292,7 @@ void Tools::draw_market_panel() const {
     y += kRow / 2;
 
     const sim::Company& c = world_.company(chosen);
+    const float chart_top = y;
     std::string chairman = "None";
     std::string bio;
     for (const sim::Investor& inv : world_.investors()) {
@@ -2328,6 +2329,51 @@ void Tools::draw_market_panel() const {
     line("This year: revenue " + format_money(now.revenue()) + "   profit " + format_money(now.profit()) +
          "   trackage in " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackageIncome)]) +
          " out " + format_money(now.lines[static_cast<std::size_t>(sim::Ledger::TrackagePaid)]));
+    // The share price over the last ten years, month by month (rt3-clone-spec §15.4 View chart).
+    {
+        const float cx0 = x0 + 720, cx1 = x0 + w - 14, cy0 = chart_top, cy1 = y - 2;
+        ui::chip(cx0, cy0, cx1, cy1, 0.45f);
+        const std::vector<sim::Money>& prices = c.price_months();
+        glColor3f(0.85f, 0.83f, 0.78f);
+        draw_text(cx0 + 8, cy0 + 3, "Share price", kScale);
+        if (prices.size() < 2) {
+            glColor3f(0.6f, 0.58f, 0.54f);
+            draw_text(cx0 + 8, cy0 + 22, "A chart after a month or two of trading", kScale);
+        } else {
+            std::int64_t lo = prices.front().in_cents(), hi = lo;
+            for (const sim::Money& p : prices) lo = std::min(lo, p.in_cents()), hi = std::max(hi, p.in_cents());
+            if (hi == lo) hi = lo + 1;
+            const float px0 = cx0 + 74, px1 = cx1 - 8, py0 = cy0 + 22, py1 = cy1 - 18;
+            const auto px = [&](std::size_t i) {
+                return px0 + (px1 - px0) * static_cast<float>(i) / static_cast<float>(prices.size() - 1);
+            };
+            const auto py = [&](std::int64_t cents) {
+                return py1 - (py1 - py0) * static_cast<float>(cents - lo) / static_cast<float>(hi - lo);
+            };
+            // Faint lines at the top and bottom, the high and low marked.
+            fill_rect(px0, py0, px1, py0 + 1, 1.0f, 1.0f, 1.0f, 0.12f);
+            fill_rect(px0, py1, px1, py1 + 1, 1.0f, 1.0f, 1.0f, 0.12f);
+            glColor3f(0.7f, 0.68f, 0.62f);
+            draw_text(cx0 + 8, py0 - 6, format_cents(sim::Money::cents(hi)), kScale);
+            draw_text(cx0 + 8, py1 - 10, format_cents(sim::Money::cents(lo)), kScale);
+            float r, g, b;
+            owner_rgb(c.id(), world_.player_company(), r, g, b);
+            glLineWidth(2.0f);
+            glColor3f(r, g, b);
+            glBegin(GL_LINE_STRIP);
+            for (std::size_t i = 0; i < prices.size(); ++i) glVertex2f(px(i), py(prices[i].in_cents()));
+            glEnd();
+            glLineWidth(1.0f);
+            // When the line starts: so many months back from now.
+            const auto months = static_cast<std::int32_t>(prices.size());
+            const std::int32_t m0 = world_.date().year() * 12 + world_.date().month() - 1 - months;
+            static const char* kMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+            glColor3f(0.6f, 0.58f, 0.54f);
+            draw_text(px0, cy1 - 17, std::string(kMonths[m0 % 12]) + " " + std::to_string(m0 / 12), kScale);
+            const std::string end = "now";
+            draw_text(px1 - static_cast<float>(text_width(end, kScale)), cy1 - 17, end, kScale);
+        }
+    }
     y += kRow / 2;
     glColor3f(1.0f, 0.9f, 0.5f);
     line("Players");
