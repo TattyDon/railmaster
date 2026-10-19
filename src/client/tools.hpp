@@ -250,6 +250,10 @@ private:
     bool console_open_ = false; // the debug console (rt3-clone-spec §15.8)
     bool console_key(SDL_Keycode key);
     void draw_console() const;
+    bool help_open_ = false; // the help card (?)
+    void draw_help() const;
+    // The help button, after the tool buttons.
+    std::array<float, 4> help_button() const;
     bool find_open_ = false;
     std::string find_text_;
     std::size_t find_sel_ = 0;

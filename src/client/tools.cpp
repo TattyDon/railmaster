@@ -1317,6 +1317,14 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         }
         return;
     }
+    if (help_open_) {
+        help_open_ = false; // any click closes the card
+        return;
+    }
+    if (const auto hb = help_button(); !right_button && sx >= hb[0] && sx < hb[2] && sy >= hb[1] && sy < hb[3]) {
+        help_open_ = true;
+        return;
+    }
     if (!right_button && click_row(sx, sy)) return;
     if (find_open_) {
         find_open_ = false; // a click away from the box closes it
@@ -1557,6 +1565,16 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (menu_open_) return menu_key(key);
+    if (help_open_) {
+        if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_SLASH || key == SDLK_QUESTION || key == SDLK_F1) {
+            help_open_ = false;
+        }
+        return true;
+    }
+    if (key == SDLK_QUESTION || (key == SDLK_SLASH && (mod & KMOD_SHIFT) != 0)) {
+        help_open_ = true;
+        return true;
+    }
     if (find_open_) return find_key(key);
     if (console_open_) return console_key(key);
     if (key == SDLK_PERIOD && settings_.cheats && tool_ != Tool::Train && (mod & (KMOD_CTRL | KMOD_GUI)) == 0) {
@@ -2747,6 +2765,93 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
     return out;
 }
 
+std::array<float, 4> Tools::help_button() const {
+    const std::vector<Button> buttons = layout_buttons();
+    const float x = buttons.back().x1 + 3.0f;
+    return {x, kToolbarY, x + static_cast<float>(text_width("? Help", kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+namespace {
+
+// What each tool does, for the tooltip under its button.
+const char* tool_tip(Tool t) {
+    switch (t) {
+    case Tool::Inspect: return "Look: click a train, station or industry for its details";
+    case Tool::Track: return "Track: click to start, click again to lay track to there; right-click stops";
+    case Tool::Station: return "Station: click on your track to build one; [ ] size, B other buildings";
+    case Tool::ServiceTower: return "Service tower: water and sand for trains, built by the line";
+    case Tool::Maintenance: return "Shed: maintenance for trains, fewer breakdowns";
+    case Tool::Train: return "Train: click stations in order, L picks the engine, Enter buys it";
+    case Tool::Finance: return "Company: books, bonds, shares, dividend and territories";
+    case Tool::Market: return "Market: buy and sell shares, take over or merge railroads";
+    case Tool::Industry: return "Industry: buy, build or upgrade mines, farms and works";
+    case Tool::Status: return "Status: the scenario's goals and medals";
+    case Tool::Lists: return "Lists: every train, station and company; click one to go there";
+    case Tool::Ledger: return "Ledger: the year's accounts and reports";
+    }
+    return "";
+}
+
+} // namespace
+
+void Tools::draw_help() const {
+    struct Section {
+        const char* title;
+        std::vector<std::pair<const char*, const char*>> keys;
+    };
+    const Section sections[] = {
+        {"Building",
+         {{"F2", "Track: click to start and to lay; Ctrl+Z undo"},
+          {"F3", "Station on your track; [ ] size"},
+          {"F4  F5", "Service tower and maintenance shed"},
+          {"F6", "Train: click stations, L engine, Enter buys"},
+          {"F9", "Industries: buy, build, upgrade"}}},
+        {"Running the railroad",
+         {{"F1", "Look: click for details; E route, R engine, U enlarge"},
+          {"F7", "Company: bonds, shares, dividend, territories"},
+          {"F8", "Market: shares, takeovers, mergers"},
+          {"L  F10  F11", "Ledger, goals, lists"},
+          {"M", "Messages"}}},
+        {"Getting around",
+         {{"Arrows", "Pan (or the mouse at the window's edge)"},
+          {"Wheel", "Zoom"},
+          {"Shift+arrows", "Turn and tilt (or right-drag)"},
+          {"Ctrl+F", "Find a town or station"},
+          {"0-9", "Go to a bookmark; Shift+0-9 stores one"},
+          {"V", "Flat map or 3D"}}},
+        {"Time and view",
+         {{"Space", "Pause; + and - set the speed"},
+          {"N", "Time of day"},
+          {"O  P", "Map overlays"},
+          {"Tab", "Hide the interface"},
+          {"Ctrl+H", "Hide the trees"},
+          {"Esc", "Menu: save, load, settings; Ctrl+S quick save"}}},
+    };
+    const float w = std::min(1100.0f, static_cast<float>(cam_.width_px) - 20), h = 400;
+    const float x0 = (static_cast<float>(cam_.width_px) - w) / 2, y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2);
+    fill_rect(0, 0, static_cast<float>(cam_.width_px), static_cast<float>(cam_.height_px), 0.0f, 0.0f, 0.0f, 0.35f);
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 18, y0 + 10, "Help: the main keys", kScale + 1);
+    ui::rule(x0 + 10, x0 + w - 10, y0 + 40);
+    for (int i = 0; i < 4; ++i) {
+        const float cx = x0 + 20 + static_cast<float>(i % 2) * (w / 2);
+        float y = y0 + 52 + static_cast<float>(i / 2) * 160;
+        glColor3f(1.0f, 0.86f, 0.5f);
+        draw_text(cx, y, sections[i].title, kScale);
+        y += 24;
+        for (const auto& [key, what] : sections[i].keys) {
+            glColor3f(1.0f, 0.95f, 0.75f);
+            draw_text(cx + 6, y, key, kScale);
+            glColor3f(0.88f, 0.86f, 0.8f);
+            draw_text(cx + 130, y, what, kScale);
+            y += 21;
+        }
+    }
+    glColor3f(0.6f, 0.58f, 0.54f);
+    draw_text(x0 + 18, y0 + h - 26, "The bottom bar always shows the current tool's keys.   ? or Esc or a click closes this", kScale);
+}
+
 std::string Tools::hint() const {
     switch (tool_) {
     case Tool::Inspect: {
@@ -3324,6 +3429,13 @@ void Tools::draw_ui(const std::string& status) const {
         else glColor3f(0.92f, 0.88f, 0.8f);
         draw_text(b.x0 + 4, b.y0 + 4, b.label, kScale);
     }
+    {
+        const auto hb = help_button();
+        ui::tab(hb[0], hb[1], hb[2], hb[3], help_open_);
+        if (help_open_) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(hb[0] + 4, hb[1] + 4, "? Help", kScale);
+    }
 
     // Bottom bar: what the tool does, and the last result or what is under the cursor.
     ui::bar(0, h - kBottomBarH, w, h, false);
@@ -3392,6 +3504,17 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
     if (find_open_) draw_find_panel();
+    // A tooltip under the toolbar button the mouse is on.
+    for (const Button& b : layout_buttons()) {
+        if (hover_sx_ < b.x0 || hover_sx_ >= b.x1 || hover_sy_ < b.y0 || hover_sy_ >= b.y1 || menu_open_ || help_open_) continue;
+        const std::string tip = tool_tip(b.tool);
+        const float tw = static_cast<float>(text_width(tip, kScale)) + 16;
+        const float tx = std::min(b.x0, static_cast<float>(cam_.width_px) - tw - 6), ty = b.y1 + 6;
+        ui::chip(tx, ty, tx + tw, ty + 24);
+        glColor3f(0.95f, 0.93f, 0.86f);
+        draw_text(tx + 8, ty + 4, tip, kScale);
+    }
+    if (help_open_) draw_help();
     if (console_open_) draw_console();
     draw_choice_dialog();
     if (paper_open_) draw_newspaper();
