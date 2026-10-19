@@ -2014,7 +2014,15 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
                 world_.execute(sim::SetRoute{.train = r.created_id, .route = pending_route(), .service_stops = service});
             }
             if (apply_consists(r.created_id)) {
-                show("Bought " + world_.data().locomotives.get(loco).name + " for " + format_money(r.cost), true);
+                const bool steam = world_.data().locomotives.get(loco).fuel == sim::Fuel::Steam;
+                if (steam && !tower_near(pending_route())) {
+                    show("Bought " + world_.data().locomotives.get(loco).name +
+                             ", but no service tower is near its stations: build one (F4) or it will run dry and crawl",
+                         false);
+                    message_until_ = SDL_GetTicks() + 9000;
+                } else {
+                    show("Bought " + world_.data().locomotives.get(loco).name + " for " + format_money(r.cost), true);
+                }
             }
             stops_.clear();
             stop_sel_ = 0;
@@ -2780,6 +2788,19 @@ void Tools::draw_lists_panel() const {
     if (n == 0) cells({"None yet"}, 0.7f, 0.7f, 0.7f);
 }
 
+bool Tools::tower_near(const std::vector<sim::StationId>& route) const {
+    const sim::Railway& rw = world_.railway();
+    const std::int64_t reach = world_.economy().cells_mm(3);
+    for (const sim::ServiceBuilding& sb : rw.service_buildings()) {
+        if (sb.type != sim::ServiceType::ServiceTower) continue;
+        const sim::MapPoint at = rw.track().node(sb.node).pos;
+        for (const sim::StationId s : route) {
+            if (s < rw.stations().size() && sim::distance_mm(at, rw.track().node(rw.station(s).node).pos) <= reach) return true;
+        }
+    }
+    return false;
+}
+
 std::vector<sim::StationId> Tools::pending_route() const {
     std::vector<sim::StationId> out;
     for (const PendingStop& p : stops_) out.push_back(p.station);
@@ -2998,8 +3019,11 @@ std::string Tools::hint() const {
             return std::string(editing_ ? "Train " + std::to_string(*editing_ + 1) + ": " : "") +
                    "Click stations in order.  L engine: " + loco + "  [ ] cars: " + std::to_string(cars_);
         }
+        const bool dry = !locos.empty() && stops_.size() >= 2 &&
+                         world_.data().locomotives.get(locos[loco_choice_ % locos.size()]).fuel == sim::Fuel::Steam &&
+                         !tower_near(pending_route());
         return std::string(editing_ ? "Train " + std::to_string(*editing_ + 1) + " " : "") + stop_text() +
-               (editing_ ? "  Enter saves" : "  Enter buys " + loco);
+               (editing_ ? "  Enter saves" : "  Enter buys " + loco) + (dry ? "   No service tower on this route (F4)!" : "");
     }
     case Tool::Industry: {
         const auto types = buildable_types();

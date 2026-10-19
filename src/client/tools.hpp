@@ -208,6 +208,9 @@ private:
     std::size_t cargo_choice_ = 0;             // the cargo a custom consist's next car carries
     std::optional<sim::TrainId> editing_{};    // the train whose route the Train tool is changing
     std::vector<sim::StationId> pending_route() const;
+    // Whether a service tower stands by any of these stations (any owner's:
+    // trains passing it fill up).
+    bool tower_near(const std::vector<sim::StationId>& route) const;
     std::vector<bool> pending_service() const;
     // Give the train each pending stop's consist; false (with a message) on refusal.
     bool apply_consists(sim::TrainId id);
