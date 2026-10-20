@@ -177,6 +177,12 @@ private:
     void open_detail(DetailKind kind, std::uint32_t id);
     // A train, else a station, else an industry under the cursor; false if none.
     bool open_detail_under_cursor();
+    std::optional<Detail> detail_under_cursor() const;
+    // A card by the cursor, once it rests over a train, station or industry
+    // in the Look tool: the few facts that matter most.
+    Uint32 hover_moved_at_ = 0;
+    std::vector<std::string> hover_card_lines(const Detail& d) const;
+    void draw_hover_card() const;
     std::optional<sim::TrainId> detail_train() const;
     void draw_detail_panel() const;
 

@@ -1322,6 +1322,7 @@ void Tools::draw_menu() const {
 }
 
 void Tools::on_mouse_move(float sx, float sy) {
+    if (std::fabs(sx - hover_sx_) + std::fabs(sy - hover_sy_) > 2) hover_moved_at_ = SDL_GetTicks();
     hover_sx_ = sx;
     hover_sy_ = sy;
     hover_ = cam_.to_map(sx, sy);
@@ -3242,23 +3243,107 @@ void Tools::open_detail(DetailKind kind, std::uint32_t id) {
     renaming_ = false;
 }
 
-bool Tools::open_detail_under_cursor() {
+std::optional<Tools::Detail> Tools::detail_under_cursor() const {
     const sim::Railway& rw = world_.railway();
     for (const sim::Train& t : rw.trains()) {
-        if (t.in_service() && sim::distance_mm(rw.train_position(t.id), hover_) <= snap_mm()) {
-            open_detail(DetailKind::Train, t.id);
-            return true;
+        if (t.in_service() && sim::distance_mm(rw.train_position(t.id), hover_) <= snap_mm()) return Detail{DetailKind::Train, t.id};
+    }
+    if (const auto st = station_near(hover_)) return Detail{DetailKind::Station, *st};
+    if (const auto site = site_under_cursor()) return Detail{DetailKind::Industry, *site};
+    return std::nullopt;
+}
+
+bool Tools::open_detail_under_cursor() {
+    const auto d = detail_under_cursor();
+    if (!d) return false;
+    open_detail(d->kind, d->id);
+    return true;
+}
+
+std::vector<std::string> Tools::hover_card_lines(const Detail& d) const {
+    const sim::Railway& rw = world_.railway();
+    const sim::Economy& eco = world_.economy();
+    const auto& cargo = world_.data().cargo;
+    std::vector<std::string> out;
+    switch (d.kind) {
+    case DetailKind::Train: {
+        const sim::Train& t = rw.train(d.id);
+        out.push_back("Train " + std::to_string(t.id + 1) + " - " + world_.data().locomotives.get(t.loco).name);
+        std::string state = state_name(t.state);
+        if (!t.route.empty() && t.stop_index < t.route.size()) {
+            const std::string at = rw.station(t.route[t.stop_index]).name;
+            state = t.state == sim::TrainState::Dwelling ? "At " + at : state + ", for " + at;
         }
+        out.push_back(state);
+        if (t.owner != world_.company().id()) out.push_back(world_.company(t.owner).name());
+        out.push_back("This year: earned " + format_money(t.accounts.revenue()) + ", profit " + format_money(t.accounts.profit()));
+        std::string advice;
+        if (train_trouble(t, &advice) > 0) out.push_back("! " + advice);
+        break;
     }
-    if (const auto st = station_near(hover_)) {
-        open_detail(DetailKind::Station, *st);
-        return true;
+    case DetailKind::Station: {
+        const sim::Station& s = rw.station(d.id);
+        out.push_back(s.name);
+        out.push_back(std::string(size_name(s.size)) + " station" + (s.town ? ", " + eco.towns()[*s.town].name : std::string()) +
+                      (s.owner != world_.company().id() ? ", " + world_.company(s.owner).name() : std::string()));
+        // Whole loads waiting, the most first.
+        std::vector<std::int64_t> milli(cargo.all().size(), 0);
+        for (std::size_t c = 0; c < s.waiting.size() && c < milli.size(); ++c) milli[c] += s.waiting[c].milli;
+        for (const sim::ExpressWaiting& e : s.express)
+            if (e.cargo < milli.size()) milli[e.cargo] += e.milli;
+        std::vector<std::pair<std::int64_t, std::string>> waiting;
+        for (std::size_t c = 0; c < milli.size(); ++c)
+            if (milli[c] >= sim::kMilli) waiting.emplace_back(milli[c] / sim::kMilli, cargo.get(static_cast<sim::CargoId>(c)).name);
+        std::sort(waiting.begin(), waiting.end(), [](const auto& l, const auto& r) { return l.first > r.first; });
+        std::string w = "Waiting:";
+        for (std::size_t i = 0; i < std::min<std::size_t>(waiting.size(), 4); ++i)
+            w += std::string(i ? ", " : " ") + std::to_string(waiting[i].first) + " " + waiting[i].second;
+        out.push_back(waiting.empty() ? "Nothing waiting" : w);
+        out.push_back("Income this month " + format_money(s.income_this_month));
+        break;
     }
-    if (const auto site = site_under_cursor()) {
-        open_detail(DetailKind::Industry, *site);
-        return true;
+    case DetailKind::Industry: {
+        const sim::Site& s = eco.sites()[d.id];
+        const sim::IndustryType& t = world_.data().industries.get(s.type);
+        out.push_back(site_name(d.id));
+        std::string makes, wants;
+        for (const sim::CargoId c : t.outputs) makes += (makes.empty() ? "" : ", ") + cargo.get(c).name;
+        for (const sim::IndustryInput& in : t.inputs) wants += (wants.empty() ? "" : ", ") + cargo.get(in.cargo).name;
+        if (!makes.empty()) out.push_back("Makes " + makes);
+        if (!wants.empty()) out.push_back("Wants " + wants);
+        out.push_back(s.closed ? std::string("Closed") : s.owner ? "Owned by " + world_.company(*s.owner).name() : std::string("Not owned"));
+        break;
     }
-    return false;
+    }
+    return out;
+}
+
+void Tools::draw_hover_card() const {
+    if (tool_ != Tool::Inspect || founding_ || menu_open_ || help_open_ || guide_open_ || find_open_ || console_open_) return;
+    if (SDL_GetTicks() - hover_moved_at_ < 350) return; // only once the mouse rests
+    const float h = static_cast<float>(cam_.height_px);
+    if (hover_sy_ < kToolbarY + kButtonH || hover_sy_ > h - kBottomBarH) return;
+    if (detail_ && hover_sx_ >= detail_box_[0] && hover_sx_ <= detail_box_[2] && hover_sy_ >= detail_box_[1] &&
+        hover_sy_ <= detail_box_[3]) {
+        return; // over the detail panel
+    }
+    const auto d = detail_under_cursor();
+    if (!d || (detail_ && detail_->kind == d->kind && detail_->id == d->id)) return; // its panel says it all
+    const std::vector<std::string> lines = hover_card_lines(*d);
+    float w = 0;
+    for (const std::string& l : lines) w = std::max(w, static_cast<float>(text_width(l, kScale)));
+    w += 20;
+    const float lh = 21, ht = 12 + lh * static_cast<float>(lines.size());
+    float x = hover_sx_ + 18, y = hover_sy_ + 18;
+    if (x + w > static_cast<float>(cam_.width_px) - 6) x = hover_sx_ - 18 - w;
+    if (y + ht > h - kBottomBarH - 4) y = hover_sy_ - 18 - ht;
+    ui::chip(x, y, x + w, y + ht, 0.88f);
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        if (i == 0) glColor3f(1.0f, 0.86f, 0.5f);
+        else if (lines[i].rfind("! ", 0) == 0) glColor3f(1.0f, 0.5f, 0.4f);
+        else glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(x + 10, y + 6 + lh * static_cast<float>(i), lines[i], kScale);
+    }
 }
 
 std::optional<sim::TrainId> Tools::detail_train() const {
@@ -3865,6 +3950,7 @@ void Tools::draw_ui(const std::string& status) const {
         }
     }
     if (find_open_) draw_find_panel();
+    draw_hover_card();
     // A tooltip under the toolbar button the mouse is on.
     for (const Button& b : layout_buttons()) {
         if (hover_sx_ < b.x0 || hover_sx_ >= b.x1 || hover_sy_ < b.y0 || hover_sy_ >= b.y1 || menu_open_ || help_open_) continue;

@@ -237,7 +237,29 @@ void Camera::center_on(sim::MapPoint p) {
     pan_y = y - static_cast<float>(height_px) / (2 * zoom);
 }
 
+void Camera::glide_to(sim::MapPoint p) {
+    if (!three_d) {
+        center_on(p);
+        return;
+    }
+    glide_ = std::pair{static_cast<float>(p.x_mm) / mm_per_tile, static_cast<float>(p.y_mm) / mm_per_tile};
+}
+
+void Camera::update(float dt) {
+    if (!glide_) return;
+    // Most of the way in about half a second, slowing as it arrives.
+    const float k = 1.0f - std::exp(-dt / 0.15f);
+    target_x += (glide_->first - target_x) * k;
+    target_y += (glide_->second - target_y) * k;
+    if (std::hypot(glide_->first - target_x, glide_->second - target_y) < 0.01f) {
+        target_x = glide_->first;
+        target_y = glide_->second;
+        glide_.reset();
+    }
+}
+
 void Camera::pan(float dx, float dy) {
+    glide_.reset(); // the player has taken over
     if (!three_d) {
         pan_x += dx;
         pan_y += dy;

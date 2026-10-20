@@ -1,5 +1,8 @@
 #pragma once
 
+#include <optional>
+#include <utility>
+
 #include "railmaster/sim/terrain.hpp"
 #include "railmaster/sim/track.hpp"
 
@@ -56,6 +59,11 @@ struct Camera {
     void zoom_at(float sx, float sy, float factor);
     // Look at a map point.
     void center_on(sim::MapPoint p);
+    // Glide there over a moment instead (3D; the top-down map jumps). A pan
+    // stops it; update moves along it each frame.
+    void glide_to(sim::MapPoint p);
+    void update(float dt);
+    bool gliding() const { return glide_.has_value(); }
     // Move the view by (dx, dy) screen-ish units: right and down on screen.
     void pan(float dx, float dy);
     void orbit(float dyaw, float dpitch);
@@ -70,6 +78,7 @@ private:
     std::array<float, 16> view_proj_{}; // column-major, map tiles to clip space
     std::array<float, 16> view_inverse_{};
     void project(float x, float y, float z, float& sx, float& sy, float& w) const;
+    std::optional<std::pair<float, float>> glide_{}; // where a glide is heading (tiles)
 };
 
 } // namespace railmaster::client

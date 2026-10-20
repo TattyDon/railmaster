@@ -716,7 +716,7 @@ int main(int argc, char* argv[]) {
                 // A click on the radar moves the view there.
                 if (const auto p = client::radar_point(world, cam, radar_x(), radar_y(), kRadar, static_cast<float>(ev.button.x),
                                                        static_cast<float>(ev.button.y))) {
-                    cam.center_on(*p);
+                    cam.glide_to(*p);
                     break;
                 }
                 client::audio::play(client::audio::Sound::Click, 0.35f);
@@ -937,7 +937,8 @@ int main(int argc, char* argv[]) {
             if (!tools.newspaper_open()) tools.open_newspaper(text, {});
         }
         // The lists and train paging move the view.
-        if (const auto p = tools.take_jump()) cam.center_on(*p);
+        if (const auto p = tools.take_jump()) cam.glide_to(*p);
+        cam.update(static_cast<float>(dt));
         if (!title.open() && !editor.open()) tools.check_trains();
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
