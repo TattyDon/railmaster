@@ -248,6 +248,7 @@ and checks the economy against the spec's targets
 | T, B, G (Track) | Tunnel, bridge and overpass frequency: Never, Rarely, Average, Common (Shift steps back). Overpasses at Average go over double track; level crossings make trains take turns |
 | 1 to 9 | Answer a scenario event's question (the game pauses for it) |
 | U (Inspect, a station's panel open) | Enlarge your station a size (Small to Medium to Large) for the difference in their prices, at today's costs and the territory's; the panel shows the price |
+| Enter (Inspect, your station's panel open) | Rename the station: type in the panel's title (up to 30 characters, not another station's name), Enter keeps it, Esc cancels |
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | Ctrl+Z (Track) | Undo the last run of track, at full refund, until you leave the Track tool |
 | U (Track) | Double the run of single track under the cursor, at 90% of laying it again (dearer than building double at once) |

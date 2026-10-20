@@ -414,6 +414,7 @@ private:
     CommandResult run(const Cheat& cmd);
     CommandResult run(const RemoveStation& cmd);
     CommandResult run(const RemoveServiceBuilding& cmd);
+    CommandResult run(const RenameStation& cmd);
 public:
     // What enlarging a station a size costs now (nothing if it is large).
     Money station_upgrade_cost(StationId id) const;

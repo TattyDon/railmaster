@@ -1031,6 +1031,21 @@ CommandResult World::run(const RemoveServiceBuilding& cmd) {
     return success(Money{} - refund, 0);
 }
 
+CommandResult World::run(const RenameStation& cmd) {
+    if (cmd.station >= railway_.stations().size()) return fail("no such station");
+    if (railway_.station(cmd.station).owner != acting().id()) return fail("you can only rename your own stations");
+    // Trimmed of spaces at either end.
+    const auto first = cmd.name.find_first_not_of(' ');
+    const std::string name = first == std::string::npos ? "" : cmd.name.substr(first, cmd.name.find_last_not_of(' ') - first + 1);
+    if (name.empty()) return fail("a station needs a name");
+    if (name.size() > 30) return fail("names are at most 30 characters");
+    for (const Station& s : railway_.stations()) {
+        if (s.id != cmd.station && s.name == name) return fail("another station is called that");
+    }
+    railway_.station_mut(cmd.station).name = name;
+    return success(Money{}, cmd.station);
+}
+
 CommandResult World::run(const AnswerChoice& cmd) {
     if (actor_ != kHumanPlayer) return fail("only the player answers scenario questions");
     if (cmd.choice >= pending_choices_.size()) return fail("no such question");

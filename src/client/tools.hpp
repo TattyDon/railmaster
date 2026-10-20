@@ -47,7 +47,7 @@ public:
     // Typed text (SDL_TEXTINPUT); true if a box took it.
     bool on_text(const char* text);
     // A box is taking typed keys (the arrows should not pan).
-    bool typing() const { return find_open_ || guide_open_; }
+    bool typing() const { return find_open_ || guide_open_ || renaming_; }
     bool guide_open() const { return guide_open_; }
 
     void draw_world_overlay() const;
@@ -327,6 +327,10 @@ private:
     std::array<float, 4> help_button() const;
     bool find_open_ = false;
     std::string find_text_;
+    // Renaming the station whose panel is open (Enter in Look): the name as typed.
+    bool renaming_ = false;
+    std::string rename_text_;
+    bool rename_key(SDL_Keycode key);
     std::size_t find_sel_ = 0;
     std::vector<FindHit> find_hits() const;
     bool find_key(SDL_Keycode key);

@@ -282,6 +282,12 @@ struct RemoveStation {
     StationId station = 0;
 };
 // Take down one of your service towers or maintenance sheds, likewise.
+// Give one of your stations a new name: 1 to 30 characters, not another station's.
+struct RenameStation {
+    StationId station = 0;
+    std::string name{};
+};
+
 struct RemoveServiceBuilding {
     ServiceBuildingId building = 0;
 };
@@ -291,7 +297,7 @@ using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, E
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding, RenameStation>;
 
 struct CommandResult {
     bool ok = false;

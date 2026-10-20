@@ -990,7 +990,35 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
     return true;
 }
 
+bool Tools::rename_key(SDL_Keycode key) {
+    if (!detail_ || detail_->kind != DetailKind::Station || key == SDLK_ESCAPE) {
+        renaming_ = false;
+        return true;
+    }
+    if (key == SDLK_BACKSPACE) {
+        // Whole characters: drop UTF-8 continuation bytes with their lead.
+        while (!rename_text_.empty() && (static_cast<unsigned char>(rename_text_.back()) & 0xC0) == 0x80) rename_text_.pop_back();
+        if (!rename_text_.empty()) rename_text_.pop_back();
+    } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+        const std::string old = world_.railway().station(detail_->id).name;
+        const sim::CommandResult r = world_.execute(sim::RenameStation{.station = detail_->id, .name = rename_text_});
+        if (r.ok) {
+            renaming_ = false;
+            if (world_.railway().station(detail_->id).name != old) {
+                show(as_written(old) + " is now " + as_written(world_.railway().station(detail_->id).name), true);
+            }
+        } else {
+            show("Cannot: " + r.error, false);
+        }
+    }
+    return true;
+}
+
 bool Tools::on_text(const char* text) {
+    if (renaming_) {
+        if (rename_text_.size() < 30) rename_text_ += text;
+        return true;
+    }
     if (!find_open_) return false;
     if (find_text_.size() < 30) find_text_ += text;
     find_sel_ = 0;
@@ -1668,6 +1696,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     }
     if (menu_open_) return menu_key(key);
     if (guide_open_) return guide_key(key);
+    if (renaming_) return rename_key(key);
     if (key == SDLK_g && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
         open_guide();
         return true;
@@ -1802,6 +1831,12 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         }
         if (key == SDLK_SPACE && detail_train()) {
             follow_ = !follow_;
+            return true;
+        }
+        if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) && detail_ && detail_->kind == DetailKind::Station &&
+            world_.player_company() && world_.railway().station(detail_->id).owner == *world_.player_company()) {
+            renaming_ = true;
+            rename_text_ = world_.railway().station(detail_->id).name;
             return true;
         }
         if (key == SDLK_u && detail_ && detail_->kind == DetailKind::Station) {
@@ -3107,7 +3142,7 @@ std::string Tools::hint() const {
         if (detail_) {
             std::string keys = link_ ? "B build the planned line   Click another to show it  Esc close"
                                      : "Click another to show it  Esc close";
-            if (detail_->kind == DetailKind::Station) keys = "U enlarge  Click another to show it  Esc close";
+            if (detail_->kind == DetailKind::Station) keys = "U enlarge  Enter rename  Click another to show it  Esc close";
             if (detail_train()) keys = "E route  H priority  F filter  W full  [ ] cars  C caboose  D diner  Y copy  XX retire  R engine  Space follow  Esc close";
             return keys;
         }
@@ -3184,6 +3219,7 @@ std::optional<sim::MapPoint> Tools::take_jump() {
 void Tools::open_detail(DetailKind kind, std::uint32_t id) {
     if (!detail_ || detail_->kind != kind || detail_->id != id) follow_ = false;
     detail_ = Detail{kind, id};
+    renaming_ = false;
 }
 
 bool Tools::open_detail_under_cursor() {
@@ -3388,8 +3424,11 @@ void Tools::draw_detail_panel() const {
         }
     } else if (detail_->kind == DetailKind::Station) {
         const sim::Station& s = rw.station(detail_->id);
-        rows.push_back(title(as_written(s.name)));
-        rows.push_back(dim({owner_name(s.owner)}));
+        const bool blink = (SDL_GetTicks() / 500) % 2 == 0;
+        rows.push_back(title(renaming_ ? rename_text_ + (blink ? "|" : " ") : as_written(s.name)));
+        if (renaming_) rows.push_back(dim({"Type a new name: Enter keeps it, Esc cancels"}));
+        else if (s.owner == world_.company().id()) rows.push_back(dim({owner_name(s.owner) + "  (Enter renames)"}));
+        else rows.push_back(dim({owner_name(s.owner)}));
         rows.push_back(rule_row());
         rows.push_back(line({"Size", std::string(size_name(s.size)) + ", reaches " +
                                          std::to_string(sim::catchment_radius(s.size, world_.data().balance)) + " cells"}));
