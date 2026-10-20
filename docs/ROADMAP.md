@@ -297,7 +297,10 @@ brass with soft shadows, raised brass tabs for the chosen tool; town names
 are placed nearest first, left out where they would overlap, and fade with
 distance. Stations carry signs too: the name, a stripe in the owner's colour,
 and pips counting the loads of passengers, mail and freight waiting, for
-the stations near the camera. Zoom by wheel, smooth trackpad scrolling,
+the stations near the camera. On the platforms themselves, what waits is drawn too:
+a figure for every quarter load of passengers (up to two dozen) in coats
+of many colours, mail sacks at one end and freight crates stacked at the
+other. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Clouds' shadows (shaders; off in Settings) drift over the land, dimming

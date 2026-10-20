@@ -2352,6 +2352,63 @@ void draw_building(const Plot& p, const Camera& cam) {
 // Large: longer platforms with canopies, a stone hall with wings and a clock
 // tower, and a footbridge over the tracks. The house stands on the -across
 // side, (dy, -dx). Inside GL_QUADS.
+// What waits on a station's platform, drawn each frame: a figure for every
+// quarter load of passengers (up to two dozen) in coats of many colours,
+// mail sacks at one end and freight crates at the other, so a busy station
+// looks busy. Inside GL_QUADS; (x, y, z) and (dx, dy) as draw_station.
+void platform_life(const sim::Station& st, const sim::CargoRegistry& cargo, float x, float y, float z, float dx, float dy,
+                   float s) {
+    const std::optional<sim::CargoId> passengers = cargo.find("passengers"), mail = cargo.find("mail");
+    std::int64_t pax = 0, post = 0, freight = 0;
+    for (const sim::ExpressWaiting& e : st.express) {
+        if (e.cargo == passengers) pax += e.milli;
+        else if (e.cargo == mail) post += e.milli;
+        else freight += e.milli; // troops wait with the freight, in crates of kit
+    }
+    for (const sim::WaitingCargo& c : st.waiting) freight += c.milli;
+    const int people = static_cast<int>(std::min<std::int64_t>(24, pax / 250));
+    const int sacks = static_cast<int>(std::min<std::int64_t>(10, post / 250));
+    const int crates = static_cast<int>(std::min<std::int64_t>(12, freight / 400));
+    if (people + sacks + crates == 0) return;
+    // As draw_station lays out its near platform.
+    const bool small = st.size == sim::StationSize::Small, large = st.size == sim::StationSize::Large;
+    const float len = (large ? 0.5f : small ? 0.24f : 0.34f) * s, pw = 0.03f * s, ph = 0.03f, off = 0.15f + pw;
+    const float qx = -dy, qy = dx, top = z + ph;
+    const auto at = [&](float along, float across, float& ox, float& oy) {
+        ox = x + dx * along - qx * across;
+        oy = y + dy * along - qy * across;
+    };
+    static constexpr float kCoats[][3] = {{0.2f, 0.22f, 0.35f}, {0.45f, 0.12f, 0.1f}, {0.18f, 0.3f, 0.2f}, {0.3f, 0.26f, 0.22f},
+                                         {0.55f, 0.5f, 0.42f},  {0.12f, 0.12f, 0.13f}, {0.5f, 0.35f, 0.15f}, {0.35f, 0.2f, 0.4f}};
+    const float skin[3] = {0.9f, 0.72f, 0.58f}, hat[3] = {0.1f, 0.09f, 0.08f};
+    float cx, cy;
+    for (int i = 0; i < people; ++i) {
+        // Spread along the middle of the platform, in loose groups.
+        const std::uint32_t h = hash(st.id, static_cast<std::uint32_t>(i), 41);
+        const float along = (unit(h) * 1.4f - 0.7f) * len, across = off + (unit(h >> 16) - 0.5f) * pw * 1.2f;
+        at(along, across, cx, cy);
+        const float* coat = kCoats[(h >> 8) % 8];
+        // A little larger than life, like the lamps, so they read at a distance.
+        const float tall = (0.024f + 0.006f * unit(h >> 4)) * s;
+        box(cx, cy, top, dx, dy, 0.0052f * s, 0.0045f * s, tall, coat, coat);
+        box(cx, cy, top + tall, dx, dy, 0.0037f * s, 0.0037f * s, 0.0075f * s, skin, skin);
+        if ((h >> 12) % 3 == 0) box(cx, cy, top + tall + 0.0075f * s, dx, dy, 0.0048f * s, 0.0048f * s, 0.003f * s, hat, hat);
+    }
+    const float sack[3] = {0.72f, 0.66f, 0.5f}, sack_top[3] = {0.8f, 0.74f, 0.58f};
+    for (int i = 0; i < sacks; ++i) {
+        // Heaped at the far end, two deep.
+        at(len * 0.82f - static_cast<float>(i / 2) * 0.013f * s, off + (i % 2 == 0 ? -0.3f : 0.3f) * pw, cx, cy);
+        box(cx, cy, top, dx, dy, 0.006f * s, 0.006f * s, 0.009f * s, sack, sack_top);
+    }
+    const float wood[3] = {0.55f, 0.4f, 0.22f}, wood_top[3] = {0.62f, 0.47f, 0.27f};
+    for (int i = 0; i < crates; ++i) {
+        // Stacked three high at the near end.
+        const int column = i / 3, level = i % 3;
+        at(-len * 0.8f + static_cast<float>(column) * 0.022f * s, off, cx, cy);
+        box(cx, cy, top + static_cast<float>(level) * 0.017f * s, dx, dy, 0.009f * s, 0.009f * s, 0.017f * s, wood, wood_top);
+    }
+}
+
 void draw_station(sim::StationSize size, float x, float y, float z, float dx, float dy, float s, const float* trim,
                   std::uint32_t seed) {
     const float qx = -dy, qy = dx;
@@ -2886,6 +2943,9 @@ void draw_railway(const sim::World& w, const Camera& cam) {
             float dx, dy;
             along(st.node, dx, dy);
             draw_station(st.size, x, y, z, dx, dy, s, trim, hash(st.id, 3, 9));
+            if (std::hypot(x - cam.target_x, y - cam.target_y) < cam.distance * 2.5f + 10.0f) {
+                platform_life(st, w.data().cargo, x, y, z, dx, dy, s);
+            }
         }
         for (const sim::StationBuilding& b : rw.station_buildings()) {
             const float x = tiles(b.pos.x_mm, cam), y = tiles(b.pos.y_mm, cam), z = cam.ground_z(x, y);

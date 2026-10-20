@@ -85,6 +85,7 @@ there):
 - Art: any building, engine, car or industry can come from a glTF model
   instead of the shapes drawn in code; see [docs/models.md](docs/models.md)
   for the roles and how to add a pack.
+- Busy stations look it: people wait on the platforms (one for every quarter load of passengers), with mail sacks and freight crates stacked at the ends.
 - The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade) where the graphics card allows
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
