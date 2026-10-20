@@ -42,6 +42,11 @@ void set_foliage(bool on);
 // terrain), the trees' leaves in part (set_foliage).
 void set_occlusion(unsigned texture, float inv_w, float inv_h);
 void set_ground(bool on);
+// The land's height (tiles) at each map corner, as a 16-bit luminance
+// texture `corners_w` x `corners_h` spanning z_min to z_min + z_range: the
+// occlusion then darkens the foot of buildings, trees and trains too,
+// fading out over their first few feet above the ground.
+void set_heights(unsigned texture, int corners_w, int corners_h, float z_min, float z_range);
 // Seconds of real time, for what moves while paused too (the water).
 void set_clock(float seconds);
 // Clouds' shadows drifting over the land.

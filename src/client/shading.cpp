@@ -131,7 +131,10 @@ uniform int u_clouds;   // 1: clouds' shadows drift over the land
 uniform float u_rain;   // 0 to 1: how hard it rains (or snows)
 uniform sampler2D u_ao; // the sky each spot sees past trees and buildings round it
 uniform vec3 u_ao_scale; // tiles to the texture's coordinates (x, y)
-uniform int u_ao_mode;  // 0 none, 1 the ground (in full), 2 leaves (in part)
+uniform int u_ao_mode;  // 0 none, 1 the ground (in full), 2 leaves (in part), 3 things standing on it (at their foot)
+uniform sampler2D u_heights; // the land's height at the map's corners
+uniform vec3 u_height_map;   // tiles to the heights' texture coordinates (x, y)
+uniform vec3 u_height_range; // lowest height, the span (0: none yet)
 varying vec3 v_world;
 varying vec3 v_normal;
 varying vec4 v_color;
@@ -210,6 +213,16 @@ void main() {
         if (u_ao_mode > 0) {
             float occ = 1.0 - texture2D(u_ao, v_world.xy * u_ao_scale.xy).r;
             if (u_ao_mode == 2) occ *= 0.5;
+            if (u_ao_mode == 3) {
+                // Walls, trunks and wheels darken where they meet the ground,
+                // fading out over their first few feet.
+                if (u_height_range.y > 0.0) {
+                    float ground = u_height_range.x + u_height_range.y * texture2D(u_heights, (v_world.xy + 0.5) * u_height_map.xy).r;
+                    occ *= 0.85 * (1.0 - smoothstep(0.0, 0.07, v_world.z - ground));
+                } else {
+                    occ = 0.0;
+                }
+            }
             ambient *= 1.0 - occ;
             sun *= 1.0 - occ * 0.6;
         }
@@ -248,7 +261,9 @@ bool g_active = false;
 bool g_in_world = false;
 GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0, g_ao_tex = 0;
 float g_ao_inv_w = 0.0f, g_ao_inv_h = 0.0f;
-GLint u_ao = -1, u_ao_scale = -1, u_ao_mode = -1;
+GLint u_ao = -1, u_ao_scale = -1, u_ao_mode = -1, u_heights = -1, u_height_map = -1, u_height_range = -1;
+GLuint g_heights_tex = 0;
+float g_height_map[2] = {0, 0}, g_height_range[2] = {0, 0};
 GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1, u_time = -1, u_campos = -1, u_clouds = -1, u_rain = -1;
 bool g_clouds = true;
 float g_rain = 0.0f;
@@ -334,6 +349,9 @@ bool init(bool wanted) {
     u_ao = p_get_uniform_location(g_program, "u_ao");
     u_ao_scale = p_get_uniform_location(g_program, "u_ao_scale");
     u_ao_mode = p_get_uniform_location(g_program, "u_ao_mode");
+    u_heights = p_get_uniform_location(g_program, "u_heights");
+    u_height_map = p_get_uniform_location(g_program, "u_height_map");
+    u_height_range = p_get_uniform_location(g_program, "u_height_range");
 
     // The shadow map: a depth texture as a framebuffer's only attachment.
     glGenTextures(1, &g_shadow_tex);
@@ -497,6 +515,8 @@ void begin_world(const Camera& cam) {
     p_use_program(g_program);
     p_uniform_matrix4fv(u_view_inv, 1, GL_FALSE, cam.view_inverse().data());
     g_in_world = true;
+    p_active_texture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, g_heights_tex != 0 ? g_heights_tex : g_white);
     p_active_texture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, g_ao_tex != 0 ? g_ao_tex : g_white);
     p_active_texture(GL_TEXTURE1);
@@ -525,7 +545,25 @@ void begin_world(const Camera& cam) {
     p_uniform1f(u_rain, g_rain);
     p_uniform1i(u_ao, 2);
     p_uniform3f(u_ao_scale, g_ao_inv_w, g_ao_inv_h, 0.0f);
-    p_uniform1i(u_ao_mode, 0);
+    p_uniform1i(u_heights, 3);
+    p_uniform3f(u_height_map, g_height_map[0], g_height_map[1], 0.0f);
+    p_uniform3f(u_height_range, g_height_range[0], g_heights_tex != 0 ? g_height_range[1] : 0.0f, 0.0f);
+    p_uniform1i(u_ao_mode, 3);
+}
+
+void set_heights(unsigned texture, int corners_w, int corners_h, float z_min, float z_range) {
+    g_heights_tex = texture;
+    g_height_map[0] = 1.0f / static_cast<float>(corners_w);
+    g_height_map[1] = 1.0f / static_cast<float>(corners_h);
+    g_height_range[0] = z_min;
+    g_height_range[1] = z_range;
+    if (g_active && g_in_world) {
+        p_active_texture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        p_active_texture(GL_TEXTURE0);
+        p_uniform3f(u_height_map, g_height_map[0], g_height_map[1], 0.0f);
+        p_uniform3f(u_height_range, z_min, z_range, 0.0f);
+    }
 }
 
 void set_occlusion(unsigned texture, float inv_w, float inv_h) {
@@ -541,7 +579,7 @@ void set_occlusion(unsigned texture, float inv_w, float inv_h) {
 }
 
 void set_ground(bool on) {
-    if (g_active && g_in_world) p_uniform1i(u_ao_mode, on ? 1 : 0);
+    if (g_active && g_in_world) p_uniform1i(u_ao_mode, on ? 1 : 3);
 }
 
 void set_rain(float amount) { g_rain = std::clamp(amount, 0.0f, 1.0f); }
@@ -558,7 +596,7 @@ void set_clock(float seconds) { g_clock = seconds; }
 void set_foliage(bool on) {
     if (g_active && g_in_world) {
         p_uniform1i(u_foliage, on ? 1 : 0);
-        p_uniform1i(u_ao_mode, on ? 2 : 0);
+        p_uniform1i(u_ao_mode, on ? 2 : 3);
     }
 }
 

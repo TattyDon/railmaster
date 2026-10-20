@@ -2813,6 +2813,33 @@ void town_lights(const TownLayout& towns, const Camera& cam) {
 
 } // namespace
 
+// The land's height at every map corner (tiles, as the mesh draws it), for
+// the shader to tell how far above the ground a point stands.
+void upload_heights(const sim::Terrain& t, const Camera& cam) {
+    if (!shading::active()) return;
+    const int cw = t.width() + 1, ch = t.height() + 1;
+    const float scale = cam.height_exaggeration / static_cast<float>(t.tile_size_m());
+    std::vector<float> z(static_cast<std::size_t>(cw) * static_cast<std::size_t>(ch));
+    for (int y = 0; y < ch; ++y)
+        for (int x = 0; x < cw; ++x) z[static_cast<std::size_t>(y) * static_cast<std::size_t>(cw) + static_cast<std::size_t>(x)] = static_cast<float>(t.corner_height(x, y)) * scale;
+    const auto [lo, hi] = std::minmax_element(z.begin(), z.end());
+    const float z_min = *lo, range = std::max(1e-4f, *hi - *lo);
+    std::vector<std::uint16_t> texels(z.size());
+    for (std::size_t i = 0; i < z.size(); ++i) texels[i] = static_cast<std::uint16_t>(std::lround((z[i] - z_min) / range * 65535.0f));
+    static GLuint tex = 0;
+    if (tex == 0) glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE16, cw, ch, 0, GL_LUMINANCE, GL_UNSIGNED_SHORT, texels.data());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
+    shading::set_heights(tex, cw, ch, z_min, range);
+}
+
 void draw_terrain(const sim::Terrain& t, const Camera& cam) {
     if (!cam.three_d) {
         glBegin(GL_QUADS);
@@ -2841,6 +2868,7 @@ void draw_terrain(const sim::Terrain& t, const Camera& cam) {
         build_terrain_mesh(t, cam);
         glEndList();
         mesh.key = key;
+        upload_heights(t, cam);
     }
     begin_lit();
     shading::set_ground(true);

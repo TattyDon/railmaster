@@ -334,7 +334,9 @@ Ambient occlusion (shaders): what covers the land (trees, houses,
 industries, stations) is drawn into a coverage map a few texels a tile and
 blurred; the ground's sky light and some of its sunlight dim by it, and
 leaves by half as much, so woods have dark floors and buildings stand in a
-soft pool rather than floating. It is rebuilt with the scene on a worker
+soft pool rather than floating. Walls, trunks and wheels darken by it too
+where they meet the ground, fading out over their first few feet (the
+shader reads the land's height from a 16-bit texture of the map's corners). It is rebuilt with the scene on a worker
 thread, so building track never stalls.
 
 Speed: woods keep two display lists a chunk, model trees near the camera
@@ -346,7 +348,7 @@ frames a second.
 
 Next:
 - Real art: a 2x2-cell house shape for variety.
-- More shading: screen-space ambient occlusion on buildings themselves.
+- More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
