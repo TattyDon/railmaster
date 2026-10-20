@@ -25,8 +25,15 @@ std::int32_t catchment_radius(StationSize size, const Balance& b = default_balan
 struct Earnings {
     Money total;
     std::vector<std::pair<CargoId, Money>> by_cargo;
-    // Loads delivered, in thousandths, by cargo (paid or not).
-    std::vector<std::pair<CargoId, std::int32_t>> delivered;
+    // Loads delivered, in thousandths, by cargo (paid or not), and the
+    // station each was picked up at (for travellers who changed trains, the
+    // last one; an id past the stations if it has since been taken down).
+    struct Delivery {
+        CargoId cargo = 0;
+        std::int32_t milli = 0;
+        StationId from = 0;
+    };
+    std::vector<Delivery> delivered;
 
     void add(CargoId c, Money m) {
         total += m;

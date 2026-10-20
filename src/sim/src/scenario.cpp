@@ -112,7 +112,18 @@ Scenario Scenario::from_json(std::string_view json_text) {
             goal.kind = parse_kind(g.at("kind").get<std::string>());
             goal.towns = g.value("towns", std::vector<std::string>{});
             goal.cargo = g.value("cargo", std::string());
+            goal.from = g.value("from", std::string());
+            goal.to = g.value("to", std::string());
             goal.name = g.value("name", std::string());
+            if ((!goal.from.empty() || !goal.to.empty()) && goal.kind != GoalKind::Deliver) {
+                throw std::runtime_error("from and to are for deliver goals");
+            }
+            for (const std::string& name : {goal.from, goal.to}) {
+                if (name.empty()) continue;
+                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == name; })) {
+                    throw std::runtime_error("goal names town '" + name + "', which the scenario does not place");
+                }
+            }
             goal.count = g.value("count", std::int64_t{0});
             goal.amount = Money::dollars(g.value("amount", std::int64_t{0}));
             for (const std::string& name : goal.towns) {
@@ -331,8 +342,13 @@ GoalProgress check_goal(const World& w, const Goal& g) {
     }
     case GoalKind::Deliver: {
         const auto cargo = w.data().cargo.find(g.cargo);
-        const std::int64_t loads = co && cargo ? w.company().delivered_milli(*cargo) / kMilli : 0;
-        return {loads >= g.count, "Deliver " + g.cargo + ": " + std::to_string(loads) + " of " + std::to_string(g.count) + " loads"};
+        const bool placed = !g.from.empty() || !g.to.empty();
+        std::int64_t loads = 0;
+        if (co && cargo) loads = (placed ? w.place_delivered_milli(*co, g) : w.company().delivered_milli(*cargo)) / kMilli;
+        std::string what = "Deliver " + g.cargo;
+        if (!g.from.empty()) what += " from " + g.from;
+        if (!g.to.empty()) what += " to " + g.to;
+        return {loads >= g.count, what + ": " + std::to_string(loads) + " of " + std::to_string(g.count) + " loads"};
     }
     case GoalKind::OnlyRailroad: {
         std::int32_t others = 0;

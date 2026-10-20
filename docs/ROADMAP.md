@@ -402,8 +402,8 @@ Still to do:
   makes scenarios on it: a name, briefing, start, rivals and a goal and
   deadline for each medal (a scenario file's `landscape` names its map).
   The scenario page also sets founding money, a track budget and the
-  restrictions, and up to two goals a medal (industry profit and
-  territories among them). Events come from templates on an Events tab
+  restrictions, and up to two goals a medal (industry profit,
+  territories and goods delivered to a town among them). Events come from templates on an Events tab
   (headline, cargo price, industry output, building costs, grant,
   earthquake, early engine), dated; conditions and choices are still
   written by hand in the file.

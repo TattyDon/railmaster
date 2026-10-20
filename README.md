@@ -112,8 +112,8 @@ whether new track must join your own, only one company may be run, and
 the chairman may neither resign nor be fired. Medals: for Bronze, Silver
 and Gold a goal and, if you like, a second one (connect the map's first
 towns, book value, revenue, cash, net worth, average speed, the only
-railroad, the highest value, industry profit, or stations in so many of
-the painted territories), each with its target, and the deadline. Events: up to eight, each from a template (a headline you type, a
+railroad, the highest value, industry profit, stations in so many of
+the painted territories, or so many loads of goods delivered to a town), each with its target, and the deadline. Events: up to eight, each from a template (a headline you type, a
 cargo's price or an industry's output rising or falling for a while,
 building costs changing, a grant to your company, an earthquake near a
 town, an engine arriving early) on a month and year; Delete removes one. Save the scenario, or save

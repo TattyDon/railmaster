@@ -648,3 +648,57 @@ TEST_CASE("the debug console can force a medal or a loss") {
     CHECK(loss.scenario_result().finished);
     CHECK_FALSE(loss.scenario_result().medal.has_value());
 }
+
+TEST_CASE("deliver goals can name a town the loads come from or go to (§14.3)") {
+    // Not allowed: an unknown town, or from/to on another kind of goal.
+    CHECK_THROWS_WITH(Scenario::from_json(scenario_json(
+                          R"({"by": "1851-12-31", "goals": [{"kind": "deliver", "cargo": "coal", "count": 1, "to": "Gamma"}]})",
+                          kNoGoals, kNoGoals)),
+                      "scenario: goal names town 'Gamma', which the scenario does not place");
+    CHECK_THROWS_WITH(Scenario::from_json(scenario_json(
+                          R"({"by": "1851-12-31", "goals": [{"kind": "company_cash", "amount": 1, "from": "Alpha"}]})",
+                          kNoGoals, kNoGoals)),
+                      "scenario: from and to are for deliver goals");
+
+    const Scenario s = Scenario::from_json(scenario_json(
+        R"({"by": "1855-12-31", "goals": [{"kind": "deliver", "cargo": "passengers", "count": 1, "from": "Alpha", "to": "Beta"}]})",
+        R"({"by": "1855-12-31", "goals": [{"kind": "deliver", "cargo": "passengers", "count": 1, "to": "Alpha"}]})",
+        R"({"by": "1855-12-31", "goals": [{"kind": "deliver", "cargo": "passengers", "count": 1000, "from": "Beta"}]})"));
+    World w = small_world(s, shipped());
+    const Town& a = w.economy().towns()[town_index(w, "Alpha")];
+    const Town& b = w.economy().towns()[town_index(w, "Beta")];
+    const MapPoint pa = w.economy().node_centre(a.cx, a.cy), pb = w.economy().node_centre(b.cx, b.cy);
+    for (int y = 25; y <= 36; ++y)
+        for (int x = 15; x <= 50; ++x) w.terrain().set_corner_height(x, y, 20);
+    for (int y = 25; y < 36; ++y)
+        for (int x = 15; x < 50; ++x) w.terrain().set_ground(x, y, GroundType::Grass);
+    REQUIRE(w.execute(BuildTrack{.start = free_at(pa), .end = free_at(pb)}).ok);
+    const StationId sa = w.execute(BuildStation{.at = node_near(w, pa)}).created_id;
+    const StationId sb = w.execute(BuildStation{.at = node_near(w, pb)}).created_id;
+    REQUIRE(w.railway().station(sa).town == town_index(w, "Alpha"));
+    REQUIRE(w.railway().station(sb).town == town_index(w, "Beta"));
+    REQUIRE(w.execute(BuildServiceBuilding{.at = node_near(w, pa), .type = ServiceType::ServiceTower}).ok);
+    LocoTypeId loco = 0;
+    while (!w.data().locomotives.get(loco).available_in(1850)) ++loco;
+    REQUIRE(w.execute(BuyTrain{.loco = loco, .cars = 2, .route = {sa, sb}}).ok);
+
+    const Goal& ab = s.medals[0].goals.front();
+    const Goal& to_a = s.medals[1].goals.front();
+    const Goal& from_b = s.medals[2].goals.front();
+    CHECK(check_goal(w, ab).text == "Deliver passengers from Alpha to Beta: 0 of 1 loads");
+    run_to(w, Date::from_ymd(1851, 1, 1));
+    const CargoId pax = *w.data().cargo.find("passengers");
+    const std::int64_t all = w.company().delivered_milli(pax);
+    const std::int64_t one_way = w.place_delivered_milli(w.company().id(), ab);
+    const std::int64_t other_way = w.place_delivered_milli(w.company().id(), to_a);
+    MESSAGE("passengers delivered " << all << ", Alpha to Beta " << one_way << ", to Alpha " << other_way);
+    CHECK(one_way > 0);
+    CHECK(other_way > 0);
+    // The only line: everything is one way or the other, and Beta's are the ones to Alpha.
+    CHECK(one_way + other_way == all);
+    CHECK(w.place_delivered_milli(w.company().id(), from_b) == other_way);
+    CHECK(check_goal(w, ab).met);
+    // Kept in saves.
+    const World loaded = World::load(w.save(), shipped());
+    CHECK(loaded.place_delivered_milli(loaded.company().id(), ab) == one_way);
+}

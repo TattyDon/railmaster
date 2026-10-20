@@ -124,8 +124,8 @@ Grouped by the spec's own build order (§17).
   served stop.
 
 **Scenarios and presentation**
-- Hand-made maps; per-player, per-company and per-territory counters;
-  deliveries from or to a place (§14 [C/I]).
+- Per-player, per-company and per-territory counters (§14.4 [C]); counters
+  are game-wide.
 - Ledger reports, detail panels, radar, 3D camera (§15 [D]).
 - Content packaging (§16 [I]): maps as zipped files; saves are compressed
   with a command log, but as one zlib stream rather than a zip.

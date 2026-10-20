@@ -570,8 +570,10 @@ namespace {
 // The goals a scenario made in the editor can set, two a medal at most.
 constexpr const char* kGoalNames[] = {"Connect towns",    "Book value",         "Revenue in a year",  "Company cash",
                                       "Your net worth",   "Average train speed", "Only railroad left", "Highest value",
-                                      "Industry profit",  "Stations in territories"};
-constexpr int kGoalKinds = 10;
+                                      "Industry profit",  "Stations in territories", "Deliver goods to a town"};
+constexpr int kGoalKinds = 11;
+constexpr std::int64_t kLoadLadder[] = {10, 25, 50, 100, 200}; // deliver goals, loads
+constexpr int kLoadSteps = 5;
 constexpr std::int64_t kMoneyLadder[] = {1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 75, 100}; // millions
 constexpr int kMoneySteps = 12;
 constexpr int kSpeedSteps = 14; // 15 to 80 mph
@@ -585,6 +587,7 @@ int ladder_size(int kind, int towns, int territories) {
     case 6:
     case 7: return 1;
     case 9: return std::max(1, territories - 1); // 2 territories up to all of them
+    case 10: return std::max(1, towns) * kLoadSteps; // each town, each number of loads
     default: return kMoneySteps;
     }
 }
@@ -655,6 +658,12 @@ std::string Editor::goal_text(const ScenarioDraft::Goal& g) const {
         if (terr < 2) return "Stations in territories (paint two territories or more first)";
         return "Stations in " + std::to_string(std::min(g.level + 2, terr)) + " territories";
     }
+    case 10: {
+        if (towns < 1) return "Deliver goods to a town (place a town first)";
+        const int level = std::min(g.level, towns * kLoadSteps - 1);
+        return "Deliver " + std::to_string(kLoadLadder[level % kLoadSteps]) + " loads of goods to " +
+               towns_[static_cast<std::size_t>(level / kLoadSteps)].name;
+    }
     default:
         return std::string(kGoalNames[g.kind]) + " $" + std::to_string(kMoneyLadder[std::min(g.level, kMoneySteps - 1)]) + ",000,000";
     }
@@ -678,6 +687,12 @@ nlohmann::json Editor::goal_json(const ScenarioDraft::Goal& g) const {
     case 6: goal = {{"kind", "only_railroad"}}; break;
     case 7: goal = {{"kind", "highest_value"}}; break;
     case 8: goal = {{"kind", "industry_profit"}}; break;
+    case 10: {
+        const int level = std::min(g.level, std::max(1, static_cast<int>(towns_.size())) * kLoadSteps - 1);
+        goal = {{"kind", "deliver"}, {"cargo", "goods"}, {"count", kLoadLadder[level % kLoadSteps]}};
+        if (!towns_.empty()) goal["to"] = towns_[static_cast<std::size_t>(level / kLoadSteps)].name;
+        break;
+    }
     default: goal = {{"kind", "territories"}, {"count", std::min(g.level + 2, territory_count())}}; break;
     }
     if (money_goal(g.kind)) goal["amount"] = kMoneyLadder[std::min(g.level, kMoneySteps - 1)] * 1'000'000;
@@ -971,6 +986,9 @@ bool Editor::scen_key(SDL_Keycode key) {
                     std::string why;
                     if (g.kind == 0 && towns_.size() < 2) {
                         why = "A goal connects towns, but the map has fewer than two: place towns with the Town brush";
+                    }
+                    if (g.kind == 10 && towns_.empty()) {
+                        why = "A goal delivers goods to a town, but the map has none: place one with the Town brush";
                     }
                     if (g.kind == 9 && territory_count() < 2) {
                         why = "A goal counts territories, but the map has fewer than two: paint them with the Territory brush";

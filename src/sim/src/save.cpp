@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 22; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 23; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -36,7 +36,7 @@ constexpr std::uint32_t kSaveVersion = 22; // 2: events, Grants; 3: restrictions
                                            // 16: and its industries; 17: and its territories;
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
                                            // 20: cheats (assisted games); 21: more cheats;
-                                           // 22: share prices by month
+                                           // 22: share prices by month; 23: deliveries from or to a place
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -648,7 +648,7 @@ void io(Ar& ar, World& w) {
     if constexpr (Ar::loading) w.pending_choices_.assign(ar.count(1), {});
     else ar.put(w.pending_choices_.size(), 8);
     for (auto& c : w.pending_choices_) fields(ar, c.event, c.effect, c.until_month);
-    fields(ar, w.road_samples_, w.assisted_);
+    fields(ar, w.road_samples_, w.assisted_, w.place_deliveries_);
     fields(ar, w.config_);
     if constexpr (Ar::loading) w.command_log_.assign(ar.count(1), {});
     else ar.put(w.command_log_.size(), 8);

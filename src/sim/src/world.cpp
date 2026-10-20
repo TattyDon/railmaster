@@ -258,7 +258,8 @@ void World::tick_inner() {
         }
         railway_.station_mut(station).income_this_month += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
-        for (const auto& [cargo, milli] : e.delivered) runner.record_delivery(cargo, milli);
+        for (const Earnings::Delivery& d : e.delivered) runner.record_delivery(d.cargo, d.milli);
+        record_place_deliveries(t.owner, station, e.delivered);
         // Service to a town makes it grow.
         if (const auto town = railway_.station(station).town) {
             Town& tw = economy_.town_mut(*town);

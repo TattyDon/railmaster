@@ -73,7 +73,7 @@ deliver cargo, reach a book value, win the market.
 | `revenue` | `amount` | Company revenue over the last 12 months |
 | `personal_net_worth` | `amount` | Your net worth |
 | `industry_profit` | `amount` | Lifetime profit of the industries your company owns |
-| `deliver` | `cargo`, `count` | Loads of the cargo your company has delivered since the start |
+| `deliver` | `cargo`, `count`; optional `from`, `to` (towns the file places) | Loads of the cargo your company has delivered since the start; with `from`, only loads picked up at a station serving that town (for travellers who changed trains, where they boarded their last train); with `to`, only loads delivered at a station serving that town (§14.3 `deliverCargo`) |
 | `only_railroad` | none | Every rival company has merged away |
 | `highest_value` | none | Your company's market value is above every rival's |
 | `average_speed` | `count` (mph) | Your trains' average speed on the line over the last 12 months (distance run over time spent running, servicing, broken down or held; from the start until a year has passed) is at least this (§14.3 `avgLocoSpeed`) |
@@ -86,6 +86,7 @@ A file is refused, with a reason, if it has any of these faults:
 - a goal that names a town the file does not place;
 - `connect_towns` with fewer than two towns;
 - `deliver` without a cargo or count;
+- `from` or `to` on a goal other than `deliver`, or naming a town the file does not place;
 - `average_speed` without a count, or `variable` without a name;
 - Bronze with no goals;
 - a deadline on or before the start;
@@ -199,7 +200,4 @@ deadline).
 ## Not yet
 
 - Per-player, per-company and per-territory counters (§14.4).
-- Deliveries from or to a particular place (§14.3).
 - Other disasters than earthquakes and sabotage (the spec names only these).
-- Hand-made maps: the terrain is still generated from the seed.
-- A scenario picker in the client; the file is given on the command line.

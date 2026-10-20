@@ -208,6 +208,9 @@ public:
     // A cheat has been used in this game (rt3-clone-spec §15.8).
     bool assisted() const { return assisted_; }
     const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // Loads (thousandths) a company has delivered that count for a deliver
+    // goal naming a town to come from or go to (rt3-clone-spec §14.3).
+    std::int64_t place_delivered_milli(CompanyId company, const Goal& g) const;
     // Questions scenario events have put to the player, waiting for an
     // answer (AnswerChoice) until their month runs out.
     struct PendingChoice {
@@ -326,6 +329,10 @@ private:
     std::vector<std::vector<TrackUndo>> track_undo_;
     std::optional<Scenario> scenario_;
     bool assisted_ = false;
+    // Deliveries counting for deliver goals with a from or to town, by
+    // company and goal ("company|cargo|from|to"), thousandths.
+    std::map<std::string, std::int64_t> place_deliveries_;
+    void record_place_deliveries(CompanyId company, StationId at, const std::vector<Earnings::Delivery>& delivered);
     ScenarioResult scenario_result_;
     void check_scenario();
 

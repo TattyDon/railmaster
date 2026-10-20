@@ -446,7 +446,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                                          .scaled(speed, 1000));
                 }
                 received += car.milli;
-                income.delivered.emplace_back(c.id, car.milli);
+                income.delivered.push_back({c.id, car.milli, car.loaded_at});
                 if (c.key == "passengers") st.passengers_arrived_milli += car.milli;
                 car = Car{};
             } else if (left == 0) {
@@ -460,7 +460,7 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             income.add(c.id,
                        Money::dollars(gain * left / 1000 * car.milli / kMilli).scaled(revenue_permille, 1000));
             eco.add_stock(c.id, here.best_cx, here.best_cy, car.milli);
-            income.delivered.emplace_back(c.id, car.milli);
+            income.delivered.push_back({c.id, car.milli, car.loaded_at});
             car = Car{};
         } else if (left == 0) {
             car = Car{}; // expired on the way: worthless, dumped

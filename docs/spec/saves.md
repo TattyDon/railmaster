@@ -96,6 +96,7 @@ Format versions:
 - **20:** whether a cheat from the debug console has been used (an assisted game).
 - **21:** the debug console's train speed and no-crash switches, and a medal tier in its commands.
 - **22:** each company's share price at every month end, the last ten years (the Market chart).
+- **23:** loads delivered from or to a place, for scenario goals that name one.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

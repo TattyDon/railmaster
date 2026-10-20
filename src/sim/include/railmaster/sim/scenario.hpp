@@ -48,6 +48,9 @@ struct Goal {
     GoalKind kind = GoalKind::BookValue;
     std::vector<std::string> towns{};
     std::string cargo{};
+    // Deliver: only loads picked up at a station serving the town `from`,
+    // and/or delivered at one serving `to` (rt3-clone-spec §14.3); empty: anywhere.
+    std::string from{}, to{};
     std::string name{}; // Variable: the counter
     std::int64_t count = 0;
     Money amount{};

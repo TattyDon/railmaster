@@ -256,3 +256,50 @@ void World::apply_modifiers() {
 }
 
 } // namespace railmaster::sim
+
+namespace railmaster::sim {
+
+namespace {
+
+std::string place_key(CompanyId company, const Goal& g) {
+    return std::to_string(company) + "|" + g.cargo + "|" + g.from + "|" + g.to;
+}
+
+} // namespace
+
+void World::record_place_deliveries(CompanyId company, StationId at, const std::vector<Earnings::Delivery>& delivered) {
+    if (!scenario_ || delivered.empty()) return;
+    // The town a station serves, by name; empty if none (or taken down).
+    const auto town_of = [&](StationId s) -> std::string {
+        if (s >= railway_.stations().size()) return {};
+        const auto t = railway_.station(s).town;
+        return t && *t < economy_.towns().size() ? economy_.towns()[*t].name : std::string();
+    };
+    const std::string here = town_of(at);
+    std::vector<const Goal*> goals;
+    for (const MedalTier& tier : scenario_->medals)
+        for (const Goal& g : tier.goals) goals.push_back(&g);
+    for (const ScenarioEvent& e : scenario_->events)
+        for (const Goal& g : e.when.goals) goals.push_back(&g);
+    std::vector<std::string> counted; // each goal once, however many tiers name it
+    for (const Goal* g : goals) {
+        if (g->kind != GoalKind::Deliver || (g->from.empty() && g->to.empty())) continue;
+        if (!g->to.empty() && g->to != here) continue;
+        const std::string key = place_key(company, *g);
+        if (std::find(counted.begin(), counted.end(), key) != counted.end()) continue;
+        counted.push_back(key);
+        const auto cargo = data_.cargo.find(g->cargo);
+        for (const Earnings::Delivery& d : delivered) {
+            if (!cargo || d.cargo != *cargo) continue;
+            if (!g->from.empty() && town_of(d.from) != g->from) continue;
+            place_deliveries_[key] += d.milli;
+        }
+    }
+}
+
+std::int64_t World::place_delivered_milli(CompanyId company, const Goal& g) const {
+    const auto it = place_deliveries_.find(place_key(company, g));
+    return it == place_deliveries_.end() ? 0 : it->second;
+}
+
+} // namespace railmaster::sim
