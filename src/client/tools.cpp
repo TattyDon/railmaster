@@ -2554,6 +2554,19 @@ void Tools::draw_world_overlay() const {
         }
         [[fallthrough]];
     case Tool::Station:
+        if (!station_building_) {
+            // The ground a station here would serve, at the size chosen.
+            const sim::MapPoint c = hover_pick_.kind == sim::TrackEnd::Kind::Free ? hover_ : hover_pick_.pos;
+            const auto r = static_cast<double>(world_.economy().cells_mm(sim::catchment_radius(station_size_, world_.data().balance)));
+            constexpr int kSides = 40;
+            for (int i = 0; i < kSides; ++i) {
+                const double a0 = 6.283185307 * i / kSides, a1 = 6.283185307 * (i + 1) / kSides;
+                const sim::MapPoint p0{c.x_mm + static_cast<std::int64_t>(r * std::cos(a0)), c.y_mm + static_cast<std::int64_t>(r * std::sin(a0))};
+                const sim::MapPoint p1{c.x_mm + static_cast<std::int64_t>(r * std::cos(a1)), c.y_mm + static_cast<std::int64_t>(r * std::sin(a1))};
+                draw_line(p0, p1, cam_, 0.45f, 0.85f, 1.0f, 0.85f);
+            }
+        }
+        [[fallthrough]];
     case Tool::ServiceTower:
     case Tool::Maintenance: {
         // Show what a click would attach to: a node, a point on track, or open ground.
@@ -3630,6 +3643,8 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = inspect_text();
     } else if (tool_ == Tool::Industry) {
         line2 = industry_text();
+    } else if (tool_ == Tool::Station && !station_building_) {
+        line2 = station_reach_text();
     } else if (tool_ == Tool::Train && !stops_.empty()) {
         const auto& cargo = world_.data().cargo.all();
         line2 = "Up/Down stop  F kind  W full  [ ] cars  K custom  < > " +
@@ -4222,6 +4237,39 @@ void Tools::draw_link() const {
         const sim::MapPoint p{pa.x_mm + (pb.x_mm - pa.x_mm) * d / length, pa.y_mm + (pb.y_mm - pa.y_mm) * d / length};
         draw_marker(p, cam_, 4, 1.0f, 0.8f, 0.25f);
     }
+}
+
+std::string Tools::station_reach_text() const {
+    const sim::Economy& eco = world_.economy();
+    const auto& types = world_.data().industries;
+    const auto& cargo = world_.data().cargo;
+    const sim::MapPoint p = hover_pick_.kind == sim::TrackEnd::Kind::Free ? hover_ : hover_pick_.pos;
+    const std::int64_t r_mm = eco.cells_mm(sim::catchment_radius(station_size_, world_.data().balance));
+    const std::int32_t px = eco.cell_x(p), py = eco.cell_y(p);
+    const std::int32_t year = world_.date().year();
+    std::vector<std::int64_t> made(cargo.all().size(), 0), wanted(cargo.all().size(), 0);
+    for (const sim::Site& site : eco.sites()) {
+        if (site.closed || (!(site.cx == px && site.cy == py) && !eco.within(site.cx, site.cy, p, r_mm))) continue;
+        const sim::IndustryType& t = types.get(site.type);
+        const std::int64_t rate = t.rate_milli * std::max(1, site.level);
+        for (const sim::CargoId c : t.outputs) made[c] += rate;
+        if (t.kind == sim::IndustryKind::Raw) continue; // a raw site's inputs only help it
+        for (const sim::IndustryInput& in : t.inputs)
+            if (!in.until_year || year <= *in.until_year) wanted[in.cargo] += rate;
+    }
+    const auto top = [&](const std::vector<std::int64_t>& v, bool amounts, std::size_t n) {
+        std::vector<sim::CargoId> ids;
+        for (const sim::CargoType& c : cargo.all())
+            if (v[c.id] > 0 && c.available_year <= year && c.key != "waste") ids.push_back(c.id);
+        std::sort(ids.begin(), ids.end(), [&](sim::CargoId a, sim::CargoId b) { return v[a] > v[b]; });
+        std::string out;
+        for (std::size_t i = 0; i < ids.size() && i < n; ++i) {
+            out += (i ? ", " : "") + as_written(cargo.get(ids[i]).name) + (amounts ? " " + loads(v[ids[i]]) : "");
+        }
+        if (ids.size() > n) out += " +" + std::to_string(ids.size() - n) + " more";
+        return out.empty() ? std::string("nothing") : out;
+    };
+    return "In reach (loads a year): makes " + top(made, true, 5) + ".  Wants " + top(wanted, false, 5);
 }
 
 } // namespace railmaster::client
