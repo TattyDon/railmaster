@@ -954,6 +954,7 @@ bool Tools::click_row(float sx, float sy) {
         else guide_sel_ = i;
         break;
     case RowPanel::TrainTool: train_panel_click(i); break;
+    case RowPanel::ToolOptions: tool_options_click(i); break;
     }
     return true;
 }
@@ -986,6 +987,7 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
         }
         case RowPanel::Guide: guide_key(key); break;
         case RowPanel::TrainTool: on_key(key, 0); break; // through the stops
+        case RowPanel::ToolOptions: break;
         case RowPanel::Console: break;
         }
     }
@@ -1497,6 +1499,11 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     if (sy < kToolbarY + kButtonH || sy > static_cast<float>(cam_.height_px) - kBottomBarH) return;
 
     on_mouse_move(sx, sy);
+    // On a tool's side panel, not the map below it.
+    if (const auto& pb = side_panel_box_; (tool_ == Tool::Train || tool_ == Tool::Track || tool_ == Tool::Station) &&
+                                          sx >= pb[0] && sx < pb[2] && sy >= pb[1] && sy < pb[3]) {
+        return;
+    }
     switch (tool_) {
     case Tool::Inspect:
         if (detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3]) return;
@@ -1584,8 +1591,6 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         return;
     }
     case Tool::Train: {
-        const auto& pb = train_panel_box_;
-        if (sx >= pb[0] && sx < pb[2] && sy >= pb[1] && sy < pb[3]) return; // on the panel, not the map
         const auto s = station_at_cursor();
         if (!s) {
             show("Click a station to add it to the route", false);
@@ -3935,6 +3940,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Status) draw_status_panel();
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Train) draw_train_panel();
+    if (tool_ == Tool::Track || tool_ == Tool::Station) draw_tool_options();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
     // Money rising from paid trains.
@@ -4559,7 +4565,7 @@ void Tools::train_panel_click(std::size_t index) {
 
 void Tools::draw_train_panel() const {
     if (founding_ || menu_open_ || help_open_ || guide_open_) {
-        train_panel_box_ = {};
+        side_panel_box_ = {};
         return;
     }
     const auto locos = available_locos();
@@ -4573,7 +4579,7 @@ void Tools::draw_train_panel() const {
     const std::size_t first = locos.size() <= shown ? 0 : std::min(chosen > 3 ? chosen - 3 : 0, locos.size() - shown);
     const float h = 40 + kRowH * static_cast<float>(shown) + 30 + kRowH * static_cast<float>(std::max<std::size_t>(1, stops_.size())) + 30 +
                     2 * (kRowH + 6) + 40;
-    train_panel_box_ = {x0, y0, x0 + w, y0 + h};
+    side_panel_box_ = {x0, y0, x0 + w, y0 + h};
     ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     glColor3f(1.0f, 0.86f, 0.5f);
@@ -4653,6 +4659,108 @@ void Tools::draw_train_panel() const {
     else glColor3f(0.55f, 0.52f, 0.46f);
     draw_text(x0 + (w - static_cast<float>(text_width(buy, kScale))) / 2, y + 6, buy, kScale);
     if (ready) add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 6, RowPanel::TrainTool, kBuy);
+}
+
+namespace {
+// The options panel's rows: the Track tool's from 0, the Station tool's
+// sizes from kSizeRow and what it builds from kBuildRow.
+enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo };
+constexpr std::size_t kSizeRow = 100, kBuildRow = 200;
+constexpr sim::StationBuildingType kBuildings[] = {sim::StationBuildingType::PostOffice, sim::StationBuildingType::Hotel,
+                                                   sim::StationBuildingType::Restaurant, sim::StationBuildingType::Tavern};
+} // namespace
+
+void Tools::tool_options_click(std::size_t index) {
+    switch (index) {
+    case kDouble: on_key(SDLK_d, 0); return;
+    case kCurves: on_key(SDLK_c, 0); return;
+    case kTunnels: on_key(SDLK_t, 0); return;
+    case kBridges: on_key(SDLK_b, 0); return;
+    case kOverpasses: on_key(SDLK_g, 0); return;
+    case kUndo: on_key(SDLK_z, KMOD_CTRL); return;
+    default: break;
+    }
+    if (index >= kSizeRow && index < kSizeRow + 3) {
+        station_size_ = static_cast<sim::StationSize>(index - kSizeRow);
+        station_building_.reset();
+    } else if (index == kBuildRow) {
+        station_building_.reset();
+    } else if (index > kBuildRow && index <= kBuildRow + std::size(kBuildings)) {
+        station_building_ = kBuildings[index - kBuildRow - 1];
+    }
+}
+
+void Tools::draw_tool_options() const {
+    if (founding_ || menu_open_ || help_open_ || guide_open_) {
+        side_panel_box_ = {};
+        return;
+    }
+    constexpr float kRowH = 24;
+    const float w = 300, x0 = 10, y0 = kToolbarY + kButtonH + 10;
+    const bool track = tool_ == Tool::Track;
+    const float h = track ? 40 + kRowH * 5 + 44 : 40 + 22 + kRowH + 16 + 22 + kRowH * 5 + 10;
+    side_panel_box_ = {x0, y0, x0 + w, y0 + h};
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    float y = y0 + 10;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y, track ? "Track" : "Station", kScale + 1);
+    y += 30;
+    // A row: its name, then its setting at the right; the chosen one highlighted.
+    const auto row = [&](const std::string& name, const std::string& value, std::size_t index, bool chosen) {
+        if (chosen) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4);
+        glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(x0 + 14, y + 1, name, kScale);
+        glColor3f(chosen ? 1.0f : 0.8f, chosen ? 0.95f : 0.78f, chosen ? 0.75f : 0.7f);
+        draw_text(x0 + w - 14 - static_cast<float>(text_width(value, kScale)), y + 1, value, kScale);
+        add_row(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4, RowPanel::ToolOptions, index);
+        y += kRowH;
+    };
+    if (track) {
+        const auto setting = [](sim::Frequency f) {
+            std::string out = sim::frequency_name(f);
+            if (!out.empty()) out[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[0])));
+            return out;
+        };
+        row("Double track", double_track_ ? "On" : "Off", kDouble, double_track_);
+        row("Curves", curves_ ? "On" : "Off", kCurves, curves_);
+        row("Tunnels", setting(tunnels_), kTunnels, false);
+        row("Bridges", setting(bridges_), kBridges, false);
+        row("Overpasses", setting(overpasses_), kOverpasses, false);
+        y += 8;
+        ui::tab(x0 + 10, y, x0 + w - 10, y + kRowH + 2, false);
+        glColor3f(0.95f, 0.92f, 0.82f);
+        const std::string undo = "Undo the last track (Ctrl+Z)";
+        draw_text(x0 + (w - static_cast<float>(text_width(undo, kScale))) / 2, y + 5, undo, kScale);
+        add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 2, RowPanel::ToolOptions, kUndo);
+        return;
+    }
+    // The station's size, as three buttons with their prices.
+    glColor3f(0.75f, 0.73f, 0.67f);
+    draw_text(x0 + 14, y, "Size and the ground it serves", kScale);
+    y += 22;
+    const float bw = (w - 20 - 2 * 6) / 3;
+    for (int i = 0; i < 3; ++i) {
+        const auto size = static_cast<sim::StationSize>(i);
+        const bool on = !station_building_ && station_size_ == size;
+        const float bx = x0 + 10 + static_cast<float>(i) * (bw + 6);
+        ui::tab(bx, y, bx + bw, y + kRowH + 2, on);
+        const std::string label = size_name(size);
+        if (on) glColor3f(0.12f, 0.08f, 0.04f);
+        else glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(bx + (bw - static_cast<float>(text_width(label, kScale))) / 2, y + 5, label, kScale);
+        add_row(bx, y, bx + bw, y + kRowH + 2, RowPanel::ToolOptions, kSizeRow + static_cast<std::size_t>(i));
+    }
+    y += kRowH + 16;
+    glColor3f(0.75f, 0.73f, 0.67f);
+    draw_text(x0 + 14, y, "Build", kScale);
+    y += 22;
+    row("A station", format_money(sim::station_cost(station_size_)), kBuildRow, !station_building_);
+    for (std::size_t i = 0; i < std::size(kBuildings); ++i) {
+        const sim::StationBuildingType t = kBuildings[i];
+        row(std::string(sim::station_building_name(t)) + " by a station",
+            format_money(world_.construction_cost(sim::station_building_cost(t, world_.data().balance))), kBuildRow + 1 + i,
+            station_building_ == t);
+    }
 }
 
 } // namespace railmaster::client

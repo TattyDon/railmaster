@@ -240,7 +240,11 @@ private:
     // what the keys do, and Buy (or Save route); a click on a row picks it.
     void draw_train_panel() const;
     void train_panel_click(std::size_t index);
-    mutable std::array<float, 4> train_panel_box_{};
+    // The Track and Station tools' options as a panel in the same place:
+    // what their keys set, to click.
+    void draw_tool_options() const;
+    void tool_options_click(std::size_t index);
+    mutable std::array<float, 4> side_panel_box_{};
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
 
@@ -364,7 +368,7 @@ private:
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
     // Rows a click can choose, put down as the panels draw each frame: one
     // click selects a row, a click on the chosen row acts as Enter would.
-    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide, TrainTool };
+    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide, TrainTool, ToolOptions };
     struct RowBox {
         float x0, y0, x1, y1;
         RowPanel panel;

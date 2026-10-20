@@ -255,6 +255,7 @@ and checks the economy against the spec's targets
 | T (Inspect) | Buy access rights to the territory under the cursor; the Inspect line shows its price and modifiers |
 | Ctrl+Z (Track) | Undo the last run of track, at full refund, until you leave the Track tool |
 | U (Track) | Double the run of single track under the cursor, at 90% of laying it again (dearer than building double at once) |
+| Track and Station panels | The Track tool's panel (top left) sets double track, curves, and how often tunnels, bridges and overpasses are used, and undoes the last track; the Station tool's picks the size (Small, Medium, Large) and what to build (a station, post office, hotel, restaurant or tavern), with prices. The keys do the same |
 | X twice (Track) | Remove the run of your track under the cursor (out to the next junction, station or support building, shown in red): 10% of its value back, the rest written off. Trains whose route ran over it find another way |
 | X twice (Station, Tower, Shed) | Take down your station, service tower or shed under the cursor (ringed in red): 10% of its value back. A station can't go while a train still calls there; change its route first (E) |
 | E (Track) | Electrify the piece of your track under the cursor; Shift+E all your track. Electric engines need electrified track between every pair of stops |
