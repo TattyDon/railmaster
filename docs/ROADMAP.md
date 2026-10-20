@@ -306,7 +306,10 @@ and pips counting the loads of passengers, mail and freight waiting, for
 the stations near the camera. On the platforms themselves, what waits is drawn too:
 a figure for every quarter load of passengers (up to two dozen) in coats
 of many colours, mail sacks at one end and freight crates stacked at the
-other. Zoom by wheel, smooth trackpad scrolling,
+other. Resting the mouse on a train, station or industry in the Look
+tool brings up a card of its main facts beside the cursor, and the view
+glides (rather than jumps) to what the lists, Find, the Guide and the
+radar choose. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Clouds' shadows (shaders; off in Settings) drift over the land, dimming
