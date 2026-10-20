@@ -244,6 +244,13 @@ private:
     // what their keys set, to click.
     void draw_tool_options() const;
     void tool_options_click(std::size_t index);
+    // A row of buttons across a panel, from x0 to x1 at y, each pressing a
+    // key (the screens' actions, for the mouse).
+    struct KeyButton {
+        std::string label;
+        SDL_Keycode key;
+    };
+    void key_buttons(float x0, float x1, float y, const std::vector<KeyButton>& buttons) const;
     mutable std::array<float, 4> side_panel_box_{};
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
@@ -368,7 +375,7 @@ private:
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
     // Rows a click can choose, put down as the panels draw each frame: one
     // click selects a row, a click on the chosen row acts as Enter would.
-    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide, TrainTool, ToolOptions };
+    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide, TrainTool, ToolOptions, KeyButton };
     struct RowBox {
         float x0, y0, x1, y1;
         RowPanel panel;

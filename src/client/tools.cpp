@@ -246,6 +246,28 @@ void Tools::draw_finance_panel() const {
         break;
     }
     }
+    // The actions, for the mouse: what the keys do.
+    const float by = y0 + h - 40;
+    ui::rule(x0 + 10, x0 + w - 10, by - 8);
+    if (company_tab_ == 3) {
+        key_buttons(x0 + 10, x0 + 300, by, {{"Buy access", SDLK_t}});
+    } else {
+        key_buttons(x0 + 10, x0 + w - 10, by,
+                    {{"Issue bond", SDLK_b}, {"Repay bond", SDLK_r}, {"Buy shares", SDLK_a}, {"Sell shares", SDLK_s},
+                     {"Issue stock", SDLK_i}, {"Buy back", SDLK_y}, {"Dividend -", SDLK_LEFTBRACKET}, {"Dividend +", SDLK_RIGHTBRACKET}});
+    }
+}
+
+void Tools::key_buttons(float x0, float x1, float y, const std::vector<KeyButton>& buttons) const {
+    constexpr float kGap = 6, kH = 26;
+    const float bw = (x1 - x0 - kGap * static_cast<float>(buttons.size() - 1)) / static_cast<float>(buttons.size());
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        const float bx = x0 + static_cast<float>(i) * (bw + kGap);
+        ui::tab(bx, y, bx + bw, y + kH, false);
+        glColor3f(0.95f, 0.92f, 0.82f);
+        draw_text(bx + (bw - static_cast<float>(text_width(buttons[i].label, kScale))) / 2, y + 5, buttons[i].label, kScale);
+        add_row(bx, y, bx + bw, y + kH, RowPanel::KeyButton, static_cast<std::size_t>(buttons[i].key));
+    }
 }
 
 void Tools::draw_ledger_panel() const {
@@ -955,6 +977,7 @@ bool Tools::click_row(float sx, float sy) {
         break;
     case RowPanel::TrainTool: train_panel_click(i); break;
     case RowPanel::ToolOptions: tool_options_click(i); break;
+    case RowPanel::KeyButton: on_key(static_cast<SDL_Keycode>(i), 0); break;
     }
     return true;
 }
@@ -987,7 +1010,8 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
         }
         case RowPanel::Guide: guide_key(key); break;
         case RowPanel::TrainTool: on_key(key, 0); break; // through the stops
-        case RowPanel::ToolOptions: break;
+        case RowPanel::ToolOptions:
+        case RowPanel::KeyButton: break;
         case RowPanel::Console: break;
         }
     }
@@ -2443,7 +2467,7 @@ void Tools::draw_market_panel() const {
     constexpr float kRow = 16.0f;
     const auto& companies = world_.companies();
     const float x0 = 40, y0 = 56, w = 1100;
-    const float h = kRow * static_cast<float>(companies.size() + world_.investors().size() + 12);
+    const float h = kRow * static_cast<float>(companies.size() + world_.investors().size() + 12) + 44; // and the buttons
     ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
     // Name, then right-aligned columns ending at each later position.
@@ -2576,6 +2600,12 @@ void Tools::draw_market_panel() const {
              format_money(inv.cash) + "   " +
              (inv.chairs ? "Runs " + world_.company(*inv.chairs).name() : std::string("No company")));
     }
+    // The actions, for the mouse: what the keys do, on the company chosen above.
+    const float by = y0 + h - 38;
+    ui::rule(x0 + 10, x0 + w - 10, by - 8);
+    key_buttons(x0 + 10, x0 + w - 10, by,
+                {{"Buy 1,000 shares", SDLK_a}, {"Sell 1,000 shares", SDLK_s}, {"Take over", SDLK_t}, {"Merge (+20%)", SDLK_m},
+                 {"Resign (click twice)", SDLK_q}, {"Found a new company", SDLK_n}});
 }
 
 void Tools::cycle_overlay(int direction) {
@@ -2698,7 +2728,7 @@ void Tools::draw_world_overlay() const {
         }
         [[fallthrough]];
     case Tool::Station:
-        if (!station_building_) {
+        if (tool_ == Tool::Station && !station_building_) { // not for the Track tool, which falls through here
             // The ground a station here would serve, at the size chosen.
             const sim::MapPoint c = hover_pick_.kind == sim::TrackEnd::Kind::Free ? hover_ : hover_pick_.pos;
             const auto r = static_cast<double>(world_.economy().cells_mm(sim::catchment_radius(station_size_, world_.data().balance)));
