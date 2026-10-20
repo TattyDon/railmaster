@@ -953,6 +953,7 @@ bool Tools::click_row(float sx, float sy) {
         if (guide_sel_ == i) guide_key(SDLK_RETURN);
         else guide_sel_ = i;
         break;
+    case RowPanel::TrainTool: train_panel_click(i); break;
     }
     return true;
 }
@@ -984,6 +985,7 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
             break;
         }
         case RowPanel::Guide: guide_key(key); break;
+        case RowPanel::TrainTool: on_key(key, 0); break; // through the stops
         case RowPanel::Console: break;
         }
     }
@@ -1344,6 +1346,27 @@ std::optional<sim::BuildTrack> Tools::pending_track() const {
     return cmd;
 }
 
+std::optional<sim::StationId> Tools::station_at_cursor() const {
+    // In 3D, by where stations are drawn on screen: a few pixels near the
+    // horizon cover far more ground than near the camera, so a distance on
+    // the map alone would miss far stations.
+    if (cam_.three_d) {
+        std::optional<sim::StationId> best;
+        float best_d = 16.0f;
+        for (const sim::Station& s : world_.railway().stations()) {
+            float sx = 0, sy = 0;
+            if (!cam_.to_screen(world_.railway().track().node(s.node).pos, sx, sy)) continue;
+            const float d = std::hypot(sx - hover_sx_, sy - hover_sy_);
+            if (d < best_d) {
+                best = s.id;
+                best_d = d;
+            }
+        }
+        if (best) return best;
+    }
+    return station_near(hover_);
+}
+
 std::optional<sim::StationId> Tools::station_near(sim::MapPoint p) const {
     std::optional<sim::StationId> best;
     std::int64_t best_d = snap_mm() + 1;
@@ -1376,7 +1399,7 @@ bool Tools::remove_site_key() {
     // Take down the station, tower or shed under the cursor, on a second press.
     const bool station = tool_ == Tool::Station;
     const char* what = station ? "station" : tool_ == Tool::ServiceTower ? "service tower" : "shed";
-    const std::optional<std::uint32_t> id = station ? station_near(hover_) : building_near(hover_);
+    const std::optional<std::uint32_t> id = station ? station_at_cursor() : building_near(hover_);
     if (!id) {
         show(std::string("Point at one of your ") + what + "s to take it down", false);
         return true;
@@ -1561,7 +1584,9 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         return;
     }
     case Tool::Train: {
-        const auto s = station_near(hover_);
+        const auto& pb = train_panel_box_;
+        if (sx >= pb[0] && sx < pb[2] && sy >= pb[1] && sy < pb[3]) return; // on the panel, not the map
+        const auto s = station_at_cursor();
         if (!s) {
             show("Click a station to add it to the route", false);
             return;
@@ -2606,7 +2631,7 @@ std::string Tools::cell_text() const {
     }
     if (map_overlay_ == MapOverlay::Travel) {
         // Where the travellers waiting at the station under the cursor want to go, most first.
-        if (const auto st = station_near(hover_)) {
+        if (const auto st = station_at_cursor()) {
             const sim::Railway& rw = world_.railway();
             std::vector<std::pair<std::int32_t, std::string>> to;
             for (const sim::ExpressWaiting& e : rw.station(*st).express) {
@@ -2710,7 +2735,7 @@ void Tools::draw_world_overlay() const {
                 draw_line(p, net.node(world_.railway().station(stops_[i + 1].station).node).pos, cam_, 1.0f, 0.85f, 0.2f, 0.8f);
             }
         }
-        if (const auto s = station_near(hover_)) draw_marker(net.node(world_.railway().station(*s).node).pos, cam_, 8, 1, 1, 1);
+        if (const auto s = station_at_cursor()) draw_marker(net.node(world_.railway().station(*s).node).pos, cam_, 8, 1, 1, 1);
         return;
     }
     case Tool::Inspect: {
@@ -3248,7 +3273,7 @@ std::optional<Tools::Detail> Tools::detail_under_cursor() const {
     for (const sim::Train& t : rw.trains()) {
         if (t.in_service() && sim::distance_mm(rw.train_position(t.id), hover_) <= snap_mm()) return Detail{DetailKind::Train, t.id};
     }
-    if (const auto st = station_near(hover_)) return Detail{DetailKind::Station, *st};
+    if (const auto st = station_at_cursor()) return Detail{DetailKind::Station, *st};
     if (const auto site = site_under_cursor()) return Detail{DetailKind::Industry, *site};
     return std::nullopt;
 }
@@ -3768,7 +3793,7 @@ std::string Tools::inspect_text() const {
         s += " sand " + percent(t.sand) + " oil " + percent(t.oil);
         return s;
     }
-    if (const auto st = station_near(hover_)) {
+    if (const auto st = station_at_cursor()) {
         if (map_overlay_ == MapOverlay::Travel) return cell_text(); // where its travellers want to go
         const sim::Station& s = rw.station(*st);
         std::string text = "Station: " + s.name + " (" + size_name(s.size) + ")" +
@@ -3909,6 +3934,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Market) draw_market_panel();
     if (tool_ == Tool::Status) draw_status_panel();
     if (tool_ == Tool::Lists) draw_lists_panel();
+    if (tool_ == Tool::Train) draw_train_panel();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
     // Money rising from paid trains.
@@ -4499,6 +4525,134 @@ std::string Tools::station_reach_text() const {
         return out.empty() ? std::string("nothing") : out;
     };
     return "In reach (loads a year): makes " + top(made, true, 5) + ".  Wants " + top(wanted, false, 5);
+}
+
+namespace {
+// What the Train panel's rows do, as their indexes: engines from 0, stops
+// from kStopRow, and the buttons.
+constexpr std::size_t kStopRow = 1000;
+enum TrainButton : std::size_t { kFewer = 2000, kMore, kKind, kFull, kService, kDrop, kBuy, kClear };
+} // namespace
+
+void Tools::train_panel_click(std::size_t index) {
+    if (index < kStopRow) {
+        loco_choice_ = index;
+        return;
+    }
+    if (index < kFewer) {
+        stop_sel_ = std::min(index - kStopRow, stops_.empty() ? 0 : stops_.size() - 1);
+        return;
+    }
+    // The buttons do what their keys do.
+    switch (index) {
+    case kFewer: on_key(SDLK_LEFTBRACKET, 0); break;
+    case kMore: on_key(SDLK_RIGHTBRACKET, 0); break;
+    case kKind: on_key(SDLK_f, 0); break;
+    case kFull: on_key(SDLK_w, 0); break;
+    case kService: on_key(SDLK_s, 0); break;
+    case kDrop: on_key(SDLK_BACKSPACE, 0); break;
+    case kBuy: on_key(SDLK_RETURN, 0); break;
+    case kClear: cancel(); break;
+    default: break;
+    }
+}
+
+void Tools::draw_train_panel() const {
+    if (founding_ || menu_open_ || help_open_ || guide_open_) {
+        train_panel_box_ = {};
+        return;
+    }
+    const auto locos = available_locos();
+    const auto& data = world_.data();
+    // Top left: the radar is below it and detail panels open on the right.
+    const float w = 360, x0 = 10, y0 = kToolbarY + kButtonH + 10;
+    constexpr float kRowH = 22;
+    // Engines: up to eight about the one chosen.
+    const std::size_t chosen = locos.empty() ? 0 : loco_choice_ % locos.size();
+    const std::size_t shown = std::min<std::size_t>(8, locos.size());
+    const std::size_t first = locos.size() <= shown ? 0 : std::min(chosen > 3 ? chosen - 3 : 0, locos.size() - shown);
+    const float h = 40 + kRowH * static_cast<float>(shown) + 30 + kRowH * static_cast<float>(std::max<std::size_t>(1, stops_.size())) + 30 +
+                    2 * (kRowH + 6) + 40;
+    train_panel_box_ = {x0, y0, x0 + w, y0 + h};
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    float y = y0 + 10;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y, editing_ ? "Train " + std::to_string(*editing_ + 1) + ": a new route" : std::string("A new train"), kScale + 1);
+    y += 30;
+    // The engines.
+    for (std::size_t i = first; i < first + shown; ++i) {
+        const sim::LocomotiveType& l = data.locomotives.get(locos[i]);
+        if (i == chosen) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4);
+        glColor3f(i == chosen ? 1.0f : 0.85f, i == chosen ? 0.95f : 0.85f, i == chosen ? 0.8f : 0.8f);
+        draw_text(x0 + 14, y, l.name, kScale);
+        const std::string right = std::to_string(l.top_speed_mph) + " mph  " + format_money(l.cost);
+        draw_text(x0 + w - 14 - static_cast<float>(text_width(right, kScale)), y, right, kScale);
+        add_row(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4, RowPanel::TrainTool, i);
+        y += kRowH;
+    }
+    if (locos.empty()) {
+        glColor3f(1.0f, 0.5f, 0.45f);
+        draw_text(x0 + 14, y, "No engines available this year", kScale);
+        y += kRowH;
+    }
+    ui::rule(x0 + 10, x0 + w - 10, y + 4);
+    y += 12;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y, "Route", kScale);
+    y += kRowH;
+    // The stops, each with what the train takes on there.
+    if (stops_.empty()) {
+        glColor3f(0.7f, 0.68f, 0.62f);
+        draw_text(x0 + 14, y, "Click stations on the map, in order", kScale);
+        y += kRowH;
+    }
+    for (std::size_t i = 0; i < stops_.size(); ++i) {
+        const PendingStop& p = stops_[i];
+        if (i == stop_sel_) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4);
+        glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(x0 + 14, y, std::to_string(i + 1) + ". " + world_.railway().station(p.station).name, kScale);
+        std::string what = p.rule.custom ? std::to_string(p.rule.cars.size()) + " custom"
+                                         : std::string(sim::cargo_filter_name(p.rule.filter)) + " " + std::to_string(p.rule.min) + "-" +
+                                               std::to_string(p.rule.max);
+        if (p.service) what += ", service";
+        glColor3f(0.75f, 0.73f, 0.67f);
+        draw_text(x0 + w - 14 - static_cast<float>(text_width(what, kScale)), y, what, kScale);
+        add_row(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4, RowPanel::TrainTool, kStopRow + i);
+        y += kRowH;
+    }
+    y += 8;
+    // Buttons: a row of small ones for the selected stop, then Buy and Clear.
+    const auto button = [&](float bx0, float bx1, float by, const std::string& label, std::size_t action, bool live) {
+        ui::tab(bx0, by, bx1, by + kRowH + 2, false);
+        if (live) glColor3f(0.95f, 0.92f, 0.82f);
+        else glColor3f(0.5f, 0.48f, 0.44f);
+        draw_text((bx0 + bx1 - static_cast<float>(text_width(label, kScale))) / 2, by + 4, label, kScale);
+        if (live) add_row(bx0, by, bx1, by + kRowH + 2, RowPanel::TrainTool, action);
+    };
+    const bool has = !stops_.empty();
+    const float bw = (w - 20 - 3 * 6) / 4;
+    const sim::ConsistRule* r = has ? &stops_[stop_sel_].rule : nullptr;
+    button(x0 + 10, x0 + 10 + bw, y, "- car", kFewer, true);
+    button(x0 + 10 + (bw + 6), x0 + 10 + bw * 2 + 6, y, "+ car", kMore, true);
+    button(x0 + 10 + 2 * (bw + 6), x0 + 10 + bw * 3 + 12, y, r ? std::string(sim::cargo_filter_name(r->filter)) : "Kind", kKind, has);
+    button(x0 + 10 + 3 * (bw + 6), x0 + w - 10, y, r && r->min > 0 ? "Full: on" : "Full: off", kFull, has);
+    y += kRowH + 8;
+    const float bw3 = (w - 20 - 2 * 6) / 3;
+    button(x0 + 10, x0 + 10 + bw3, y, has && stops_[stop_sel_].service ? "Service: on" : "Service: off", kService, has);
+    button(x0 + 10 + bw3 + 6, x0 + 10 + 2 * bw3 + 6, y, "Drop last", kDrop, has);
+    button(x0 + 10 + 2 * (bw3 + 6), x0 + w - 10, y, "Clear", kClear, has || editing_.has_value());
+    y += kRowH + 12;
+    // Buy (or save the route being edited).
+    std::string buy = "Click two stations or more";
+    bool ready = stops_.size() >= 2 && !locos.empty();
+    if (editing_) buy = ready ? "Save the new route" : buy;
+    else if (ready) buy = "Buy " + data.locomotives.get(locos[chosen]).name + " for " +
+                          format_money(data.locomotives.get(locos[chosen]).cost);
+    ui::tab(x0 + 10, y, x0 + w - 10, y + kRowH + 6, ready);
+    if (ready) glColor3f(0.12f, 0.08f, 0.04f);
+    else glColor3f(0.55f, 0.52f, 0.46f);
+    draw_text(x0 + (w - static_cast<float>(text_width(buy, kScale))) / 2, y + 6, buy, kScale);
+    if (ready) add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 6, RowPanel::TrainTool, kBuy);
 }
 
 } // namespace railmaster::client

@@ -128,6 +128,8 @@ private:
     std::int64_t snap_mm() const { return static_cast<std::int64_t>(cam_.pixels_to_mm(10.0f)); }
     std::optional<sim::BuildTrack> pending_track() const;
     std::optional<sim::StationId> station_near(sim::MapPoint p) const;
+    // The station under the mouse: within a few pixels on screen, else by the map.
+    std::optional<sim::StationId> station_at_cursor() const;
     std::vector<sim::LocoTypeId> available_locos() const;
     std::string hint() const;
     std::string inspect_text() const;
@@ -234,6 +236,11 @@ private:
     // Give the train each pending stop's consist; false (with a message) on refusal.
     bool apply_consists(sim::TrainId id);
     std::string stop_text() const;
+    // The Train tool's panel: engines to pick, the stops so far, buttons for
+    // what the keys do, and Buy (or Save route); a click on a row picks it.
+    void draw_train_panel() const;
+    void train_panel_click(std::size_t index);
+    mutable std::array<float, 4> train_panel_box_{};
     std::uint8_t cars_ = 4;
     std::size_t loco_choice_ = 0;
 
@@ -357,7 +364,7 @@ private:
     mutable std::vector<TabBox> menu_boxes_; // each item's place, for clicks
     // Rows a click can choose, put down as the panels draw each frame: one
     // click selects a row, a click on the chosen row acts as Enter would.
-    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide };
+    enum class RowPanel { Find, Console, Lists, Ledger, Territories, Market, Guide, TrainTool };
     struct RowBox {
         float x0, y0, x1, y1;
         RowPanel panel;

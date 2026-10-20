@@ -309,7 +309,11 @@ of many colours, mail sacks at one end and freight crates stacked at the
 other. Resting the mouse on a train, station or industry in the Look
 tool brings up a card of its main facts beside the cursor, and the view
 glides (rather than jumps) to what the lists, Find, the Guide and the
-radar choose. Zoom by wheel, smooth trackpad scrolling,
+radar choose. The Train tool has a panel: the engines to click, the
+stops so far, buttons for each stop's cars, cargo, full loads and
+service, and Buy. Stations are picked by where they are drawn on screen,
+so far ones near the horizon are as easy to click as near ones. Zoom by
+wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Clouds' shadows (shaders; off in Settings) drift over the land, dimming
