@@ -168,7 +168,7 @@ const Company& World::acting() const { return market_.companies.at(*market_.inve
 
 bool World::money_no_object() const { return sandbox_ && actor_ == kHumanPlayer; }
 
-bool World::owns_track_at(const TrackEnd& at) {
+bool World::owns_track_at(const TrackEnd& at) const {
     const TrackNetwork& net = railway_.track();
     const CompanyId me = acting().id();
     if (at.kind == TrackEnd::Kind::OnEdge) return net.edge(at.edge).owner == me;
@@ -359,25 +359,73 @@ CommandResult World::run(const EndTrackUndo&) {
     return success(Money{}, 0);
 }
 
-CommandResult World::run(const BuildStation& cmd) {
-    if (scenario_ && scenario_->restrictions.no_stations) return fail("this scenario does not allow building stations");
-    if (cmd.at.kind == TrackEnd::Kind::Free) return fail("stations must be built on track");
-    if (!owns_track_at(cmd.at)) return fail("stations must be built on your own track");
-    if (cmd.at.kind == TrackEnd::Kind::Node) {
-        for (const Station& s : railway_.stations()) {
-            if (s.node == cmd.at.node) return fail("there is already a station here");
+std::string World::station_name_for(MapPoint p) const {
+    const auto taken = [&](const std::string& n) {
+        for (const Station& s : railway_.stations())
+            if (s.name == n) return true;
+        return false;
+    };
+    // The nearest town centre (by the larger of the two offsets, as a town's reach is measured).
+    std::optional<std::size_t> nearest;
+    std::int64_t best = 0;
+    for (std::size_t t = 0; t < economy_.towns().size(); ++t) {
+        const MapPoint c = economy_.node_centre(economy_.towns()[t].cx, economy_.towns()[t].cy);
+        const std::int64_t d = std::max(std::abs(c.x_mm - p.x_mm), std::abs(c.y_mm - p.y_mm));
+        if (!nearest || d < best) {
+            nearest = t;
+            best = d;
         }
     }
-    if (auto why = access_problem(acting().id(), cmd.at.pos)) return fail(*why);
+    if (!nearest) {
+        std::string n = "Station " + std::to_string(railway_.stations().size() + 1);
+        for (std::size_t i = railway_.stations().size() + 2; taken(n); ++i) n = "Station " + std::to_string(i);
+        return n;
+    }
+    const Town& town = economy_.towns()[*nearest];
+    std::vector<std::string> names;
+    if (best <= economy_.cells_mm(data_.balance.stations.town_reach_cells)) {
+        const MapPoint c = economy_.node_centre(town.cx, town.cy);
+        const std::int64_t dx = p.x_mm - c.x_mm, dy = p.y_mm - c.y_mm;
+        const char* side = std::abs(dx) >= std::abs(dy) ? (dx >= 0 ? " East" : " West") : (dy >= 0 ? " South" : " North");
+        names = {town.name, town.name + side, town.name + " Junction"};
+    } else {
+        names = {town.name + " Junction", town.name + " Crossing", town.name + " Siding"};
+    }
+    for (const std::string& n : names)
+        if (!taken(n)) return n;
+    for (int i = 2;; ++i) {
+        const std::string n = names.back() + " " + std::to_string(i);
+        if (!taken(n)) return n;
+    }
+}
+
+std::optional<std::string> World::station_problem(const BuildStation& cmd) const {
+    if (scenario_ && scenario_->restrictions.no_stations) return "this scenario does not allow building stations";
+    if (cmd.at.kind == TrackEnd::Kind::Free) return "stations must be built on track";
+    if (!owns_track_at(cmd.at)) return "stations must be built on your own track";
+    if (cmd.at.kind == TrackEnd::Kind::Node) {
+        for (const Station& s : railway_.stations()) {
+            if (s.node == cmd.at.node) return "there is already a station here";
+        }
+    }
+    if (auto why = access_problem(acting().id(), cmd.at.pos)) return why;
+    return cannot_afford(station_build_cost(cmd));
+}
+
+Money World::station_build_cost(const BuildStation& cmd) const {
     // A territory may make stations dearer [C].
     const TerritoryId terr = territory_at(cmd.at.pos);
     const std::int64_t terr_pct =
         terr < territories_.territories.size() ? territories_.territories[terr].station_cost_percent : 100;
-    const Money cost = construction_cost(station_cost(cmd.size, data_.balance)).scaled(terr_pct, 100);
-    if (auto why = cannot_afford(cost)) return fail(*why);
+    return construction_cost(station_cost(cmd.size, data_.balance)).scaled(terr_pct, 100);
+}
+
+CommandResult World::run(const BuildStation& cmd) {
+    if (auto why = station_problem(cmd)) return fail(*why);
+    const Money cost = station_build_cost(cmd);
     const NodeId node = resolve_on_track(cmd.at);
     acting().invest_buildings(cost);
-    std::string name = cmd.name.empty() ? "Station " + std::to_string(railway_.stations().size() + 1) : cmd.name;
+    std::string name = cmd.name.empty() ? station_name_for(railway_.track().node(node).pos) : cmd.name;
     const StationId id = railway_.add_station(std::move(name), node, cmd.size, acting().id());
     // Which town it serves, for the station-age modifier: the nearest town
     // centre within the reach of a town's houses.

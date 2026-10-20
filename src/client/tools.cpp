@@ -3830,6 +3830,23 @@ void Tools::draw_ui(const std::string& status) const {
         else glColor3f(1.0f, 0.45f, 0.4f);
         draw_text(hover_sx_ + 14, hover_sy_ + 10, label, kScale);
     }
+    // Over track in the Station tool: the name the station would take and
+    // its price, or why it can't go there.
+    if (tool_ == Tool::Station && !station_building_ && hover_pick_.kind != sim::TrackEnd::Kind::Free &&
+        world_.player_company() && !menu_open_ && !help_open_ && !guide_open_ && hover_sy_ > kToolbarY + kButtonH &&
+        hover_sy_ < static_cast<float>(cam_.height_px) - kBottomBarH) {
+        const sim::BuildStation cmd{.at = hover_pick_, .size = station_size_};
+        const auto why = world_.station_problem(cmd);
+        const std::string label = why ? "Cannot: " + *why
+                                      : world_.station_name_for(hover_pick_.pos) + "  " + size_name(station_size_) + " " +
+                                            format_money(world_.station_build_cost(cmd));
+        const float tw = static_cast<float>(text_width(label, kScale)) + 16;
+        const float tx = hover_sx_ + 16, ty = hover_sy_ + 8;
+        ui::chip(tx, ty, tx + tw, ty + 24);
+        if (why) glColor3f(1.0f, 0.5f, 0.45f);
+        else glColor3f(0.95f, 0.93f, 0.8f);
+        draw_text(tx + 8, ty + 4, label, kScale);
+    }
 }
 
 std::array<float, 4> Tools::guide_button() const {

@@ -224,6 +224,12 @@ TEST_CASE("station age counts from a town's first station; open country gets hal
     REQUIRE(second.ok);
     CHECK(w.revenue_permille(second.created_id) == w.revenue_permille(in_town.created_id));
     CHECK(w.revenue_permille(second.created_id) < 1100);
+
+    // Stations take the town's name, then its side, then Junction; out of town, the nearest town's.
+    CHECK(w.railway().station(in_town.created_id).name == "Townsville");
+    CHECK(w.railway().station(country.created_id).name == "Townsville Junction");
+    CHECK(w.railway().station(second.created_id).name == "Townsville East");
+    CHECK(w.station_name_for(net.node(w.railway().station(in_town.created_id).node).pos) == "Townsville West");
 }
 
 TEST_CASE("a station can be enlarged a size at a time for the difference in price") {

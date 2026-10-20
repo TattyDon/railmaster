@@ -129,6 +129,14 @@ public:
     // grid must match the terrain's.
     void set_territories(TerritoryMap map);
     TerritoryId territory_at(MapPoint p) const;
+    // The name a new station here would take: the town it serves (then that
+    // town's east, west, north or south side, then Junction), else the
+    // nearest town's Junction, Crossing or Siding; numbered if all are taken.
+    // "Station N" on a map without towns.
+    std::string station_name_for(MapPoint p) const;
+    // Why a BuildStation would be refused, or nothing; and what it would cost.
+    std::optional<std::string> station_problem(const BuildStation& cmd) const;
+    Money station_build_cost(const BuildStation& cmd) const;
     // Why `company` may not build at `p`, if it may not: a territory it has
     // no access to.
     std::optional<std::string> access_problem(CompanyId company, MapPoint p) const;
@@ -363,7 +371,7 @@ private:
     Company& acting();
     const Company& acting() const;
     bool money_no_object() const; // sandbox, for the human player
-    bool owns_track_at(const TrackEnd& at);
+    bool owns_track_at(const TrackEnd& at) const;
     // A track plan with its costs moved by the economic state.
     PlanResult priced(PlanResult r) const;
     // Find where a planned run crosses existing track at ground level, and
