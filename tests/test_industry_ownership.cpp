@@ -134,6 +134,11 @@ TEST_CASE("building a processing plant: anywhere on open dry land, never a produ
     CHECK(build("steel_mill", 25, 3).error.find("off the map") != std::string::npos);
     // Footprints of 4 x 4 cells never overlap (one-cell nodes here: 5 apart).
     CHECK(build("steel_mill", 5, 5).error.find("too close") != std::string::npos);
+    // Houses are not open land; the tool asks the same question before the click.
+    add(w, "house", 16, 3);
+    CHECK(build("steel_mill", 16, 3).error == "a town's houses stand there");
+    CHECK(w.industry_problem(BuildIndustry{.type = type(w, "steel_mill"), .cx = 16, .cy = 3}) == "a town's houses stand there");
+    CHECK_FALSE(w.industry_problem(BuildIndustry{.type = type(w, "steel_mill"), .cx = 8, .cy = 8}).has_value());
     const Money cash = w.company().cash();
     const CommandResult r = build("steel_mill", 8, 8);
     REQUIRE(r.ok);

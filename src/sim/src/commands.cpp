@@ -791,31 +791,36 @@ CommandResult World::run(const BuyIndustry& cmd) {
     return success(price, s.id);
 }
 
-CommandResult World::run(const BuildIndustry& cmd) {
-    if (scenario_ && scenario_->restrictions.no_industries) return fail("this scenario does not allow building industries");
-    if (cmd.type >= data_.industries.all().size()) return fail("unknown industry");
+std::optional<std::string> World::industry_problem(const BuildIndustry& cmd) const {
+    if (scenario_ && scenario_->restrictions.no_industries) return "this scenario does not allow building industries";
+    if (cmd.type >= data_.industries.all().size()) return "unknown industry";
     const IndustryType& t = data_.industries.get(cmd.type);
-    if (!buildable(t.kind)) return fail("only processing plants and warehouses can be built; producers can only be bought");
+    if (!buildable(t.kind)) return "only processing plants and warehouses can be built; producers can only be bought";
     // A warehouse trades whatever of its cargo exists; a plant needs its product to.
     for (CargoId c : t.kind == IndustryKind::Warehouse ? std::vector<CargoId>{} : t.outputs) {
         const CargoType& ct = data_.cargo.get(c);
-        if (date_.year() < ct.available_year) return fail(ct.name + " is not made until " + std::to_string(ct.available_year));
+        if (date_.year() < ct.available_year) return ct.name + " is not made until " + std::to_string(ct.available_year);
     }
-    if (cmd.cx < 0 || cmd.cy < 0 || cmd.cx >= economy_.width() || cmd.cy >= economy_.height()) {
-        return fail("that is off the map");
-    }
-    if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
-    if (economy_.water(cmd.cx, cmd.cy)) return fail("industries need dry land");
-    if (auto why = access_problem(acting().id(), economy_.node_centre(cmd.cx, cmd.cy))) return fail(*why);
+    if (cmd.cx < 0 || cmd.cy < 0 || cmd.cx >= economy_.width() || cmd.cy >= economy_.height()) return "that is off the map";
+    if (economy_.water(cmd.cx, cmd.cy)) return "industries need dry land";
+    if (auto why = access_problem(acting().id(), economy_.node_centre(cmd.cx, cmd.cy))) return why;
     for (const Site& s : economy_.sites()) {
-        if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) return fail("something is already built there");
+        if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) {
+            return s.kind == IndustryKind::House ? "a town's houses stand there" : "something is already built there";
+        }
     }
     // Footprints never overlap (rt3-clone-spec §3.1).
     const std::int32_t apart = 2 * economy_.footprint_ring();
     for (const Site& s : economy_.sites()) {
         if (s.closed || s.kind == IndustryKind::House) continue;
-        if (std::max(std::abs(s.cx - cmd.cx), std::abs(s.cy - cmd.cy)) <= apart) return fail("too close to another industry");
+        if (std::max(std::abs(s.cx - cmd.cx), std::abs(s.cy - cmd.cy)) <= apart) return "too close to another industry";
     }
+    return cannot_afford(construction_cost(industry_build_cost(data_.balance.industries)));
+}
+
+CommandResult World::run(const BuildIndustry& cmd) {
+    if (terrain_.revision() != economy_terrain_revision_) refresh_economy_terrain();
+    if (auto why = industry_problem(cmd)) return fail(*why);
     const Money cost = construction_cost(industry_build_cost(data_.balance.industries));
     if (auto why = cannot_afford(cost)) return fail(*why);
     acting().invest_industry(cost);

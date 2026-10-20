@@ -244,6 +244,7 @@ private:
     // what their keys set, to click.
     void draw_tool_options() const;
     void tool_options_click(std::size_t index);
+    void draw_industry_options() const;
     // A row of buttons across a panel, from x0 to x1 at y, each pressing a
     // key (the screens' actions, for the mouse).
     struct KeyButton {

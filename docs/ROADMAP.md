@@ -313,7 +313,8 @@ radar choose. The Train tool has a panel: the engines to click, the
 stops so far, buttons for each stop's cars, cargo, full loads and
 service, and Buy; the Track and Station tools have panels of their
 options (double track, curves, tunnel, bridge and overpass frequency,
-undo; station size and what to build, with prices), and the Company
+undo; station size and what to build, with prices; the Industry tool's
+plants to build), and the Company
 and Market screens a row of buttons for their actions. Stations are picked by where they are drawn on screen,
 so far ones near the horizon are as easy to click as near ones. Zoom by
 wheel, smooth trackpad scrolling,

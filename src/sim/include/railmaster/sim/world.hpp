@@ -137,6 +137,9 @@ public:
     // Why a BuildStation would be refused, or nothing; and what it would cost.
     std::optional<std::string> station_problem(const BuildStation& cmd) const;
     Money station_build_cost(const BuildStation& cmd) const;
+    // Why a BuildIndustry would be refused, or nothing (the Industry tool
+    // shows it before the click).
+    std::optional<std::string> industry_problem(const BuildIndustry& cmd) const;
     // Why `company` may not build at `p`, if it may not: a territory it has
     // no access to.
     std::optional<std::string> access_problem(CompanyId company, MapPoint p) const;

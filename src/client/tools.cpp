@@ -1010,7 +1010,9 @@ bool Tools::on_wheel(float sx, float sy, int steps) {
         }
         case RowPanel::Guide: guide_key(key); break;
         case RowPanel::TrainTool: on_key(key, 0); break; // through the stops
-        case RowPanel::ToolOptions:
+        case RowPanel::ToolOptions: // the Industry tool's plants scroll; the other panels stay put
+            if (tool_ == Tool::Industry) on_key(key == SDLK_UP ? SDLK_LEFTBRACKET : SDLK_RIGHTBRACKET, 0);
+            break;
         case RowPanel::KeyButton: break;
         case RowPanel::Console: break;
         }
@@ -1524,7 +1526,8 @@ void Tools::on_click(float sx, float sy, bool right_button) {
 
     on_mouse_move(sx, sy);
     // On a tool's side panel, not the map below it.
-    if (const auto& pb = side_panel_box_; (tool_ == Tool::Train || tool_ == Tool::Track || tool_ == Tool::Station) &&
+    if (const auto& pb = side_panel_box_; (tool_ == Tool::Train || tool_ == Tool::Track || tool_ == Tool::Station ||
+                                           tool_ == Tool::Industry) &&
                                           sx >= pb[0] && sx < pb[2] && sy >= pb[1] && sy < pb[3]) {
         return;
     }
@@ -2835,7 +2838,16 @@ std::optional<sim::SiteId> Tools::site_under_cursor() const {
 
 std::string Tools::industry_text() const {
     const auto id = site_under_cursor();
-    if (!id) return "Open land";
+    if (!id) {
+        // What a click here would build, or why it can't.
+        const auto types = buildable_types();
+        if (types.empty()) return "Open land: no plants can be built yet";
+        const sim::IndustryTypeId t = types[build_choice_ % types.size()];
+        const sim::BuildIndustry cmd{.type = t, .cx = world_.economy().cell_x(hover_), .cy = world_.economy().cell_y(hover_)};
+        if (const auto why = world_.industry_problem(cmd)) return "Cannot build here: " + *why;
+        return "Open land: a " + world_.data().industries.get(t).name + " here costs " +
+               format_money(world_.construction_cost(sim::industry_build_cost(world_.data().balance.industries)));
+    }
     const sim::Site& s = world_.economy().sites()[*id];
     const sim::Balance::Industries& b = world_.data().balance.industries;
     const sim::IndustryType& type = world_.data().industries.get(s.type);
@@ -3916,6 +3928,7 @@ void Tools::draw_ui(const std::string& status) const {
         line2 = inspect_text();
     } else if (tool_ == Tool::Industry) {
         line2 = industry_text();
+        good = line2.rfind("Cannot", 0) != 0;
     } else if (tool_ == Tool::Station && !station_building_) {
         line2 = station_reach_text();
     } else if (tool_ == Tool::Train && !stops_.empty()) {
@@ -3971,6 +3984,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Lists) draw_lists_panel();
     if (tool_ == Tool::Train) draw_train_panel();
     if (tool_ == Tool::Track || tool_ == Tool::Station) draw_tool_options();
+    if (tool_ == Tool::Industry) draw_industry_options();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
     // Money rising from paid trains.
@@ -4695,7 +4709,7 @@ namespace {
 // The options panel's rows: the Track tool's from 0, the Station tool's
 // sizes from kSizeRow and what it builds from kBuildRow.
 enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo };
-constexpr std::size_t kSizeRow = 100, kBuildRow = 200;
+constexpr std::size_t kSizeRow = 100, kBuildRow = 200, kPlantRow = 300;
 constexpr sim::StationBuildingType kBuildings[] = {sim::StationBuildingType::PostOffice, sim::StationBuildingType::Hotel,
                                                    sim::StationBuildingType::Restaurant, sim::StationBuildingType::Tavern};
 } // namespace
@@ -4709,6 +4723,10 @@ void Tools::tool_options_click(std::size_t index) {
     case kOverpasses: on_key(SDLK_g, 0); return;
     case kUndo: on_key(SDLK_z, KMOD_CTRL); return;
     default: break;
+    }
+    if (index >= kPlantRow) {
+        build_choice_ = index - kPlantRow;
+        return;
     }
     if (index >= kSizeRow && index < kSizeRow + 3) {
         station_size_ = static_cast<sim::StationSize>(index - kSizeRow);
@@ -4790,6 +4808,57 @@ void Tools::draw_tool_options() const {
         row(std::string(sim::station_building_name(t)) + " by a station",
             format_money(world_.construction_cost(sim::station_building_cost(t, world_.data().balance))), kBuildRow + 1 + i,
             station_building_ == t);
+    }
+}
+
+void Tools::draw_industry_options() const {
+    if (founding_ || menu_open_ || help_open_ || guide_open_) {
+        side_panel_box_ = {};
+        return;
+    }
+    constexpr float kRowH = 22;
+    const auto types = buildable_types();
+    const auto& data = world_.data();
+    const std::size_t chosen = types.empty() ? 0 : build_choice_ % types.size();
+    const std::size_t shown = std::min<std::size_t>(12, types.size());
+    const std::size_t first = types.size() <= shown ? 0 : std::min(chosen > 5 ? chosen - 5 : 0, types.size() - shown);
+    const float w = 380, x0 = 10, y0 = kToolbarY + kButtonH + 10;
+    const float h = 40 + 3 * 20 + 10 + 22 + kRowH * static_cast<float>(std::max<std::size_t>(1, shown)) + 10;
+    side_panel_box_ = {x0, y0, x0 + w, y0 + h};
+    ui::panel(x0, y0, x0 + w, y0 + h);
+    float y = y0 + 10;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y, "Industry", kScale + 1);
+    y += 30;
+    // What a click on the map does.
+    glColor3f(0.8f, 0.78f, 0.72f);
+    for (const char* line : {"Click an industry to buy it, or yours to upgrade it;", "open land builds the plant chosen below.",
+                             "M and C: what a warehouse or port under the mouse does."}) {
+        draw_text(x0 + 14, y, line, kScale);
+        y += 20;
+    }
+    y += 10;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0 + 14, y, "Plants to build, " + format_money(world_.construction_cost(sim::industry_build_cost(data.balance.industries))) + " each",
+              kScale);
+    y += 22;
+    if (types.empty()) {
+        glColor3f(0.7f, 0.68f, 0.62f);
+        draw_text(x0 + 14, y, "None can be built yet", kScale);
+        return;
+    }
+    for (std::size_t i = first; i < first + shown; ++i) {
+        const sim::IndustryType& t = data.industries.get(types[i]);
+        if (i == chosen) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4);
+        glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(x0 + 14, y, t.name, kScale);
+        std::string makes;
+        for (const sim::CargoId c : t.outputs) makes += (makes.empty() ? "" : ", ") + data.cargo.get(c).name;
+        if (t.kind == sim::IndustryKind::Warehouse) makes = "keeps cargo";
+        glColor3f(0.75f, 0.73f, 0.67f);
+        draw_text(x0 + w - 14 - static_cast<float>(text_width(makes, kScale)), y, makes, kScale);
+        add_row(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4, RowPanel::ToolOptions, kPlantRow + i);
+        y += kRowH;
     }
 }
 
