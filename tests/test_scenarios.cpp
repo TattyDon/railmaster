@@ -702,3 +702,42 @@ TEST_CASE("deliver goals can name a town the loads come from or go to (§14.3)")
     const World loaded = World::load(w.save(), shipped());
     CHECK(loaded.place_delivered_milli(loaded.company().id(), ab) == one_way);
 }
+
+TEST_CASE("counters have scopes: the game, the player, their company or a territory (§14.4 [C])") {
+    CHECK_THROWS_WITH(with_events(R"([{"id": "a", "effects": [{"kind": "add_variable", "target": "n", "scope": "town", "value": 1}]}])"),
+                      "scenario: unknown counter scope 'town'");
+    CHECK_THROWS_WITH(with_events(R"([{"id": "a", "effects": [{"kind": "add_variable", "target": "n", "scope": "territory", "value": 1}]}])"),
+                      "scenario: a territory counter needs a territory");
+    // Every month: +1 to the game's, the player's, the company's and Prussia's own "n";
+    // a second event fires once the company's reaches 2.
+    const Scenario s = with_events(R"([
+        {"id": "count", "repeat_months": 1, "effects": [
+            {"kind": "add_variable", "target": "n", "value": 1},
+            {"kind": "add_variable", "target": "n", "scope": "player", "value": 10},
+            {"kind": "add_variable", "target": "n", "scope": "company", "value": 100},
+            {"kind": "add_variable", "target": "n", "scope": "territory", "territory": "Prussia", "value": 1000}]},
+        {"id": "then", "when": {"variable": {"name": "n", "scope": "company", "at_least": 200}},
+         "effects": [{"kind": "set_variable", "target": "done", "value": 1}]}])");
+    World w = small_world(s, shipped());
+    const auto counter = [](const std::string& name, const char* scope, const char* terr = nullptr) {
+        Goal g{.kind = GoalKind::Variable, .name = name, .count = 1};
+        if (std::string(scope) == "player") g.name = "@player|" + name;
+        if (std::string(scope) == "company") g.name = "@company|" + name;
+        if (terr) g.name = std::string("@territory:") + terr + "|" + name;
+        return g;
+    };
+    run_to(w, Date::from_ymd(1850, 3, 2)); // two month ends
+    CHECK(w.variable("n") == 2);
+    CHECK(check_goal(w, counter("n", "player")).text == "n (yours) 20 of 1");
+    CHECK(check_goal(w, counter("n", "company")).text == "n (your company) 200 of 1");
+    CHECK(check_goal(w, counter("n", "game", "Prussia")).text == "n (Prussia) 2000 of 1");
+    CHECK(w.variable("done") == 1);
+    // A new company starts its own count; the player's and the game's go on.
+    REQUIRE(w.execute(Resign{}).ok);
+    REQUIRE(w.execute(FoundCompany{.name = "Second Go", .personal_investment = Money::dollars(100'000)}).ok);
+    CHECK(w.variable("@company|n") == 0);
+    CHECK(w.variable("@player|n") == 20);
+    run_to(w, Date::from_ymd(1850, 4, 2));
+    CHECK(w.variable("@company|n") == 100);
+    CHECK(w.variable("n") == 3);
+}

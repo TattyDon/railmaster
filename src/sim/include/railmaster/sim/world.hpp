@@ -223,11 +223,14 @@ public:
     // A company's trains' average speed on the road over the last 12 months
     // (distance run over time spent running), in mph; 0 before any running.
     std::int64_t average_speed_mph(CompanyId c) const;
-    // A scenario's counters (rt3-clone-spec §14.4), set by its events.
+    // A scenario's counters (rt3-clone-spec §14.4), set by its events. A
+    // name scoped to the player or their company ("@player|n", "@company|n")
+    // means the human player's own, or their present company's.
     std::int64_t variable(const std::string& name) const {
-        const auto it = variables_.find(name);
+        const auto it = variables_.find(variable_key(name));
         return it == variables_.end() ? 0 : it->second;
     }
+    std::string variable_key(const std::string& name) const;
     // A scenario's track budget: the tiles a company has left, if there is a budget.
     std::optional<std::int64_t> track_tiles_left(CompanyId c) const;
     // How many track builds the player can still undo.

@@ -123,8 +123,8 @@ void World::apply_effects(const std::vector<EventEffect>& effects, std::size_t e
             for (Territory& t : territories_.territories)
                 if (t.name == f.target) t.access_cost = f.amount;
             break;
-        case EffectKind::SetVariable: variables_[f.target] = f.value; break;
-        case EffectKind::AddVariable: variables_[f.target] += f.value; break;
+        case EffectKind::SetVariable: variables_[variable_key(f.target)] = f.value; break;
+        case EffectKind::AddVariable: variables_[variable_key(f.target)] += f.value; break;
         case EffectKind::Briefing: scenario_->briefing = f.text; break;
         case EffectKind::Choice:
             // Parsing keeps choices to an event's own effects.
@@ -300,6 +300,15 @@ void World::record_place_deliveries(CompanyId company, StationId at, const std::
 std::int64_t World::place_delivered_milli(CompanyId company, const Goal& g) const {
     const auto it = place_deliveries_.find(place_key(company, g));
     return it == place_deliveries_.end() ? 0 : it->second;
+}
+
+std::string World::variable_key(const std::string& name) const {
+    if (name.rfind("@player|", 0) == 0) return "@player:" + std::to_string(kHumanPlayer) + name.substr(7);
+    if (name.rfind("@company|", 0) == 0) {
+        const auto co = player_company();
+        return "@company:" + (co ? std::to_string(*co) : std::string("none")) + name.substr(8);
+    }
+    return name; // the game's, or a territory's (its name is part of it)
 }
 
 } // namespace railmaster::sim

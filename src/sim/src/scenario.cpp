@@ -46,6 +46,23 @@ GoalKind parse_kind(const std::string& k) {
     throw std::runtime_error("unknown goal kind '" + k + "'");
 }
 
+// A counter's name with its scope (rt3-clone-spec §14.4 [C]: game, player,
+// company or territory), from "scope" and "territory" beside it: the game's
+// counters keep their plain name; the others are kept as "@player|name",
+// "@company|name" or "@territory:Prussia|name", and World::variable_key
+// makes the first two the player's or their company's own.
+std::string scoped_name(const std::string& name, const nlohmann::json& j) {
+    const std::string scope = j.value("scope", std::string("game"));
+    if (scope == "game") return name;
+    if (scope == "player" || scope == "company") return "@" + scope + "|" + name;
+    if (scope == "territory") {
+        const std::string terr = j.value("territory", std::string());
+        if (terr.empty()) throw std::runtime_error("a territory counter needs a territory");
+        return "@territory:" + terr + "|" + name;
+    }
+    throw std::runtime_error("unknown counter scope '" + scope + "'");
+}
+
 EffectKind parse_effect(const std::string& k) {
     if (k == "news") return EffectKind::News;
     if (k == "company_cash") return EffectKind::CompanyCash;
@@ -115,6 +132,7 @@ Scenario Scenario::from_json(std::string_view json_text) {
             goal.from = g.value("from", std::string());
             goal.to = g.value("to", std::string());
             goal.name = g.value("name", std::string());
+            if (goal.kind == GoalKind::Variable && !goal.name.empty()) goal.name = scoped_name(goal.name, g);
             if ((!goal.from.empty() || !goal.to.empty()) && goal.kind != GoalKind::Deliver) {
                 throw std::runtime_error("from and to are for deliver goals");
             }
@@ -186,7 +204,7 @@ Scenario Scenario::from_json(std::string_view json_text) {
             if (when.contains("before")) event.when.before = parse_date(when.at("before").get<std::string>());
             for (const auto& g : when.value("goals", nlohmann::json::array())) event.when.goals.push_back(parse_goal(g));
             if (when.contains("variable")) {
-                event.when.variable = when.at("variable").at("name").get<std::string>();
+                event.when.variable = scoped_name(when.at("variable").at("name").get<std::string>(), when.at("variable"));
                 event.when.at_least = when.at("variable").value("at_least", std::int64_t{1});
             }
             event.when.chance_percent = when.value("chance_percent", 100);
@@ -199,6 +217,9 @@ Scenario Scenario::from_json(std::string_view json_text) {
                 EventEffect effect;
                 effect.kind = parse_effect(ef.at("kind").get<std::string>());
                 effect.target = ef.value("target", std::string());
+                if ((effect.kind == EffectKind::SetVariable || effect.kind == EffectKind::AddVariable) && !effect.target.empty()) {
+                    effect.target = scoped_name(effect.target, ef);
+                }
                 effect.text = ef.value("text", std::string());
                 effect.percent = ef.value("percent", 100);
                 effect.months = ef.value("months", effect.kind == EffectKind::Choice ? 1 : 0);
@@ -362,7 +383,7 @@ GoalProgress check_goal(const World& w, const Goal& g) {
     }
     case GoalKind::Variable: {
         const std::int64_t have = w.variable(g.name);
-        return {have >= g.count, g.name + " " + std::to_string(have) + " of " + std::to_string(g.count)};
+        return {have >= g.count, variable_label(g.name) + " " + std::to_string(have) + " of " + std::to_string(g.count)};
     }
     case GoalKind::HighestValue: {
         Money best;
@@ -378,6 +399,17 @@ GoalProgress check_goal(const World& w, const Goal& g) {
 std::int64_t scenario_score_milli(Medal m, std::int32_t difficulty_percent, std::int32_t years_early) {
     const std::int64_t base = static_cast<std::int64_t>(m) + 1;
     return base * 1000 * difficulty_percent / 100 * (100 + 5 * std::max(0, years_early)) / 100;
+}
+
+std::string variable_label(const std::string& name) {
+    if (name.empty() || name[0] != '@') return name;
+    const auto bar = name.find('|');
+    if (bar == std::string::npos) return name;
+    const std::string scope = name.substr(1, bar - 1), plain = name.substr(bar + 1);
+    if (scope == "player") return plain + " (yours)";
+    if (scope == "company") return plain + " (your company)";
+    if (scope.rfind("territory:", 0) == 0) return plain + " (" + scope.substr(10) + ")";
+    return plain;
 }
 
 } // namespace railmaster::sim

@@ -57,6 +57,10 @@ struct Goal {
 };
 
 // How far the player is with a goal, for the status screen.
+// A counter's name as the player reads it: "Bridges (your company)",
+// "Forts (Prussia)" (see the scopes in scenario.cpp).
+std::string variable_label(const std::string& name);
+
 struct GoalProgress {
     bool met = false;
     std::string text; // e.g. "Book value $4,200,000 of $10,000,000"

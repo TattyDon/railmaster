@@ -77,7 +77,7 @@ deliver cargo, reach a book value, win the market.
 | `only_railroad` | none | Every rival company has merged away |
 | `highest_value` | none | Your company's market value is above every rival's |
 | `average_speed` | `count` (mph) | Your trains' average speed on the line over the last 12 months (distance run over time spent running, servicing, broken down or held; from the start until a year has passed) is at least this (§14.3 `avgLocoSpeed`) |
-| `variable` | `name`, `count` | The scenario counter is at least this (§14.3) |
+| `variable` | `name`, `count`; optional `scope`, `territory` (see Counters) | The scenario counter is at least this (§14.3) |
 
 Amounts are whole dollars.
 
@@ -160,7 +160,7 @@ Then the event fires with `chance_percent` chance (100 by default).
 | `build_cost` | `percent`, `months` | Scales all construction costs |
 | `unlock_engine` | `target` engine | Makes the engine available from now, even before its year, for good |
 | `territory_price` | `target` territory name, `amount` | Sets a new price for access rights to the territory, for good |
-| `set_variable`, `add_variable` | `target` counter, `value` | Sets or adds to a counter |
+| `set_variable`, `add_variable` | `target` counter, `value`; optional `scope`, `territory` (see Counters) | Sets or adds to a counter |
 | `briefing` | `text` | Replaces the briefing on the status screen |
 | `choice` | `text`, `options`, `months` (default 1) | Asks the player a question, with up to nine answers, each a `label` and its own `effects`. The game pauses and shows it; the player answers with 1-9. Unanswered after `months` month ends, it lapses and nothing happens. A choice cannot offer another choice |
 | `earthquake` | `target` town, `value` radius in cells (default 3), `percent` (default 100) | Each piece of track (anyone's) whose middle lies within the radius of the town's centre is destroyed with this chance, unless a train is on it. Its owner writes it off with nothing back; trains find another way or wait for the line to be rebuilt |
@@ -172,12 +172,28 @@ Then the event fires with `chance_percent` chance (100 by default).
 - **Checks:** cargo, industry, engine and territory names are checked
   against the game data when the game starts.
 - **Ids:** event ids must be unique.
-- **Counters** belong to the whole game; the spec's player, company and
-  territory scopes are not modelled.
+- **Counters** belong to the whole game unless given a scope (see
+  Counters below).
 
 **Offers with deadlines** are choices: an offer to accept or decline,
 with `months` to answer. The shipped Lowland Junction's banker offers a
 loan this way, and collects it later through a counter.
+
+## Counters
+
+Counters (§14.4 [C]) start at 0 and are kept in saves. Wherever one is
+named (a `variable` goal, a condition's `variable`, `set_variable` and
+`add_variable`), `scope` says whose it is:
+
+| `scope` | Whose |
+|---|---|
+| `game` (the default) | The game's: one for everyone |
+| `player` | The player's own, whatever company they run |
+| `company` | The company the player runs now: a company founded after resigning starts its own at 0 |
+| `territory` | The territory named in `territory`, by name |
+
+Goals show them as "Forts (Prussia) 2 of 5", "Bridges (your company) …".
+An unknown scope, or `territory` without a territory, is refused.
 
 ## Medals
 
@@ -199,5 +215,4 @@ deadline).
 
 ## Not yet
 
-- Per-player, per-company and per-territory counters (§14.4).
 - Other disasters than earthquakes and sabotage (the spec names only these).
