@@ -85,7 +85,7 @@ there):
 - Art: any building, engine, car or industry can come from a glTF model
   instead of the shapes drawn in code; see [docs/models.md](docs/models.md)
   for the roles and how to add a pack.
-- The game draws with shaders and shadows where the graphics card allows
+- The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade) where the graphics card allows
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
 - Zoom with the mouse wheel, a two-finger scroll or pinch on a trackpad,

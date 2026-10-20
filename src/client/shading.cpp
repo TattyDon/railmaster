@@ -129,6 +129,9 @@ uniform float u_time;   // seconds, for the water's ripples
 uniform vec3 u_campos;  // the eye, on the map
 uniform int u_clouds;   // 1: clouds' shadows drift over the land
 uniform float u_rain;   // 0 to 1: how hard it rains (or snows)
+uniform sampler2D u_ao; // the sky each spot sees past trees and buildings round it
+uniform vec3 u_ao_scale; // tiles to the texture's coordinates (x, y)
+uniform int u_ao_mode;  // 0 none, 1 the ground (in full), 2 leaves (in part)
 varying vec3 v_world;
 varying vec3 v_normal;
 varying vec4 v_color;
@@ -204,6 +207,12 @@ void main() {
         sun *= 1.0 - 0.5 * u_rain; // a dull light while it rains or snows
         // Sky light from above, warmer light bounced off the ground below.
         vec3 ambient = mix(u_ground, u_sky, n.z * 0.5 + 0.5);
+        if (u_ao_mode > 0) {
+            float occ = 1.0 - texture2D(u_ao, v_world.xy * u_ao_scale.xy).r;
+            if (u_ao_mode == 2) occ *= 0.5;
+            ambient *= 1.0 - occ;
+            sun *= 1.0 - occ * 0.6;
+        }
         rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
         rgb *= 1.0 + 0.45 * roof_snow; // snow stays bright out of the sun
         // Open water (flat and blue): ripples drifting with the wind, the sky
@@ -237,7 +246,9 @@ void main() {
 
 bool g_active = false;
 bool g_in_world = false;
-GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0;
+GLuint g_program = 0, g_white = 0, g_shadow_tex = 0, g_shadow_fbo = 0, g_ao_tex = 0;
+float g_ao_inv_w = 0.0f, g_ao_inv_h = 0.0f;
+GLint u_ao = -1, u_ao_scale = -1, u_ao_mode = -1;
 GLint u_sun_colour = -1, u_sky = -1, u_ground = -1, u_view_inv = -1, u_tex = -1, u_shadow = -1, u_light = -1, u_sun = -1, u_lit = -1, u_shadows = -1, u_texel = -1, u_snow = -1, u_autumn = -1, u_foliage = -1, u_time = -1, u_campos = -1, u_clouds = -1, u_rain = -1;
 bool g_clouds = true;
 float g_rain = 0.0f;
@@ -320,6 +331,9 @@ bool init(bool wanted) {
     u_campos = p_get_uniform_location(g_program, "u_campos");
     u_clouds = p_get_uniform_location(g_program, "u_clouds");
     u_rain = p_get_uniform_location(g_program, "u_rain");
+    u_ao = p_get_uniform_location(g_program, "u_ao");
+    u_ao_scale = p_get_uniform_location(g_program, "u_ao_scale");
+    u_ao_mode = p_get_uniform_location(g_program, "u_ao_mode");
 
     // The shadow map: a depth texture as a framebuffer's only attachment.
     glGenTextures(1, &g_shadow_tex);
@@ -483,6 +497,8 @@ void begin_world(const Camera& cam) {
     p_use_program(g_program);
     p_uniform_matrix4fv(u_view_inv, 1, GL_FALSE, cam.view_inverse().data());
     g_in_world = true;
+    p_active_texture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, g_ao_tex != 0 ? g_ao_tex : g_white);
     p_active_texture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, g_shadow_tex);
     p_active_texture(GL_TEXTURE0);
@@ -507,6 +523,25 @@ void begin_world(const Camera& cam) {
     p_uniform3f(u_campos, vi[12], vi[13], vi[14]);
     p_uniform1i(u_clouds, g_clouds ? 1 : 0);
     p_uniform1f(u_rain, g_rain);
+    p_uniform1i(u_ao, 2);
+    p_uniform3f(u_ao_scale, g_ao_inv_w, g_ao_inv_h, 0.0f);
+    p_uniform1i(u_ao_mode, 0);
+}
+
+void set_occlusion(unsigned texture, float inv_w, float inv_h) {
+    g_ao_tex = texture;
+    g_ao_inv_w = inv_w;
+    g_ao_inv_h = inv_h;
+    if (g_active && g_in_world) {
+        p_active_texture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, g_ao_tex);
+        p_active_texture(GL_TEXTURE0);
+        p_uniform3f(u_ao_scale, inv_w, inv_h, 0.0f);
+    }
+}
+
+void set_ground(bool on) {
+    if (g_active && g_in_world) p_uniform1i(u_ao_mode, on ? 1 : 0);
 }
 
 void set_rain(float amount) { g_rain = std::clamp(amount, 0.0f, 1.0f); }
@@ -521,7 +556,10 @@ void set_clouds(bool on) { g_clouds = on; }
 void set_clock(float seconds) { g_clock = seconds; }
 
 void set_foliage(bool on) {
-    if (g_active && g_in_world) p_uniform1i(u_foliage, on ? 1 : 0);
+    if (g_active && g_in_world) {
+        p_uniform1i(u_foliage, on ? 1 : 0);
+        p_uniform1i(u_ao_mode, on ? 2 : 0);
+    }
 }
 
 void set_season(float snow, float autumn) {

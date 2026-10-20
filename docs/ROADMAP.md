@@ -324,6 +324,13 @@ After dark, windows light up along the town's streets, station lamps
 glow, and engines carry headlamps with a pool of light on the track
 ahead; smoke and track darken with the rest.
 
+Ambient occlusion (shaders): what covers the land (trees, houses,
+industries, stations) is drawn into a coverage map a few texels a tile and
+blurred; the ground's sky light and some of its sunlight dim by it, and
+leaves by half as much, so woods have dark floors and buildings stand in a
+soft pool rather than floating. It is rebuilt with the scene on a worker
+thread, so building track never stalls.
+
 Speed: woods keep two display lists a chunk, model trees near the camera
 and the light code-drawn ones further off; the detailed track (beds,
 sleepers, rails) and the towns, streets and industries are compiled into
@@ -333,7 +340,7 @@ frames a second.
 
 Next:
 - Real art: a 2x2-cell house shape for variety.
-- More shading: ambient occlusion, water reflections, day and night.
+- More shading: screen-space ambient occlusion on buildings themselves.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

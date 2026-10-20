@@ -36,6 +36,12 @@ void set_time_of_day(float phase);
 void set_season(float snow, float autumn);
 // Around drawing trees, so their leaves turn in autumn (grass only fades).
 void set_foliage(bool on);
+// Ambient occlusion: a luminance texture over the map (1 open sky, darker
+// where trees and buildings stand round), `inv_w` and `inv_h` one over the
+// map's size in tiles. The ground takes it in full (set_ground around the
+// terrain), the trees' leaves in part (set_foliage).
+void set_occlusion(unsigned texture, float inv_w, float inv_h);
+void set_ground(bool on);
 // Seconds of real time, for what moves while paused too (the water).
 void set_clock(float seconds);
 // Clouds' shadows drifting over the land.

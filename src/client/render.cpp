@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <chrono>
 #include <cstdlib>
+#include <future>
 #include <tuple>
 #include <unordered_set>
 
@@ -286,6 +288,10 @@ struct TerrainMesh {
     GLuint list = 0;
     std::uint64_t key = 0;
 };
+
+// The terrain's key as draw_terrain last found it, so others need not hash
+// the whole map again each frame.
+std::uint64_t g_terrain_key = 0;
 
 std::uint64_t terrain_key(const sim::Terrain& t, const Camera& cam) {
     std::uint64_t h = 1469598103934665603ull;
@@ -2574,6 +2580,28 @@ constexpr int kTreeChunk = 32;
 
 // `art`: trees from the models where there are some (near the camera), or
 // always the light ones drawn in code (far off).
+// The trees standing on a tile: `f(i, hash, x, y, size)` for each (x, y
+// in tiles), woods by noise and forest ground, clear of what `wooded` holds.
+template <typename Ground, typename F> void tile_trees(const Ground& t, const Occupancy& wooded, int tx, int ty, F f) {
+    const sim::GroundType g = t.ground(tx, ty);
+    if (g == sim::GroundType::Water || g == sim::GroundType::Desert) return;
+    const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
+    const float wood = map_noise(fx, fy, 14.0f, 61) * 0.7f + map_noise(fx, fy, 5.0f, 62) * 0.3f;
+    const std::uint32_t th = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 7);
+    int n = 0;
+    if (g == sim::GroundType::Forest) n = 5;
+    else if (g == sim::GroundType::Rock || g == sim::GroundType::Snow) n = unit(th) < 0.12f ? 1 : 0;
+    else if (wood > 0.66f) n = 4;
+    else if (wood > 0.58f) n = 2;
+    else if (unit(th) < 0.035f) n = 1;
+    for (int i = 0; i < n; ++i) {
+        const std::uint32_t hh = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 11));
+        const float x = fx + 0.1f + 0.8f * unit(hh), y = fy + 0.1f + 0.8f * unit(hh >> 16);
+        if (wooded.blocked(x, y, 0.08f)) continue;
+        f(i, hh, x, y, 0.65f + 0.4f * unit(hh >> 8));
+    }
+}
+
 void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Camera& cam, int cx0, int cy0, bool art_trees) {
     const float trunk[3] = {0.36f, 0.26f, 0.17f};
     struct ArtTree {
@@ -2584,23 +2612,8 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
     glBegin(GL_QUADS);
     for (int ty = cy0; ty < std::min(cy0 + kTreeChunk, t.height()); ++ty) {
         for (int tx = cx0; tx < std::min(cx0 + kTreeChunk, t.width()); ++tx) {
-            const sim::GroundType g = t.ground(tx, ty);
-            if (g == sim::GroundType::Water || g == sim::GroundType::Desert) continue;
-            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
-            const float wood = map_noise(fx, fy, 14.0f, 61) * 0.7f + map_noise(fx, fy, 5.0f, 62) * 0.3f;
-            const std::uint32_t th = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 7);
-            int n = 0;
-            if (g == sim::GroundType::Forest) n = 5;
-            else if (g == sim::GroundType::Rock || g == sim::GroundType::Snow) n = unit(th) < 0.12f ? 1 : 0;
-            else if (wood > 0.66f) n = 4;
-            else if (wood > 0.58f) n = 2;
-            else if (unit(th) < 0.035f) n = 1;
-            for (int i = 0; i < n; ++i) {
-                const std::uint32_t hh = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 11));
-                const float x = fx + 0.1f + 0.8f * unit(hh), y = fy + 0.1f + 0.8f * unit(hh >> 16);
-                if (wooded.blocked(x, y, 0.08f)) continue;
+            tile_trees(t, wooded, tx, ty, [&](int i, std::uint32_t hh, float x, float y, float size) {
                 const float base = cam.ground_z(x, y) - 0.01f;
-                const float size = 0.65f + 0.4f * unit(hh >> 8);
                 const float shade = 0.82f + 0.3f * unit(hh >> 4);
                 // Stands of conifers among broadleaf woods, and the odd one mixed in.
                 const float pick = unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 211)));
@@ -2609,7 +2622,7 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
                 if (const models::Model* m = art_trees ? models::pick(conifer ? "tree_conifer" : "tree_broadleaf", hh >> 3) : nullptr) {
                     const float yaw = unit(hh >> 6) * 6.2831853f;
                     art.push_back({m, x, y, base + 0.01f, std::cos(yaw), std::sin(yaw), 0.42f * size});
-                    continue;
+                    return;
                 }
                 box(x, y, base, 1, 0, 0.012f * size, 0.012f * size, 0.1f * size, trunk, trunk);
                 if (conifer) {
@@ -2626,7 +2639,7 @@ void build_tree_chunk(const sim::Terrain& t, const Occupancy& wooded, const Came
                     frustum(x, y, base + 0.2f * size, r, base + 0.3f * size, r * 0.85f, leaf);
                     frustum(x, y, base + 0.3f * size, r * 0.85f, base + 0.38f * size, 0.0f, top);
                 }
-            }
+            });
         }
     }
     glEnd();
@@ -2730,6 +2743,7 @@ void draw_terrain(const sim::Terrain& t, const Camera& cam) {
     }
     static TerrainMesh mesh;
     const std::uint64_t key = terrain_key(t, cam);
+    g_terrain_key = key;
     if (mesh.list == 0 || mesh.key != key) {
         // Made now: a texture upload inside the list would only be recorded.
         ground_texture();
@@ -2741,7 +2755,9 @@ void draw_terrain(const sim::Terrain& t, const Camera& cam) {
         mesh.key = key;
     }
     begin_lit();
+    shading::set_ground(true);
     glCallList(mesh.list);
+    shading::set_ground(false);
     end_lit();
 }
 
@@ -3136,6 +3152,156 @@ void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& c
     }
 }
 
+// Ambient occlusion on the ground (shaders): how much of the sky each spot
+// sees past what stands round it. What covers the land (trees, houses,
+// industries, stations) is drawn into a grid a few texels a tile, blurred
+// so it spreads a little way out, and the shader dims the ground's ambient
+// light (and some of the sun) by it: woods get dark floors, and buildings
+// stand in a soft pool instead of floating. Rebuilt with the scene, on a
+// worker thread from a copy of what it needs, so building never stalls.
+struct OcclusionInput {
+    struct Ground {
+        int w = 0, h = 0;
+        std::vector<sim::GroundType> g;
+        sim::GroundType ground(int x, int y) const { return g[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)]; }
+    } ground;
+    std::optional<Occupancy> wooded; // empty: no trees
+    std::vector<Plot> plots;
+    std::vector<std::array<float, 3>> squares; // industries: centre and half side, tiles
+    std::vector<std::array<float, 3>> discs;   // stations: centre and radius, tiles
+};
+
+struct Occlusion {
+    int w = 0, h = 0;             // texels
+    int tiles_w = 0, tiles_h = 0; // the map it covers
+    std::vector<unsigned char> sky;
+};
+
+Occlusion compute_occlusion(const OcclusionInput& in) {
+    const int w = in.ground.w, h = in.ground.h;
+    const int r = std::clamp(1536 / std::max(w, h), 2, 6); // texels a tile
+    const int tw = w * r, th = h * r;
+    std::vector<float> cover(static_cast<std::size_t>(tw) * static_cast<std::size_t>(th), 0.0f);
+    const auto fr = static_cast<float>(r);
+    // Cover `v` over the points (tiles) within `reach` of the centre that are `inside`.
+    const auto stamp = [&](float x, float y, float reach, float v, auto inside) {
+        const int x0 = std::max(0, static_cast<int>((x - reach) * fr)), x1 = std::min(tw - 1, static_cast<int>((x + reach) * fr));
+        const int y0 = std::max(0, static_cast<int>((y - reach) * fr)), y1 = std::min(th - 1, static_cast<int>((y + reach) * fr));
+        for (int yy = y0; yy <= y1; ++yy)
+            for (int xx = x0; xx <= x1; ++xx) {
+                const float px = (static_cast<float>(xx) + 0.5f) / fr - x, py = (static_cast<float>(yy) + 0.5f) / fr - y;
+                float& c = cover[static_cast<std::size_t>(yy) * static_cast<std::size_t>(tw) + static_cast<std::size_t>(xx)];
+                if (inside(px, py)) c = std::max(c, v);
+            }
+    };
+    const auto disc = [&](float x, float y, float rad, float v) {
+        // At least a texel, so small trees still count.
+        const float rr = std::max(rad, 0.5f / fr);
+        stamp(x, y, rr, v, [&](float px, float py) { return px * px + py * py <= rr * rr; });
+    };
+    if (in.wooded) {
+        for (int ty = 0; ty < h; ++ty)
+            for (int tx = 0; tx < w; ++tx)
+                tile_trees(in.ground, *in.wooded, tx, ty, [&](int, std::uint32_t, float x, float y, float size) { disc(x, y, 0.15f * size, 0.9f); });
+    }
+    for (const Plot& p : in.plots) {
+        stamp(p.x, p.y, p.hl + p.hw, 1.0f, [&](float px, float py) {
+            return std::fabs(px * p.dx + py * p.dy) <= p.hl && std::fabs(-px * p.dy + py * p.dx) <= p.hw;
+        });
+    }
+    for (const auto& [x, y, half] : in.squares) {
+        stamp(x, y, half, 0.6f, [&](float px, float py) { return std::fabs(px) <= half && std::fabs(py) <= half; });
+    }
+    for (const auto& [x, y, rad] : in.discs) disc(x, y, rad, 0.6f);
+    // Two box blurs, each about half a tile each way: roughly a Gaussian,
+    // so the dark fades out softly.
+    const int br = std::max(1, r / 2);
+    const float n = 1.0f / static_cast<float>(2 * br + 1);
+    std::vector<float> tmp(cover.size());
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int y = 0; y < th; ++y) {
+            const float* src = &cover[static_cast<std::size_t>(y) * static_cast<std::size_t>(tw)];
+            float* out = &tmp[static_cast<std::size_t>(y) * static_cast<std::size_t>(tw)];
+            float sum = 0;
+            for (int x = -br; x <= br; ++x) sum += src[std::clamp(x, 0, tw - 1)];
+            for (int x = 0; x < tw; ++x) {
+                out[x] = sum * n;
+                sum += src[std::min(x + br + 1, tw - 1)] - src[std::max(x - br, 0)];
+            }
+        }
+        // Down the columns a row at a time, keeping each column's running
+        // sum, so memory is read in order.
+        const auto row = [&](int y) { return &tmp[static_cast<std::size_t>(std::clamp(y, 0, th - 1)) * static_cast<std::size_t>(tw)]; };
+        std::vector<float> sums(static_cast<std::size_t>(tw), 0.0f);
+        for (int y = -br; y <= br; ++y) {
+            const float* r0 = row(y);
+            for (int x = 0; x < tw; ++x) sums[static_cast<std::size_t>(x)] += r0[x];
+        }
+        for (int y = 0; y < th; ++y) {
+            float* out = &cover[static_cast<std::size_t>(y) * static_cast<std::size_t>(tw)];
+            const float *add = row(y + br + 1), *drop = row(y - br);
+            for (int x = 0; x < tw; ++x) {
+                out[x] = sums[static_cast<std::size_t>(x)] * n;
+                sums[static_cast<std::size_t>(x)] += add[x] - drop[x];
+            }
+        }
+    }
+    Occlusion o{tw, th, w, h, std::vector<unsigned char>(cover.size())};
+    for (std::size_t i = 0; i < cover.size(); ++i) o.sky[i] = static_cast<unsigned char>(255.0f * (1.0f - 0.65f * std::min(1.0f, cover[i] * 2.2f)));
+    return o;
+}
+
+void update_occlusion(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
+                      const Scene& sc, const Camera& cam) {
+    if (!shading::active() || !cam.terrain) return;
+    const sim::Terrain& t = *cam.terrain;
+    static std::uint64_t wanted = 0;
+    static std::future<Occlusion> job;
+    static GLuint tex = 0;
+    const auto upload = [&](const Occlusion& o) {
+        if (tex == 0) glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        // Already blurred, so it needs no mipmaps to look smooth far off.
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, o.w, o.h, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, o.sky.data());
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+        glBindTexture(GL_TEXTURE_2D, shading::white_texture()); // what untextured drawing expects
+        shading::set_occlusion(tex, 1.0f / static_cast<float>(o.tiles_w), 1.0f / static_cast<float>(o.tiles_h));
+    };
+    // A finished job goes up as soon as it is ready.
+    if (job.valid() && job.wait_for(std::chrono::seconds(0)) == std::future_status::ready) upload(job.get());
+    const std::uint64_t key = (sc.version * 1099511628211ull ^ g_terrain_key) * 2 + (cam.show_trees ? 1 : 0);
+    if (wanted == key || job.valid()) return; // up to date, or one is under way (the next frame starts the newer)
+    const bool first = wanted == 0;
+    wanted = key;
+    OcclusionInput in;
+    in.ground.w = t.width();
+    in.ground.h = t.height();
+    in.ground.g.resize(static_cast<std::size_t>(t.width()) * static_cast<std::size_t>(t.height()));
+    for (int y = 0; y < t.height(); ++y)
+        for (int x = 0; x < t.width(); ++x) in.ground.g[static_cast<std::size_t>(y) * static_cast<std::size_t>(t.width()) + static_cast<std::size_t>(x)] = t.ground(x, y);
+    if (cam.show_trees) in.wooded = *sc.wooded;
+    in.plots = sc.towns.plots;
+    const auto k = static_cast<float>(eco.cells_per_node());
+    for (const sim::Site& s : eco.sites()) {
+        if (s.closed || industries.get(s.type).kind == sim::IndustryKind::House) continue;
+        in.squares.push_back({(static_cast<float>(s.cx) + 0.5f) * k, (static_cast<float>(s.cy) + 0.5f) * k, 0.25f * k});
+    }
+    const float s = object_scale(cam);
+    for (const sim::Station& st : rw.stations()) {
+        const sim::TrackNode& node = rw.track().node(st.node);
+        const float reach = (st.size == sim::StationSize::Large ? 0.4f : st.size == sim::StationSize::Small ? 0.2f : 0.3f) * s;
+        in.discs.push_back({static_cast<float>(node.pos.x_mm) / cam.mm_per_tile, static_cast<float>(node.pos.y_mm) / cam.mm_per_tile, reach});
+    }
+    // The first is made at once, so the view never opens without it.
+    if (first) upload(compute_occlusion(in));
+    else job = std::async(std::launch::async, [in = std::move(in)] { return compute_occlusion(in); });
+}
+
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
                 std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
@@ -3162,6 +3328,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
     }
     if (cam.three_d) {
         const Scene& sc = scene(eco, industries, rw, cam);
+        update_occlusion(eco, industries, rw, sc, cam);
         const TownLayout& towns = sc.towns;
         // Towns and industries change only with the scene (and the streets
         // with the era), so they are compiled into a display list; the
