@@ -10,6 +10,7 @@
 #include <SDL_opengl.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <chrono>
 #include <cstdlib>
@@ -2019,14 +2020,26 @@ public:
             const sim::TrackNode& n = net.node(st.node);
             const float reach = 0.25f + (st.size == sim::StationSize::Large ? 0.55f : st.size == sim::StationSize::Small ? 0.3f : 0.4f) * s;
             mark(tile(n.pos.x_mm), tile(n.pos.y_mm), reach);
+            yards_.push_back({tile(n.pos.x_mm), tile(n.pos.y_mm), reach});
         }
-        for (const sim::StationBuilding& b : rw.station_buildings()) mark(tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s);
+        for (const sim::StationBuilding& b : rw.station_buildings()) {
+            mark(tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s);
+            yards_.push_back({tile(b.pos.x_mm), tile(b.pos.y_mm), 0.12f * s});
+        }
         for (const sim::ServiceBuilding& b : rw.service_buildings()) {
             float dx, dy, x, y;
             track_along(net, b.node, dx, dy);
             service_spot(net, cam, b.node, dx, dy, s, service_slot(rw, b), x, y);
             mark(x, y, 0.1f + 0.2f * s);
+            yards_.push_back({x, y, 0.1f + 0.2f * s});
         }
+    }
+    // Is the point (tiles) within a station's grounds or a railway
+    // building's? Streets stop short of them (they may cross plain track).
+    bool in_yard(float x, float y) const {
+        return std::any_of(yards_.begin(), yards_.end(), [&](const std::array<float, 3>& d) {
+            return std::hypot(x - d[0], y - d[1]) <= d[2] + 0.06f;
+        });
     }
     // A disc `r` tiles round a point (towns, for the trees).
     void mark_disc(float x, float y, float r) { mark(x, y, r); }
@@ -2061,6 +2074,7 @@ private:
     }
     int w_, h_;
     std::vector<bool> cells_;
+    std::vector<std::array<float, 3>> yards_; // stations and railway buildings: centre and reach, tiles
 };
 
 // Towns (rt3-clone-spec §15.6 views): each town's houses stand in rows
@@ -2115,7 +2129,24 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             float x0, y0, x1, y1;
             world(a0, c0, x0, y0);
             world(a1, c1, x1, y1);
-            out.streets.insert(out.streets.end(), {x0, y0, x1, y1});
+            // In pieces, leaving out what would run through a station's
+            // grounds or a railway building.
+            const int steps = std::max(1, static_cast<int>(std::hypot(x1 - x0, y1 - y0) / 0.04f));
+            std::optional<float> from;
+            const auto emit = [&](float t0, float t1) {
+                if ((t1 - t0) * std::hypot(x1 - x0, y1 - y0) < 0.08f) return; // a stub: leave it out
+                out.streets.insert(out.streets.end(), {x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1});
+            };
+            for (int i = 0; i <= steps; ++i) {
+                const float t = static_cast<float>(i) / static_cast<float>(steps);
+                const bool clear = !taken.in_yard(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+                if (clear && !from) from = t;
+                if (!clear && from) {
+                    emit(*from, std::max(*from, t - 1.0f / static_cast<float>(steps)));
+                    from.reset();
+                }
+            }
+            if (from) emit(*from, 1.0f);
         };
         const std::size_t first = out.plots.size();
         // The town's buildings fill the plots nearest its centre (a little

@@ -203,7 +203,8 @@ a ragged edge and the odd garden, clear of the railway, industries and
 water. Buildings face their street with windows on each floor and a door:
 cottages, two-storey houses and terraced rows outside, shops and offices
 with awnings in the middle (taller as the town grows) and a church with a
-spire. Streets are dirt, then gravel from 1890 and asphalt from 1930.
+spire. Streets are dirt, then gravel from 1890 and asphalt from 1930. Streets may cross plain track, but stop short of
+stations and railway buildings, leaving an open square round each.
 
 Rolling stock is modelled: steam engines with red spoked drivers, a pony
 truck, smokebox, flared chimney, brass steam dome, sand dome, headlamp,
