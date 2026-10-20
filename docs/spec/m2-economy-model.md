@@ -148,6 +148,18 @@ Researched rules [economy-cargo.md §1, §7, §9; trains-track-operations.md §2
 
 How we implement them (code: `freight.hpp`):
 
+- **Footprints** (rt3-clone-spec §3.1 [C]): every industry stands on a
+  square `industries.footprint_cells` (4) map cells across, centred on its
+  economy node. A station reaches it when the station is within its radius
+  of any part of that square (each way, as for nodes), and then draws on
+  and prices at the industry's node even when that node's centre is out of
+  range. Houses are reached at their node's centre, as before, so towns do
+  not reach further. Its production, stock and prices stay at its node:
+  the price field is per node. New maps, new industries over time and
+  built plants keep footprints apart (on the Small map's 2 × 2-cell nodes,
+  industries are at least three nodes apart and two from any house);
+  industries placed by hand on a map are left where they are.
+
 1. **Gathering (daily).** A station has one price per cargo: the best in
    its catchment, used both for buying and selling there. Using the cheapest
    cell for buying would let trains earn the price spread inside one town.

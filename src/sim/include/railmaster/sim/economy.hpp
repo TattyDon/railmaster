@@ -175,6 +175,30 @@ public:
     std::int32_t cells_between(std::int32_t ax, std::int32_t ay, std::int32_t bx, std::int32_t by) const {
         return std::max(std::abs(ax - bx), std::abs(ay - by)) * cells_per_node_;
     }
+    // Industries' footprint across, in map cells (balance: industries.
+    // footprint_cells), and how many nodes either side of its own it reaches
+    // into: industries closer than twice that would overlap.
+    std::int32_t footprint_cells() const { return footprint_cells_; }
+    std::int32_t footprint_ring() const {
+        return std::max(0, (footprint_cells_ - cells_per_node_ + 2 * cells_per_node_ - 1) / (2 * cells_per_node_));
+    }
+    // Whether a station at `p` reaching `r_mm` (each way, as within) reaches
+    // the site: an industry anywhere on its footprint, a house at its node's
+    // centre; always the site on the node holding `p`.
+    bool reaches(const Site& s, MapPoint p, std::int64_t r_mm) const;
+    // Calls f(x, y) for every node a station at `p` reaching `r_mm` draws on:
+    // those for_nodes_within gives, then the nodes of industries it reaches
+    // whose own node is beyond that.
+    template <typename F>
+    void for_reach(MapPoint p, std::int64_t r_mm, F&& f) const {
+        for_nodes_within(p, r_mm, f);
+        const std::int32_t px = cell_x(p), py = cell_y(p);
+        for (const Site& s : sites_) {
+            if (s.closed || s.kind == IndustryKind::House) continue;
+            if ((s.cx == px && s.cy == py) || within(s.cx, s.cy, p, r_mm)) continue; // already given
+            if (reaches(s, p, r_mm)) f(s.cx, s.cy);
+        }
+    }
     // Calls f(x, y) for every node whose centre is within `r_mm` of `p`, row
     // by row, and always the node holding `p`.
     template <typename F>
@@ -308,6 +332,7 @@ private:
     std::int32_t activity_percent_ = 100;
     std::vector<std::int32_t> demand_percent_; // by cargo; 100 when absent
     std::int32_t warehouse_radius_ = 2;
+    std::int32_t footprint_cells_ = 4; // from the balance, not saved
     std::int32_t warehouse_spoilage_percent_ = 25;
     std::int32_t convert_yield_percent_ = 25;
     std::vector<Site> sites_;

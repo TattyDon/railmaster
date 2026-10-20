@@ -123,6 +123,7 @@ Economy::Economy(std::int32_t width_cells, std::int32_t height_cells, std::int64
     : width_(width_cells), height_(height_cells), cell_size_mm_(cell_size_mm),
       cells_per_node_(std::max(1, cells_per_node)), balance_(balance.economy) {
     warehouse_radius_ = balance.industries.warehouse_radius_cells;
+    footprint_cells_ = std::max(1, balance.industries.footprint_cells);
     warehouse_spoilage_percent_ = balance.industries.warehouse_spoilage_percent;
     convert_yield_percent_ = balance.industries.convert_yield_percent;
     if (width_ <= 0 || height_ <= 0 || cell_size_mm_ <= 0) throw std::invalid_argument("bad economy grid size");
@@ -236,6 +237,17 @@ void Economy::apply_borders() {
 bool Economy::within(std::int32_t cx, std::int32_t cy, MapPoint p, std::int64_t r_mm) const {
     const MapPoint c = node_centre(cx, cy);
     return std::abs(c.x_mm - p.x_mm) <= r_mm && std::abs(c.y_mm - p.y_mm) <= r_mm;
+}
+
+bool Economy::reaches(const Site& s, MapPoint p, std::int64_t r_mm) const {
+    if (s.cx == cell_x(p) && s.cy == cell_y(p)) return true;
+    if (s.kind == IndustryKind::House) return within(s.cx, s.cy, p, r_mm);
+    // The gap from p to the footprint's square, each way.
+    const MapPoint c = node_centre(s.cx, s.cy);
+    const std::int64_t half = std::int64_t{footprint_cells_} * cell_size_mm_ / cells_per_node_ / 2;
+    const std::int64_t gx = std::max<std::int64_t>(0, std::abs(c.x_mm - p.x_mm) - half);
+    const std::int64_t gy = std::max<std::int64_t>(0, std::abs(c.y_mm - p.y_mm) - half);
+    return gx <= r_mm && gy <= r_mm;
 }
 
 std::int64_t Economy::area_permille() const {
@@ -787,6 +799,26 @@ std::int32_t usual_count(const IndustryType& t, const Balance::MapGeneration& mg
     }
 }
 
+// Room for an industry at node (x, y): its node and the ring of nodes its
+// footprint reaches into all free, so footprints never overlap each other
+// or a house. take_footprint then marks them.
+bool footprint_free(const Economy& e, const std::vector<bool>& taken, std::int32_t x, std::int32_t y) {
+    const std::int32_t r = e.footprint_ring();
+    for (std::int32_t ny = y - r; ny <= y + r; ++ny)
+        for (std::int32_t nx = x - r; nx <= x + r; ++nx) {
+            if (nx < 0 || ny < 0 || nx >= e.width() || ny >= e.height()) continue;
+            if (taken[static_cast<std::size_t>(ny) * static_cast<std::size_t>(e.width()) + static_cast<std::size_t>(nx)]) return false;
+        }
+    return true;
+}
+
+void take_footprint(const Economy& e, std::vector<bool>& taken, std::int32_t x, std::int32_t y) {
+    const std::int32_t r = e.footprint_ring();
+    for (std::int32_t ny = std::max(0, y - r); ny <= std::min(e.height() - 1, y + r); ++ny)
+        for (std::int32_t nx = std::max(0, x - r); nx <= std::min(e.width() - 1, x + r); ++nx)
+            taken[static_cast<std::size_t>(ny) * static_cast<std::size_t>(e.width()) + static_cast<std::size_t>(nx)] = true;
+}
+
 // Raw producers go anywhere on open land; processors and consumers go near
 // towns, where their customers are. `taken` marks occupied cells.
 std::optional<SiteId> place_site(Economy& economy, const IndustryRegistry& industries, IndustryTypeId type,
@@ -805,9 +837,8 @@ std::optional<SiteId> place_site(Economy& economy, const IndustryRegistry& indus
             y = rng.between(0, h - 1);
         }
         if (x < 0 || y < 0 || x >= w || y >= h || economy.water(x, y)) continue;
-        const auto i = static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
-        if (taken[i]) continue;
-        taken[i] = true;
+        if (!footprint_free(economy, taken, x, y)) continue;
+        take_footprint(economy, taken, x, y);
         return economy.add_site(industries, type, x, y);
     }
     return std::nullopt;
@@ -821,7 +852,9 @@ std::vector<SiteId> spawn_industries(Economy& economy, const CargoRegistry& carg
     const std::int32_t w = economy.width(), h = economy.height();
     std::vector<bool> taken(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
     for (const Site& s : economy.sites()) {
-        if (!s.closed) taken[static_cast<std::size_t>(s.cy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(s.cx)] = true;
+        if (s.closed) continue;
+        if (s.kind == IndustryKind::House) taken[static_cast<std::size_t>(s.cy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(s.cx)] = true;
+        else take_footprint(economy, taken, s.cx, s.cy);
     }
     const std::int64_t area = economy.area_permille();
     std::vector<SiteId> opened;
@@ -944,16 +977,17 @@ void populate_economy(Economy& economy, const CargoRegistry& cargo,
             else if (x == 0 || y == 0 || x == w - 1 || y == h - 1) edge.emplace_back(x, y);
         }
     }
-    for (std::int32_t i = 0; i < scaled(mg.ports); ++i) {
+    for (std::int32_t i = 0; i < scaled(mg.ports);) {
         auto& pool = !coast.empty() ? coast : edge;
         if (pool.empty()) return;
         const std::size_t pick = rng.below(static_cast<std::uint32_t>(pool.size()));
         const auto [x, y] = pool[pick];
         pool.erase(pool.begin() + static_cast<std::ptrdiff_t>(pick));
-        if (taken[idx(x, y)]) continue;
+        if (!footprint_free(economy, taken, x, y)) continue; // try another spot
+        ++i;
         const SiteId id = economy.add_site(industries, *port, x, y);
         economy.site_mut(id).port_mode = static_cast<PortMode>(rng.below(3));
-        taken[idx(x, y)] = true;
+        take_footprint(economy, taken, x, y);
     }
 }
 

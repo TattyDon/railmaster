@@ -172,6 +172,7 @@ Early development. Done so far:
 - post offices, hotels, restaurants and taverns by stations, sharing each
   station's passenger trade
 - industries that slow down when their output piles up unsold
+- industries on yards of 4 × 4 cells, fenced and cleared on the map: a station reaching any part of the yard reaches the industry
 - towns that grow with good service (star ratings by each name), ports on
   the coast that import and export, warehouses you build, and new industries
   appearing over the years

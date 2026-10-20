@@ -67,6 +67,9 @@ A test replays a busy game with rivals this way.
 
 Games changed outside commands (tests that edit the terrain directly, for
 example) do not replay; the client changes the game only through commands.
+A replay also needs the simulation code the save was made with: a save
+from before a change to map generation or the rules (industry footprints,
+for example) still loads, from its saved state, but replays differently.
 
 ## Compatibility
 

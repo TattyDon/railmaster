@@ -27,6 +27,7 @@ Last reviewed against spec v1.0 (9 October 2026).
 | §6.3 [C] | Refinery: oil → diesel; rubber plantation (1900) | missing (rubber had no source) | added |
 | §6.3 [C] | Houses take milk only until ~1890 | always | until 1890 |
 | §2 [D] | Every game starts paused | started running | starts paused |
+| §3.1 [C] | Industries have a 4 × 4 cell footprint | one economy node (2 × 2 cells on the Small map) | a 4 × 4 cell yard centred on the node: a station reaching any of it reaches the industry; footprints never overlap each other or houses; production and prices stay at the node [our adaptation] |
 | §5.1, §5.3 [D] | Middlemen cheap along water and coasts, slower over mountains; prices flat along coasts, steep across ranges | uniform | per-cell conductance from terrain weights price coupling and drift cost and speed [I numbers] |
 | §5.5 [C] | Five economic states, checked twice a year; production, costs, prime rate, share prices | none | as the spec's table; transitions as its [I] matrix |
 | §8.5 [D] | Any company may run over a rival's track and use its stations; the owner gets the share of revenue matching the distance on its track; the runner pays all fuel | one company | as documented, measured per leg [I] ([rivals-model.md](rivals-model.md)) |
@@ -111,8 +112,8 @@ Grouped by the spec's own build order (§17).
 - Measured per-locomotive numbers to replace ours (§17 items 1 and 4).
 
 **Economy**
-- Industry and demand-block footprints of 4 × 4 cells (§3.1 [C]); ours sit
-  on one economy node (2 × 2 cells on the Small map).
+- Demand-block footprints of 4 × 4 cells (§3.1 [C]): houses still sit on
+  one economy node (industries have their footprint).
 
 **Express**
 - Units with origin and destination houses chosen by gravity weighting;

@@ -357,6 +357,10 @@ struct Balance {
         // A converting warehouse makes this much of its output for each load
         // taken in [I: the one observed case had a "low yield"].
         std::int32_t convert_yield_percent = 25;
+        // Industries stand on a square this many map cells across, centred
+        // on their economy node (rt3-clone-spec §3.1 [C]: 4 x 4). A station
+        // reaching any of it reaches the industry; footprints never overlap.
+        std::int32_t footprint_cells = 4;
     } industries;
 
     // The business cycle (rt3-clone-spec §5.5). Arrays run Depression,

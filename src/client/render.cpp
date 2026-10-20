@@ -1056,6 +1056,39 @@ bool ends_with(const std::string& s, const char* suffix) {
     return s.size() >= tail.size() && s.compare(s.size() - tail.size(), tail.size(), tail) == 0;
 }
 
+bool on_water(float x, float y, const Camera& cam);
+
+// An industry's yard (its footprint, rt3-clone-spec §3.1), `half` tiles
+// each way, clear of trees and houses: trodden earth round the buildings,
+// and a fence on the yard's bounds where it is not farmland (whose fields
+// have their own) or a port (on the shore).
+// Inside GL_QUADS.
+void industry_yard(const sim::IndustryType& t, float x, float y, float half, const Camera& cam) {
+    const bool farm = ends_with(t.key, "_farm") || t.key == "fruit_orchard" || t.key == "cattle_ranch" ||
+                      t.key == "rubber_plantation";
+    const bool port = t.kind == sim::IndustryKind::Port;
+    const float earth[3] = {0.5f, 0.46f, 0.37f}, wood[3] = {0.45f, 0.36f, 0.25f};
+    glNormal3f(0, 0, 1);
+    if (!farm) {
+        glColor3fv(earth);
+        constexpr int kSteps = 4; // follows the ground
+        const float inner = half * 0.6f;
+        for (int j = 0; j < kSteps; ++j)
+            for (int i = 0; i < kSteps; ++i) {
+                const float step = 2 * inner / kSteps;
+                const float qx = x - inner + step * static_cast<float>(i), qy = y - inner + step * static_cast<float>(j);
+                if (on_water(qx + step / 2, qy + step / 2, cam)) continue;
+                ground_quad(qx, qy, qx + step, qy + step, cam);
+            }
+    }
+    if (farm || port) return;
+    const float x0 = x - half, y0 = y - half, x1 = x + half, y1 = y + half;
+    // Round three sides, open towards the south, where the track usually comes.
+    fence(x0, y0, x1, y0, cam, wood);
+    fence(x0, y0, x0, y1, cam, wood);
+    fence(x1, y0, x1, y1, cam, wood);
+}
+
 // One industry, shaped by what it is (k: map cells across its spot).
 void industry_3d(const sim::IndustryType& t, float x, float y, float k, std::uint32_t seed, const Camera& cam) {
     const std::string& key = t.key;
@@ -2045,8 +2078,10 @@ public:
     void mark_disc(float x, float y, float r) { mark(x, y, r); }
     // Industries' spots, `half` tiles each way from their centres.
     void mark_square(float x, float y, float half) {
-        for (float yy = y - half; yy <= y + half; yy += kCell)
-            for (float xx = x - half; xx <= x + half; xx += kCell) mark(xx, yy, 0.0f);
+        // Every cell the square overlaps.
+        for (int cy = std::max(0, cell(y - half)); cy <= std::min(h_ - 1, cell(y + half)); ++cy)
+            for (int cx = std::max(0, cell(x - half)); cx <= std::min(w_ - 1, cell(x + half)); ++cx)
+                cells_[static_cast<std::size_t>(cy) * static_cast<std::size_t>(w_) + static_cast<std::size_t>(cx)] = true;
     }
     // Is any cell within `r` tiles of the point taken?
     bool blocked(float x, float y, float r) const {
@@ -2616,7 +2651,8 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
     sc.taken.emplace(rw, cam, width, height);
     for (const sim::Site& site : eco.sites()) {
         if (site.closed || industries.get(site.type).kind == sim::IndustryKind::House) continue;
-        sc.taken->mark_square((static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k, 0.4f * k);
+        sc.taken->mark_square((static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k,
+                              0.5f * std::max(k, static_cast<float>(eco.footprint_cells())));
     }
     sc.towns = layout_towns(eco, industries, *sc.taken, cam);
     sc.wooded = sc.taken;
@@ -3426,6 +3462,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
     const float px = 1.0f / cam.zoom;
     // Drawing is in map cells; a site sits at the centre of its economy node.
     const auto k = static_cast<float>(eco.cells_per_node());
+    // An industry's yard: its footprint (rt3-clone-spec §3.1), or its node
+    // where that is bigger. Its buildings keep to the middle, at the node's scale.
+    const float spot = std::max(k, static_cast<float>(eco.footprint_cells()));
     const auto cell_square = [&](std::int32_t cx, std::int32_t cy, float half) {
         const float x = (static_cast<float>(cx) + 0.5f) * k, y = (static_cast<float>(cy) + 0.5f) * k;
         ground_quad(x - half, y - half, x + half, y + half, cam);
@@ -3441,7 +3480,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             if (!makes && !uses) continue;
             if (makes) glColor3f(0.9f, 0.1f, 0.1f);
             else glColor3f(0.1f, 0.85f, 0.2f);
-            cell_square(s.cx, s.cy, std::max(0.45f * k, 6 * px));
+            cell_square(s.cx, s.cy, std::max(0.45f * spot, 6 * px));
         }
         glEnd();
     }
@@ -3505,6 +3544,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const float x0 = (static_cast<float>(s.cx) + 0.5f) * k, y0 = (static_cast<float>(s.cy) + 0.5f) * k;
             if (t.kind == sim::IndustryKind::House) continue; // laid out by town, above
             const std::uint32_t seed = hash(static_cast<std::uint32_t>(s.cx), static_cast<std::uint32_t>(s.cy), 3);
+            if (spot > k) industry_yard(t, x0, y0, spot * 0.5f, cam);
             if (const models::Model* m = models::pick("industry:" + t.key, seed)) {
                 // In place of the shapes drawn in code, in proportion.
                 glEnd();

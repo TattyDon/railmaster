@@ -11,11 +11,32 @@ namespace railmaster::sim {
 namespace {
 
 // Calls f(x, y) for every economy node in a station's catchment, row by
-// row: those whose centre is within the radius of the station.
+// row: those whose centre is within the radius of the station, then the
+// nodes of industries whose footprint it reaches.
 template <typename F>
 void for_catchment(const Economy& eco, const Railway& rw, const Station& s, F&& f) {
     const MapPoint p = rw.track().node(s.node).pos;
-    eco.for_nodes_within(p, eco.cells_mm(catchment_radius(s.size, rw.balance())), f);
+    eco.for_reach(p, eco.cells_mm(catchment_radius(s.size, rw.balance())), f);
+}
+
+// The same nodes as a list, to walk many times (once for each cargo).
+std::vector<std::pair<std::int32_t, std::int32_t>> catchment_nodes(const Economy& eco, const Railway& rw, const Station& s) {
+    std::vector<std::pair<std::int32_t, std::int32_t>> out;
+    for_catchment(eco, rw, s, [&](std::int32_t x, std::int32_t y) { out.emplace_back(x, y); });
+    return out;
+}
+
+CatchmentPrices best_price(const Economy& eco, const std::vector<std::pair<std::int32_t, std::int32_t>>& nodes, CargoId c) {
+    CatchmentPrices out;
+    bool first = true;
+    for (const auto& [x, y] : nodes) {
+        const std::int32_t p = eco.price(c, x, y);
+        if (first || p > out.best) {
+            out = {p, x, y};
+            first = false;
+        }
+    }
+    return out;
 }
 
 void size_pool(Station& s, const CargoRegistry& cargo) {
@@ -119,26 +140,16 @@ std::int32_t catchment_radius(StationSize size, const Balance& b) {
 }
 
 CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const Station& s, CargoId c) {
-    CatchmentPrices out;
-    bool first = true;
-    for_catchment(eco, rw, s, [&](std::int32_t x, std::int32_t y) {
-        const std::int32_t p = eco.price(c, x, y);
-        if (first || p > out.best) {
-            out = {p, x, y};
-            first = false;
-        }
-    });
-    return out;
+    return best_price(eco, catchment_nodes(eco, rw, s), c);
 }
 
 std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const IndustryRegistry& industries,
                             const Station& s, CargoId c, bool outputs) {
     const MapPoint p = rw.track().node(s.node).pos;
     const std::int64_t r_mm = eco.cells_mm(catchment_radius(s.size, rw.balance()));
-    const std::int32_t px = eco.cell_x(p), py = eco.cell_y(p);
     std::int64_t total = 0;
     for (const Site& site : eco.sites()) {
-        if (!(site.cx == px && site.cy == py) && !eco.within(site.cx, site.cy, p, r_mm)) continue;
+        if (!eco.reaches(site, p, r_mm)) continue;
         const IndustryType& t = industries.get(site.type);
         const bool has = outputs ? std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end()
                                  : std::any_of(t.inputs.begin(), t.inputs.end(),
@@ -264,11 +275,14 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     const std::size_t n_stations = rw.stations().size();
     if (n_stations == 0) return;
 
-    // Best selling price for each cargo at each station, computed once.
+    // Each station's catchment, and the best selling price for each cargo
+    // there, computed once.
+    std::vector<std::vector<std::pair<std::int32_t, std::int32_t>>> catchment(n_stations);
     std::vector<std::vector<std::int32_t>> best_at(n_stations, std::vector<std::int32_t>(cargo.all().size(), 0));
     for (StationId s = 0; s < n_stations; ++s) {
+        catchment[s] = catchment_nodes(eco, rw, rw.station(s));
         for (const CargoType& c : cargo.all()) {
-            if (eco.active(c.id)) best_at[s][c.id] = catchment_prices(eco, rw, rw.station(s), c.id).best;
+            if (eco.active(c.id)) best_at[s][c.id] = best_price(eco, catchment[s], c.id).best;
         }
     }
 
@@ -286,16 +300,16 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             // cell instead would pay out on the spread within a town.
             const std::int32_t price = best_at[sid][c.id];
             if (price + threshold >= onward[c.id]) continue;
-            for_catchment(eco, rw, st, [&](std::int32_t x, std::int32_t y) {
+            for (const auto& [x, y] : catchment[sid]) {
                 const std::int32_t room = rw.balance().stations.cap_milli - pool.milli;
                 const std::int32_t stock = eco.stock_milli(c.id, x, y);
-                if (room <= 0 || stock <= 0) return;
+                if (room <= 0 || stock <= 0) continue;
                 const std::int32_t want =
                     std::min(room, std::max(1, stock * rw.balance().stations.gather_percent_per_day / 100));
                 const std::int32_t got = eco.take_stock(c.id, x, y, want);
                 pool.milli += got;
                 pool.value += std::int64_t{price} * got;
-            });
+            }
         }
     }
 

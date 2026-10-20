@@ -810,6 +810,12 @@ CommandResult World::run(const BuildIndustry& cmd) {
     for (const Site& s : economy_.sites()) {
         if (!s.closed && s.cx == cmd.cx && s.cy == cmd.cy) return fail("something is already built there");
     }
+    // Footprints never overlap (rt3-clone-spec §3.1).
+    const std::int32_t apart = 2 * economy_.footprint_ring();
+    for (const Site& s : economy_.sites()) {
+        if (s.closed || s.kind == IndustryKind::House) continue;
+        if (std::max(std::abs(s.cx - cmd.cx), std::abs(s.cy - cmd.cy)) <= apart) return fail("too close to another industry");
+    }
     const Money cost = construction_cost(industry_build_cost(data_.balance.industries));
     if (auto why = cannot_afford(cost)) return fail(*why);
     acting().invest_industry(cost);

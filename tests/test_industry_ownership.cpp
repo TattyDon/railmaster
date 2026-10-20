@@ -132,8 +132,10 @@ TEST_CASE("building a processing plant: anywhere on open dry land, never a produ
     CHECK(build("steel_mill", 10, 10).error.find("dry land") != std::string::npos);
     CHECK(build("steel_mill", 3, 3).error.find("already built") != std::string::npos);
     CHECK(build("steel_mill", 25, 3).error.find("off the map") != std::string::npos);
+    // Footprints of 4 x 4 cells never overlap (one-cell nodes here: 5 apart).
+    CHECK(build("steel_mill", 5, 5).error.find("too close") != std::string::npos);
     const Money cash = w.company().cash();
-    const CommandResult r = build("steel_mill", 5, 5);
+    const CommandResult r = build("steel_mill", 8, 8);
     REQUIRE(r.ok);
     CHECK(r.cost == Money::dollars(450'000));
     CHECK(w.company().cash() == cash - Money::dollars(450'000));
@@ -143,7 +145,7 @@ TEST_CASE("building a processing plant: anywhere on open dry land, never a produ
 
     // In a boom it costs more, like all construction.
     w.set_economic_state(EconomicState::Boom);
-    CHECK(build("steel_mill", 6, 6).cost == Money::dollars(450'000).scaled(115, 100));
+    CHECK(build("steel_mill", 14, 14).cost == Money::dollars(450'000).scaled(115, 100));
 }
 
 TEST_CASE("upgrading doubles a plant's capacity and overhead; an idle big plant loses more [D]") {
@@ -212,4 +214,27 @@ TEST_CASE("a merger brings the target's industries with it [C]") {
     REQUIRE_MESSAGE(merged.ok, merged.error);
     CHECK(w.economy().sites()[mine].owner == w.company().id());
     CHECK(w.company().industry_value() == value);
+}
+
+TEST_CASE("an industry stands on a 4 x 4 cell footprint: a station reaching any of it reaches the industry (§3.1 [C])") {
+    World w = flat_world(); // one-cell nodes of 1 km
+    const Economy& eco = w.economy();
+    const SiteId mine = add(w, "coal_mine", 10, 10); // centre (10.5, 10.5) km, footprint 8.5 to 12.5
+    const SiteId house = add(w, "house", 3, 3);       // centre (3.5, 3.5) km
+    const auto at = [](double x_km, double y_km) {
+        return MapPoint{static_cast<std::int64_t>(x_km * 1e6), static_cast<std::int64_t>(y_km * 1e6)};
+    };
+    const std::int64_t two_cells = eco.cells_mm(2);
+    // Two cells from the footprint's edge, four from the mine's centre.
+    CHECK(eco.reaches(eco.sites()[mine], at(14.5, 10.5), two_cells));
+    CHECK(eco.reaches(eco.sites()[mine], at(14.5, 14.5), two_cells));
+    CHECK_FALSE(eco.reaches(eco.sites()[mine], at(14.6, 10.5), two_cells));
+    // A house is reached at its node's centre, as before.
+    CHECK(eco.reaches(eco.sites()[house], at(5.5, 3.5), two_cells));
+    CHECK_FALSE(eco.reaches(eco.sites()[house], at(5.6, 3.5), two_cells));
+    // The station draws on the mine's node although its centre is out of range.
+    bool drawn = false;
+    eco.for_reach(at(14.5, 10.5), two_cells, [&](std::int32_t x, std::int32_t y) { drawn |= x == 10 && y == 10; });
+    CHECK(drawn);
+    CHECK(eco.footprint_ring() == 2); // 4 cells over one-cell nodes: two either side
 }

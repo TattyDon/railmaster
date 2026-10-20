@@ -3920,8 +3920,7 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
         for (const sim::Station& st : rw.stations()) {
             if (!me || st.owner != *me) continue;
             const sim::MapPoint at = rw.track().node(st.node).pos;
-            const std::int32_t r = sim::catchment_radius(st.size, world_.data().balance);
-            if (std::abs(eco.cell_x(at) - site.cx) <= r && std::abs(eco.cell_y(at) - site.cy) <= r) return true;
+            if (eco.reaches(site, at, eco.cells_mm(sim::catchment_radius(st.size, world_.data().balance)))) return true;
         }
         return false;
     };
@@ -4369,11 +4368,10 @@ std::string Tools::station_reach_text() const {
     const auto& cargo = world_.data().cargo;
     const sim::MapPoint p = hover_pick_.kind == sim::TrackEnd::Kind::Free ? hover_ : hover_pick_.pos;
     const std::int64_t r_mm = eco.cells_mm(sim::catchment_radius(station_size_, world_.data().balance));
-    const std::int32_t px = eco.cell_x(p), py = eco.cell_y(p);
     const std::int32_t year = world_.date().year();
     std::vector<std::int64_t> made(cargo.all().size(), 0), wanted(cargo.all().size(), 0);
     for (const sim::Site& site : eco.sites()) {
-        if (site.closed || (!(site.cx == px && site.cy == py) && !eco.within(site.cx, site.cy, p, r_mm))) continue;
+        if (site.closed || !eco.reaches(site, p, r_mm)) continue; // industries anywhere on their footprint
         const sim::IndustryType& t = types.get(site.type);
         const std::int64_t rate = t.rate_milli * std::max(1, site.level);
         for (const sim::CargoId c : t.outputs) made[c] += rate;

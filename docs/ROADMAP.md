@@ -102,14 +102,18 @@ Still to do:
 - Express units with homes (express loads have destination stations, change
   trains up to twice, and a town whose travellers mostly give up avoids
   rail for six months; origin and destination *houses* are not modelled).
-- Industry footprints of 4 × 4 cells (§3.1).
 
 Later eras are calibrated too: the demo network started in 1900 and 1950
 runs the era's fastest steam or diesel engine and returns about what it
 does from 1830, helped by the spec's era factor on passenger and mail
 spawning and rarer breakdowns ([spec/calibration.md](spec/calibration.md)).
 
-Done since: territories (rt3-clone-spec §3.3): access rights to build,
+Done since: industry footprints of 4 × 4 cells (rt3-clone-spec §3.1): a
+station reaching any part of an industry's yard reaches it, and
+footprints never overlap; the client draws each yard fenced and cleared of
+trees, with trodden earth round the buildings.
+
+Done before that: territories (rt3-clone-spec §3.3): access rights to build,
 territory fees, station-cost, overhead and credit modifiers, closed borders
 for middlemen, a generator for new maps and rivals that buy access.
 

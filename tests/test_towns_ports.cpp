@@ -226,3 +226,29 @@ TEST_CASE("new maps get ports on the coast") {
     // Three per 128 km x 128 km, scaled to the map's area.
     CHECK(ports == default_balance().map.ports * eco.area_permille() / 1000);
 }
+
+TEST_CASE("new maps keep industries' 4 x 4 cell footprints apart (§3.1 [C])") {
+    GameData d;
+    d.cargo = CargoRegistry::from_json(read_data("cargo.json"));
+    d.industries = IndustryRegistry::from_json(read_data("industries.json"), d.cargo);
+    WorldConfig cfg; // the shipped Small map: nodes of 2 x 2 cells, so one node either side
+    World w(cfg, std::move(d));
+    const Economy& eco = w.economy();
+    REQUIRE(eco.footprint_ring() == 1);
+    std::vector<const Site*> industries;
+    for (const Site& s : eco.sites())
+        if (!s.closed && s.kind != IndustryKind::House) industries.push_back(&s);
+    REQUIRE(industries.size() > 20);
+    int crowded = 0, on_houses = 0;
+    for (std::size_t i = 0; i < industries.size(); ++i) {
+        for (std::size_t j = i + 1; j < industries.size(); ++j) {
+            crowded += std::max(std::abs(industries[i]->cx - industries[j]->cx), std::abs(industries[i]->cy - industries[j]->cy)) < 3;
+        }
+        // And clear of houses within their footprint.
+        for (const Site& s : eco.sites()) {
+            if (s.kind == IndustryKind::House) on_houses += std::max(std::abs(s.cx - industries[i]->cx), std::abs(s.cy - industries[i]->cy)) < 2;
+        }
+    }
+    CHECK(crowded == 0);
+    CHECK(on_houses == 0);
+}

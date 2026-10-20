@@ -505,7 +505,10 @@ void io(Ar& ar, Economy& e) {
     fields(ar, e.active_, e.scratch_, e.conductance_, e.east_w_, e.south_w_, e.node_territory_, e.closed_territory_,
            e.activity_percent_, e.demand_percent_, e.warehouse_radius_, e.warehouse_spoilage_percent_,
            e.convert_yield_percent_, e.sites_, e.towns_);
-    if constexpr (Ar::loading) e.balance_ = ar.balance->economy;
+    if constexpr (Ar::loading) {
+        e.balance_ = ar.balance->economy;
+        e.footprint_cells_ = std::max(1, ar.balance->industries.footprint_cells); // older saves: the default, 4
+    }
 }
 
 template <class Ar>
