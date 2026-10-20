@@ -2558,7 +2558,8 @@ void Tools::cycle_overlay(int direction) {
                                 {MapOverlay::Holdings, 0},
                                 {MapOverlay::Profit, 0},
                                 {MapOverlay::Grade, 0},
-                                {MapOverlay::Traffic, 0}};
+                                {MapOverlay::Traffic, 0},
+                                {MapOverlay::Travel, 0}};
     for (const auto& c : world_.data().cargo.all()) {
         if (world_.economy().active(c.id)) choices.push_back({MapOverlay::Cargo, c.id});
     }
@@ -2601,6 +2602,24 @@ std::string Tools::cell_text() const {
         if (t.overhead_percent != 100) s += ", overhead +" + std::to_string(t.overhead_percent - 100) + "%";
         if (t.credit_grades != 0) s += std::string(", credit ") + (t.credit_grades > 0 ? "+" : "") + std::to_string(t.credit_grades);
         if (t.closed_border) s += ", borders closed";
+    }
+    if (map_overlay_ == MapOverlay::Travel) {
+        // Where the travellers waiting at the station under the cursor want to go, most first.
+        if (const auto st = station_near(hover_)) {
+            const sim::Railway& rw = world_.railway();
+            std::vector<std::pair<std::int32_t, std::string>> to;
+            for (const sim::ExpressWaiting& e : rw.station(*st).express) {
+                if (e.milli < sim::kMilli / 10 || e.destination >= rw.stations().size()) continue;
+                to.emplace_back(e.milli, world_.data().cargo.get(e.cargo).name + " to " + rw.station(e.destination).name);
+            }
+            std::sort(to.begin(), to.end(), [](const auto& l, const auto& r) { return l.first > r.first; });
+            if (!s.empty()) s += ".  ";
+            s += rw.station(*st).name + (to.empty() ? ": nobody waiting" : " waiting: ");
+            for (std::size_t i = 0; i < std::min<std::size_t>(to.size(), 4); ++i) {
+                const std::int32_t tenths = to[i].first / (sim::kMilli / 10);
+                s += (i > 0 ? ", " : "") + std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) + " " + to[i].second;
+            }
+        }
     }
     if (map_overlay_ == MapOverlay::Grade || map_overlay_ == MapOverlay::Traffic) {
         const sim::Railway& rw = world_.railway();
@@ -3136,6 +3155,7 @@ std::string Tools::hint() const {
         case MapOverlay::Profit: cargo_map += "Profit"; break;
         case MapOverlay::Grade: cargo_map += "Grade"; break;
         case MapOverlay::Traffic: cargo_map += "Traffic"; break;
+        case MapOverlay::Travel: cargo_map += "Travel"; break;
         case MapOverlay::Cargo: cargo_map += overlay_ ? world_.data().cargo.get(*overlay_).name : "Off"; break;
         }
         if (link_ && !detail_) return "B build the planned line (gold) for you   Esc let it go   " + cargo_map;
@@ -3664,6 +3684,7 @@ std::string Tools::inspect_text() const {
         return s;
     }
     if (const auto st = station_near(hover_)) {
+        if (map_overlay_ == MapOverlay::Travel) return cell_text(); // where its travellers want to go
         const sim::Station& s = rw.station(*st);
         std::string text = "Station: " + s.name + " (" + size_name(s.size) + ")" +
                            (s.owner != world_.company().id() ? ", " + world_.company(s.owner).name() : std::string()) +
