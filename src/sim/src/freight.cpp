@@ -353,13 +353,29 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             if (c.id < here.avoided_until.size() && today < here.avoided_until[c.id]) {
                 daily = daily * rw.balance().express.avoid_generation_percent / 100;
             }
-            for (StationId dest : reach[sid]) {
-                const std::int64_t a = attraction[dest];
+            // How many in all: more for every destination with a pull, each
+            // saturating [I]. Then shared out by gravity: pull over distance
+            // squared (rt3-clone-spec §8.3 [I]).
+            const auto& xb = rw.balance().express;
+            const MapPoint from = rw.track().node(here.node).pos;
+            const std::int64_t min_mm = std::int64_t{std::max(1, xb.gravity_min_km)} * 1'000'000;
+            std::int64_t total = 0, weights = 0;
+            std::vector<std::int64_t> weight(reach[sid].size(), 0);
+            for (std::size_t i = 0; i < reach[sid].size(); ++i) {
+                const std::int64_t a = attraction[reach[sid][i]];
                 if (a == 0) continue;
+                total += daily * a / (a + std::int64_t{xb.attraction_half} * kMilli);
+                const std::int64_t mm = std::max(min_mm, distance_mm(from, rw.track().node(rw.station(reach[sid][i]).node).pos));
+                weight[i] = a * 1000 / std::max<std::int64_t>(1000, pow_ratio_permille(mm, min_mm, xb.gravity_exponent_permille));
+                weights += weight[i];
+            }
+            if (weights == 0) continue;
+            for (std::size_t i = 0; i < reach[sid].size(); ++i) {
+                if (weight[i] == 0) continue;
+                const StationId dest = reach[sid][i];
                 Station& origin = rw.station_mut(sid);
                 ExpressWaiting& pool = express_pool(origin, c.id, dest);
-                const auto add = static_cast<std::int32_t>(
-                    daily * a / (a + std::int64_t{rw.balance().express.attraction_half} * kMilli));
+                const auto add = static_cast<std::int32_t>(total * weight[i] / weights);
                 const std::int32_t kept = std::min(rw.balance().express.cap_milli, pool.milli + add) - pool.milli;
                 pool.milli += kept;
                 if (origin.express_made_month.size() <= c.id) origin.express_made_month.resize(std::size_t{c.id} + 1, 0);

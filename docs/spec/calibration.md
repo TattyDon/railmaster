@@ -161,6 +161,26 @@ tries tunnels and bridges each at Never, Rarely and Average and builds the
 cheapest; its return is 12.6% from 1830, 15.9% from 1900 and 15.5% from
 1950. Rivals build at Average, which plans track exactly as before.
 
+With industry footprints of 4 × 4 cells (stations reach an industry
+anywhere on its yard, and yards keep apart), every generated map changed.
+All 20 metrics stayed in range: the demo returned 11.6% a year on $530K of
+revenue, with served towns growing 27%.
+
+With travellers sent by gravity (each station's new loads shared among
+its destinations by pull ÷ distance^e, the total unchanged), the demo
+network's revenue fell, as more of them take short, cheap trips:
+
+| Setting | Demo return | Demo revenue | Served towns grow | Out of range |
+|---|---|---|---|---|
+| none (before) | 11.6% | $530K | 27% | 0 |
+| distance², from 8 km (the spec's proposal) | 7.5% | $392K | 22% | 1 (growth) |
+| distance², from 20 km | 8.6% | $421K | 22% | 1 (growth) |
+| distance¹, from 8 km | 9.6% | $462K | 24% | 1 (growth) |
+| distance^1.5, from 12 km (chosen) | 9.0% | $438K | 27% | 0 |
+
+From 1900 and 1950 the demo returns 9.3% and 9.0%; rivals are about the
+same ($1.67M a year, 36% freight).
+
 ## What changed
 
 - **Rates** in `data/industries.json` follow the spec: raw producers 2.2

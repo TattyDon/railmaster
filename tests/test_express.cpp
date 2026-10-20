@@ -2,6 +2,10 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cmath>
+#include <utility>
+
 using namespace railmaster::sim;
 
 namespace {
@@ -319,4 +323,24 @@ TEST_CASE("when most travellers give up waiting, the town avoids the railway for
     const std::int32_t normal_day = made_on(until + 1);
     CHECK(avoided_day > 0);
     CHECK(avoided_day * 100 <= normal_day * (default_balance().express.avoid_generation_percent + 5));
+}
+
+TEST_CASE("travellers go more to near places than far ones: pull over a power of distance (§8.3 [I])") {
+    const auto& xb = default_balance().express;
+    const double e = xb.gravity_exponent_permille / 1000.0, floor_km = xb.gravity_min_km;
+    // The ratio of loads to the near town and the far one, both as big.
+    const auto expected = [&](double near_km, double far_km) {
+        return std::pow(std::max(far_km, floor_km) / std::max(near_km, floor_km), e);
+    };
+    for (const auto& [near_x, far_x] : {std::pair{0, 45}, std::pair{11, 45}}) {
+        // From the town at 15 km: one town at near_x, another at far_x, equal in size.
+        Towns w({near_x, 15, far_x}, 20);
+        w.rw.add_train(0, 4, {w.st[0], w.st[1], w.st[2]});
+        w.gather(5);
+        const double near = w.waiting(w.st[1], w.pax(), w.st[0]), far = w.waiting(w.st[1], w.pax(), w.st[2]);
+        REQUIRE(far > 0);
+        const double want = expected(15.0 - near_x, far_x - 15.0);
+        CHECK(near / far > want * 0.93);
+        CHECK(near / far < want * 1.07);
+    }
 }

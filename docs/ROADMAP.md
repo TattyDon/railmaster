@@ -99,9 +99,10 @@ minimum and maximum cars, waiting for full loads, caboose and dining car,
 copying and retiring trains; empty cars are no longer hauled.
 
 Still to do:
-- Express units with homes (express loads have destination stations, change
-  trains up to twice, and a town whose travellers mostly give up avoids
-  rail for six months; origin and destination *houses* are not modelled).
+- Express units with homes (express loads have destination stations
+  chosen by gravity, pull ÷ distance^1.5, change trains up to twice, and a
+  town whose travellers mostly give up avoids rail for six months; origin
+  and destination *houses* are not modelled).
 
 Later eras are calibrated too: the demo network started in 1900 and 1950
 runs the era's fastest steam or diesel engine and returns about what it

@@ -116,9 +116,12 @@ Grouped by the spec's own build order (§17).
   one economy node (industries have their footprint).
 
 **Express**
-- Units with origin and destination houses chosen by gravity weighting;
-  more than one change of trains; won't board rarely served stops;
-  travellers who give up avoid rail for a while (§8.3 [D/I]).
+- Units with their own origin and destination *houses* (§8.3 [D]): ours
+  are pooled by station, going to stations chosen by gravity weighting
+  (pull ÷ distance^1.5, not the proposed square: see m2-economy-model.md);
+  they change trains up to twice, and a place whose travellers give up
+  avoids rail for six months. Not modelled: refusing to board for a rarely
+  served stop.
 
 **Scenarios and presentation**
 - Hand-made maps; per-player, per-company and per-territory counters;

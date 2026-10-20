@@ -232,13 +232,20 @@ How we implement them (code: `freight.hpp`):
    `express.era_volume_percent`). The factor keeps later eras as
    profitable as the 1830s: faster trains run more kilometres, and so pay
    more fuel and break down more, for passengers a town makes at the same
-   rate. For every station sharing a
-   train route with it, add production × A ÷ (A + 2) per year to the
-   waiting pool for that destination, where A is the destination's
-   *attraction*: the summed rate of its catchment sites that take the cargo.
-   Each extra destination adds traffic, and a big town draws more than a
-   village but not without limit. Only stations a train links are
-   destinations; transfers between trains are not modelled.
+   rate. For every station it can reach by train (changing up to
+   `max_legs` times), the year's new loads grow by production × A ÷ (A + 2),
+   where A is the destination's *attraction*: the summed rate of its
+   catchment sites that take the cargo. Each extra destination adds
+   traffic, and a big town draws more than a village but not without limit.
+   - **Where they go** (rt3-clone-spec §8.3 [I]: a gravity model,
+     population ÷ distance²): the total is shared among the destinations
+     in proportion to A ÷ distance^1.5, distances under 12 km counting as
+     12 (`express.gravity_exponent_permille`, `gravity_min_km`). Near, big
+     towns get the most travellers. The spec proposes distance²; that sent
+     so many on short, cheap trips that the calibrated networks' returns
+     and town growth fell out of range (calibration.md), so we use 1.5.
+     The spec picks origin and destination *houses*; we pick stations, the
+     houses being pooled in each catchment.
 2. **Waiting.** Each pool loses 0.1% a day per point of decay sensitivity
    (passengers 0.9%, mail 1%), half the on-train rate [C], and holds at most
    20 loads.

@@ -289,6 +289,16 @@ struct Balance {
         // Journeys of up to this many trains: travellers change at hubs on
         // the way (rt3-clone-spec §8.3 [D]; how many changes is [I]).
         std::int32_t max_legs = 3;
+        // Where travellers go (rt3-clone-spec §8.3 [I]: a gravity model,
+        // population / distance^2): a station's new loads are shared among
+        // the stations they can reach in proportion to each one's pull over
+        // its distance to this power, distances under gravity_min_km
+        // counting as that. How many there are in all is unchanged. We use
+        // distance^1.5 from 12 km: the square sent so many on short, cheap
+        // trips that the calibrated networks' returns and town growth fell
+        // out of range (docs/spec/calibration.md).
+        std::int32_t gravity_exponent_permille = 1500;
+        std::int32_t gravity_min_km = 12;
         // Travellers who give up (rt3-clone-spec §8.3 [D]): when more than
         // this share of a month's new passengers (or mail) at a station is
         // lost waiting, the place avoids rail for avoid_days [I: 6 months],

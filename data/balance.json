@@ -153,6 +153,8 @@
     ],
     "fare_distance_exponent_permille": 900,
     "fare_reference_km": 50,
+    "gravity_exponent_permille": 1500,
+    "gravity_min_km": 12,
     "mail_cap_months": 2,
     "max_legs": 3,
     "min_load_milli": 500,
