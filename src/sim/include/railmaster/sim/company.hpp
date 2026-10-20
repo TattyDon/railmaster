@@ -122,6 +122,8 @@ public:
     void post(Ledger line, Money amount);
     void invest_track(Money cost);
     void invest_buildings(Money cost);
+    // A building taken down: its book value off the books, `refund` back.
+    void remove_buildings(Money book, Money refund);
     void invest_train(Money cost);
     // Buying, building or upgrading an industry.
     void invest_industry(Money cost);

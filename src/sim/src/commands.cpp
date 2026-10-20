@@ -951,6 +951,38 @@ CommandResult World::run(const Cheat& cmd) {
     return success(Money{}, 0);
 }
 
+CommandResult World::run(const RemoveStation& cmd) {
+    if (cmd.station >= railway_.stations().size()) return fail("no such station");
+    const Station& st = railway_.station(cmd.station);
+    if (st.owner != acting().id()) return fail("you can only take down your own stations");
+    for (const Train& t : railway_.trains()) {
+        if (!t.in_service() || std::find(t.route.begin(), t.route.end(), cmd.station) == t.route.end()) continue;
+        return fail("Train " + std::to_string(t.id + 1) + " still stops there: change its route first (E)");
+    }
+    const Money book = station_cost(st.size, data_.balance);
+    const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
+    railway_.remove_station(cmd.station);
+    for (Rival& r : rivals_) {
+        for (RivalRoute& route : r.routes) {
+            if (route.a > cmd.station) --route.a;
+            if (route.b > cmd.station) --route.b;
+        }
+    }
+    acting().remove_buildings(book, refund);
+    return success(Money{} - refund, 0);
+}
+
+CommandResult World::run(const RemoveServiceBuilding& cmd) {
+    if (cmd.building >= railway_.service_buildings().size()) return fail("no such building");
+    const ServiceBuilding& b = railway_.service_buildings()[cmd.building];
+    if (b.owner != acting().id()) return fail("you can only take down your own buildings");
+    const Money book = service_building_cost(b.type, data_.balance);
+    const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
+    railway_.remove_service_building(cmd.building);
+    acting().remove_buildings(book, refund);
+    return success(Money{} - refund, 0);
+}
+
 CommandResult World::run(const AnswerChoice& cmd) {
     if (actor_ != kHumanPlayer) return fail("only the player answers scenario questions");
     if (cmd.choice >= pending_choices_.size()) return fail("no such question");

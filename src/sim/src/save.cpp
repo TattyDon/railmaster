@@ -587,6 +587,10 @@ void io(Ar& ar, AnswerChoice& c) { fields(ar, c.choice, c.option); }
 template <class Ar>
 void io(Ar& ar, UpgradeStation& c) { fields(ar, c.station); }
 template <class Ar>
+void io(Ar& ar, RemoveStation& c) { fields(ar, c.station); }
+template <class Ar>
+void io(Ar& ar, RemoveServiceBuilding& c) { fields(ar, c.building); }
+template <class Ar>
 void io(Ar& ar, Cheat& c) { fields(ar, c.kind, c.amount, c.train, c.tier); }
 // Commands with nothing to say.
 template <class Ar>

@@ -299,3 +299,43 @@ TEST_CASE("each company's share price is kept at every month end, for the Market
     const World loaded = World::load(w.save(), test_data());
     CHECK(loaded.company().price_months() == w.company().price_months());
 }
+
+TEST_CASE("stations and support buildings can be taken down, and later stations renumber") {
+    World w = flat_world();
+    REQUIRE(w.execute(track(free_at(2, 5), free_at(18, 5))).ok);
+    const TrackNetwork& net = w.railway().track();
+    const auto at = [&](std::int64_t x_km) { return pick_track_end(net, {x_km * kKm, 5 * kKm}, 600'000); };
+    const StationId a = w.execute(BuildStation{.at = at(2), .name = "A"}).created_id;
+    const StationId b = w.execute(BuildStation{.at = at(10), .name = "B"}).created_id;
+    const StationId c = w.execute(BuildStation{.at = at(18), .name = "C"}).created_id;
+    const CommandResult tower = w.execute(BuildServiceBuilding{.at = at(14), .type = ServiceType::ServiceTower});
+    REQUIRE(tower.ok);
+    const CommandResult train = w.execute(BuyTrain{.loco = 0, .cars = 2, .route = {b, c}});
+    REQUIRE(train.ok);
+
+    // B is served: refused, with the train named.
+    const CommandResult refused = w.execute(RemoveStation{.station = b});
+    CHECK_FALSE(refused.ok);
+    CHECK(refused.error.find("Train 1") != std::string::npos);
+
+    // A is not: it goes, a tenth back, and B and C move down a number.
+    const Money cash = w.company().cash();
+    REQUIRE(w.execute(RemoveStation{.station = a}).ok);
+    CHECK(w.company().cash() == cash + station_cost(StationSize::Medium).scaled(10, 100));
+    REQUIRE(w.railway().stations().size() == 2);
+    CHECK(w.railway().station(0).name == "B");
+    CHECK(w.railway().station(1).name == "C");
+    CHECK(w.railway().station(1).id == 1);
+    const Train& t = w.railway().train(train.created_id);
+    REQUIRE(t.route.size() == 2);
+    CHECK(w.railway().station(t.route[0]).name == "B");
+    CHECK(w.railway().station(t.route[1]).name == "C");
+
+    // The train still runs between them.
+    for (int i = 0; i < 5000 && w.railway().train(train.created_id).stops_made < 2; ++i) w.tick();
+    CHECK(w.railway().train(train.created_id).stops_made >= 2);
+
+    REQUIRE(w.execute(RemoveServiceBuilding{.building = tower.created_id}).ok);
+    CHECK(w.railway().service_buildings().empty());
+    CHECK_FALSE(w.execute(RemoveServiceBuilding{.building = 0}).ok);
+}

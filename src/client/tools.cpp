@@ -1328,6 +1328,60 @@ std::optional<sim::StationId> Tools::station_near(sim::MapPoint p) const {
     return best;
 }
 
+std::optional<sim::ServiceBuildingId> Tools::building_near(sim::MapPoint p) const {
+    std::optional<sim::ServiceBuildingId> best;
+    std::int64_t best_d = snap_mm() + 1;
+    const auto type = tool_ == Tool::ServiceTower ? sim::ServiceType::ServiceTower : sim::ServiceType::MaintenanceFacility;
+    for (const sim::ServiceBuilding& b : world_.railway().service_buildings()) {
+        if (b.type != type) continue;
+        const std::int64_t d = sim::distance_mm(p, world_.railway().track().node(b.node).pos);
+        if (d < best_d) {
+            best = b.id;
+            best_d = d;
+        }
+    }
+    return best;
+}
+
+bool Tools::remove_site_key() {
+    // Take down the station, tower or shed under the cursor, on a second press.
+    const bool station = tool_ == Tool::Station;
+    const char* what = station ? "station" : tool_ == Tool::ServiceTower ? "service tower" : "shed";
+    const std::optional<std::uint32_t> id = station ? station_near(hover_) : building_near(hover_);
+    if (!id) {
+        show(std::string("Point at one of your ") + what + "s to take it down", false);
+        return true;
+    }
+    if (SDL_GetTicks() > remove_site_until_ || remove_site_ != id) {
+        const sim::Balance& bal = world_.data().balance;
+        const sim::Money book = station ? sim::station_cost(world_.railway().station(*id).size, bal)
+                                        : sim::service_building_cost(world_.railway().service_buildings()[*id].type, bal);
+        remove_site_until_ = SDL_GetTicks() + 3000;
+        remove_site_ = id;
+        const std::string name = station ? world_.railway().station(*id).name : std::string("this ") + what;
+        show("Press X again to take down " + name + ": " + format_money(book) + " book value, " +
+                 std::to_string(bal.track.remove_refund_percent) + "% back",
+             false);
+        return true;
+    }
+    remove_site_until_ = 0;
+    remove_site_.reset();
+    const std::string name = station ? world_.railway().station(*id).name : std::string("The ") + what;
+    const sim::CommandResult r = station ? world_.execute(sim::RemoveStation{.station = *id})
+                                         : world_.execute(sim::RemoveServiceBuilding{.building = *id});
+    if (!r.ok) {
+        show("Cannot: " + r.error, false);
+        return true;
+    }
+    // Station and building ids above it have moved down one.
+    if (detail_ && detail_->kind == DetailKind::Station) detail_.reset();
+    stops_.clear();
+    stop_sel_ = 0;
+    ledger_sel_ = 0;
+    show(name + " taken down: " + format_money(sim::Money{} - r.cost) + " back", true);
+    return true;
+}
+
 std::vector<sim::LocoTypeId> Tools::available_locos() const {
     std::vector<sim::LocoTypeId> out;
     for (const auto& l : world_.data().locomotives.all()) {
@@ -1951,6 +2005,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             station_size_ = static_cast<sim::StationSize>((static_cast<int>(station_size_) + step) % 3);
             return true;
         }
+        if (key == SDLK_x) return remove_site_key();
+        return false;
+    case Tool::ServiceTower:
+    case Tool::Maintenance:
+        if (key == SDLK_x) return remove_site_key();
         return false;
     case Tool::Train: {
         const auto locos = available_locos();
@@ -2569,6 +2628,15 @@ void Tools::draw_world_overlay() const {
         [[fallthrough]];
     case Tool::ServiceTower:
     case Tool::Maintenance: {
+        // What a second X would take down, in red.
+        if (SDL_GetTicks() <= remove_site_until_ && remove_site_) {
+            const sim::Railway& rw = world_.railway();
+            if (tool_ == Tool::Station && *remove_site_ < rw.stations().size()) {
+                draw_marker(net.node(rw.station(*remove_site_).node).pos, cam_, 24, 1.0f, 0.15f, 0.1f);
+            } else if (tool_ != Tool::Station && *remove_site_ < rw.service_buildings().size()) {
+                draw_marker(net.node(rw.service_buildings()[*remove_site_].node).pos, cam_, 16, 1.0f, 0.15f, 0.1f);
+            }
+        }
         // Show what a click would attach to: a node, a point on track, or open ground.
         switch (hover_pick_.kind) {
         case sim::TrackEnd::Kind::Node: draw_marker(hover_pick_.pos, cam_, 4, 1.0f, 1.0f, 1.0f); break;
@@ -2949,9 +3017,9 @@ const char* tool_tip(Tool t) {
     switch (t) {
     case Tool::Inspect: return "Look: click a train, station or industry for its details";
     case Tool::Track: return "Track: click to start, click again to lay track to there; right-click stops";
-    case Tool::Station: return "Station: click on your track to build one; [ ] size, B other buildings";
-    case Tool::ServiceTower: return "Service tower: water and sand for trains, built by the line";
-    case Tool::Maintenance: return "Shed: maintenance for trains, fewer breakdowns";
+    case Tool::Station: return "Station: click on your track to build one; [ ] size, B other buildings, X twice removes";
+    case Tool::ServiceTower: return "Service tower: water and sand for trains, built by the line; X twice removes";
+    case Tool::Maintenance: return "Shed: maintenance for trains, fewer breakdowns; X twice removes";
     case Tool::Train: return "Train: click stations in order, L picks the engine, Enter buys it";
     case Tool::Finance: return "Company: books, bonds, shares, dividend and territories";
     case Tool::Market: return "Market: buy and sell shares, take over or merge railroads";
@@ -3057,13 +3125,13 @@ std::string Tools::hint() const {
                    ".  B next kind";
         }
         return std::string("Click on track to build a station.  B for buildings.  [ ] size: ") + size_name(station_size_) + " " +
-               format_money(sim::station_cost(station_size_));
+               format_money(sim::station_cost(station_size_)) + ".  X twice: take one down";
     case Tool::ServiceTower:
         return "Click on track: service tower (water, sand) " +
-               format_money(sim::service_building_cost(sim::ServiceType::ServiceTower));
+               format_money(sim::service_building_cost(sim::ServiceType::ServiceTower)) + ".  X twice: take one down";
     case Tool::Maintenance:
         return "Click on track: maintenance facility (oil) " +
-               format_money(sim::service_building_cost(sim::ServiceType::MaintenanceFacility));
+               format_money(sim::service_building_cost(sim::ServiceType::MaintenanceFacility)) + ".  X twice: take one down";
     case Tool::Train: {
         const auto locos = available_locos();
         std::string loco = "None available";

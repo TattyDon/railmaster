@@ -348,6 +348,11 @@ public:
     std::vector<EdgeId> run_of(EdgeId e) const;
 
     StationId add_station(std::string name, NodeId node, StationSize size, CompanyId owner = 0);
+    // Remove a station no train in service stops at; later stations move
+    // down a number, and every train, load and traveller follows. Loads
+    // bound for it are lost.
+    void remove_station(StationId id);
+    void remove_service_building(ServiceBuildingId id);
     const Station& station(StationId id) const { return stations_.at(id); }
     // Why an electric engine could not run this route, if it could not:
     // every leg between consecutive stops, the last back to the first, must

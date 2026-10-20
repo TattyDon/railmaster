@@ -275,12 +275,23 @@ struct Cheat {
     std::int32_t tier = 0;
 };
 
+// Take down one of your stations, when no train in service stops there
+// (change their routes first): a tenth of its value back, the rest
+// written off, as for track. Travellers waiting for it go home.
+struct RemoveStation {
+    StationId station = 0;
+};
+// Take down one of your service towers or maintenance sheds, likewise.
+struct RemoveServiceBuilding {
+    ServiceBuildingId building = 0;
+};
+
 using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, EndTrackUndo, BuildStation, BuildServiceBuilding, BuyTrain, ReplaceLocomotive, SetConsist, SetSpecialCars,
                              SetRoute, SetPriority,
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding>;
 
 struct CommandResult {
     bool ok = false;

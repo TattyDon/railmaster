@@ -283,6 +283,43 @@ void Railway::transfer_owner(CompanyId from, CompanyId to) {
     }
 }
 
+void Railway::remove_station(StationId id) {
+    const auto renumber = [&](std::uint32_t s) { return s > id ? s - 1 : s; };
+    stations_.erase(stations_.begin() + id);
+    for (Station& st : stations_) {
+        st.id = renumber(st.id);
+        std::erase_if(st.express, [&](const ExpressWaiting& e) { return e.destination == id; });
+        for (ExpressWaiting& e : st.express) e.destination = renumber(e.destination);
+    }
+    constexpr std::uint32_t kGone = 0xFFFFFFFFu; // a load from the removed station: still never sold back "there"
+    for (Train& t : trains_) {
+        // Trains out of service may still list it; drop it from their stops.
+        for (std::size_t i = t.route.size(); i-- > 0;) {
+            if (t.route[i] != id) continue;
+            t.route.erase(t.route.begin() + static_cast<std::ptrdiff_t>(i));
+            if (i < t.rules.size()) t.rules.erase(t.rules.begin() + static_cast<std::ptrdiff_t>(i));
+            if (i < t.service_stop.size()) t.service_stop.erase(t.service_stop.begin() + static_cast<std::ptrdiff_t>(i));
+        }
+        for (StationId& s : t.route) s = renumber(s);
+        if (t.stop_index >= t.route.size()) t.stop_index = 0;
+        for (Car& c : t.cars) {
+            if (c.destination && *c.destination == id) c = Car{};
+            if (c.via && *c.via == id) c.via.reset();
+            if (c.destination) c.destination = renumber(*c.destination);
+            if (c.via) c.via = renumber(*c.via);
+            c.loaded_at = c.loaded_at == id ? kGone : (c.loaded_at == kGone ? kGone : renumber(c.loaded_at));
+        }
+    }
+    std::erase_if(arrivals_, [&](const auto& a) { return a.second == id; });
+    for (auto& a : arrivals_) a.second = renumber(a.second);
+}
+
+void Railway::remove_service_building(ServiceBuildingId id) {
+    service_buildings_.erase(service_buildings_.begin() + id);
+    for (ServiceBuilding& b : service_buildings_)
+        if (b.id > id) --b.id;
+}
+
 StationId Railway::add_station(std::string name, NodeId node, StationSize size, CompanyId owner) {
     if (node >= track_.nodes().size()) throw std::out_of_range("station node out of range");
     const auto id = static_cast<StationId>(stations_.size());

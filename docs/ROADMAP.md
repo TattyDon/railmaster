@@ -28,7 +28,7 @@ several cells (about 15,000 a map) and catchment radii of 2/3/4 cells.
 Provisional rules are listed in `docs/spec/m1-provisional-models.md`; their
 numbers are in `data/balance.json`.
 
-Done since: track removal and double-track upgrades with refunds, crashes,
+Done since: track removal and double-track upgrades with refunds, taking down stations, towers and sheds, crashes,
 yielding on a rival's track, and route editing: changing a train's stops,
 manual service stops and priority (rt3-clone-spec §9.3), from Inspect
 (E, H) and the Train tool.

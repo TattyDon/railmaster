@@ -245,6 +245,12 @@ private:
     sim::TrainId retire_armed_ = 0;
     Uint32 remove_armed_until_ = 0;     // and a first X in the Track tool removing this run
     std::vector<sim::EdgeId> remove_armed_;
+    // A first X over a station (Station tool) or a tower or shed (F4, F5):
+    // the second X within the time takes it down.
+    Uint32 remove_site_until_ = 0;
+    std::optional<std::uint32_t> remove_site_;
+    std::optional<sim::ServiceBuildingId> building_near(sim::MapPoint p) const;
+    bool remove_site_key();
     Uint32 bankrupt_armed_until_ = 0;   // likewise K for bankruptcy
     bool founding_ = false;
     bool founding_cancellable_ = false;

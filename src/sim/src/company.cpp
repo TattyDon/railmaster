@@ -270,6 +270,11 @@ void Company::invest_buildings(Money cost) {
     history_.back().buildings_built += cost;
 }
 
+void Company::remove_buildings(Money book, Money refund) {
+    buildings_ = std::max(Money{}, buildings_ - book);
+    cash_ += refund;
+}
+
 void Company::invest_industry(Money cost) {
     cash_ -= cost;
     industries_ += cost;
