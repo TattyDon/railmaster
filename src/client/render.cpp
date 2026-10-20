@@ -3558,6 +3558,96 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
     }
 }
 
+void draw_station_names(const sim::World& w, const Camera& cam) {
+    const sim::Railway& rw = w.railway();
+    const auto& cargo = w.data().cargo;
+    const std::optional<sim::CargoId> passengers = cargo.find("passengers"), mail = cargo.find("mail");
+    struct Label {
+        sim::StationId id;
+        float sx, sy, dist;
+    };
+    std::vector<Label> labels;
+    for (const sim::Station& s : rw.stations()) {
+        const sim::MapPoint p = rw.track().node(s.node).pos;
+        float sx = 0, sy = 0;
+        if (!cam.to_screen(p, sx, sy)) continue;
+        const float tx = static_cast<float>(p.x_mm) / cam.mm_per_tile, ty = static_cast<float>(p.y_mm) / cam.mm_per_tile;
+        labels.push_back({s.id, sx, sy + 16, std::hypot(tx - cam.target_x, ty - cam.target_y)});
+    }
+    std::sort(labels.begin(), labels.end(), [](const Label& l, const Label& r) { return l.dist < r.dist; });
+    struct Box {
+        float x0, y0, x1, y1;
+    };
+    std::vector<Box> placed;
+    // Closer in than the towns' names: stations crowd a wide view.
+    const float fade_from = cam.distance * 1.2f, fade_to = cam.distance * 2.6f;
+    const std::optional<sim::CompanyId> player = w.player_company();
+    for (const Label& l : labels) {
+        const float alpha = cam.three_d ? std::clamp((fade_to - l.dist) / std::max(1.0f, fade_to - fade_from), 0.0f, 1.0f) : 1.0f;
+        if (alpha <= 0.02f) continue;
+        const sim::Station& s = rw.station(l.id);
+        // Loads waiting: passengers, mail, and everything else.
+        std::int64_t pax = 0, post = 0, freight = 0;
+        for (const sim::ExpressWaiting& e : s.express) {
+            if (e.cargo == passengers) pax += e.milli;
+            else if (e.cargo == mail) post += e.milli;
+            else freight += e.milli;
+        }
+        for (const sim::WaitingCargo& c : s.waiting) freight += c.milli;
+        struct Pip {
+            std::int64_t loads;
+            float r, g, b;
+        };
+        // Whole loads, as the station's panel counts them.
+        const Pip pips[] = {{pax / sim::kMilli, 0.45f, 0.8f, 1.0f},
+                            {post / sim::kMilli, 1.0f, 0.88f, 0.45f},
+                            {freight / sim::kMilli, 0.85f, 0.6f, 0.35f}};
+        float pips_w = 0;
+        for (const Pip& p : pips) {
+            if (p.loads <= 0) continue;
+            pips_w += 14.0f + static_cast<float>(text_width(std::to_string(p.loads), 2)) + 8.0f;
+        }
+        const auto name_w = static_cast<float>(text_width(s.name, 2));
+        const float w_box = std::max(name_w, pips_w) + 20.0f;
+        const float h_box = pips_w > 0 ? 44.0f : 24.0f;
+        const Box box{l.sx - w_box / 2, l.sy, l.sx + w_box / 2, l.sy + h_box};
+        const bool clash = std::any_of(placed.begin(), placed.end(), [&](const Box& o) {
+            return box.x0 < o.x1 + 3 && box.x1 > o.x0 - 3 && box.y0 < o.y1 + 2 && box.y1 > o.y0 - 2;
+        });
+        if (clash) continue;
+        placed.push_back(box);
+        ui::chip(box.x0, box.y0, box.x1, box.y1, 0.7f * alpha);
+        float r, g, b;
+        owner_rgb(s.owner, player, r, g, b);
+        glColor4f(r, g, b, alpha);
+        glBegin(GL_QUADS);
+        glVertex2f(box.x0 + 3, box.y0 + 4);
+        glVertex2f(box.x0 + 6, box.y0 + 4);
+        glVertex2f(box.x0 + 6, box.y1 - 4);
+        glVertex2f(box.x0 + 3, box.y1 - 4);
+        glEnd();
+        glColor4f(1.0f, 1.0f, 0.95f, alpha);
+        draw_text(box.x0 + 12, box.y0 + 5, s.name, 2);
+        float x = box.x0 + 12;
+        for (const Pip& p : pips) {
+            if (p.loads <= 0) continue;
+            const float cy = box.y0 + 32;
+            glColor4f(p.r, p.g, p.b, alpha);
+            glBegin(GL_TRIANGLE_FAN);
+            glVertex2f(x + 5, cy);
+            for (int j = 0; j <= 12; ++j) {
+                const float an = 6.2831853f * static_cast<float>(j) / 12.0f;
+                glVertex2f(x + 5 + 5 * std::cos(an), cy + 5 * std::sin(an));
+            }
+            glEnd();
+            const std::string n = std::to_string(p.loads);
+            glColor4f(0.92f, 0.92f, 0.88f, alpha);
+            draw_text(x + 14, box.y0 + 25, n, 2);
+            x += 14.0f + static_cast<float>(text_width(n, 2)) + 8.0f;
+        }
+    }
+}
+
 void draw_plan(sim::MapPoint start, const sim::TrackPlan& plan, const Camera& cam) {
     glLineWidth(plan.double_track ? 5.0f : 3.0f);
     glBegin(GL_LINES);

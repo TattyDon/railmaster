@@ -60,6 +60,9 @@ void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo, co
 // Town names, in screen space.
 // Town names with their star rating ("NORTHWICK **").
 void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Balance::Towns& towns);
+// Signs under the stations near the camera: the name, a stripe in the
+// owner's colour, and how many loads of passengers, mail and freight wait.
+void draw_station_names(const sim::World& w, const Camera& cam);
 // Territory borders along map-cell edges (closed borders in red), in map
 // coordinates; then, in screen coordinates, each territory's name at its
 // centre with its access price (none if open, "YOURS" with access).

@@ -1235,6 +1235,7 @@ int main(int argc, char* argv[]) {
 
         cam.apply_screen();
         if (cam.three_d) client::draw_weather(cam, rain, snowing, static_cast<float>(std::fmod(clock_s, 3600.0)));
+        if (!hide_ui) client::draw_station_names(world, cam); // information, so Tab hides it
         client::draw_town_names(world.economy(), cam, world.data().balance.towns);
         client::draw_territory_names(world.territories(), cam,
                                      world.player_company() ? &world.company(*world.player_company()) : nullptr);

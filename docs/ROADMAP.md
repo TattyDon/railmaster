@@ -295,7 +295,9 @@ town ratings show as gold stars. Panels, bars, toolbar tabs, labels and
 the radar share one look (src/client/ui.cpp): warm dark gradients framed in
 brass with soft shadows, raised brass tabs for the chosen tool; town names
 are placed nearest first, left out where they would overlap, and fade with
-distance. Zoom by wheel, smooth trackpad scrolling,
+distance. Stations carry signs too: the name, a stripe in the owner's colour,
+and pips counting the loads of passengers, mail and freight waiting, for
+the stations near the camera. Zoom by wheel, smooth trackpad scrolling,
 pinch, or Option (Alt) + Up/Down.
 
 Clouds' shadows (shaders; off in Settings) drift over the land, dimming
