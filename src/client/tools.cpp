@@ -319,6 +319,51 @@ void Tools::draw_ledger_panel() const {
         t.line("Credit rating", {sim::rating_name(co.credit_rating())});
         t.line("Share price", {format_cents(co.share_price())});
         t.line("Book value", {format_money(co.book_value())});
+        // Revenue and profit year by year, as bars: the last ten years, this
+        // one so far on the right.
+        if (w >= 1100) {
+            const float cx0 = x0 + 800, cx1 = x0 + w - 20, cy0 = y + 8, cy1 = y + 300;
+            glColor3f(1.0f, 0.86f, 0.5f);
+            draw_text(cx0, cy0, "Revenue and profit, by year", kScale);
+            const std::size_t count = std::min<std::size_t>(10, years.size());
+            const std::size_t first = years.size() - count;
+            double top = 1, bottom = 0; // dollars, bottom <= 0
+            for (std::size_t i = first; i < years.size(); ++i) {
+                top = std::max({top, static_cast<double>(years[i].revenue().whole_dollars()),
+                                static_cast<double>(years[i].profit().whole_dollars())});
+                bottom = std::min(bottom, static_cast<double>(years[i].profit().whole_dollars()));
+            }
+            const float py0 = cy0 + 28, py1 = cy1 - 22; // the plot
+            const auto at = [&](double dollars) {
+                return py1 - static_cast<float>((dollars - bottom) / (top - bottom)) * (py1 - py0);
+            };
+            const float zero = at(0);
+            const float slot = (cx1 - cx0) / static_cast<float>(std::max<std::size_t>(count, 1));
+            for (std::size_t i = 0; i < count; ++i) {
+                const sim::YearAccounts& ya = years[first + i];
+                const float sx = cx0 + slot * static_cast<float>(i);
+                const float bw = slot * 0.36f;
+                const float rev = at(static_cast<double>(ya.revenue().whole_dollars()));
+                const double profit = static_cast<double>(ya.profit().whole_dollars());
+                const float pro = at(profit);
+                const float alpha = first + i + 1 == years.size() ? 0.6f : 0.95f; // this year is not over
+                fill_rect(sx + slot * 0.1f, std::min(rev, zero), sx + slot * 0.1f + bw, std::max(rev, zero), 0.95f, 0.78f, 0.3f, alpha);
+                if (profit >= 0) fill_rect(sx + slot * 0.1f + bw, std::min(pro, zero), sx + slot * 0.1f + 2 * bw, std::max(pro, zero), 0.35f, 0.85f, 0.4f, alpha);
+                else fill_rect(sx + slot * 0.1f + bw, std::min(pro, zero), sx + slot * 0.1f + 2 * bw, std::max(pro, zero), 0.95f, 0.35f, 0.3f, alpha);
+                glColor3f(0.75f, 0.73f, 0.67f);
+                const std::int32_t yy = ya.year % 100;
+                draw_text(sx + slot * 0.1f, py1 + 4, (yy < 10 ? "'0" : "'") + std::to_string(yy), kScale);
+            }
+            fill_rect(cx0, zero, cx1, zero + 1, 0.8f, 0.78f, 0.7f, 0.8f); // the zero line
+            glColor3f(0.75f, 0.73f, 0.67f);
+            const std::string scale = format_money(sim::Money::dollars(static_cast<std::int64_t>(top)));
+            draw_text(cx1 - static_cast<float>(text_width(scale, kScale)), cy0, scale, kScale);
+            fill_rect(cx0, cy1 + 4, cx0 + 12, cy1 + 16, 0.95f, 0.78f, 0.3f, 0.95f);
+            glColor3f(0.85f, 0.83f, 0.77f);
+            draw_text(cx0 + 16, cy1 + 2, "revenue", kScale);
+            fill_rect(cx0 + 100, cy1 + 4, cx0 + 112, cy1 + 16, 0.35f, 0.85f, 0.4f, 0.95f);
+            draw_text(cx0 + 116, cy1 + 2, "profit", kScale);
+        }
         break;
     }
     case 1: {
