@@ -281,6 +281,10 @@ fences, a red gambrel barn, a domed silo and a farmhouse, and herds of
 cattle (black and white at dairies) or sheep. New primitives: beams
 between any two points, gambrel roofs, fences.
 
+Electrified track has overhead line close up: steel masts beside the
+track every few hundred feet, arms with droppers out over each track,
+and the contact wire sagging a little between them.
+
 Bridges are drawn by type: timber trestles (splayed bents with girts and
 X-braces, stringers under the deck), stone viaducts (piers with battered
 footings, round arches under spandrel walls, a parapet), steel through

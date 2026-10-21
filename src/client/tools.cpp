@@ -4807,7 +4807,7 @@ void Tools::draw_train_panel() const {
 namespace {
 // The options panel's rows: the Track tool's from 0, the Station tool's
 // sizes from kSizeRow and what it builds from kBuildRow.
-enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo, kUndoBuild };
+enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo, kUndoBuild, kWireAll };
 constexpr std::size_t kSizeRow = 100, kBuildRow = 200, kPlantRow = 300;
 constexpr sim::StationBuildingType kBuildings[] = {sim::StationBuildingType::PostOffice, sim::StationBuildingType::Hotel,
                                                    sim::StationBuildingType::Restaurant, sim::StationBuildingType::Tavern};
@@ -4822,6 +4822,7 @@ void Tools::tool_options_click(std::size_t index) {
     case kOverpasses: on_key(SDLK_g, 0); return;
     case kUndo: on_key(SDLK_z, KMOD_CTRL); return;
     case kUndoBuild: undo_build(); return;
+    case kWireAll: on_key(SDLK_e, KMOD_SHIFT); return;
     default: break;
     }
     if (index >= kPlantRow) {
@@ -4846,7 +4847,7 @@ void Tools::draw_tool_options() const {
     constexpr float kRowH = 24;
     const float w = 300, x0 = 10, y0 = kToolbarY + kButtonH + 10;
     const bool track = tool_ == Tool::Track;
-    const float h = track ? 40 + kRowH * 5 + 44 : 40 + 22 + kRowH + 16 + 22 + kRowH * 5 + 44;
+    const float h = track ? 40 + kRowH * 5 + 44 + kRowH + 8 : 40 + 22 + kRowH + 16 + 22 + kRowH * 5 + 44;
     side_panel_box_ = {x0, y0, x0 + w, y0 + h};
     ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
@@ -4880,6 +4881,12 @@ void Tools::draw_tool_options() const {
         const std::string undo = "Undo the last track (Ctrl+Z)";
         draw_text(x0 + (w - static_cast<float>(text_width(undo, kScale))) / 2, y + 5, undo, kScale);
         add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 2, RowPanel::ToolOptions, kUndo);
+        y += kRowH + 8;
+        ui::tab(x0 + 10, y, x0 + w - 10, y + kRowH + 2, false);
+        glColor3f(0.95f, 0.92f, 0.82f);
+        const std::string wire = "Electrify all your track (Shift+E)";
+        draw_text(x0 + (w - static_cast<float>(text_width(wire, kScale))) / 2, y + 5, wire, kScale);
+        add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 2, RowPanel::ToolOptions, kWireAll);
         return;
     }
     // The station's size, as three buttons with their prices.

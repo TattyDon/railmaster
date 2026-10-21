@@ -1896,7 +1896,7 @@ std::uint64_t railway_key(const sim::Railway& rw, std::optional<sim::CompanyId> 
         mix(e.a);
         mix(e.b);
         mix((e.removed ? 1u : 0u) | (e.double_track ? 2u : 0u) | (static_cast<unsigned>(e.kind) << 2) |
-            (static_cast<unsigned>(e.bridge) << 6));
+            (static_cast<unsigned>(e.bridge) << 6) | (e.electrified ? 1u << 10 : 0u));
         mix(e.owner);
     }
     for (const sim::TrackNode& n : net.nodes()) {
@@ -1908,6 +1908,64 @@ std::uint64_t railway_key(const sim::Railway& rw, std::optional<sim::CompanyId> 
     mix(static_cast<std::uint64_t>(cam.height_exaggeration * 1000));
     mix(reinterpret_cast<std::uintptr_t>(cam.terrain));
     return h;
+}
+
+// Overhead line on electrified track, close up: a steel mast beside the
+// track every few hundred feet, an arm out over each track, and the contact
+// wire hung between them with a little sag. Inside GL_QUADS.
+void catenary(const sim::Railway& rw, const Camera& cam) {
+    const sim::TrackNetwork& net = rw.track();
+    const auto tile = [&](std::int64_t mm) { return static_cast<float>(mm) / cam.mm_per_tile; };
+    const float steel[3] = {0.42f, 0.44f, 0.46f}, copper[3] = {0.62f, 0.42f, 0.24f};
+    constexpr float kHeight = 0.15f, kWire = 0.12f, kSpacing = 0.45f;
+    for (const sim::TrackEdge& e : net.edges()) {
+        if (!e.electrified || e.removed || e.kind == sim::TrackKind::Tunnel) continue;
+        const sim::TrackNode& a = net.node(e.a);
+        const sim::TrackNode& b = net.node(e.b);
+        const float ax = tile(a.pos.x_mm), ay = tile(a.pos.y_mm), bx = tile(b.pos.x_mm), by = tile(b.pos.y_mm);
+        const float len = std::hypot(bx - ax, by - ay);
+        if (len <= 0) continue;
+        const float dx = (bx - ax) / len, dy = (by - ay) / len, px = -dy, py = dx;
+        const float za = cam.z_of(a.z_mm), zb = cam.z_of(b.z_mm);
+        // The rail height, as track_body lays it (over the ground in cuttings).
+        const auto z_at = [&](float t) {
+            const float rail = za + (zb - za) * t;
+            if (e.kind != sim::TrackKind::Ground) return rail + 0.02f;
+            return std::max(rail, cam.ground_z(ax + (bx - ax) * t, ay + (by - ay) * t)) + 0.02f;
+        };
+        const std::vector<float> tracks = e.double_track ? std::vector<float>{-0.07f, 0.07f} : std::vector<float>{0.0f};
+        const float mast_off = (e.double_track ? 0.07f : 0.0f) + 0.11f; // beside the outer track
+        const int spans = std::max(1, static_cast<int>(std::round(len / kSpacing)));
+        for (int i = 0; i <= spans; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(spans);
+            const float x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = z_at(t);
+            // The mast (shared with the next edge at a node, so only one at
+            // each end of a run: drawn here at the edge's ends too).
+            const float mx = x + px * mast_off, my = y + py * mast_off;
+            beam(mx, my, z - 0.02f, mx, my, z + kHeight, 0.008f, steel);
+            // The arm, out over the far track (just past its wire).
+            const float reach = tracks.front() - 0.02f;
+            beam(mx, my, z + kHeight - 0.01f, x + px * reach, y + py * reach, z + kHeight - 0.01f, 0.005f, steel);
+            // Droppers from the arm to each track's wire.
+            for (const float off : tracks) {
+                beam(x + px * off, y + py * off, z + kHeight - 0.01f, x + px * off, y + py * off, z + kWire, 0.003f, steel);
+            }
+        }
+        // The contact wire over each track, sagging between masts.
+        for (const float off : tracks) {
+            for (int i = 0; i < spans; ++i) {
+                constexpr int kSteps = 4;
+                for (int k = 0; k < kSteps; ++k) {
+                    const float s0 = static_cast<float>(k) / kSteps, s1 = static_cast<float>(k + 1) / kSteps;
+                    const float t0 = (static_cast<float>(i) + s0) / static_cast<float>(spans);
+                    const float t1 = (static_cast<float>(i) + s1) / static_cast<float>(spans);
+                    const float sag0 = 0.012f * 4 * s0 * (1 - s0), sag1 = 0.012f * 4 * s1 * (1 - s1);
+                    beam(ax + (bx - ax) * t0 + px * off, ay + (by - ay) * t0 + py * off, z_at(t0) + kWire - sag0,
+                         ax + (bx - ax) * t1 + px * off, ay + (by - ay) * t1 + py * off, z_at(t1) + kWire - sag1, 0.004f, copper);
+                }
+            }
+        }
+    }
 }
 
 // Track close up, as display lists rebuilt only when the railway changes:
@@ -1924,6 +1982,9 @@ void track_3d(const sim::Railway& rw, const Camera& cam, std::optional<sim::Comp
         if (bed.list == 0) bed.list = glGenLists(1);
         glNewList(bed.list, GL_COMPILE);
         track_body(rw, cam, player, cam.zoom >= 26.0f);
+        glBegin(GL_QUADS);
+        catenary(rw, cam);
+        glEnd();
         glEndList();
         bed.key = key;
     }
@@ -2972,16 +3033,19 @@ void draw_railway(const sim::World& w, const Camera& cam) {
         }
         glEnd();
     }
-    // Overhead wires: a thin copper line along electrified track.
-    glLineWidth(1.0f);
-    glBegin(GL_LINES);
-    glColor3f(0.95f, 0.6f, 0.2f);
-    for (const sim::TrackEdge& e : net.edges()) {
-        if (!e.electrified || e.removed) continue;
-        vertex_at(net.node(e.a).pos, net.node(e.a).z_mm, cam, kLift + 0.06f);
-        vertex_at(net.node(e.b).pos, net.node(e.b).z_mm, cam, kLift + 0.06f);
+    // Overhead wires from afar (close up, catenary is drawn with the track):
+    // a thin copper line along electrified track.
+    if (!detailed) {
+        glLineWidth(1.0f);
+        glBegin(GL_LINES);
+        glColor3f(0.95f, 0.6f, 0.2f);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (!e.electrified || e.removed) continue;
+            vertex_at(net.node(e.a).pos, net.node(e.a).z_mm, cam, kLift + 0.06f);
+            vertex_at(net.node(e.b).pos, net.node(e.b).z_mm, cam, kLift + 0.06f);
+        }
+        glEnd();
     }
-    glEnd();
 
     // Crossings: a white cross where lines meet at level, a blue bar where
     // one goes over the other.
