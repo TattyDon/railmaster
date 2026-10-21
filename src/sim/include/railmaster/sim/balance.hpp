@@ -570,6 +570,9 @@ struct Balance {
         std::int32_t grumble_after_bad_years = 2;
         std::int32_t oust_after_bad_years = 3;
         std::int32_t happy_return_permille = 100;
+        // The dividend suggested to the player: this share of the last 12
+        // months' profit, as the AI tycoons' default temperament pays [I].
+        std::int32_t suggested_payout_percent = 30;
     } corporate;
 
     // Parse a balance file. Missing keys keep their defaults; unknown keys

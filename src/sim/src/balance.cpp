@@ -113,7 +113,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(Balance::Corporate, takeover_bas
                                                 takeover_below_book_permille, takeover_loss_year_permille,
                                                 merger_neutral_premium_percent, merger_support_slope,
                                                 merger_chairman_premium_percent, retry_days, grumble_after_bad_years,
-                                                oust_after_bad_years, happy_return_permille)
+                                                oust_after_bad_years, happy_return_permille, suggested_payout_percent)
 
 namespace {
 

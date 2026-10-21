@@ -34,6 +34,7 @@
   "corporate": {
     "grumble_after_bad_years": 2,
     "happy_return_permille": 100,
+    "suggested_payout_percent": 30,
     "merger_chairman_premium_percent": 125,
     "merger_neutral_premium_percent": 110,
     "merger_support_slope": 3,

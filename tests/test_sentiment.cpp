@@ -253,3 +253,17 @@ TEST_CASE("the investors' reasons: each bad year, what another brings, and what 
     CHECK(r[2].rfind("Another such year and the shareholders vote on removing you", 0) == 0);
     CHECK(r[3].rfind("A year counts as bad when", 0) == 0);
 }
+
+TEST_CASE("the suggested dividend: 30% of the last 12 months' profit, if the cash covers a year of it") {
+    Company c = founded(); // $6M cash, 600,000 shares
+    CHECK(c.suggested_dividend() == Money{}); // no months on record yet
+    for (int m = 0; m < 12; ++m) {
+        c.post(Ledger::FreightRevenue, Money::dollars(100'000));
+        c.record_month();
+    }
+    // $1.2M a year: 30% is $360,000, $0.60 a share.
+    CHECK(c.suggested_dividend() == Money::cents(60));
+    // Not when the cash would not cover a year of it: spent on trains, which is no loss.
+    c.invest_train(c.cash() - Money::dollars(300'000));
+    CHECK(c.suggested_dividend() == Money{});
+}

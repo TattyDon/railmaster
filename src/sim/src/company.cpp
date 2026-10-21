@@ -149,6 +149,15 @@ std::vector<std::string> Company::investor_reasons() const {
     return out;
 }
 
+Money Company::suggested_dividend() const {
+    const auto profit = trailing_profit();
+    if (!profit || *profit <= Money{} || shares_ <= 0) return Money{};
+    const Money per_share = profit->scaled(corporate_.suggested_payout_percent, 100 * shares_);
+    // Whole cents, and only what a year's cash would cover.
+    const Money year = per_share.scaled(shares_, 1);
+    return cash_ >= year ? per_share : Money{};
+}
+
 Sentiment Company::sentiment() const {
     const std::int32_t streak = bad_year_streak();
     if (streak >= corporate_.oust_after_bad_years) return Sentiment::Hostile;

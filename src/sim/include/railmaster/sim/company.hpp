@@ -248,6 +248,10 @@ public:
     // §12.2): each bad year in the current run (profit and share price both
     // down, or a loss), what another one would bring, and what pleases them.
     std::vector<std::string> investor_reasons() const;
+    // A dividend a share worth paying now: the balance's share of the last
+    // 12 months' profit, if there was one, and if the company's cash covers
+    // a year of it; otherwise nothing.
+    Money suggested_dividend() const;
     // Return over up to five closed years, the latest weighted 5, then 4, 3,
     // 2, 1, in thousandths; zero before the first year closes.
     std::int32_t weighted_return_permille() const;

@@ -193,7 +193,12 @@ void Tools::draw_finance_panel() const {
         t.line("Five-year return to shareholders", {format_permille(co.weighted_return_permille())});
         t.line("Bad years in a row", {std::to_string(co.bad_year_streak())});
         // Why, and what comes next (rt3-clone-spec §12.2), in the investors' words.
-        for (const std::string& reason : co.investor_reasons()) {
+        std::vector<std::string> reasons = co.investor_reasons();
+        if (co.dividend_per_share() <= sim::Money{} && co.suggested_dividend() > sim::Money{}) {
+            reasons.push_back("You pay no dividend: " + format_cents(co.suggested_dividend()) +
+                              " a share would keep them happier and lift the share price (D, or the button below)");
+        }
+        for (const std::string& reason : reasons) {
             for (const std::string& l : wrap(reason, kScale, w - 40)) t.line("  " + l, {}, 0.72f, 0.7f, 0.64f);
         }
         t.line("Your salary", {format_money(sim::chairman_salary(co)) + " a year"});
@@ -230,6 +235,11 @@ void Tools::draw_finance_panel() const {
         t.line("Market value", {format_money(co.share_price() * co.shares_outstanding())});
         t.line("Book value per share", {format_cents(co.book_value_per_share())});
         t.line("Dividend per share, a year", {format_cents(co.dividend_per_share())});
+        if (const sim::Money s = co.suggested_dividend(); s > sim::Money{} && s != co.dividend_per_share()) {
+            t.line("  Suggested: " + std::to_string(world_.data().balance.corporate.suggested_payout_percent) +
+                       "% of the last 12 months' profit (D)",
+                   {format_cents(s)}, 0.72f, 0.7f, 0.64f);
+        }
         t.line("Dividends paid this year", {format_money(now.dividends_paid)});
         t.line("Stock issues this year", {std::to_string(co.stock_issues_this_year()) + " of 2"});
         t.gap();
@@ -270,13 +280,19 @@ void Tools::draw_finance_panel() const {
     }
     // The actions, for the mouse: what the keys do.
     const float by = y0 + h - 40;
-    ui::rule(x0 + 10, x0 + w - 10, by - 8);
     if (company_tab_ == 3) {
+        ui::rule(x0 + 10, x0 + w - 10, by - 8);
         key_buttons(x0 + 10, x0 + 300, by, {{"Buy access", SDLK_t}});
     } else {
-        key_buttons(x0 + 10, x0 + w - 10, by,
+        // Two rows: bonds and stock, then the dividend.
+        ui::rule(x0 + 10, x0 + w - 10, by - 42);
+        key_buttons(x0 + 10, x0 + w - 10, by - 34,
                     {{"Issue bond", SDLK_b}, {"Repay bond", SDLK_r}, {"Buy shares", SDLK_a}, {"Sell shares", SDLK_s},
-                     {"Issue stock", SDLK_i}, {"Buy back", SDLK_y}, {"Dividend -", SDLK_LEFTBRACKET}, {"Dividend +", SDLK_RIGHTBRACKET}});
+                     {"Issue stock", SDLK_i}, {"Buy back", SDLK_y}});
+        const sim::Money suggested = co.suggested_dividend();
+        key_buttons(x0 + 10, x0 + w - 10, by,
+                    {{"Dividend -", SDLK_LEFTBRACKET}, {"Dividend +", SDLK_RIGHTBRACKET},
+                     {suggested > sim::Money{} ? "Suggested dividend: " + format_cents(suggested) : std::string("Suggested dividend"), SDLK_d}});
     }
 }
 
@@ -2321,6 +2337,16 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             const sim::Money next = key == SDLK_RIGHTBRACKET ? now + step : std::max(sim::Money{}, now - step);
             r = world_.execute(sim::SetDividend{.per_share = next});
             done = "Dividend set to " + format_cents(next) + " a share a year";
+        } else if (key == SDLK_d) {
+            // The suggested dividend: a share of last year's profit the cash covers.
+            const sim::Money per_share = world_.company().suggested_dividend();
+            if (per_share <= sim::Money{}) {
+                show("No dividend to suggest: it needs a profit over the last 12 months, and the cash to pay a year of it", false);
+                return true;
+            }
+            r = world_.execute(sim::SetDividend{.per_share = per_share});
+            done = "Dividend set to " + format_cents(per_share) + " a share a year (" +
+                   format_money(per_share.scaled(world_.company().shares_outstanding(), 1)) + " a year in all)";
         } else {
             return false;
         }
@@ -3363,7 +3389,7 @@ std::string Tools::hint() const {
     case Tool::Finance:
         if (company_tab_ == 3) return "Tab next page   Up/Down choose a territory   T buy access to it";
         return "Tab next page   B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   "
-               "[ ] dividend   KK bankruptcy";
+               "[ ] dividend  D suggested   KK bankruptcy";
     case Tool::Ledger: return "Tab (or click) next page   L or Esc close";
     }
     return {};
