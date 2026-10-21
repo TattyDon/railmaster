@@ -751,7 +751,9 @@ std::string format_money(sim::Money m) {
 }
 
 void Tools::select(Tool t) {
-    cancel();
+    // A train's route being planned is kept, to come back to (say, after
+    // electrifying its track); only the track being laid is let go.
+    track_start_.reset();
     // Leaving the Track tool ends free undo [D].
     if (tool_ == Tool::Track && t != Tool::Track) world_.execute(sim::EndTrackUndo{});
     // Likewise stations and buildings, on leaving the Station, Tower and Shed tools.
@@ -1596,7 +1598,8 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         return;
     }
     if (right_button) {
-        cancel();
+        if (tool_ == Tool::Train) cancel();
+        else track_start_.reset();
         return;
     }
     for (const Button& b : layout_buttons()) {
@@ -1924,7 +1927,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
     case SDLK_o: cycle_overlay(+1); return true;
     case SDLK_p: cycle_overlay(-1); return true;
     case SDLK_ESCAPE:
-        if (track_start_ || !stops_.empty() || editing_) cancel();
+        if (track_start_) track_start_.reset();
+        else if (tool_ == Tool::Train && (!stops_.empty() || editing_)) cancel(); // the route only in its own tool
         else if (detail_) {
             detail_.reset();
             follow_ = false;
@@ -2027,6 +2031,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             }
             // Edit the route in the Train tool, starting from the current one.
             select(Tool::Train);
+            cancel(); // whatever route was being planned gives way to this one
             editing_ = *id;
             for (std::size_t i = 0; i < t.route.size(); ++i) {
                 stops_.push_back({.station = t.route[i],
@@ -2112,7 +2117,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             // Free undo of the last run built since opening the Track tool [D].
             const sim::CommandResult r = world_.execute(sim::UndoTrack{});
             if (r.ok) {
-                cancel();
+                track_start_.reset();
                 show("Undone: " + format_money(sim::Money{} - r.cost) + " refunded", true);
             } else {
                 show("Cannot undo: " + r.error, false);
@@ -2153,7 +2158,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             remove_armed_.clear();
             const sim::CommandResult r = world_.execute(sim::RemoveTrack{.edges = run});
             if (r.ok) {
-                cancel();
+                track_start_.reset();
                 show("Track removed: " + format_money(sim::Money{} - r.cost) + " back", true);
             } else {
                 show("Cannot: " + r.error, false);
@@ -3369,6 +3374,15 @@ std::string Tools::hint() const {
         const bool dry = !locos.empty() && stops_.size() >= 2 &&
                          world_.data().locomotives.get(locos[loco_choice_ % locos.size()]).fuel == sim::Fuel::Steam &&
                          !tower_near(pending_route());
+        // An electric engine on a route not wired all the way: say so, as the panel does.
+        const sim::LocoTypeId engine = editing_ ? world_.railway().train(*editing_).loco
+                                                : (locos.empty() ? 0 : locos[loco_choice_ % locos.size()]);
+        if (stops_.size() >= 2 && (editing_ || !locos.empty()) &&
+            world_.data().locomotives.get(engine).fuel == sim::Fuel::Electric) {
+            if (const auto why = world_.railway().electric_route_problem(pending_route())) {
+                return stop_text() + "   Not wired" + why->substr(why->find(" from ")) + ": electrify it (Track tool, E)";
+            }
+        }
         return std::string(editing_ ? "Train " + std::to_string(*editing_ + 1) + " " : "") + stop_text() +
                (editing_ ? "  Enter saves" : "  Enter buys " + loco) + (dry ? "   No service tower on this route (F4)!" : "");
     }
