@@ -97,6 +97,7 @@ Format versions:
 - **21:** the debug console's train speed and no-crash switches, and a medal tier in its commands.
 - **22:** each company's share price at every month end, the last ten years (the Market chart).
 - **23:** loads delivered from or to a place, for scenario goals that name one.
+- **24:** the stations and buildings each player may still undo.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

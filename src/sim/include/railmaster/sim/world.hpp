@@ -333,6 +333,18 @@ private:
         std::int64_t tiles = 0; // from the track budget, given back by an undo
     };
     std::vector<std::vector<TrackUndo>> track_undo_;
+    // Stations and buildings placed since entering their tool, by player,
+    // newest last, for UndoBuild: what, its id, where (to check it is the
+    // same one) and what it cost.
+    struct BuildUndo {
+        std::uint8_t kind = 0; // 0 station, 1 tower or shed, 2 station building
+        std::uint32_t id = 0;
+        MapPoint at{};
+        Money cost{};
+    };
+    std::vector<std::vector<BuildUndo>> build_undo_;
+    void remember_build(std::uint8_t kind, std::uint32_t id, MapPoint at, Money cost);
+    void forget_builds();
     std::optional<Scenario> scenario_;
     bool assisted_ = false;
     // Deliveries counting for deliver goals with a from or to town, by
@@ -428,6 +440,8 @@ private:
     CommandResult run(const RemoveStation& cmd);
     CommandResult run(const RemoveServiceBuilding& cmd);
     CommandResult run(const RenameStation& cmd);
+    CommandResult run(const UndoBuild& cmd);
+    CommandResult run(const EndBuildUndo& cmd);
 public:
     // What enlarging a station a size costs now (nothing if it is large).
     Money station_upgrade_cost(StationId id) const;

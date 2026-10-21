@@ -276,6 +276,7 @@ private:
     std::optional<std::uint32_t> remove_site_;
     std::optional<sim::ServiceBuildingId> building_near(sim::MapPoint p) const;
     bool remove_site_key();
+    bool undo_build(); // Ctrl+Z in the Station, Tower and Shed tools
     Uint32 bankrupt_armed_until_ = 0;   // likewise K for bankruptcy
     bool founding_ = false;
     bool founding_cancellable_ = false;

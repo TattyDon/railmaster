@@ -282,6 +282,12 @@ struct RemoveStation {
     StationId station = 0;
 };
 // Take down one of your service towers or maintenance sheds, likewise.
+// Undo the last station, tower, shed or station building you placed, for
+// the full price, as Ctrl+Z undoes track (rt3-clone-spec §15: free undo
+// until leaving the panel). EndBuildUndo forgets them (leaving the tool).
+struct UndoBuild {};
+struct EndBuildUndo {};
+
 // Give one of your stations a new name: 1 to 30 characters, not another station's.
 struct RenameStation {
     StationId station = 0;
@@ -297,7 +303,7 @@ using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, E
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding, RenameStation>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding, RenameStation, UndoBuild, EndBuildUndo>;
 
 struct CommandResult {
     bool ok = false;

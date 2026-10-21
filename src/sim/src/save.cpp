@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 23; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 24; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -36,7 +36,8 @@ constexpr std::uint32_t kSaveVersion = 23; // 2: events, Grants; 3: restrictions
                                            // 16: and its industries; 17: and its territories;
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
                                            // 20: cheats (assisted games); 21: more cheats;
-                                           // 22: share prices by month; 23: deliveries from or to a place
+                                           // 22: share prices by month; 23: deliveries from or to a place;
+                                           // 24: stations and buildings to undo
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -603,6 +604,10 @@ void io(Ar&, UndoTrack&) {}
 template <class Ar>
 void io(Ar&, EndTrackUndo&) {}
 template <class Ar>
+void io(Ar&, UndoBuild&) {}
+template <class Ar>
+void io(Ar&, EndBuildUndo&) {}
+template <class Ar>
 void io(Ar&, IssueBond&) {}
 template <class Ar>
 void io(Ar&, RepayBond&) {}
@@ -640,6 +645,13 @@ void io(Ar& ar, World& w) {
         if constexpr (Ar::loading) stack.assign(ar.count(1), {});
         else ar.put(stack.size(), 8);
         for (auto& u : stack) fields(ar, u.edges, u.ends, u.first_new_node, u.tiles);
+    }
+    if constexpr (Ar::loading) w.build_undo_.assign(ar.count(1), {});
+    else ar.put(w.build_undo_.size(), 8);
+    for (auto& stack : w.build_undo_) {
+        if constexpr (Ar::loading) stack.assign(ar.count(1), {});
+        else ar.put(stack.size(), 8);
+        for (auto& u : stack) fields(ar, u.kind, u.id, u.at, u.cost);
     }
     fields(ar, w.scenario_, w.scenario_result_, w.event_month_, w.variables_, w.founder_, w.track_tiles_);
     if constexpr (Ar::loading) w.modifiers_.assign(ar.count(1), {});

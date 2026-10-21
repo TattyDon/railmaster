@@ -671,6 +671,9 @@ void Tools::select(Tool t) {
     cancel();
     // Leaving the Track tool ends free undo [D].
     if (tool_ == Tool::Track && t != Tool::Track) world_.execute(sim::EndTrackUndo{});
+    // Likewise stations and buildings, on leaving the Station, Tower and Shed tools.
+    const auto builds = [](Tool x) { return x == Tool::Station || x == Tool::ServiceTower || x == Tool::Maintenance; };
+    if (builds(tool_) && !builds(t)) world_.execute(sim::EndBuildUndo{});
     if (t != Tool::Inspect) {
         detail_.reset();
         follow_ = false;
@@ -1423,6 +1426,20 @@ std::optional<sim::ServiceBuildingId> Tools::building_near(sim::MapPoint p) cons
     return best;
 }
 
+bool Tools::undo_build() {
+    // Free while still in the tool, as for track (rt3-clone-spec §15).
+    const sim::CommandResult r = world_.execute(sim::UndoBuild{});
+    if (!r.ok) {
+        show("Cannot undo: " + r.error, false);
+        return true;
+    }
+    if (detail_ && detail_->kind == DetailKind::Station) detail_.reset(); // ids may have moved
+    stops_.clear();
+    stop_sel_ = 0;
+    show("Undone: " + format_money(sim::Money{} - r.cost) + " back", true);
+    return true;
+}
+
 bool Tools::remove_site_key() {
     // Take down the station, tower or shed under the cursor, on a second press.
     const bool station = tool_ == Tool::Station;
@@ -2099,10 +2116,12 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             return true;
         }
         if (key == SDLK_x) return remove_site_key();
+        if (key == SDLK_z && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) return undo_build();
         return false;
     case Tool::ServiceTower:
     case Tool::Maintenance:
         if (key == SDLK_x) return remove_site_key();
+        if (key == SDLK_z && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) return undo_build();
         return false;
     case Tool::Train: {
         const auto locos = available_locos();
@@ -3253,7 +3272,7 @@ std::string Tools::hint() const {
                    ".  B next kind";
         }
         return std::string("Click on track to build a station.  B for buildings.  [ ] size: ") + size_name(station_size_) + " " +
-               format_money(sim::station_cost(station_size_)) + ".  X twice: take one down";
+               format_money(sim::station_cost(station_size_)) + ".  Ctrl+Z undo  X twice: take one down";
     case Tool::ServiceTower:
         return "Click on track: service tower (water, sand) " +
                format_money(sim::service_building_cost(sim::ServiceType::ServiceTower)) + ".  X twice: take one down";
@@ -4509,13 +4528,17 @@ void Tools::build_link() {
         plan.track.start.kind == sim::TrackEnd::Kind::Node ? plan.track.start.node : *net.nearest_node(plan.track.start.pos, 1);
     const auto sa = station_at(plan.track.start, start_node);
     const auto sb = station_at(plan.track.end, track.created_id);
-    if (!sa || !sb) return;
+    if (!sa || !sb) {
+        world_.execute(sim::EndBuildUndo{});
+        return;
+    }
     if (plan.tower) {
         const sim::NodeId node = world_.railway().station(*sa).node;
         const sim::CommandResult t = world_.execute(sim::BuildServiceBuilding{
             .at = {sim::TrackEnd::Kind::Node, node, 0, net.node(node).pos}, .type = sim::ServiceType::ServiceTower});
         if (!t.ok) show("Line built, but no service tower: " + t.error, false);
     }
+    world_.execute(sim::EndBuildUndo{}); // the Guide's line is not undone piece by piece
     const sim::CommandResult train = world_.execute(sim::BuyTrain{.loco = *plan.loco, .cars = 4, .route = {*sa, *sb}});
     if (!train.ok) {
         show("Line built, but cannot buy the train: " + train.error, false);
@@ -4708,7 +4731,7 @@ void Tools::draw_train_panel() const {
 namespace {
 // The options panel's rows: the Track tool's from 0, the Station tool's
 // sizes from kSizeRow and what it builds from kBuildRow.
-enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo };
+enum TrackOption : std::size_t { kDouble = 0, kCurves, kTunnels, kBridges, kOverpasses, kUndo, kUndoBuild };
 constexpr std::size_t kSizeRow = 100, kBuildRow = 200, kPlantRow = 300;
 constexpr sim::StationBuildingType kBuildings[] = {sim::StationBuildingType::PostOffice, sim::StationBuildingType::Hotel,
                                                    sim::StationBuildingType::Restaurant, sim::StationBuildingType::Tavern};
@@ -4722,6 +4745,7 @@ void Tools::tool_options_click(std::size_t index) {
     case kBridges: on_key(SDLK_b, 0); return;
     case kOverpasses: on_key(SDLK_g, 0); return;
     case kUndo: on_key(SDLK_z, KMOD_CTRL); return;
+    case kUndoBuild: undo_build(); return;
     default: break;
     }
     if (index >= kPlantRow) {
@@ -4746,7 +4770,7 @@ void Tools::draw_tool_options() const {
     constexpr float kRowH = 24;
     const float w = 300, x0 = 10, y0 = kToolbarY + kButtonH + 10;
     const bool track = tool_ == Tool::Track;
-    const float h = track ? 40 + kRowH * 5 + 44 : 40 + 22 + kRowH + 16 + 22 + kRowH * 5 + 10;
+    const float h = track ? 40 + kRowH * 5 + 44 : 40 + 22 + kRowH + 16 + 22 + kRowH * 5 + 44;
     side_panel_box_ = {x0, y0, x0 + w, y0 + h};
     ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
@@ -4809,6 +4833,12 @@ void Tools::draw_tool_options() const {
             format_money(world_.construction_cost(sim::station_building_cost(t, world_.data().balance))), kBuildRow + 1 + i,
             station_building_ == t);
     }
+    y += 8;
+    ui::tab(x0 + 10, y, x0 + w - 10, y + kRowH + 2, false);
+    glColor3f(0.95f, 0.92f, 0.82f);
+    const std::string undo = "Undo the last built (Ctrl+Z)";
+    draw_text(x0 + (w - static_cast<float>(text_width(undo, kScale))) / 2, y + 5, undo, kScale);
+    add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 2, RowPanel::ToolOptions, kUndoBuild);
 }
 
 void Tools::draw_industry_options() const {

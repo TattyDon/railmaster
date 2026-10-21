@@ -354,6 +354,63 @@ CommandResult World::run(const UpgradeTrack& cmd) {
     return success(cost, 0);
 }
 
+void World::remember_build(std::uint8_t kind, std::uint32_t id, MapPoint at, Money cost) {
+    if (build_undo_.size() <= actor_) build_undo_.resize(std::size_t{actor_} + 1);
+    build_undo_[actor_].push_back({kind, id, at, cost});
+}
+
+void World::forget_builds() {
+    for (auto& stack : build_undo_) stack.clear();
+}
+
+CommandResult World::run(const UndoBuild&) {
+    if (actor_ >= build_undo_.size() || build_undo_[actor_].empty()) return fail("nothing to undo");
+    const BuildUndo last = build_undo_[actor_].back();
+    const CompanyId me = acting().id();
+    switch (last.kind) {
+    case 0: {
+        if (last.id >= railway_.stations().size()) return fail("that station has gone");
+        const Station& st = railway_.station(last.id);
+        if (st.owner != me || railway_.track().node(st.node).pos != last.at) return fail("that station has been changed since");
+        for (const Train& t : railway_.trains()) {
+            if (t.in_service() && std::find(t.route.begin(), t.route.end(), last.id) != t.route.end()) {
+                return fail("Train " + std::to_string(t.id + 1) + " already stops there");
+            }
+        }
+        railway_.remove_station(last.id);
+        for (Rival& r : rivals_) {
+            for (RivalRoute& route : r.routes) {
+                if (route.a > last.id) --route.a;
+                if (route.b > last.id) --route.b;
+            }
+        }
+        break;
+    }
+    case 1: {
+        if (last.id >= railway_.service_buildings().size()) return fail("that building has gone");
+        const ServiceBuilding& b = railway_.service_buildings()[last.id];
+        if (b.owner != me || railway_.track().node(b.node).pos != last.at) return fail("that building has been changed since");
+        railway_.remove_service_building(last.id);
+        break;
+    }
+    default: {
+        if (last.id >= railway_.station_buildings().size()) return fail("that building has gone");
+        const StationBuilding& b = railway_.station_buildings()[last.id];
+        if (b.owner != me || b.pos != last.at) return fail("that building has been changed since");
+        railway_.remove_station_building(last.id);
+        break;
+    }
+    }
+    acting().remove_buildings(last.cost, last.cost); // undo is free, as for track [D]
+    build_undo_[actor_].pop_back();
+    return success(Money{} - last.cost, 0);
+}
+
+CommandResult World::run(const EndBuildUndo&) {
+    if (actor_ < build_undo_.size()) build_undo_[actor_].clear();
+    return success(Money{}, 0);
+}
+
 CommandResult World::run(const EndTrackUndo&) {
     if (actor_ < track_undo_.size()) track_undo_[actor_].clear();
     return success(Money{}, 0);
@@ -445,6 +502,7 @@ CommandResult World::run(const BuildStation& cmd) {
     if (st.town && !economy_.towns()[*st.town].first_station_day) {
         economy_.town_mut(*st.town).first_station_day = st.built_day;
     }
+    remember_build(0, id, railway_.track().node(node).pos, cost);
     return success(cost, id);
 }
 
@@ -461,7 +519,9 @@ CommandResult World::run(const BuildServiceBuilding& cmd) {
     const NodeId node = resolve_on_track(cmd.at);
     acting().invest_buildings(construction_cost(service_building_cost(cmd.type, data_.balance)));
     const ServiceBuildingId id = railway_.add_service_building(cmd.type, node, acting().id());
-    return success(construction_cost(service_building_cost(cmd.type, data_.balance)), id);
+    const Money cost = construction_cost(service_building_cost(cmd.type, data_.balance));
+    remember_build(1, id, railway_.track().node(node).pos, cost);
+    return success(cost, id);
 }
 
 CommandResult World::run(const BuyTrain& cmd) {
@@ -863,7 +923,9 @@ CommandResult World::run(const BuildStationBuilding& cmd) {
     const Money cost = construction_cost(station_building_cost(cmd.type, data_.balance));
     if (auto why = cannot_afford(cost)) return fail(*why);
     acting().invest_buildings(cost);
-    return success(cost, railway_.add_station_building(cmd.type, cmd.pos, acting().id()));
+    const std::uint32_t id = railway_.add_station_building(cmd.type, cmd.pos, acting().id());
+    remember_build(2, id, cmd.pos, cost);
+    return success(cost, id);
 }
 
 CommandResult World::run(const SetPortMode& cmd) {
@@ -1021,6 +1083,7 @@ CommandResult World::run(const RemoveStation& cmd) {
     const Money book = station_cost(st.size, data_.balance);
     const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
     railway_.remove_station(cmd.station);
+    forget_builds(); // ids above it have moved
     for (Rival& r : rivals_) {
         for (RivalRoute& route : r.routes) {
             if (route.a > cmd.station) --route.a;
@@ -1038,6 +1101,7 @@ CommandResult World::run(const RemoveServiceBuilding& cmd) {
     const Money book = service_building_cost(b.type, data_.balance);
     const Money refund = book.scaled(data_.balance.track.remove_refund_percent, 100);
     railway_.remove_service_building(cmd.building);
+    forget_builds();
     acting().remove_buildings(book, refund);
     return success(Money{} - refund, 0);
 }

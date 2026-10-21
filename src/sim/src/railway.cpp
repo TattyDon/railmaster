@@ -314,6 +314,12 @@ void Railway::remove_station(StationId id) {
     for (auto& a : arrivals_) a.second = renumber(a.second);
 }
 
+void Railway::remove_station_building(std::uint32_t id) {
+    if (id >= station_buildings_.size()) return;
+    station_buildings_.erase(station_buildings_.begin() + static_cast<std::ptrdiff_t>(id));
+    for (std::size_t i = id; i < station_buildings_.size(); ++i) station_buildings_[i].id = static_cast<std::uint32_t>(i);
+}
+
 void Railway::remove_service_building(ServiceBuildingId id) {
     service_buildings_.erase(service_buildings_.begin() + id);
     for (ServiceBuilding& b : service_buildings_)

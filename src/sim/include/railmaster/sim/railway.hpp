@@ -353,6 +353,7 @@ public:
     // bound for it are lost.
     void remove_station(StationId id);
     void remove_service_building(ServiceBuildingId id);
+    void remove_station_building(std::uint32_t id);
     const Station& station(StationId id) const { return stations_.at(id); }
     // Why an electric engine could not run this route, if it could not:
     // every leg between consecutive stops, the last back to the first, must

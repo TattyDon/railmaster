@@ -353,3 +353,41 @@ TEST_CASE("stations and support buildings can be taken down, and later stations 
     CHECK(w.railway().service_buildings().empty());
     CHECK_FALSE(w.execute(RemoveServiceBuilding{.building = 0}).ok);
 }
+
+TEST_CASE("stations and buildings can be undone for their full price until the tool is left (§15 [D])") {
+    World w = flat_world();
+    REQUIRE(w.execute(track(free_at(2, 5), free_at(12, 5))).ok);
+    REQUIRE(w.execute(EndTrackUndo{}).ok);
+    const TrackNetwork& net = w.railway().track();
+    const auto at = [&](std::int64_t x_km) { return pick_track_end(net, {x_km * kKm, 5 * kKm}, 600'000); };
+    CHECK(w.execute(UndoBuild{}).error == "nothing to undo");
+
+    const Money before = w.company().cash();
+    const CommandResult s1 = w.execute(BuildStation{.at = at(2)});
+    const CommandResult s2 = w.execute(BuildStation{.at = at(12)});
+    const CommandResult tower = w.execute(BuildServiceBuilding{.at = at(7), .type = ServiceType::ServiceTower});
+    const CommandResult inn = w.execute(BuildStationBuilding{.type = StationBuildingType::Tavern, .pos = {2 * kKm, 6 * kKm}});
+    REQUIRE((s1.ok && s2.ok && tower.ok && inn.ok));
+    // Newest first, each for what it cost.
+    CommandResult u = w.execute(UndoBuild{});
+    REQUIRE(u.ok);
+    CHECK(u.cost == Money{} - inn.cost);
+    CHECK(w.railway().station_buildings().empty());
+    u = w.execute(UndoBuild{});
+    REQUIRE(u.ok);
+    CHECK(w.railway().service_buildings().empty());
+    // Kept in saves.
+    World loaded = World::load(w.save(), test_data());
+    // A station a train calls at stays.
+    REQUIRE(w.execute(BuyTrain{.loco = 0, .cars = 1, .route = {s1.created_id, s2.created_id}}).ok);
+    CHECK(w.execute(UndoBuild{}).error == "Train 1 already stops there");
+    // The loaded game, with no train, can still undo both stations, getting everything back.
+    REQUIRE(loaded.execute(UndoBuild{}).ok);
+    REQUIRE(loaded.execute(UndoBuild{}).ok);
+    CHECK(loaded.railway().stations().empty());
+    CHECK(loaded.company().cash() == before);
+    // Leaving the tool forgets them.
+    REQUIRE(loaded.execute(BuildStation{.at = at(2)}).ok);
+    REQUIRE(loaded.execute(EndBuildUndo{}).ok);
+    CHECK(loaded.execute(UndoBuild{}).error == "nothing to undo");
+}
