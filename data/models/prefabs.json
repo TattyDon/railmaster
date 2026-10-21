@@ -657,6 +657,1361 @@
     }
    ]
   },
+  "cottage-cross-wood": {
+   "texture": "kenney-fantasy-town/Textures/colormap-terracotta.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-door.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      2,
+      0,
+      0.7
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      -0.55,
+      1
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    }
+   ]
+  },
+  "cottage-hipped-stone": {
+   "texture": "kenney-fantasy-town/Textures/colormap-slate.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-door.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable-end.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable-end.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      1,
+      0,
+      0.85
+     ],
+     "turn": 0
+    }
+   ]
+  },
+  "house-l-stone": {
+   "texture": "kenney-fantasy-town/Textures/colormap-terracotta.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-door.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      1,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      2,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      2,
+      0,
+      1.7
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-small.glb",
+     "at": [
+      2,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-small.glb",
+     "at": [
+      2,
+      -1,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      2,
+      -1,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      2,
+      -1,
+      1
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      2,
+      -1,
+      0.7
+     ],
+     "turn": 270
+    }
+   ]
+  },
+  "house-l-wood": {
+   "texture": "kenney-fantasy-town/Textures/colormap-slate.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-door.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      1,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      2,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      2,
+      0,
+      1.7
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-small.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      0,
+      -1,
+      0.7
+     ],
+     "turn": 270
+    }
+   ]
+  },
+  "house-hipped-wood": {
+   "texture": "kenney-fantasy-town/Textures/colormap-slate.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-door.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      2,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      2,
+      0,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable-end.glb",
+     "at": [
+      0,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable.glb",
+     "at": [
+      1,
+      0,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/roof-gable-end.glb",
+     "at": [
+      2,
+      0,
+      2
+     ],
+     "turn": 180,
+     "scale": [
+      1,
+      1,
+      1.6
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      1,
+      0,
+      1.85
+     ],
+     "turn": 0
+    }
+   ]
+  },
+  "foursquare-wood": {
+   "texture": "kenney-fantasy-town/Textures/colormap-terracotta.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-wood-door.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      1,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-wood-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-point.glb",
+     "at": [
+      0.5,
+      -0.5,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      2,
+      2,
+      1.8
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      0.3,
+      -0.5,
+      2.05
+     ],
+     "turn": 0
+    }
+   ]
+  },
+  "foursquare-stone": {
+   "texture": "kenney-fantasy-town/Textures/colormap-slate.png",
+   "pieces": [
+    {
+     "file": "kenney-fantasy-town/wall-door.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      1,
+      -1,
+      0
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      1,
+      0,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      -1,
+      0
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      0
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 90
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      1
+     ],
+     "turn": 270
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      0,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      0,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      0,
+      -1,
+      1
+     ],
+     "turn": 180
+    },
+    {
+     "file": "kenney-fantasy-town/wall-window-shutters.glb",
+     "at": [
+      1,
+      -1,
+      1
+     ],
+     "turn": 0
+    },
+    {
+     "file": "kenney-fantasy-town/roof-point.glb",
+     "at": [
+      0.5,
+      -0.5,
+      2
+     ],
+     "turn": 0,
+     "scale": [
+      2,
+      2,
+      1.8
+     ]
+    },
+    {
+     "file": "kenney-fantasy-town/chimney.glb",
+     "at": [
+      0.3,
+      -0.5,
+      2.05
+     ],
+     "turn": 0
+    }
+   ]
+  },
   "terrace-stone": {
    "texture": "kenney-fantasy-town/Textures/colormap-terracotta.png",
    "pieces": [

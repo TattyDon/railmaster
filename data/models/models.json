@@ -23,11 +23,20 @@
     ]
   },
   "roles": {
-    "house": [
+    "cottage": [
       "prefab:cottage-wood-terracotta",
       "prefab:cottage-wood-slate",
+      "prefab:cottage-cross-wood",
+      "prefab:cottage-hipped-stone"
+    ],
+    "house": [
       "prefab:house-wood",
-      "prefab:house-stone"
+      "prefab:house-stone",
+      "prefab:house-l-stone",
+      "prefab:house-l-wood",
+      "prefab:house-hipped-wood",
+      "prefab:foursquare-wood",
+      "prefab:foursquare-stone"
     ],
     "terrace": [
       "prefab:terrace-stone",

@@ -374,8 +374,14 @@ unchanged), which made a large map with three rivals run about 1.8 times
 faster (about 80 game days a second in its first year, 58 by its fifth,
 against the 6 Very Fast needs).
 
+Town houses come in several shapes, all from the kit's pieces: plain
+gables, L-shaped houses with a one-storey back wing, cottages with a cross
+gable, hipped roofs, and square two-by-two Foursquares under a pyramid
+roof. Cottages and two-storey houses draw from separate lists (the
+`cottage` and `house` roles).
+
 Next:
-- Real art: a 2x2-cell house shape for variety.
+- Gardens: fences, sheds and fruit trees in the plots behind houses.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

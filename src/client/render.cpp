@@ -3631,7 +3631,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         // batch); the rest are drawn in code.
         const auto role = [](const Plot& p) {
             switch (p.kind) {
-            case Building::Cottage:
+            case Building::Cottage: return models::has("cottage") ? "cottage" : "house";
             case Building::TwoStorey: return "house";
             case Building::Terrace: return "terrace";
             case Building::Shop: return "shop";

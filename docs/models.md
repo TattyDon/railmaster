@@ -23,7 +23,8 @@ every time), so a town gets a mix of houses.
 
 | Role | What it replaces | How it is fitted |
 |---|---|---|
-| `house` | Cottages and two-storey houses in towns | To its plot, front to the street |
+| `cottage` | One-storey cottages in towns (when empty, `house` plays them too) | To its plot, front to the street |
+| `house` | Two-storey houses in towns | To its plot, front to the street |
 | `terrace` | Terraced rows | To its plot (neighbours join up) |
 | `shop` | Shops and offices in town centres | To its plot, front to the street |
 | `church` | Each town's church | To its plot |
@@ -115,7 +116,10 @@ material's colour by its name, for every model that uses it, as a screen
 - `kenney-fantasy-town/`: timber and stone walls, gable roofs, spires and
   chimneys from Kenney's Fantasy Town Kit (CC0), assembled into the town's
   cottages, houses, terraces, shops and church, with period recolourings
-  of its palette (slate and terracotta roofs, grey stone).
+  of its palette (slate and terracotta roofs, grey stone). Houses come in
+  several shapes: plain gables, L-shaped with a back wing, a cottage with
+  a cross gable, hipped roofs, and square two-by-two Foursquares under a
+  pyramid roof.
 
 Stations (a timber depot, a two-storey station, a hall with a clock
 tower), a windmill (beside grain and corn farms) and a watermill (the

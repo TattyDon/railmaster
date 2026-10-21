@@ -52,10 +52,70 @@ def building(length, floors, material, palette, roof="roof-gable", door="door", 
         pieces.append(piece(window if floors > 1 and f == floors - 1 else wall, length - 1, 0, f, RIGHT))
     # The roof: a gable along the building (the kit's gable piece runs its
     # ridge along x and closes both its ends).
-    for i in range(length):
-        pieces.append(piece(roof, i, 0, floors, 0, [1, 1, ROOF_RISE]))
+    if roof:
+        for i in range(length):
+            pieces.append(piece(roof, i, 0, floors, 0, [1, 1, ROOF_RISE]))
     if chimney:
         pieces.append(piece("chimney", length - 1, 0, floors - 0.3, 0))
+    return {"texture": f"{PACK}/Textures/colormap-{palette}.png", "pieces": pieces}
+
+
+def back_wing(b, x, floors, material, chimney=False, reach_ridge=False):
+    """A wing one cell deep behind the cell at x, `floors` high, its gable
+    running back from the house. With reach_ridge its roof runs on into
+    the main roof's, as a cross gable (when both are the same height)."""
+    wall = "wall-wood" if material == "wood" else "wall"
+    window = f"{wall}-window-small"
+    for f in range(floors):
+        b["pieces"].append(piece(window if f == floors - 1 else wall, x, -1, f, BACK))
+        b["pieces"].append(piece(window, x, -1, f, LEFT))
+        b["pieces"].append(piece(wall, x, -1, f, RIGHT))
+    # The kit's gable runs along x: turned, it runs back along y.
+    b["pieces"].append(piece("roof-gable", x, -1, floors, LEFT, [1, 1, ROOF_RISE]))
+    if reach_ridge:
+        b["pieces"].append(piece("roof-gable", x, -0.55, floors, LEFT, [1, 1, ROOF_RISE]))
+    if chimney:
+        b["pieces"].append(piece("chimney", x, -1, floors - 0.3, BACK))
+    return b
+
+
+def l_house(material, palette, wing_at=2):
+    """Two storeys three cells long, a one-storey back wing (kitchen and
+    scullery) behind one end: an L from above."""
+    return back_wing(building(3, 2, material, palette), wing_at, 1, material, chimney=True)
+
+
+def cross_cottage(material, palette):
+    """A one-storey cottage with a wing behind one end under a cross gable."""
+    return back_wing(building(3, 1, material, palette, windows="small"), 0, 1, material, reach_ridge=True)
+
+
+def hipped_house(material, palette, floors=2):
+    """A house whose roof slopes down at its ends as well as its sides."""
+    b = building(3, floors, material, palette, roof=None, chimney=False)
+    # The kit's hip closes the cell's -x end; turned half round, the +x end.
+    b["pieces"].append(piece("roof-gable-end", 0, 0, floors, 0, [1, 1, ROOF_RISE]))
+    b["pieces"].append(piece("roof-gable", 1, 0, floors, 0, [1, 1, ROOF_RISE]))
+    b["pieces"].append(piece("roof-gable-end", 2, 0, floors, 180, [1, 1, ROOF_RISE]))
+    b["pieces"].append(piece("chimney", 1, 0, floors - 0.15, 0))
+    return b
+
+
+def foursquare(material, palette):
+    """A square house two cells by two, two storeys under a pyramid roof,
+    the door to one side (the American Foursquare, from the 1890s)."""
+    wall = "wall-wood" if material == "wood" else "wall"
+    window = f"{wall}-window-shutters"
+    pieces = []
+    for f in range(2):
+        for i in range(2):
+            pieces.append(piece(f"{wall}-door" if f == 0 and i == 0 else window, i, 0, f, FRONT))
+            pieces.append(piece(window if i == f else wall, i, -1, f, BACK))
+        for j in (0, -1):
+            pieces.append(piece(window if j == 0 or f == 1 else wall, 0, j, f, LEFT))
+            pieces.append(piece(window if j == -1 or f == 1 else wall, 1, j, f, RIGHT))
+    pieces.append(piece("roof-point", 0.5, -0.5, 2, 0, [2, 2, 2 * 0.9]))
+    pieces.append(piece("chimney", 0.3, -0.5, 2.05, 0))
     return {"texture": f"{PACK}/Textures/colormap-{palette}.png", "pieces": pieces}
 
 
@@ -155,6 +215,13 @@ def main():
         "cottage-wood-slate": building(3, 1, "wood", "slate", windows="small"),
         "house-wood": building(3, 2, "wood", "terracotta"),
         "house-stone": building(3, 2, "stone", "slate"),
+        "cottage-cross-wood": cross_cottage("wood", "terracotta"),
+        "cottage-hipped-stone": hipped_house("stone", "slate", floors=1),
+        "house-l-stone": l_house("stone", "terracotta"),
+        "house-l-wood": l_house("wood", "slate", wing_at=0),
+        "house-hipped-wood": hipped_house("wood", "slate"),
+        "foursquare-wood": foursquare("wood", "terracotta"),
+        "foursquare-stone": foursquare("stone", "slate"),
         "terrace-stone": building(3, 2, "stone", "terracotta", chimney=False),
         "terrace-wood": building(3, 2, "wood", "slate", chimney=False),
         "shop-stone": building(3, 2, "stone", "terracotta"),
