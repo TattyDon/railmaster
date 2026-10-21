@@ -4721,7 +4721,7 @@ void Tools::draw_train_panel() const {
     const std::size_t shown = std::min<std::size_t>(8, locos.size());
     const std::size_t first = locos.size() <= shown ? 0 : std::min(chosen > 3 ? chosen - 3 : 0, locos.size() - shown);
     const float h = 40 + kRowH * static_cast<float>(shown) + 30 + kRowH * static_cast<float>(std::max<std::size_t>(1, stops_.size())) + 30 +
-                    2 * (kRowH + 6) + 40;
+                    2 * (kRowH + 6) + 40 + 22; // and room for a hint under Buy
     side_panel_box_ = {x0, y0, x0 + w, y0 + h};
     ui::panel(x0, y0, x0 + w, y0 + h);
     float y = y0 + 10;
@@ -4734,7 +4734,8 @@ void Tools::draw_train_panel() const {
         if (i == chosen) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4);
         glColor3f(i == chosen ? 1.0f : 0.85f, i == chosen ? 0.95f : 0.85f, i == chosen ? 0.8f : 0.8f);
         draw_text(x0 + 14, y, l.name, kScale);
-        const std::string right = std::to_string(l.top_speed_mph) + " mph  " + format_money(l.cost);
+        const char* fuel = l.fuel == sim::Fuel::Steam ? "steam" : l.fuel == sim::Fuel::Diesel ? "diesel" : "electric";
+        const std::string right = std::string(fuel) + "  " + std::to_string(l.top_speed_mph) + " mph  " + format_money(l.cost);
         draw_text(x0 + w - 14 - static_cast<float>(text_width(right, kScale)), y, right, kScale);
         add_row(x0 + 8, y - 2, x0 + w - 8, y + kRowH - 4, RowPanel::TrainTool, i);
         y += kRowH;
@@ -4794,11 +4795,29 @@ void Tools::draw_train_panel() const {
     // Buy (or save the route being edited).
     std::string buy = "Click two stations or more";
     bool ready = stops_.size() >= 2 && !locos.empty();
-    if (editing_) buy = ready ? "Save the new route" : buy;
+    // An electric engine needs its route wired all the way (rt3-clone-spec
+    // §10.2 [D]): say where it is not, before the click.
+    std::string unwired;
+    const sim::LocoTypeId engine = editing_ ? world_.railway().train(*editing_).loco : (locos.empty() ? 0 : locos[chosen]);
+    if (ready && data.locomotives.get(engine).fuel == sim::Fuel::Electric) {
+        if (const auto why = world_.railway().electric_route_problem(pending_route())) {
+            ready = false;
+            const auto at = why->find(" from ");
+            unwired = at == std::string::npos ? *why : "Not wired" + why->substr(at);
+        }
+    }
+    if (!unwired.empty()) buy = unwired;
+    else if (editing_) buy = ready ? "Save the new route" : buy;
     else if (ready) buy = "Buy " + data.locomotives.get(locos[chosen]).name + " for " +
                           format_money(data.locomotives.get(locos[chosen]).cost);
+    if (!unwired.empty()) {
+        // The way out, under the button.
+        glColor3f(0.75f, 0.73f, 0.67f);
+        draw_text(x0 + 14, y + kRowH + 12, "Electrify it in the Track tool (E, or Shift+E for all)", kScale);
+    }
     ui::tab(x0 + 10, y, x0 + w - 10, y + kRowH + 6, ready);
     if (ready) glColor3f(0.12f, 0.08f, 0.04f);
+    else if (!unwired.empty()) glColor3f(1.0f, 0.5f, 0.42f);
     else glColor3f(0.55f, 0.52f, 0.46f);
     draw_text(x0 + (w - static_cast<float>(text_width(buy, kScale))) / 2, y + 6, buy, kScale);
     if (ready) add_row(x0 + 10, y, x0 + w - 10, y + kRowH + 6, RowPanel::TrainTool, kBuy);
