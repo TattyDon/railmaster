@@ -303,14 +303,23 @@ std::int32_t Economy::take_stock(CargoId c, std::int32_t cx, std::int32_t cy, st
 std::int32_t Economy::equilibrium_price(const CargoType& c, std::int64_t demand_milli,
                                        std::int64_t supply_milli) const {
     const std::int64_t eps = std::max(1, balance_.price_epsilon_milli);
-    const std::int64_t ratio = pow_ratio_permille(std::max<std::int64_t>(0, demand_milli) + eps,
-                                                  std::max<std::int64_t>(0, supply_milli) + eps,
-                                                  balance_.price_alpha_permille);
+    const std::int64_t ratio =
+        price_pow(std::max<std::int64_t>(0, demand_milli) + eps, std::max<std::int64_t>(0, supply_milli) + eps);
     const std::int64_t base = base_dollars(c);
     const std::int64_t pct10 = std::clamp<std::int64_t>(ratio * balance_.neutral_price_percent / 100,
                                                         std::int64_t{balance_.price_floor_percent} * 10,
                                                         std::int64_t{balance_.price_ceiling_percent} * 10);
     return static_cast<std::int32_t>(base * pct10 / 1000);
+}
+
+std::int64_t Economy::price_pow(std::int64_t num, std::int64_t den) const {
+    constexpr std::size_t kSize = 1 << 13;
+    if (pow_memo_.size() != kSize) pow_memo_.assign(kSize, PowMemo{});
+    const std::uint64_t h = (static_cast<std::uint64_t>(num) * 0x9E3779B97F4A7C15ull) ^
+                            (static_cast<std::uint64_t>(den) * 0xC2B2AE3D27D4EB4Full);
+    PowMemo& m = pow_memo_[(h >> 32) & (kSize - 1)];
+    if (m.num != num || m.den != den) m = {num, den, pow_ratio_permille(num, den, balance_.price_alpha_permille)};
+    return m.value;
 }
 
 std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType& t, std::int64_t rate, std::size_t at,
@@ -326,7 +335,7 @@ std::int32_t Economy::output_pace(const CargoRegistry& cargo, const IndustryType
         // against what it would be with none (before the floor and ceiling).
         const std::int64_t clear = rate * balance_.supply_days + std::max(1, balance_.price_epsilon_milli);
         const std::int64_t pct =
-            pow_ratio_permille(clear, clear + stock_[c][at] / kMicroPerMilli, balance_.price_alpha_permille) / 10;
+            price_pow(clear, clear + stock_[c][at] / kMicroPerMilli) / 10;
         best = std::max(best, static_cast<std::int32_t>(std::clamp<std::int64_t>((pct - stop) * 1000 / (full - stop), 0, 1000)));
     }
     return any ? best : 1000;

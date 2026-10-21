@@ -368,6 +368,12 @@ display lists rebuilt only when the railway or the scene changes (the
 chimneys' smoke is recorded with them and replayed each frame). F12 shows
 frames a second.
 
+Simulation speed: the price field's daily relaxation remembers the power
+it takes of each demand-to-supply ratio (exactly, so saves and replays are
+unchanged), which made a large map with three rivals run about 1.8 times
+faster (about 80 game days a second in its first year, 58 by its fifth,
+against the 6 Very Fast needs).
+
 Next:
 - Real art: a 2x2-cell house shape for variety.
 - More shading: occlusion between buildings themselves (eaves, alleys).

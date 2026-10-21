@@ -333,6 +333,14 @@ private:
     std::vector<std::int32_t> demand_percent_; // by cargo; 100 when absent
     std::int32_t warehouse_radius_ = 2;
     std::int32_t footprint_cells_ = 4; // from the balance, not saved
+    // pow_ratio_permille at the price alpha, remembered by its inputs: the
+    // daily relaxation asks for the same few ratios millions of times. The
+    // results are exact, so this is not saved.
+    struct PowMemo {
+        std::int64_t num = -1, den = -1, value = 0;
+    };
+    mutable std::vector<PowMemo> pow_memo_;
+    std::int64_t price_pow(std::int64_t num, std::int64_t den) const;
     std::int32_t warehouse_spoilage_percent_ = 25;
     std::int32_t convert_yield_percent_ = 25;
     std::vector<Site> sites_;
