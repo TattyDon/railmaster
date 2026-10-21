@@ -3539,11 +3539,12 @@ namespace {
 // columns (the first left-aligned, the rest right-aligned at the panel's
 // column edges).
 struct DetailRow {
-    enum class Style { Title, Heading, Text, Rule, Gauge } style = Style::Text;
+    enum class Style { Title, Heading, Text, Rule, Gauge, Bars } style = Style::Text;
     std::vector<std::string> cells{};
     float r = 0.9f, g = 0.88f, b = 0.82f;
     float fraction = 0; // gauges
     bool inverted = false; // a gauge where full is bad
+    std::vector<double> bars{}; // Bars: a value each (dollars), oldest first
 };
 
 DetailRow title(std::string s) { return {DetailRow::Style::Title, {std::move(s)}, 1.0f, 0.86f, 0.5f}; }
@@ -3707,6 +3708,13 @@ void Tools::draw_detail_panel() const {
                 rows.push_back(r);
             }
             rows.push_back(money_row("Earned since bought", t.revenue));
+            // Its profit month by month: the last 12, then this one so far.
+            if (!t.profit_months.empty()) {
+                DetailRow bars{DetailRow::Style::Bars, {"Profit by month"}};
+                for (const sim::Money& m : t.profit_months) bars.bars.push_back(static_cast<double>(m.whole_dollars()));
+                bars.bars.push_back(static_cast<double>(t.profit_this_month.whole_dollars()));
+                rows.push_back(bars);
+            }
         }
     } else if (detail_->kind == DetailKind::Station) {
         const sim::Station& s = rw.station(detail_->id);
@@ -3733,6 +3741,10 @@ void Tools::draw_detail_panel() const {
         rows.push_back(money_row("Income this month", s.income_this_month));
         if (!s.income_months.empty()) {
             rows.push_back(money_row("Income, last " + std::to_string(s.income_months.size()) + " months", s.income_last_year()));
+            DetailRow bars{DetailRow::Style::Bars, {"Income by month"}};
+            for (const sim::Money& m : s.income_months) bars.bars.push_back(static_cast<double>(m.whole_dollars()));
+            bars.bars.push_back(static_cast<double>(s.income_this_month.whole_dollars()));
+            rows.push_back(bars);
         }
 
         // Cargo: what waits, what the catchment makes and wants a year, and
@@ -3846,7 +3858,16 @@ void Tools::draw_detail_panel() const {
     const auto w = static_cast<float>(cam_.width_px);
     const float x0 = w - kW - 12, y0 = kToolbarY + kButtonH + 10;
     float h = 16;
-    for (const DetailRow& r : rows) h += r.style == DetailRow::Style::Title ? 24 : r.style == DetailRow::Style::Rule ? 8 : r.style == DetailRow::Style::Heading ? kRow + 6 : kRow;
+    const auto row_h = [&](const DetailRow& r) {
+        switch (r.style) {
+        case DetailRow::Style::Title: return 24.0f;
+        case DetailRow::Style::Rule: return 8.0f;
+        case DetailRow::Style::Heading: return kRow + 6;
+        case DetailRow::Style::Bars: return kRow + 64;
+        default: return kRow;
+        }
+    };
+    for (const DetailRow& r : rows) h += row_h(r);
     const float max_h = static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 10;
     ui::panel(x0, y0, x0 + kW, y0 + std::min(h, max_h));
     detail_box_ = {x0, y0, x0 + kW, y0 + std::min(h, max_h)};
@@ -3873,6 +3894,32 @@ void Tools::draw_detail_panel() const {
             }
             y += kRow;
             break;
+        case DetailRow::Style::Bars: {
+            // A bar a month, green up from the zero line, red down below it;
+            // the month still running dimmed.
+            if (y + row_h(r) > y0 + max_h) break;
+            glColor3f(r.r, r.g, r.b);
+            draw_text(x0 + 14, y, r.cells[0], kScale);
+            double top = 1, bottom = 0;
+            for (const double v : r.bars) top = std::max(top, v), bottom = std::min(bottom, v);
+            const float by0 = y + kRow + 2, by1 = y + kRow + 58;
+            const auto at = [&](double v) { return by1 - static_cast<float>((v - bottom) / (top - bottom)) * (by1 - by0); };
+            const float zero = at(0), bx0 = x0 + 14, bx1 = x0 + kW - 14;
+            const float slot = (bx1 - bx0) / static_cast<float>(std::max<std::size_t>(13, r.bars.size()));
+            for (std::size_t i = 0; i < r.bars.size(); ++i) {
+                const float sx = bx0 + slot * static_cast<float>(i);
+                const float alpha = i + 1 == r.bars.size() ? 0.55f : 0.95f;
+                const float yv = at(r.bars[i]);
+                if (r.bars[i] >= 0) fill_rect(sx + 2, std::min(yv, zero), sx + slot - 2, zero, 0.35f, 0.85f, 0.4f, alpha);
+                else fill_rect(sx + 2, zero, sx + slot - 2, std::max(yv, zero), 0.95f, 0.35f, 0.3f, alpha);
+            }
+            fill_rect(bx0, zero, bx1, zero + 1, 0.8f, 0.78f, 0.7f, 0.8f);
+            const std::string best = format_money(sim::Money::dollars(static_cast<std::int64_t>(top)));
+            glColor3f(0.68f, 0.66f, 0.62f);
+            draw_text(bx1 - static_cast<float>(text_width(best, kScale)), y, best, kScale);
+            y += row_h(r);
+            break;
+        }
         case DetailRow::Style::Gauge: {
             glColor3f(r.r, r.g, r.b);
             draw_text(x0 + 24, y, r.cells[0], kScale);
