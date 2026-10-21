@@ -196,7 +196,7 @@ void Tools::draw_finance_panel() const {
         std::vector<std::string> reasons = co.investor_reasons();
         if (co.dividend_per_share() <= sim::Money{} && co.suggested_dividend() > sim::Money{}) {
             reasons.push_back("You pay no dividend: " + format_cents(co.suggested_dividend()) +
-                              " a share would keep them happier and lift the share price (D, or the button below)");
+                              " a share would add to their return, and pay you as a shareholder (D, or the button below)");
         }
         for (const std::string& reason : reasons) {
             for (const std::string& l : wrap(reason, kScale, w - 40)) t.line("  " + l, {}, 0.72f, 0.7f, 0.64f);
