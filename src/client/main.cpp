@@ -1139,6 +1139,8 @@ int main(int argc, char* argv[]) {
             heard_ticks = world.total_ticks();
             if (heard.size() != rw.trains().size()) heard.resize(rw.trains().size());
             float best = 2.0f, engine_rate = 0, engine_volume = 0, engine_pan = 0;
+            float motor_best = 2.0f, motor_speed = 0, motor_volume = 0, motor_pan = 0;
+            int motor_kind = 0;
             for (const sim::Train& t : rw.trains()) {
                 Heard& was = heard[t.id];
                 const bool mine = world.player_company() && t.owner == *world.player_company();
@@ -1155,6 +1157,19 @@ int main(int argc, char* argv[]) {
                     }
                     if (was.state == sim::TrainState::Moving && t.state == sim::TrainState::Dwelling) {
                         client::audio::play(client::audio::Sound::Bell, 0.3f * near, pan);
+                    }
+                    // The diesel or electric nearest the middle of the view hums.
+                    if (t.state == sim::TrainState::Moving && !steam) {
+                        const float off = std::hypot(sx / w - 0.5f, sy / h - 0.5f) * 2;
+                        if (off < motor_best) {
+                            motor_best = off;
+                            const std::int64_t unit = sim::mph_to_mm_per_tick(100, world.data().balance);
+                            const float mph = unit > 0 ? static_cast<float>(t.speed_mm_per_tick * 100 / unit) : 0.0f;
+                            motor_kind = world.data().locomotives.get(t.loco).fuel == sim::Fuel::Diesel ? 1 : 2;
+                            motor_speed = std::clamp(mph / 100.0f, 0.0f, 1.0f);
+                            motor_volume = (motor_kind == 1 ? 0.5f : 0.35f) * near * (1.0f - 0.5f * std::min(1.0f, off));
+                            motor_pan = pan;
+                        }
                     }
                     // The engine nearest the middle of the view.
                     if (t.state == sim::TrainState::Moving && steam) {
@@ -1176,6 +1191,7 @@ int main(int argc, char* argv[]) {
                 was.paid_tick = t.last_income_tick == 0 ? 1 : t.last_income_tick;
             }
             client::audio::set_engine(engine_rate, engine_volume, engine_pan);
+            client::audio::set_motor(motor_kind, motor_speed, motor_volume, motor_pan);
         }
 
         cam.terrain = &world.terrain();

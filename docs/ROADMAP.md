@@ -392,7 +392,7 @@ Still to do:
   and a title screen starts a new railroad (map size, rivals,
   territories, difficulty), a scenario or a saved game.)
 - Original art and audio pipeline (`assets/`, credits). Sound so far is
-  synthesised in the client (`src/client/audio.cpp`): whistles, chuffs,
+  synthesised in the client (`src/client/audio.cpp`): whistles, chuffs, a diesel's rumble and an electric's whine (rising with speed),
   bells, the cash register and clicks; and music: three original tunes (a
   march-time rag in C, a waltz in F, a folk air in G), rendered at
   start-up as piano over stride, waltz or hymn-like accompaniment and

@@ -319,6 +319,14 @@ struct Mixer {
     std::thread music_maker;
     std::size_t music_track = 0, music_pos = 0;
     float music_volume = 0.4f;
+    // A diesel's or an electric's motor, heard continuously: what is wanted
+    // (set_motor), and what is playing, easing towards it so it never clicks.
+    int motor_kind = 0; // 1 diesel, 2 electric
+    float motor_want_speed = 0, motor_want_volume = 0, motor_pan = 0;
+    float motor_speed = 0, motor_volume = 0;
+    double motor_phase = 0, motor_lfo = 0;
+    float motor_lp = 0;
+    Noise motor_noise{0x1234567u};
     // Rain: filtered noise, easing towards the wanted level.
     float rain_want = 0, rain_level = 0, rain_lp_l = 0, rain_lp_r = 0;
     Noise rain_l, rain_r{0x9E3779B9u};
@@ -380,6 +388,35 @@ void callback(void* user, Uint8* stream, int bytes) {
                 m.music_pos = 0;
                 m.music_track = (m.music_track + 1) % m.music.size();
             }
+        }
+        // The motor: a diesel's rumble (a low sawtooth through a soft filter,
+        // with its firing lumpiness and a little noise), or an electric's
+        // whine (a sine and its third, rising with speed, over a hiss).
+        m.motor_volume += (m.motor_want_volume - m.motor_volume) * (3.0f / kRate);
+        m.motor_speed += (m.motor_want_speed - m.motor_speed) * (1.5f / kRate);
+        if (m.motor_volume > 0.0005f && m.motor_kind != 0) {
+            float s = 0;
+            if (m.motor_kind == 1) {
+                const float hz = 32.0f + 46.0f * m.motor_speed;
+                m.motor_phase += hz / kRate;
+                m.motor_phase -= std::floor(m.motor_phase);
+                const auto ph = static_cast<float>(m.motor_phase);
+                const float saw = 2 * ph - 1;
+                m.motor_lp += (saw + 0.25f * m.motor_noise.next() - m.motor_lp) * 0.06f;
+                m.motor_lfo += hz * 0.5 / kRate; // a firing beat at half the note
+                const float lump = 0.75f + 0.25f * std::sin(2 * kPi * static_cast<float>(m.motor_lfo - std::floor(m.motor_lfo)));
+                s = (m.motor_lp * 0.9f + 0.25f * std::sin(4 * kPi * ph)) * lump;
+            } else {
+                const float hz = 90.0f + 520.0f * m.motor_speed;
+                m.motor_phase += hz / kRate;
+                m.motor_phase -= std::floor(m.motor_phase);
+                const float ph = 2 * kPi * static_cast<float>(m.motor_phase);
+                m.motor_lp += (m.motor_noise.next() - m.motor_lp) * 0.02f;
+                s = 0.45f * std::sin(ph) + 0.12f * std::sin(3 * ph) + 0.35f * m.motor_lp;
+            }
+            const auto [gl, gr] = pan_gains(m.motor_pan);
+            l += s * m.motor_volume * gl;
+            r += s * m.motor_volume * gr;
         }
         // Rain on the roofs: soft noise, a little different in each ear.
         m.rain_level += (m.rain_want - m.rain_level) * (1.0f / kRate);
@@ -459,6 +496,20 @@ void set_engine(float chuffs_per_second, float volume, float pan) {
     g_mixer->engine_rate = chuffs_per_second;
     g_mixer->engine_volume = volume;
     g_mixer->engine_pan = pan;
+}
+
+void set_motor(int kind, float speed, float volume, float pan) {
+    if (!g_mixer) return;
+    std::lock_guard<std::mutex> guard(g_mixer->lock);
+    Mixer& m = *g_mixer;
+    if (kind != 0 && kind != m.motor_kind && m.motor_volume < 0.01f) m.motor_kind = kind; // a new voice, from quiet
+    if (kind == 0 || kind != m.motor_kind) {
+        m.motor_want_volume = 0; // fade the old one out first
+        return;
+    }
+    m.motor_want_speed = std::clamp(speed, 0.0f, 1.0f);
+    m.motor_want_volume = std::clamp(volume, 0.0f, 1.0f);
+    m.motor_pan = pan;
 }
 
 void set_master(float v) {

@@ -22,6 +22,9 @@ void play(Sound s, float volume = 1.0f, float pan = 0.0f, float pitch = 1.0f);
 
 // The engine nearest the view: chuffs a second (0 for none) and loudness.
 void set_engine(float chuffs_per_second, float volume, float pan);
+// The diesel or electric nearest the view: `kind` 1 diesel, 2 electric, 0
+// none; `speed` 0 to 1 of a fast engine's; loudness and pan as above.
+void set_motor(int kind, float speed, float volume, float pan);
 
 // Master volume, 0 to 1.
 void set_master(float v);
