@@ -227,3 +227,29 @@ TEST_CASE("resigning keeps your shares; the board appoints someone else") {
     World locked(cfg);
     CHECK_FALSE(locked.execute(Resign{}).ok);
 }
+
+TEST_CASE("the investors' reasons: each bad year, what another brings, and what pleases them (§12.2)") {
+    Company c = founded();
+    // 1850: $500K profit at $10 to $12.
+    c.post(Ledger::FreightRevenue, Money::dollars(500'000));
+    c.set_share_price(Money::dollars(12));
+    c.close_year();
+    c.start_year(1851);
+    std::vector<std::string> r = c.investor_reasons();
+    REQUIRE(r.size() == 2); // no bad years, and the rule
+    CHECK(r[0] == "No bad years lately");
+    // 1851: profit falls to $400K and the price to $11.50: bad. 1852: a loss.
+    c.post(Ledger::FreightRevenue, Money::dollars(400'000));
+    c.set_share_price(Money::cents(1150));
+    c.close_year();
+    c.start_year(1852);
+    c.post(Ledger::Fuel, Money::dollars(50'000));
+    c.close_year();
+    c.start_year(1853);
+    r = c.investor_reasons();
+    REQUIRE(r.size() == 4);
+    CHECK(r[0] == "1852: a loss of $50,000");
+    CHECK(r[1] == "1851: profit fell from $500,000 to $400,000 and the share price from $12.00 to $11.50");
+    CHECK(r[2].rfind("Another such year and the shareholders vote on removing you", 0) == 0);
+    CHECK(r[3].rfind("A year counts as bad when", 0) == 0);
+}

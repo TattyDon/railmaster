@@ -68,6 +68,24 @@ void fill_rect(float x0, float y0, float x1, float y1, float r, float g, float b
     glEnd();
 }
 
+// Words laid into lines no wider than `width` points.
+std::vector<std::string> wrap(const std::string& text, int scale, float width) {
+    std::vector<std::string> lines;
+    std::istringstream words(text);
+    std::string word, line;
+    while (words >> word) {
+        const std::string longer = line.empty() ? word : line + " " + word;
+        if (!line.empty() && static_cast<float>(text_width(longer, scale)) > width) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = longer;
+        }
+    }
+    if (!line.empty()) lines.push_back(line);
+    return lines;
+}
+
 } // namespace
 
 float Tools::draw_tabs(float x, float y, const std::vector<std::string>& labels, int chosen) const {
@@ -174,6 +192,10 @@ void Tools::draw_finance_panel() const {
         t.line("Investors", {sim::sentiment_name(mood)}, worried ? 0.95f : 0.9f, worried ? 0.66f : 0.88f, worried ? 0.6f : 0.82f);
         t.line("Five-year return to shareholders", {format_permille(co.weighted_return_permille())});
         t.line("Bad years in a row", {std::to_string(co.bad_year_streak())});
+        // Why, and what comes next (rt3-clone-spec §12.2), in the investors' words.
+        for (const std::string& reason : co.investor_reasons()) {
+            for (const std::string& l : wrap(reason, kScale, w - 40)) t.line("  " + l, {}, 0.72f, 0.7f, 0.64f);
+        }
         t.line("Your salary", {format_money(sim::chairman_salary(co)) + " a year"});
         t.line("Average train speed", {std::to_string(world_.average_speed_mph(co.id())) + " mph"});
         t.line("Costs against normal", {std::to_string(world_.cost_percent()) + "%"});
@@ -785,23 +807,6 @@ void Tools::open_newspaper(const std::string& headline, std::vector<std::string>
 
 namespace {
 
-// Words laid into lines no wider than `width` points.
-std::vector<std::string> wrap(const std::string& text, int scale, float width) {
-    std::vector<std::string> lines;
-    std::istringstream words(text);
-    std::string word, line;
-    while (words >> word) {
-        const std::string longer = line.empty() ? word : line + " " + word;
-        if (!line.empty() && static_cast<float>(text_width(longer, scale)) > width) {
-            lines.push_back(line);
-            line = word;
-        } else {
-            line = longer;
-        }
-    }
-    if (!line.empty()) lines.push_back(line);
-    return lines;
-}
 
 } // namespace
 

@@ -244,6 +244,10 @@ public:
     bool bad_year(std::size_t index) const;
     // Closed years in a row, most recent first, that were bad.
     std::int32_t bad_year_streak() const;
+    // Why the investors feel as they do, for the player (rt3-clone-spec
+    // §12.2): each bad year in the current run (profit and share price both
+    // down, or a loss), what another one would bring, and what pleases them.
+    std::vector<std::string> investor_reasons() const;
     // Return over up to five closed years, the latest weighted 5, then 4, 3,
     // 2, 1, in thousandths; zero before the first year closes.
     std::int32_t weighted_return_permille() const;

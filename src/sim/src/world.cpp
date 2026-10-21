@@ -746,8 +746,10 @@ void World::review_chairmen() {
         if (!chairman || streak < b.grumble_after_bad_years) continue;
         const std::string who = market_.investors[*chairman].name;
         if (streak < b.oust_after_bad_years || !chairman_can_be_fired_) {
-            news_.push_back("Investors in " + c.name() + " are grumbling after " + std::to_string(streak) +
-                            " bad years under " + who);
+            news_.push_back("Investors in " + c.name() + " are grumbling after " + std::to_string(streak) + " bad years under " +
+                            who + (streak + 1 >= b.oust_after_bad_years && chairman_can_be_fired_
+                                       ? ": another and they vote on the chairman (see the Company screen)"
+                                       : ""));
             continue;
         }
         // The other shareholders vote the chairman out; a chairman holding

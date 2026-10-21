@@ -107,6 +107,48 @@ std::int32_t Company::weighted_return_permille() const {
     return weights > 0 ? static_cast<std::int32_t>(sum / weights) : 0;
 }
 
+std::vector<std::string> Company::investor_reasons() const {
+    const auto money = [](Money m) {
+        const bool neg = m < Money{};
+        const std::string digits = std::to_string(neg ? -m.whole_dollars() : m.whole_dollars());
+        std::string out;
+        for (std::size_t i = 0; i < digits.size(); ++i) {
+            if (i > 0 && (digits.size() - i) % 3 == 0) out += ',';
+            out += digits[i];
+        }
+        return (neg ? "-$" : "$") + out;
+    };
+    const auto cents = [](Money m) {
+        const std::int64_t c = m.in_cents();
+        return "$" + std::to_string(c / 100) + "." + (c % 100 < 10 ? "0" : "") + std::to_string(c % 100);
+    };
+    std::vector<std::string> out;
+    // The bad years in the current run, newest first.
+    for (std::size_t i = history_.size(); i-- > 0;) {
+        const YearAccounts& y = history_[i];
+        if (!y.share_return_permille) continue; // the year still open
+        if (!bad_year(i)) break;
+        if (y.profit() < Money{}) {
+            out.push_back(std::to_string(y.year) + ": a loss of " + money(Money{} - y.profit()));
+            continue;
+        }
+        const Money end = i + 1 < history_.size() ? history_[i + 1].start_price : price_;
+        out.push_back(std::to_string(y.year) + ": profit fell from " + money(history_[i - 1].profit()) + " to " + money(y.profit()) +
+                      " and the share price from " + cents(y.start_price) + " to " + cents(end));
+    }
+    const auto streak = static_cast<std::int32_t>(out.size());
+    if (streak == 0) {
+        out.push_back("No bad years lately");
+    } else if (streak + 1 >= corporate_.oust_after_bad_years) {
+        out.push_back("Another such year and the shareholders vote on removing you as chairman, unless you hold over half the shares");
+    } else if (streak + 1 >= corporate_.grumble_after_bad_years) {
+        out.push_back("Another such year and they start grumbling");
+    }
+    out.push_back("A year counts as bad when there is a loss, or when profit and the share price both fall; rising profit, a "
+                  "rising price or dividends keep them content");
+    return out;
+}
+
 Sentiment Company::sentiment() const {
     const std::int32_t streak = bad_year_streak();
     if (streak >= corporate_.oust_after_bad_years) return Sentiment::Hostile;
