@@ -2205,6 +2205,7 @@ struct TownLayout {
     std::vector<Plot> plots;
     std::vector<float> streets; // segments x0, y0, x1, y1 (centrelines)
     std::vector<Green> greens;
+    std::vector<float> lamps; // street lamps: x, y (tiles), in pairs
 };
 
 constexpr float kRow = 0.9f;    // between streets along which houses face
@@ -2214,6 +2215,8 @@ constexpr float kPlotMargin = 0.1f; // clear of the cross street at each end
 constexpr float kStreetHalf = 0.045f;
 constexpr std::int64_t kGreenTown = 14;  // houses (by level) for a town to have a green
 constexpr std::int64_t kSquareTown = 30; // and for it to be a paved square
+constexpr std::int64_t kLampTown = 10;   // and for lamps along its streets
+constexpr float kLampSpacing = 0.45f;    // tiles between them, by turns either side
 
 TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Occupancy& taken,
                         const Camera& cam) {
@@ -2233,6 +2236,7 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             y = rows_ns ? yc + a : yc + c;
         };
         const float dx = rows_ns ? 0.0f : 1.0f, dy = rows_ns ? 1.0f : 0.0f;
+        const std::size_t lamps_from = out.lamps.size(); // this town's
         const auto street = [&](float a0, float c0, float a1, float c1, std::uint64_t id) {
             if (!street_keys.insert(id).second) return;
             float x0, y0, x1, y1;
@@ -2245,6 +2249,22 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             const auto emit = [&](float t0, float t1) {
                 if ((t1 - t0) * std::hypot(x1 - x0, y1 - y0) < 0.08f) return; // a stub: leave it out
                 out.streets.insert(out.streets.end(), {x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1});
+                if (town_size < kLampTown) return;
+                // Lamps along it, clear of the crossings at its ends.
+                const float len = std::hypot(x1 - x0, y1 - y0) * (t1 - t0);
+                const float ux = (x1 - x0) / std::hypot(x1 - x0, y1 - y0), uy = (y1 - y0) / std::hypot(x1 - x0, y1 - y0);
+                const int n = static_cast<int>((len - 0.2f) / kLampSpacing) + 1;
+                for (int i = 0; i < n; ++i) {
+                    const float d = (len - kLampSpacing * static_cast<float>(n - 1)) * 0.5f + kLampSpacing * static_cast<float>(i);
+                    const float side = i % 2 == 0 ? 1.0f : -1.0f, off = (kStreetHalf + 0.012f) * side;
+                    const float lx = x0 + (x1 - x0) * t0 + ux * d - uy * off, ly = y0 + (y1 - y0) * t0 + uy * d + ux * off;
+                    if (taken.blocked(lx, ly, 0.01f)) continue;
+                    // Some streets are laid twice (from the rows either side): one lamp to a spot.
+                    bool near = false;
+                    for (std::size_t j = lamps_from; j + 1 < out.lamps.size() && !near; j += 2)
+                        near = std::hypot(out.lamps[j] - lx, out.lamps[j + 1] - ly) < 0.15f;
+                    if (!near) out.lamps.insert(out.lamps.end(), {lx, ly});
+                }
             };
             for (int i = 0; i <= steps; ++i) {
                 const float t = static_cast<float>(i) / static_cast<float>(steps);
@@ -2660,6 +2680,18 @@ void garden(const Plot& p, float from, const Camera& cam) {
 
 void draw_square(const Green& g, const Camera& cam);
 
+// The height of a street lamp's light above the ground.
+constexpr float kLampHeight = 0.1f;
+
+// An iron lamp post with its lantern. Inside GL_QUADS.
+void street_lamp(float x, float y, const Camera& cam) {
+    static constexpr float kIron[3] = {0.16f, 0.18f, 0.17f}, kLamp[3] = {0.95f, 0.85f, 0.55f};
+    const float z = cam.ground_z(x, y) + kLift - 0.005f;
+    box(x, y, z, 1, 0, 0.007f, 0.007f, 0.01f, kIron, kIron);
+    beam(x, y, z, x, y, z + kLampHeight, 0.006f, kIron);
+    box(x, y, z + kLampHeight, 1, 0, 0.011f, 0.011f, 0.018f, kLamp, kIron);
+}
+
 // A town green (see Green). Inside GL_QUADS.
 void draw_green(const Green& g, const Camera& cam) {
     if (g.paved) {
@@ -2759,8 +2791,8 @@ void draw_square(const Green& g, const Camera& cam) {
             lifted(xb, yb, kLift);
             lifted(xa, yb, kLift);
         }
-    static constexpr float kStone[3] = {0.76f, 0.74f, 0.68f}, kWater[3] = {0.3f, 0.45f, 0.6f}, kIron[3] = {0.16f, 0.18f, 0.17f},
-                           kLamp[3] = {0.95f, 0.85f, 0.55f}, kTable[3] = {0.5f, 0.36f, 0.22f}, kWhite[3] = {0.92f, 0.9f, 0.85f};
+    static constexpr float kStone[3] = {0.76f, 0.74f, 0.68f}, kWater[3] = {0.3f, 0.45f, 0.6f}, kTable[3] = {0.5f, 0.36f, 0.22f},
+                           kWhite[3] = {0.92f, 0.9f, 0.85f};
     static constexpr float kAwnings[][3] = {{0.72f, 0.16f, 0.13f}, {0.16f, 0.45f, 0.26f}, {0.2f, 0.3f, 0.62f}, {0.82f, 0.66f, 0.2f}};
     const float cx = (g.x0 + g.x1) * 0.5f, cy = (g.y0 + g.y1) * 0.5f;
     // The fountain: a stone basin of water, a column and a bowl.
@@ -2804,10 +2836,7 @@ void draw_square(const Green& g, const Camera& cam) {
     for (const float ax : {0.0f, 1.0f})
         for (const float ay : {0.0f, 1.0f}) {
             const float x = g.x0 + 0.05f + (g.x1 - g.x0 - 0.1f) * ax, y = g.y0 + 0.05f + (g.y1 - g.y0 - 0.1f) * ay;
-            const float lz = cam.ground_z(x, y) + kLift - 0.005f;
-            box(x, y, lz, 1, 0, 0.007f, 0.007f, 0.01f, kIron, kIron);
-            beam(x, y, lz, x, y, lz + 0.1f, 0.006f, kIron);
-            box(x, y, lz + 0.1f, 1, 0, 0.011f, 0.011f, 0.018f, kLamp, kIron);
+            street_lamp(x, y, cam);
             const float tx = x + (ax < 0.5f ? 0.06f : -0.06f), ty = y + (ay < 0.5f ? 0.06f : -0.06f);
             small_tree(tx, ty, cam.ground_z(tx, ty) + kLift - 0.005f, 1.6f, unit(hash(g.seed, static_cast<std::uint32_t>(ax * 2 + ay), 5)), 0.06f);
         }
@@ -3248,14 +3277,13 @@ void town_lights(const TownLayout& towns, const Camera& cam) {
                 add_light(wx, wy, z + cell * (static_cast<float>(f) + 0.5f), cell * 0.35f, 1.0f, 0.72f, 0.35f);
             }
     }
-    // The lamps at a square's corners (draw_square).
+    // Street lamps, and those at a square's corners (draw_square).
+    const auto lamp = [&](float x, float y) { add_light(x, y, cam.ground_z(x, y) + kLift + kLampHeight, 0.05f, 1.0f, 0.8f, 0.45f); };
+    for (std::size_t i = 0; i + 1 < towns.lamps.size(); i += 2) lamp(towns.lamps[i], towns.lamps[i + 1]);
     for (const Green& g : towns.greens) {
         if (!g.paved) continue;
         for (const float ax : {0.0f, 1.0f})
-            for (const float ay : {0.0f, 1.0f}) {
-                const float x = g.x0 + 0.05f + (g.x1 - g.x0 - 0.1f) * ax, y = g.y0 + 0.05f + (g.y1 - g.y0 - 0.1f) * ay;
-                add_light(x, y, cam.ground_z(x, y) + kLift + 0.1f, 0.05f, 1.0f, 0.8f, 0.45f);
-            }
+            for (const float ay : {0.0f, 1.0f}) lamp(g.x0 + 0.05f + (g.x1 - g.x0 - 0.1f) * ax, g.y0 + 0.05f + (g.y1 - g.y0 - 0.1f) * ay);
     }
 }
 
@@ -3979,6 +4007,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
         for (const Green& g : towns.greens) draw_green(g, cam);
+        for (std::size_t i = 0; i + 1 < towns.lamps.size(); i += 2) street_lamp(towns.lamps[i], towns.lamps[i + 1], cam);
         // Houses come from the art where there is some (drawn after this
         // batch); the rest are drawn in code.
         const auto role = [](const Plot& p) {

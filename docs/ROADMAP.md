@@ -396,8 +396,12 @@ Towns of 30 houses or more pave that block as a square instead: flagstones,
 a fountain in a stone basin, market stalls under striped awnings, a lamp
 (lit after dark) and a tree at each corner.
 
+Towns of 10 houses or more have iron street lamps along their streets,
+by turns either side, lit after dark.
+
 Next:
-- Street lamps and trees along the main streets of larger towns.
+- Larger towns' outskirts: allotments, a cemetery or a cricket and
+  baseball ground on their edges.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
