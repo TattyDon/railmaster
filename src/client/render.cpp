@@ -2189,6 +2189,7 @@ struct Plot {
     int floors;
     std::uint32_t seed;
     std::uint32_t row_seed; // shared along a block's row, so terraces match
+    float garden = 0;       // how far behind the plot's centre its garden reaches; 0: none
 };
 
 struct TownLayout {
@@ -2293,8 +2294,9 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             if (taken.blocked(p.x, p.y, p.hl + 0.02f) || on_water(p.x, p.y, cam)) continue;
             p.dx = dx;
             p.dy = dy;
-            // The street is towards the row line: across is (-dy, dx).
-            p.front = -side;
+            // The street is towards the row line. Across is (-dy, dx): the
+            // row axis in east-west towns, against it in north-south ones.
+            p.front = rows_ns ? side : -side;
             p.seed = h;
             p.row_seed = hash(town_id, static_cast<std::uint32_t>((cand.row + 64) * 2 + cand.side), static_cast<std::uint32_t>(cand.block + 500));
             out.plots.push_back(p);
@@ -2337,6 +2339,22 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
         if (church < out.plots.size()) {
             out.plots[church].kind = Building::Church;
             out.plots[church].floors = 1;
+        }
+        // Houses and terraces have a garden behind, shops a yard, out to
+        // halfway to the next row's, unless the railway, an industry or
+        // water is there.
+        for (std::size_t i = first; i < out.plots.size(); ++i) {
+            Plot& p = out.plots[i];
+            if (p.kind == Building::Church) continue;
+            const float reach = kRow * 0.5f - (kStreetHalf + 0.04f + p.hw) + p.hw - 0.008f;
+            const float bx = p.dy * p.front, by = -p.dx * p.front; // away from the street
+            // Its far corners and the middle of its far side.
+            bool clear = true;
+            for (const float along : {-kPlot * 0.5f, 0.0f, kPlot * 0.5f}) {
+                const float gx = p.x + p.dx * along + bx * reach, gy = p.y + p.dy * along + by * reach;
+                if (taken.blocked(gx, gy, 0.01f) || on_water(gx, gy, cam)) clear = false;
+            }
+            if (clear) p.garden = reach;
         }
     };
     std::vector<bool> in_town(eco.sites().size(), false);
@@ -2469,6 +2487,110 @@ void draw_building(const Plot& p, const Camera& cam) {
         cylinder(tx, ty, z + 0.26f, 0.045f, 0.2f, slate, slate, 0.002f);
         break;
     }
+    }
+}
+
+// A town building's model fitted to its plot: its front to the street, the
+// plot along the street its width. It may be stretched deeper (up to 1.8
+// times) to fill the plot, but never squeezed. Returns its depth.
+float model_depth(const models::Model& m, const Plot& p) {
+    const float width = p.hl * 2.1f, sx = width / std::max(1e-4f, m.max[0] - m.min[0]);
+    const float natural = sx * (m.max[1] - m.min[1]);
+    return std::clamp(p.hw * 2.1f, natural, natural * 1.8f);
+}
+
+// A low wall, hedge or fence from one point to another, standing on the
+// lower end's ground. Inside GL_QUADS.
+void garden_wall(float x0, float y0, float x1, float y1, float h, float thick, const float* colour, const Camera& cam) {
+    const float len = std::hypot(x1 - x0, y1 - y0);
+    if (len <= 0) return;
+    const float z0 = cam.ground_z(x0, y0), z1 = cam.ground_z(x1, y1);
+    const float lo = std::min(z0, z1) - 0.005f;
+    box((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, lo, (x1 - x0) / len, (y1 - y0) / len, len * 0.5f, thick * 0.5f,
+        h + std::fabs(z1 - z0) * 0.5f + 0.005f, colour, colour);
+}
+
+void frustum(float x, float y, float z0, float r0, float z1, float r1, const float* colour);
+
+// The garden behind a house, from `from` (its back wall, from the plot's
+// centre) out to the plot's garden line: fenced, hedged or walled round,
+// with a shed, a vegetable bed or a fruit tree as the plot has them. Behind
+// a shop, a walled yard with a store. Inside GL_QUADS.
+void garden(const Plot& p, float from, const Camera& cam) {
+    from += 0.012f;
+    const float to = p.garden, depth = to - from;
+    if (depth < 0.04f) return;
+    const float bx = p.dy * p.front, by = -p.dx * p.front; // away from the street
+    const auto at = [&](float along, float back, float& x, float& y) {
+        x = p.x + p.dx * along + bx * back;
+        y = p.y + p.dy * along + by * back;
+    };
+    const float edge = kPlot * 0.5f; // on the line between plots, so neighbours share it
+    // Round it: picket fences, hedges and stone walls; terraces' yards in brick.
+    static constexpr float kPicket[3] = {0.9f, 0.88f, 0.82f}, kHedge[3] = {0.17f, 0.33f, 0.14f},
+                           kStone[3] = {0.6f, 0.58f, 0.53f}, kBrick[3] = {0.55f, 0.32f, 0.24f};
+    const float style = unit(p.seed >> 20);
+    const bool yard = p.kind == Building::Shop;
+    const float* colour = yard ? (style < 0.5f ? kBrick : kStone)
+                          : p.kind == Building::Terrace ? kBrick
+                          : style < 0.45f ? kPicket
+                          : style < 0.75f ? kHedge
+                                          : kStone;
+    const float h = colour == kHedge ? 0.03f : colour == kBrick ? 0.026f : 0.02f;
+    const float thick = colour == kHedge ? 0.014f : colour == kPicket ? 0.004f : 0.008f;
+    // Pickets are posts and rails; the rest solid.
+    const auto run = [&](float x0, float y0, float x1, float y1) {
+        if (colour == kPicket) fence(x0, y0, x1, y1, cam, kPicket);
+        else garden_wall(x0, y0, x1, y1, h, thick, colour, cam);
+    };
+    float ax, ay, bx2, by2;
+    for (const float side : {-1.0f, 1.0f}) {
+        at(side * edge, from - 0.012f, ax, ay);
+        at(side * edge, to, bx2, by2);
+        run(ax, ay, bx2, by2);
+    }
+    at(-edge, to, ax, ay);
+    at(edge, to, bx2, by2);
+    run(ax, ay, bx2, by2);
+    // What is in it: a shed in a back corner, a vegetable bed by the house,
+    // a fruit tree on the other side.
+    const float shed_side = unit(hash(p.seed, 3, 91)) < 0.5f ? -1.0f : 1.0f;
+    if (unit(hash(p.seed, 1, 91)) < (yard ? 0.6f : 0.4f) && depth > 0.07f) {
+        static constexpr float kShed[3] = {0.6f, 0.47f, 0.33f}, kFelt[3] = {0.38f, 0.36f, 0.34f};
+        float x, y;
+        at(shed_side * (edge - 0.047f), to - 0.032f, x, y);
+        const float z = cam.ground_z(x, y) - 0.005f;
+        box(x, y, z, p.dx, p.dy, 0.026f, 0.02f, 0.04f, kShed, kShed);
+        gable(x, y, z + 0.04f, p.dx, p.dy, 0.03f, 0.025f, 0.018f, kFelt, kShed);
+    }
+    if (yard) return;
+    if (unit(hash(p.seed, 2, 91)) < 0.5f) {
+        // Rows of crop and earth, along the plot.
+        const float c0 = from + 0.008f, c1 = from + std::min(depth * 0.55f, 0.08f);
+        const float t0 = -shed_side * (edge - 0.024f), t1 = shed_side * 0.01f;
+        glNormal3f(0, 0, 1);
+        constexpr int kRows = 5;
+        for (int r = 0; r < kRows; ++r) {
+            const float ca = c0 + (c1 - c0) * static_cast<float>(r) / kRows, cb = c0 + (c1 - c0) * static_cast<float>(r + 1) / kRows;
+            if (r % 2 == 0) glColor3f(0.27f, 0.42f, 0.16f);
+            else glColor3f(0.4f, 0.29f, 0.19f);
+            float x0, y0, x1, y1;
+            at(t0, ca, x0, y0);
+            at(t1, cb, x1, y1);
+            ground_quad(std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1), cam);
+        }
+    }
+    if (unit(hash(p.seed, 4, 91)) < 0.45f) {
+        // An apple or pear tree.
+        float x, y;
+        at(-shed_side * edge * 0.5f, from + depth * 0.7f, x, y);
+        const float z = cam.ground_z(x, y) - 0.005f, s = 0.8f + 0.4f * unit(hash(p.seed, 5, 91));
+        static constexpr float kTrunk[3] = {0.36f, 0.26f, 0.17f};
+        const float tint = unit(hash(p.seed, 6, 91));
+        const float leaf[3] = {0.28f + 0.08f * tint, 0.46f, 0.17f}, top[3] = {0.32f + 0.08f * tint, 0.5f, 0.2f};
+        box(x, y, z, 1, 0, 0.006f * s, 0.006f * s, 0.045f * s, kTrunk, kTrunk);
+        frustum(x, y, z + 0.035f * s, 0.025f * s, z + 0.06f * s, 0.045f * s, leaf);
+        frustum(x, y, z + 0.06f * s, 0.045f * s, z + 0.085f * s, 0.0f, top);
     }
 }
 
@@ -3640,8 +3762,15 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             return "";
         };
         const auto modelled = [&](const Plot& p) { return models::has(role(p)); };
+        // How far back from its plot's centre a building reaches, as drawn.
+        const auto half_depth = [&](const Plot& p) {
+            if (!modelled(p)) return p.hw;
+            const models::Model* m = models::pick(role(p), p.seed >> 5);
+            return model_depth(*m, p) * 0.5f;
+        };
         for (const Plot& p : towns.plots) {
             if (!modelled(p)) draw_building(p, cam);
+            if (p.garden > 0) garden(p, half_depth(p), cam);
         }
         for (const sim::Site& s : eco.sites()) {
             if (s.closed) continue;
@@ -3682,13 +3811,8 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
             const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
                                       cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
-            // Its front to the street; the plot along the street is its
-            // width. It may be stretched deeper (up to 1.8 times) to fill
-            // the plot, but never squeezed.
-            const float width = p.hl * 2.1f, sx = width / std::max(1e-4f, m->max[0] - m->min[0]);
-            const float natural = sx * (m->max[1] - m->min[1]);
-            const float depth = std::clamp(p.hw * 2.1f, natural, natural * 1.8f);
-            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, width, depth);
+            // Its front to the street, fitted as model_depth says.
+            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, model_depth(*m, p));
         }
         glEndList();
         list_key = key;

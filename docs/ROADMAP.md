@@ -380,8 +380,14 @@ gable, hipped roofs, and square two-by-two Foursquares under a pyramid
 roof. Cottages and two-storey houses draw from separate lists (the
 `cottage` and `house` roles).
 
+Behind each house is a garden out to halfway to the next row: picket
+fences, hedges or stone walls round it (brick behind terraces), and a
+shed, a vegetable bed or an apple tree as the plot has them; shops have a
+walled yard with a store. Houses in towns whose streets run north-south
+now face their street (they had faced away from it).
+
 Next:
-- Gardens: fences, sheds and fruit trees in the plots behind houses.
+- A churchyard round the church, and a green or square in larger towns.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
