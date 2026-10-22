@@ -2193,10 +2193,12 @@ struct Plot {
 };
 
 // A town green: grass with crossing paths, trees round it and a bandstand
-// or a monument in the middle.
+// or a monument in the middle. In the largest towns, a paved square with a
+// fountain and market stalls instead.
 struct Green {
     float x0, y0, x1, y1; // tiles
     std::uint32_t seed;
+    bool paved = false;
 };
 
 struct TownLayout {
@@ -2210,7 +2212,8 @@ constexpr float kCross = 2.0f;  // between the cross streets
 constexpr float kPlot = 0.36f;  // plot width along the street
 constexpr float kPlotMargin = 0.1f; // clear of the cross street at each end
 constexpr float kStreetHalf = 0.045f;
-constexpr std::int64_t kGreenTown = 14; // houses (by level) for a town to have a green
+constexpr std::int64_t kGreenTown = 14;  // houses (by level) for a town to have a green
+constexpr std::int64_t kSquareTown = 30; // and for it to be a paved square
 
 TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Occupancy& taken,
                         const Camera& cam) {
@@ -2340,7 +2343,8 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             float x0, y0, x1, y1;
             world(in, in, x0, y0);
             world(kCross - in, kRow - in, x1, y1);
-            out.greens.push_back({std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1), hash(town_id, 9, 313)});
+            out.greens.push_back({std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1), hash(town_id, 9, 313),
+                                  town_size >= kSquareTown});
         }
         // What each building is.
         const float centre_reach = 0.9f + static_cast<float>(town_size) / 30.0f;
@@ -2654,8 +2658,14 @@ void garden(const Plot& p, float from, const Camera& cam) {
     }
 }
 
+void draw_square(const Green& g, const Camera& cam);
+
 // A town green (see Green). Inside GL_QUADS.
 void draw_green(const Green& g, const Camera& cam) {
+    if (g.paved) {
+        draw_square(g, cam);
+        return;
+    }
     const auto lifted = [&](float x, float y, float lift) { glVertex3f(x, y, cam.ground_z(x, y) + lift); };
     // Mown grass, in pieces so it follows the ground.
     glNormal3f(0, 0, 1);
@@ -2727,6 +2737,80 @@ void draw_green(const Green& g, const Camera& cam) {
         cylinder(cx, cy, z + 0.071f, 0.011f, 0.045f, kBronze, kBronze, 0.008f);
         cylinder(cx, cy, z + 0.116f, 0.008f, 0.014f, kBronze, kBronze, 0.006f);
     }
+}
+
+// A paved square: flagstones, a fountain in the middle, market stalls
+// under striped awnings either side of it, lamps at the corners and a tree
+// in each corner. Inside GL_QUADS.
+void draw_square(const Green& g, const Camera& cam) {
+    const auto lifted = [&](float x, float y, float lift) { glVertex3f(x, y, cam.ground_z(x, y) + lift); };
+    // Flagstones in slightly varied greys, in pieces so they follow the ground.
+    glNormal3f(0, 0, 1);
+    const int nx = std::max(1, static_cast<int>(std::ceil((g.x1 - g.x0) / 0.07f))), ny = std::max(1, static_cast<int>(std::ceil((g.y1 - g.y0) / 0.07f)));
+    const auto fnx = static_cast<float>(nx), fny = static_cast<float>(ny);
+    for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const float v = 0.95f + 0.06f * unit(hash(g.seed, static_cast<std::uint32_t>(i), static_cast<std::uint32_t>(j)));
+            glColor3f(0.6f * v, 0.58f * v, 0.54f * v);
+            const float xa = g.x0 + (g.x1 - g.x0) * static_cast<float>(i) / fnx, xb = g.x0 + (g.x1 - g.x0) * static_cast<float>(i + 1) / fnx;
+            const float ya = g.y0 + (g.y1 - g.y0) * static_cast<float>(j) / fny, yb = g.y0 + (g.y1 - g.y0) * static_cast<float>(j + 1) / fny;
+            lifted(xa, ya, kLift);
+            lifted(xb, ya, kLift);
+            lifted(xb, yb, kLift);
+            lifted(xa, yb, kLift);
+        }
+    static constexpr float kStone[3] = {0.76f, 0.74f, 0.68f}, kWater[3] = {0.3f, 0.45f, 0.6f}, kIron[3] = {0.16f, 0.18f, 0.17f},
+                           kLamp[3] = {0.95f, 0.85f, 0.55f}, kTable[3] = {0.5f, 0.36f, 0.22f}, kWhite[3] = {0.92f, 0.9f, 0.85f};
+    static constexpr float kAwnings[][3] = {{0.72f, 0.16f, 0.13f}, {0.16f, 0.45f, 0.26f}, {0.2f, 0.3f, 0.62f}, {0.82f, 0.66f, 0.2f}};
+    const float cx = (g.x0 + g.x1) * 0.5f, cy = (g.y0 + g.y1) * 0.5f;
+    // The fountain: a stone basin of water, a column and a bowl.
+    const float z = cam.ground_z(cx, cy) + kLift - 0.005f;
+    cylinder(cx, cy, z, 0.075f, 0.02f, kStone, kStone);
+    cylinder(cx, cy, z + 0.02f, 0.064f, 0.001f, kWater, kWater);
+    cylinder(cx, cy, z, 0.012f, 0.06f, kStone, kStone);
+    cylinder(cx, cy, z + 0.05f, 0.03f, 0.01f, kStone, kWater, 0.035f);
+    cylinder(cx, cy, z + 0.06f, 0.006f, 0.02f, kStone, kStone);
+    // Stalls in two rows along the square's length, clear of the fountain.
+    const bool along_x = g.x1 - g.x0 >= g.y1 - g.y0;
+    const float length = along_x ? g.x1 - g.x0 : g.y1 - g.y0;
+    const float dx = along_x ? 1.0f : 0.0f, dy = along_x ? 0.0f : 1.0f;
+    const int stalls = std::max(2, static_cast<int>(length / 0.16f));
+    for (int side = 0; side < 2; ++side)
+        for (int i = 0; i < stalls; ++i) {
+            const float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(stalls) - 0.5f;
+            if (std::fabs(t) * length < 0.14f) continue; // the fountain
+            const std::uint32_t h = hash(g.seed, static_cast<std::uint32_t>(side * 64 + i), 21);
+            if (unit(h) < 0.25f) continue; // an empty pitch
+            const float off = (side == 0 ? -1.0f : 1.0f) * (along_x ? g.y1 - g.y0 : g.x1 - g.x0) * 0.22f;
+            const float x = cx + dx * t * length - dy * off, y = cy + dy * t * length + dx * off;
+            const float sz = cam.ground_z(x, y) + kLift - 0.005f;
+            box(x, y, sz, dx, dy, 0.035f, 0.02f, 0.02f, kTable, kTable);
+            // Goods on the table, in the stall's colour.
+            const float* awning = kAwnings[(h >> 4) % 4];
+            box(x, y, sz + 0.02f, dx, dy, 0.025f, 0.012f, 0.006f, awning, awning);
+            // Four poles and a striped awning: white and colour by turns.
+            for (const float a : {-1.0f, 1.0f})
+                for (const float c : {-1.0f, 1.0f}) {
+                    const float px = x + dx * a * 0.033f - dy * c * 0.02f, py = y + dy * a * 0.033f + dx * c * 0.02f;
+                    beam(px, py, sz, px, py, sz + 0.045f, 0.003f, kWhite);
+                }
+            for (int k = 0; k < 4; ++k) {
+                const float a0 = -0.04f + 0.02f * static_cast<float>(k);
+                gable(x + dx * (a0 + 0.01f), y + dy * (a0 + 0.01f), sz + 0.045f, dx, dy, 0.01f, 0.026f, 0.014f, k % 2 == 0 ? awning : kWhite,
+                      k % 2 == 0 ? awning : kWhite);
+            }
+        }
+    // A lamp and a tree at each corner.
+    for (const float ax : {0.0f, 1.0f})
+        for (const float ay : {0.0f, 1.0f}) {
+            const float x = g.x0 + 0.05f + (g.x1 - g.x0 - 0.1f) * ax, y = g.y0 + 0.05f + (g.y1 - g.y0 - 0.1f) * ay;
+            const float lz = cam.ground_z(x, y) + kLift - 0.005f;
+            box(x, y, lz, 1, 0, 0.007f, 0.007f, 0.01f, kIron, kIron);
+            beam(x, y, lz, x, y, lz + 0.1f, 0.006f, kIron);
+            box(x, y, lz + 0.1f, 1, 0, 0.011f, 0.011f, 0.018f, kLamp, kIron);
+            const float tx = x + (ax < 0.5f ? 0.06f : -0.06f), ty = y + (ay < 0.5f ? 0.06f : -0.06f);
+            small_tree(tx, ty, cam.ground_z(tx, ty) + kLift - 0.005f, 1.6f, unit(hash(g.seed, static_cast<std::uint32_t>(ax * 2 + ay), 5)), 0.06f);
+        }
 }
 
 // A station (rt3-clone-spec §15.6 views) at (x, y), rail height z, its
@@ -3162,6 +3246,15 @@ void town_lights(const TownLayout& towns, const Camera& cam) {
                 if (unit(h) < 0.45f) continue; // a dark room
                 const float wx = p.x + fx * (p.hw * 1.1f) + p.dx * p.hl * along, wy = p.y + fy * (p.hw * 1.1f) + p.dy * p.hl * along;
                 add_light(wx, wy, z + cell * (static_cast<float>(f) + 0.5f), cell * 0.35f, 1.0f, 0.72f, 0.35f);
+            }
+    }
+    // The lamps at a square's corners (draw_square).
+    for (const Green& g : towns.greens) {
+        if (!g.paved) continue;
+        for (const float ax : {0.0f, 1.0f})
+            for (const float ay : {0.0f, 1.0f}) {
+                const float x = g.x0 + 0.05f + (g.x1 - g.x0 - 0.1f) * ax, y = g.y0 + 0.05f + (g.y1 - g.y0 - 0.1f) * ay;
+                add_light(x, y, cam.ground_z(x, y) + kLift + 0.1f, 0.05f, 1.0f, 0.8f, 0.45f);
             }
     }
 }

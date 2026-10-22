@@ -392,8 +392,12 @@ mown grass, gravel paths crossing to a bandstand or a monument, and trees
 down both sides, with streets all round (only where the railway, an
 industry or water leaves it clear).
 
+Towns of 30 houses or more pave that block as a square instead: flagstones,
+a fountain in a stone basin, market stalls under striped awnings, a lamp
+(lit after dark) and a tree at each corner.
+
 Next:
-- Town squares paved in larger towns' centres, with a market or fountain.
+- Street lamps and trees along the main streets of larger towns.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
