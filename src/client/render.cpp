@@ -2192,9 +2192,17 @@ struct Plot {
     float garden = 0;       // how far behind the plot's centre its garden reaches; 0: none
 };
 
+// A town green: grass with crossing paths, trees round it and a bandstand
+// or a monument in the middle.
+struct Green {
+    float x0, y0, x1, y1; // tiles
+    std::uint32_t seed;
+};
+
 struct TownLayout {
     std::vector<Plot> plots;
     std::vector<float> streets; // segments x0, y0, x1, y1 (centrelines)
+    std::vector<Green> greens;
 };
 
 constexpr float kRow = 0.9f;    // between streets along which houses face
@@ -2202,6 +2210,7 @@ constexpr float kCross = 2.0f;  // between the cross streets
 constexpr float kPlot = 0.36f;  // plot width along the street
 constexpr float kPlotMargin = 0.1f; // clear of the cross street at each end
 constexpr float kStreetHalf = 0.045f;
+constexpr std::int64_t kGreenTown = 14; // houses (by level) for a town to have a green
 
 TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Occupancy& taken,
                         const Camera& cam) {
@@ -2256,6 +2265,18 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
         }
         wanted = std::min<std::int64_t>(wanted, 80);
         if (wanted == 0) return;
+        // A larger town keeps the block by its centre, between the first
+        // two rows, as a green, if it is clear.
+        bool green = false;
+        if (town_size >= kGreenTown) {
+            green = true;
+            for (const float a : {0.1f, kCross * 0.5f, kCross - 0.1f})
+                for (const float c : {0.1f, kRow * 0.5f, kRow - 0.1f}) {
+                    float x, y;
+                    world(a, c, x, y);
+                    if (taken.blocked(x, y, 0.01f) || taken.in_yard(x, y) || on_water(x, y, cam)) green = false;
+                }
+        }
         const int plots_per_block = static_cast<int>((kCross - 2 * kPlotMargin) / kPlot);
         const int rows = 2 + static_cast<int>(std::sqrt(static_cast<float>(wanted)) * 0.6f);
         const int blocks = 1 + static_cast<int>(std::sqrt(static_cast<float>(wanted)) * 0.35f);
@@ -2273,6 +2294,7 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
                         const std::uint32_t h = hash(town_id, static_cast<std::uint32_t>((row + 64) * 2 + side),
                                                      static_cast<std::uint32_t>((block + 64) * 16 + slot));
                         if (unit(h) < 0.12f) continue; // a garden
+                        if (green && block == 0 && ((row == 0 && side == 1) || (row == 1 && side == 0))) continue;
                         candidates.push_back({std::hypot(a, c) + unit(h >> 8) * 0.9f, row, side, block, slot});
                     }
         std::sort(candidates.begin(), candidates.end(), [](const Candidate& l, const Candidate& r) {
@@ -2308,6 +2330,18 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             street(b0, rc, b0, rc + side * kRow, key(town_id, cand.row * 2 + cand.side, 0, cand.block, 2));
             street(b1, rc, b1, rc + side * kRow, key(town_id, cand.row * 2 + cand.side, 0, cand.block + 1, 2));
         }
+        if (green) {
+            // Streets all round it.
+            street(0, 0, kCross, 0, key(town_id, 0, 0, 0, 1));
+            street(0, kRow, kCross, kRow, key(town_id, 1, 0, 0, 1));
+            street(0, 0, 0, kRow, key(town_id, 1, 0, 0, 2));
+            street(kCross, 0, kCross, kRow, key(town_id, 1, 0, 1, 2));
+            const float in = kStreetHalf + 0.015f;
+            float x0, y0, x1, y1;
+            world(in, in, x0, y0);
+            world(kCross - in, kRow - in, x1, y1);
+            out.greens.push_back({std::min(x0, x1), std::min(y0, y1), std::max(x0, x1), std::max(y0, y1), hash(town_id, 9, 313)});
+        }
         // What each building is.
         const float centre_reach = 0.9f + static_cast<float>(town_size) / 30.0f;
         std::size_t church = out.plots.size();
@@ -2340,12 +2374,11 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             out.plots[church].kind = Building::Church;
             out.plots[church].floors = 1;
         }
-        // Houses and terraces have a garden behind, shops a yard, out to
-        // halfway to the next row's, unless the railway, an industry or
-        // water is there.
+        // Houses and terraces have a garden behind, shops a yard and the
+        // church its churchyard, out to halfway to the next row's, unless
+        // the railway, an industry or water is there.
         for (std::size_t i = first; i < out.plots.size(); ++i) {
             Plot& p = out.plots[i];
-            if (p.kind == Building::Church) continue;
             const float reach = kRow * 0.5f - (kStreetHalf + 0.04f + p.hw) + p.hw - 0.008f;
             const float bx = p.dy * p.front, by = -p.dx * p.front; // away from the street
             // Its far corners and the middle of its far side.
@@ -2490,6 +2523,20 @@ void draw_building(const Plot& p, const Camera& cam) {
     }
 }
 
+void frustum(float x, float y, float z0, float r0, float z1, float r1, const float* colour);
+
+// A small round-topped tree (fruit trees at 1, a green's trees larger), its
+// leaves tinted by `tint` from 0 to 1 and raised `clear` on a longer trunk.
+// Inside GL_QUADS.
+void small_tree(float x, float y, float z, float s, float tint, float clear = 0) {
+    static constexpr float kTrunk[3] = {0.36f, 0.26f, 0.17f};
+    const float leaf[3] = {0.28f + 0.08f * tint, 0.46f, 0.17f}, top[3] = {0.32f + 0.08f * tint, 0.5f, 0.2f};
+    box(x, y, z, 1, 0, 0.006f * s, 0.006f * s, 0.045f * s + clear, kTrunk, kTrunk);
+    z += clear;
+    frustum(x, y, z + 0.035f * s, 0.025f * s, z + 0.06f * s, 0.045f * s, leaf);
+    frustum(x, y, z + 0.06f * s, 0.045f * s, z + 0.085f * s, 0.0f, top);
+}
+
 // A town building's model fitted to its plot: its front to the street, the
 // plot along the street its width. It may be stretched deeper (up to 1.8
 // times) to fill the plot, but never squeezed. Returns its depth.
@@ -2510,8 +2557,6 @@ void garden_wall(float x0, float y0, float x1, float y1, float h, float thick, c
         h + std::fabs(z1 - z0) * 0.5f + 0.005f, colour, colour);
 }
 
-void frustum(float x, float y, float z0, float r0, float z1, float r1, const float* colour);
-
 // The garden behind a house, from `from` (its back wall, from the plot's
 // centre) out to the plot's garden line: fenced, hedged or walled round,
 // with a shed, a vegetable bed or a fruit tree as the plot has them. Behind
@@ -2530,8 +2575,9 @@ void garden(const Plot& p, float from, const Camera& cam) {
     static constexpr float kPicket[3] = {0.9f, 0.88f, 0.82f}, kHedge[3] = {0.17f, 0.33f, 0.14f},
                            kStone[3] = {0.6f, 0.58f, 0.53f}, kBrick[3] = {0.55f, 0.32f, 0.24f};
     const float style = unit(p.seed >> 20);
-    const bool yard = p.kind == Building::Shop;
-    const float* colour = yard ? (style < 0.5f ? kBrick : kStone)
+    const bool yard = p.kind == Building::Shop, churchyard = p.kind == Building::Church;
+    const float* colour = churchyard ? kStone
+                          : yard ? (style < 0.5f ? kBrick : kStone)
                           : p.kind == Building::Terrace ? kBrick
                           : style < 0.45f ? kPicket
                           : style < 0.75f ? kHedge
@@ -2552,6 +2598,26 @@ void garden(const Plot& p, float from, const Camera& cam) {
     at(-edge, to, ax, ay);
     at(edge, to, bx2, by2);
     run(ax, ay, bx2, by2);
+    if (churchyard) {
+        // Rows of headstones facing the church, and a yew in a corner.
+        static constexpr float kHeadstone[3] = {0.7f, 0.69f, 0.65f}, kYew[3] = {0.1f, 0.24f, 0.13f};
+        const int rows = std::max(1, static_cast<int>((depth - 0.05f) / 0.04f));
+        for (int r = 0; r < rows; ++r)
+            for (int i = 0; i < 7; ++i) {
+                const std::uint32_t hs = hash(p.seed, static_cast<std::uint32_t>(r * 16 + i), 57);
+                if (unit(hs) < 0.3f) continue; // room for more
+                float x, y;
+                at(-edge + 0.04f + (2 * edge - 0.08f) * (static_cast<float>(i) + 0.5f) / 7.0f, from + 0.025f + 0.04f * static_cast<float>(r), x, y);
+                const float tall = 0.012f + 0.008f * unit(hs >> 8);
+                box(x, y, cam.ground_z(x, y) - 0.005f, p.dx, p.dy, 0.006f, 0.002f, tall + 0.005f, kHeadstone, kHeadstone);
+            }
+        float x, y;
+        at(edge - 0.035f, to - 0.035f, x, y);
+        const float z = cam.ground_z(x, y) - 0.005f;
+        box(x, y, z, 1, 0, 0.006f, 0.006f, 0.02f, kHeadstone, kHeadstone);
+        frustum(x, y, z + 0.012f, 0.03f, z + 0.1f, 0.0f, kYew);
+        return;
+    }
     // What is in it: a shed in a back corner, a vegetable bed by the house,
     // a fruit tree on the other side.
     const float shed_side = unit(hash(p.seed, 3, 91)) < 0.5f ? -1.0f : 1.0f;
@@ -2584,13 +2650,82 @@ void garden(const Plot& p, float from, const Camera& cam) {
         // An apple or pear tree.
         float x, y;
         at(-shed_side * edge * 0.5f, from + depth * 0.7f, x, y);
-        const float z = cam.ground_z(x, y) - 0.005f, s = 0.8f + 0.4f * unit(hash(p.seed, 5, 91));
-        static constexpr float kTrunk[3] = {0.36f, 0.26f, 0.17f};
-        const float tint = unit(hash(p.seed, 6, 91));
-        const float leaf[3] = {0.28f + 0.08f * tint, 0.46f, 0.17f}, top[3] = {0.32f + 0.08f * tint, 0.5f, 0.2f};
-        box(x, y, z, 1, 0, 0.006f * s, 0.006f * s, 0.045f * s, kTrunk, kTrunk);
-        frustum(x, y, z + 0.035f * s, 0.025f * s, z + 0.06f * s, 0.045f * s, leaf);
-        frustum(x, y, z + 0.06f * s, 0.045f * s, z + 0.085f * s, 0.0f, top);
+        small_tree(x, y, cam.ground_z(x, y) - 0.005f, 0.8f + 0.4f * unit(hash(p.seed, 5, 91)), unit(hash(p.seed, 6, 91)));
+    }
+}
+
+// A town green (see Green). Inside GL_QUADS.
+void draw_green(const Green& g, const Camera& cam) {
+    const auto lifted = [&](float x, float y, float lift) { glVertex3f(x, y, cam.ground_z(x, y) + lift); };
+    // Mown grass, in pieces so it follows the ground.
+    glNormal3f(0, 0, 1);
+    glColor3f(0.34f, 0.56f, 0.25f);
+    const int nx = std::max(1, static_cast<int>(std::ceil((g.x1 - g.x0) / 0.2f))), ny = std::max(1, static_cast<int>(std::ceil((g.y1 - g.y0) / 0.2f)));
+    const auto fnx = static_cast<float>(nx), fny = static_cast<float>(ny);
+    for (int j = 0; j < ny; ++j)
+        for (int i = 0; i < nx; ++i) {
+            const float xa = g.x0 + (g.x1 - g.x0) * static_cast<float>(i) / fnx, xb = g.x0 + (g.x1 - g.x0) * static_cast<float>(i + 1) / fnx;
+            const float ya = g.y0 + (g.y1 - g.y0) * static_cast<float>(j) / fny, yb = g.y0 + (g.y1 - g.y0) * static_cast<float>(j + 1) / fny;
+            lifted(xa, ya, kLift);
+            lifted(xb, ya, kLift);
+            lifted(xb, yb, kLift);
+            lifted(xa, yb, kLift);
+        }
+    // Gravel paths corner to corner, crossing in the middle.
+    glColor3f(0.72f, 0.67f, 0.56f);
+    const float cx = (g.x0 + g.x1) * 0.5f, cy = (g.y0 + g.y1) * 0.5f;
+    const float path = 0.018f;
+    for (const auto& [ax, ay, bx, by] : {std::array<float, 4>{g.x0, g.y0, g.x1, g.y1}, std::array<float, 4>{g.x0, g.y1, g.x1, g.y0}}) {
+        const float len = std::hypot(bx - ax, by - ay), qx = -(by - ay) / len * path, qy = (bx - ax) / len * path;
+        const int pieces = std::max(1, static_cast<int>(len / 0.15f));
+        for (int k = 0; k < pieces; ++k) {
+            const float t0 = static_cast<float>(k) / static_cast<float>(pieces), t1 = static_cast<float>(k + 1) / static_cast<float>(pieces);
+            const float x0 = ax + (bx - ax) * t0, y0 = ay + (by - ay) * t0, x1 = ax + (bx - ax) * t1, y1 = ay + (by - ay) * t1;
+            lifted(x0 - qx, y0 - qy, kLift + 0.002f);
+            lifted(x1 - qx, y1 - qy, kLift + 0.002f);
+            lifted(x1 + qx, y1 + qy, kLift + 0.002f);
+            lifted(x0 + qx, y0 + qy, kLift + 0.002f);
+        }
+    }
+    // A gravel circle round the middle (an octagon).
+    for (int k = 0; k < 8; ++k) {
+        const float a0 = 6.2831853f * static_cast<float>(k) / 8.0f, a1 = 6.2831853f * static_cast<float>(k + 1) / 8.0f;
+        lifted(cx, cy, kLift + 0.003f);
+        lifted(cx + 0.1f * std::cos(a0), cy + 0.1f * std::sin(a0), kLift + 0.003f);
+        lifted(cx + 0.1f * std::cos(a1), cy + 0.1f * std::sin(a1), kLift + 0.003f);
+        lifted(cx, cy, kLift + 0.003f);
+    }
+    // Trees along its long sides.
+    const bool along_x = g.x1 - g.x0 >= g.y1 - g.y0;
+    const float length = along_x ? g.x1 - g.x0 : g.y1 - g.y0;
+    const int trees = std::max(2, static_cast<int>(length / 0.32f));
+    for (int side = 0; side < 2; ++side)
+        for (int i = 0; i < trees; ++i) {
+            const float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(trees);
+            const float x = along_x ? g.x0 + (g.x1 - g.x0) * t : (side == 0 ? g.x0 + 0.06f : g.x1 - 0.06f);
+            const float y = along_x ? (side == 0 ? g.y0 + 0.06f : g.y1 - 0.06f) : g.y0 + (g.y1 - g.y0) * t;
+            const std::uint32_t h = hash(g.seed, static_cast<std::uint32_t>(side * 64 + i), 7);
+            small_tree(x, y, cam.ground_z(x, y) - 0.005f, 1.6f + 0.4f * unit(h), unit(h >> 8), 0.06f);
+        }
+    // In the middle a bandstand or a monument.
+    const float z = cam.ground_z(cx, cy) - 0.005f;
+    static constexpr float kStone[3] = {0.74f, 0.72f, 0.66f}, kIron[3] = {0.18f, 0.24f, 0.2f}, kRoof[3] = {0.55f, 0.2f, 0.16f},
+                           kBronze[3] = {0.32f, 0.42f, 0.36f};
+    if (unit(g.seed) < 0.5f) {
+        cylinder(cx, cy, z, 0.06f, 0.015f, kStone, kStone);
+        for (int k = 0; k < 8; ++k) {
+            const float a = 6.2831853f * static_cast<float>(k) / 8.0f;
+            const float px = cx + 0.052f * std::cos(a), py = cy + 0.052f * std::sin(a);
+            beam(px, py, z + 0.015f, px, py, z + 0.06f, 0.004f, kIron);
+        }
+        frustum(cx, cy, z + 0.06f, 0.07f, z + 0.095f, 0.0f, kRoof);
+    } else {
+        // Steps, a plinth and a figure on it.
+        box(cx, cy, z, 1, 0, 0.04f, 0.04f, 0.015f, kStone, kStone);
+        box(cx, cy, z + 0.015f, 1, 0, 0.022f, 0.022f, 0.05f, kStone, kStone);
+        box(cx, cy, z + 0.065f, 1, 0, 0.026f, 0.026f, 0.006f, kStone, kStone);
+        cylinder(cx, cy, z + 0.071f, 0.011f, 0.045f, kBronze, kBronze, 0.008f);
+        cylinder(cx, cy, z + 0.116f, 0.008f, 0.014f, kBronze, kBronze, 0.006f);
     }
 }
 
@@ -2840,6 +2975,7 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
     sc.towns = layout_towns(eco, industries, *sc.taken, cam);
     sc.wooded = sc.taken;
     for (const Plot& p : sc.towns.plots) sc.wooded->mark_disc(p.x, p.y, 0.35f);
+    for (const Green& g : sc.towns.greens) sc.wooded->mark_square((g.x0 + g.x1) * 0.5f, (g.y0 + g.y1) * 0.5f, std::max(g.x1 - g.x0, g.y1 - g.y0) * 0.5f);
     for (std::size_t i = 0; i + 3 < sc.towns.streets.size(); i += 4) {
         const float x0 = sc.towns.streets[i], y0 = sc.towns.streets[i + 1], x1 = sc.towns.streets[i + 2], y1 = sc.towns.streets[i + 3];
         const int steps = std::max(1, static_cast<int>(std::hypot(x1 - x0, y1 - y0) / 0.2f));
@@ -3749,6 +3885,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glNewList(list, GL_COMPILE_AND_EXECUTE);
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
+        for (const Green& g : towns.greens) draw_green(g, cam);
         // Houses come from the art where there is some (drawn after this
         // batch); the rest are drawn in code.
         const auto role = [](const Plot& p) {

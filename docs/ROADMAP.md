@@ -386,8 +386,14 @@ shed, a vegetable bed or an apple tree as the plot has them; shops have a
 walled yard with a store. Houses in towns whose streets run north-south
 now face their street (they had faced away from it).
 
+Churches stand in a walled churchyard with rows of headstones and a yew.
+Towns of 14 houses or more keep the block by their centre as a green:
+mown grass, gravel paths crossing to a bandstand or a monument, and trees
+down both sides, with streets all round (only where the railway, an
+industry or water leaves it clear).
+
 Next:
-- A churchyard round the church, and a green or square in larger towns.
+- Town squares paved in larger towns' centres, with a market or fountain.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
