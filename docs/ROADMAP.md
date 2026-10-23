@@ -399,9 +399,16 @@ a fountain in a stone basin, market stalls under striped awnings, a lamp
 Towns of 10 houses or more have iron street lamps along their streets,
 by turns either side, lit after dark.
 
+Towns of 20 houses or more (two from 30) have grounds on their edges,
+up a lane beyond their last houses where the land is clear: allotments
+(fenced plots of crops and earth, some with sheds), a walled cemetery
+(rows of headstones and crosses, a chapel, yews) or a ball ground (mown
+in stripes, a boundary line and pitch, a pavilion, a picket fence). What
+stands on a green, square or ground stands on its surface (it had been
+sunk into it), and street lamps stand on the ground beside the street.
+
 Next:
-- Larger towns' outskirts: allotments, a cemetery or a cricket and
-  baseball ground on their edges.
+- Rivers and lakes in towns: footbridges, quays and boathouses.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
