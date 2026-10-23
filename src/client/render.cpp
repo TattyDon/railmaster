@@ -2204,8 +2204,16 @@ struct Green {
     GroundUse use = GroundUse::Green;
 };
 
+// Where a street meets water: a bridge from bank to bank, or a landing (a
+// jetty, a boathouse and a boat) from the bank (x0, y0) out towards (x1, y1).
+struct Crossing {
+    float x0, y0, x1, y1; // tiles
+    bool bridge;
+};
+
 struct TownLayout {
     std::vector<Plot> plots;
+    std::vector<Crossing> crossings;
     std::vector<float> streets; // segments x0, y0, x1, y1 (centrelines)
     std::vector<Green> greens;
     std::vector<float> lamps; // street lamps: x, y (tiles), in pairs
@@ -2221,6 +2229,8 @@ constexpr std::int64_t kSquareTown = 30; // and for it to be a paved square
 constexpr std::int64_t kEdgeTown = 20;   // and for a ground on its edge (two from kSquareTown)
 constexpr std::int64_t kLampTown = 10;   // and for lamps along its streets
 constexpr float kLampSpacing = 0.45f;    // tiles between them, by turns either side
+constexpr float kLongestBridge = 1.6f;   // tiles of water a street bridges; wider, it ends at a landing
+constexpr int kLandingsPerTown = 3;
 
 TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& industries, const Occupancy& taken,
                         const Camera& cam) {
@@ -2241,6 +2251,7 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
         };
         const float dx = rows_ns ? 0.0f : 1.0f, dy = rows_ns ? 1.0f : 0.0f;
         const std::size_t lamps_from = out.lamps.size(); // this town's
+        int landings = 0;
         const auto street = [&](float a0, float c0, float a1, float c1, std::uint64_t id) {
             if (!street_keys.insert(id).second) return;
             float x0, y0, x1, y1;
@@ -2249,7 +2260,7 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             // In pieces, leaving out what would run through a station's
             // grounds or a railway building.
             const int steps = std::max(1, static_cast<int>(std::hypot(x1 - x0, y1 - y0) / 0.04f));
-            std::optional<float> from;
+            float from = -1; // where the current piece of land began; -1: none
             const auto emit = [&](float t0, float t1) {
                 if ((t1 - t0) * std::hypot(x1 - x0, y1 - y0) < 0.08f) return; // a stub: leave it out
                 out.streets.insert(out.streets.end(), {x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1});
@@ -2270,16 +2281,53 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
                     if (!near) out.lamps.insert(out.lamps.end(), {lx, ly});
                 }
             };
+            // Each point land, a yard or water; the street runs over land,
+            // bridges a stream or river with land beyond, and ends at a
+            // landing where it meets wider water.
+            enum : std::uint8_t { kLand, kYard, kWater };
+            std::vector<std::uint8_t> state(static_cast<std::size_t>(steps) + 1);
+            const auto at_t = [&](int i) { return static_cast<float>(i) / static_cast<float>(steps); };
             for (int i = 0; i <= steps; ++i) {
-                const float t = static_cast<float>(i) / static_cast<float>(steps);
-                const bool clear = !taken.in_yard(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
-                if (clear && !from) from = t;
-                if (!clear && from) {
-                    emit(*from, std::max(*from, t - 1.0f / static_cast<float>(steps)));
-                    from.reset();
+                const float x = x0 + (x1 - x0) * at_t(i), y = y0 + (y1 - y0) * at_t(i);
+                state[static_cast<std::size_t>(i)] = taken.in_yard(x, y) ? kYard : on_water(x, y, cam) ? kWater : kLand;
+            }
+            const float length = std::hypot(x1 - x0, y1 - y0);
+            for (int i = 0; i <= steps; ++i) {
+                const float t = at_t(i);
+                const bool clear = state[static_cast<std::size_t>(i)] == kLand;
+                if (clear && from < 0) from = t;
+                if (!clear && from >= 0) {
+                    emit(from, std::max(from, t - 1.0f / static_cast<float>(steps)));
+                    from = -1;
+                }
+                if (state[static_cast<std::size_t>(i)] != kWater || (i > 0 && state[static_cast<std::size_t>(i) - 1] == kWater)) continue;
+                int end = i;
+                while (end + 1 <= steps && state[static_cast<std::size_t>(end) + 1] == kWater) ++end;
+                const bool land_before = i > 0 && state[static_cast<std::size_t>(i) - 1] == kLand;
+                const bool land_after = end < steps && state[static_cast<std::size_t>(end) + 1] == kLand;
+                const float tb = at_t(std::max(0, i - 1)), ta = at_t(std::min(steps, end + 1));
+                const auto point = [&](float tt, float& px, float& py) {
+                    px = x0 + (x1 - x0) * tt;
+                    py = y0 + (y1 - y0) * tt;
+                };
+                Crossing c{};
+                if (land_before && land_after && (ta - tb) * length <= kLongestBridge) {
+                    point(tb, c.x0, c.y0);
+                    point(ta, c.x1, c.y1);
+                    c.bridge = true;
+                    out.crossings.push_back(c);
+                } else if ((land_before || land_after) && landings < kLandingsPerTown) {
+                    // From the bank out over the water.
+                    const float bank = land_before ? tb : ta, out_t = land_before ? tb + 0.3f / length : ta - 0.3f / length;
+                    point(bank, c.x0, c.y0);
+                    point(out_t, c.x1, c.y1);
+                    if (!on_water(c.x1, c.y1, cam)) continue; // too narrow for a jetty
+                    if (cam.ground_z(c.x0, c.y0) - cam.ground_z(c.x1, c.y1) > 0.12f) continue; // a bluff, not a shore
+                    out.crossings.push_back(c);
+                    ++landings;
                 }
             }
-            if (from) emit(*from, 1.0f);
+            if (from >= 0) emit(from, 1.0f);
         };
         const std::size_t first = out.plots.size();
         // The town's buildings fill the plots nearest its centre (a little
@@ -2896,6 +2944,79 @@ void street_lamp(float x, float y, const Camera& cam) {
     box(x, y, z, 1, 0, 0.007f, 0.007f, 0.01f, kIron, kIron);
     beam(x, y, z, x, y, z + kLampHeight, 0.006f, kIron);
     box(x, y, z + kLampHeight, 1, 0, 0.011f, 0.011f, 0.018f, kLamp, kIron);
+}
+
+// A sloping slab from (ax, ay, az) to (bx, by, bz), `hw` either side of its
+// line and `thick` deep below it. Inside GL_QUADS.
+void slab(float ax, float ay, float az, float bx, float by, float bz, float hw, float thick, const float* side, const float* top) {
+    const float len = std::hypot(bx - ax, by - ay);
+    if (len <= 0) return;
+    const float qx = -(by - ay) / len * hw, qy = (bx - ax) / len * hw;
+    const float px[4] = {ax - qx, bx - qx, bx + qx, ax + qx}, py[4] = {ay - qy, by - qy, by + qy, ay + qy}, pz[4] = {az, bz, bz, az};
+    glColor3fv(side);
+    for (int i = 0; i < 4; ++i) {
+        const int j = (i + 1) % 4;
+        glNormal3f(py[j] - py[i], -(px[j] - px[i]), 0.0f);
+        glVertex3f(px[i], py[i], pz[i] - thick);
+        glVertex3f(px[j], py[j], pz[j] - thick);
+        glVertex3f(px[j], py[j], pz[j]);
+        glVertex3f(px[i], py[i], pz[i]);
+    }
+    glColor3fv(top);
+    glNormal3f(0, 0, 1);
+    for (int i = 0; i < 4; ++i) glVertex3f(px[i], py[i], pz[i]);
+}
+
+// A street's bridge or landing (see Crossing). Inside GL_QUADS.
+void draw_crossing(const Crossing& c, const Camera& cam) {
+    static constexpr float kStone[3] = {0.66f, 0.62f, 0.55f}, kDeck[3] = {0.55f, 0.53f, 0.5f}, kTimber[3] = {0.45f, 0.34f, 0.23f},
+                           kPlank[3] = {0.58f, 0.46f, 0.32f}, kShingle[3] = {0.33f, 0.3f, 0.28f}, kBoat[3] = {0.35f, 0.42f, 0.5f};
+    const float len = std::hypot(c.x1 - c.x0, c.y1 - c.y0);
+    if (len <= 0) return;
+    const float ux = (c.x1 - c.x0) / len, uy = (c.y1 - c.y0) / len, qx = -uy, qy = ux;
+    if (c.bridge) {
+        // A stone bridge, its deck from bank to bank, parapets either side
+        // and piers down into the water.
+        const float za = cam.ground_z(c.x0, c.y0) + kLift + 0.004f, zb = cam.ground_z(c.x1, c.y1) + kLift + 0.004f;
+        const float hw = kStreetHalf + 0.008f;
+        slab(c.x0, c.y0, za, c.x1, c.y1, zb, hw, 0.02f, kStone, kDeck);
+        for (const float side : {-1.0f, 1.0f}) {
+            const float ox = qx * (hw - 0.004f) * side, oy = qy * (hw - 0.004f) * side;
+            slab(c.x0 + ox, c.y0 + oy, za + 0.022f, c.x1 + ox, c.y1 + oy, zb + 0.022f, 0.004f, 0.022f, kStone, kStone);
+        }
+        const int piers = std::max(1, static_cast<int>(len / 0.35f));
+        for (int i = 1; i <= piers; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(piers + 1);
+            const float x = c.x0 + (c.x1 - c.x0) * t, y = c.y0 + (c.y1 - c.y0) * t;
+            const float deck = za + (zb - za) * t - 0.02f, bed = cam.ground_z(x, y) - 0.05f;
+            box(x, y, bed, ux, uy, 0.014f, hw + 0.006f, std::max(0.0f, deck - bed), kStone, kStone);
+        }
+        return;
+    }
+    // A landing: a jetty on piles out from the bank, a boathouse beside it
+    // half over the water, and a boat tied up.
+    const float bank = cam.ground_z(c.x0, c.y0) + kLift - 0.01f;
+    float water = cam.ground_z(c.x1, c.y1);
+    for (int i = 1; i <= 4; ++i) water = std::min(water, cam.ground_z(c.x0 + ux * len * 0.25f * static_cast<float>(i), c.y0 + uy * len * 0.25f * static_cast<float>(i)));
+    const float deck = std::max(water + 0.02f, std::min(bank, water + 0.05f));
+    slab(c.x0, c.y0, deck, c.x1, c.y1, deck, 0.02f, 0.006f, kTimber, kPlank);
+    for (int i = 1; i <= 4; ++i) {
+        const float t = static_cast<float>(i) / 4.0f;
+        for (const float side : {-1.0f, 1.0f}) {
+            const float px = c.x0 + (c.x1 - c.x0) * t + qx * 0.018f * side, py = c.y0 + (c.y1 - c.y0) * t + qy * 0.018f * side;
+            beam(px, py, water - 0.05f, px, py, deck, 0.004f, kTimber);
+        }
+    }
+    const float hx = c.x0 + ux * 0.1f + qx * 0.075f, hy = c.y0 + uy * 0.1f + qy * 0.075f;
+    box(hx, hy, deck - 0.01f, ux, uy, 0.06f, 0.035f, 0.05f, kTimber, kTimber);
+    gable(hx, hy, deck + 0.04f, ux, uy, 0.065f, 0.042f, 0.025f, kShingle, kTimber);
+    for (const float a : {-0.05f, 0.05f})
+        for (const float side : {-1.0f, 1.0f}) {
+            const float px = hx + ux * a + qx * 0.03f * side, py = hy + uy * a + qy * 0.03f * side;
+            beam(px, py, water - 0.05f, px, py, deck, 0.005f, kTimber);
+        }
+    const float bx = c.x0 + ux * len * 0.7f - qx * 0.04f, by = c.y0 + uy * len * 0.7f - qy * 0.04f;
+    box(bx, by, water - 0.002f, ux, uy, 0.03f, 0.011f, 0.01f, kBoat, kPlank);
 }
 
 // A town green (see Green). Inside GL_QUADS.
@@ -4216,6 +4337,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
         for (const Green& g : towns.greens) draw_green(g, cam);
+        for (const Crossing& c : towns.crossings) draw_crossing(c, cam);
         for (std::size_t i = 0; i + 1 < towns.lamps.size(); i += 2) street_lamp(towns.lamps[i], towns.lamps[i + 1], cam);
         // Houses come from the art where there is some (drawn after this
         // batch); the rest are drawn in code.

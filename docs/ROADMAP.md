@@ -407,8 +407,14 @@ in stripes, a boundary line and pitch, a pavilion, a picket fence). What
 stands on a green, square or ground stands on its surface (it had been
 sunk into it), and street lamps stand on the ground beside the street.
 
+Town streets stop at water rather than running across it: a stream or
+river up to 1.6 tiles wide with land beyond is crossed by a stone bridge
+(parapets, piers into the water); wider water, where the bank is low,
+gets a landing at the street's end (a jetty on piles, a boathouse and a
+boat), up to three to a town.
+
 Next:
-- Rivers and lakes in towns: footbridges, quays and boathouses.
+- Real art: a 2x2-cell shop and a town hall for the largest towns' centres.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
