@@ -425,8 +425,12 @@ stacked by the plot), with no one in it after dark until it is done. The
 client tracks this itself (houses standing when a game is started or
 loaded were never building sites).
 
+Towns of 10 houses or more have pale raised pavements either side of
+their streets (the lamps stand on them), stopping short of the crossings;
+towns of 30 or more cobble their streets until asphalt comes in 1930.
+
 Next:
-- Pavements and kerbs along larger towns' streets; cobbles in the oldest.
+- Traffic in towns: carts and wagons, later motor cars, along the streets.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

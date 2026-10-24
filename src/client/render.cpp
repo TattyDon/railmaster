@@ -2219,6 +2219,7 @@ struct TownLayout {
     std::vector<Plot> plots;
     std::vector<Crossing> crossings;
     std::vector<float> streets; // segments x0, y0, x1, y1 (centrelines)
+    std::vector<std::int64_t> street_town; // by segment: its town's size (houses), for pavements and cobbles
     std::vector<Green> greens;
     std::vector<float> lamps; // street lamps: x, y (tiles), in pairs
 };
@@ -2269,6 +2270,7 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             const auto emit = [&](float t0, float t1) {
                 if ((t1 - t0) * std::hypot(x1 - x0, y1 - y0) < 0.08f) return; // a stub: leave it out
                 out.streets.insert(out.streets.end(), {x0 + (x1 - x0) * t0, y0 + (y1 - y0) * t0, x0 + (x1 - x0) * t1, y0 + (y1 - y0) * t1});
+                out.street_town.push_back(town_size);
                 if (town_size < kLampTown) return;
                 // Lamps along it, clear of the crossings at its ends.
                 const float len = std::hypot(x1 - x0, y1 - y0) * (t1 - t0);
@@ -2559,28 +2561,62 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
     return out;
 }
 
-// Streets on the ground: dirt, then gravel, then asphalt. Inside GL_QUADS.
+constexpr std::int64_t kPavedTown = 10;   // houses for a town's streets to have pavements
+constexpr std::int64_t kCobbledTown = 30;  // and to be cobbled (until asphalt)
+constexpr float kPavement = 0.028f;        // its width, tiles
+
+// Streets on the ground: dirt, then gravel, then asphalt; cobbles in the
+// largest towns until asphalt, and pavements either side in larger ones.
+// Inside GL_QUADS.
 void draw_streets(const TownLayout& layout, std::int32_t year, const Camera& cam) {
-    if (year < 1890) glColor3f(0.6f, 0.52f, 0.4f);
-    else if (year < 1930) glColor3f(0.58f, 0.56f, 0.52f);
-    else glColor3f(0.33f, 0.33f, 0.35f);
+    const float dirt[3] = {0.6f, 0.52f, 0.4f}, gravel[3] = {0.58f, 0.56f, 0.52f}, asphalt[3] = {0.33f, 0.33f, 0.35f};
+    const float* surface = year < 1890 ? dirt : year < 1930 ? gravel : asphalt;
+    const auto lifted = [&](float x, float y, float lift) { glVertex3f(x, y, cam.ground_z(x, y) + lift); };
     glNormal3f(0, 0, 1);
     for (std::size_t i = 0; i + 3 < layout.streets.size(); i += 4) {
         const float x0 = layout.streets[i], y0 = layout.streets[i + 1], x1 = layout.streets[i + 2], y1 = layout.streets[i + 3];
         const float len = std::hypot(x1 - x0, y1 - y0);
         if (len <= 0) continue;
+        const std::int64_t size = i / 4 < layout.street_town.size() ? layout.street_town[i / 4] : 0;
+        const bool cobbled = size >= kCobbledTown && year < 1930;
         const float ux = (x1 - x0) / len, uy = (y1 - y0) / len, qx = -uy * kStreetHalf, qy = ux * kStreetHalf;
-        // In short pieces, so the street follows the ground; a little past
-        // each end so crossings meet.
-        const int pieces = std::max(1, static_cast<int>(std::ceil(len / 0.25f)));
+        // In short pieces, so the street follows the ground (shorter for
+        // cobbles, in two shades by turns); a little past each end so
+        // crossings meet.
+        const int pieces = std::max(1, static_cast<int>(std::ceil(len / (cobbled ? 0.05f : 0.25f))));
         for (int k = 0; k < pieces; ++k) {
             const float t0 = static_cast<float>(k) / static_cast<float>(pieces) * len - (k == 0 ? kStreetHalf : 0.0f);
             const float t1 = static_cast<float>(k + 1) / static_cast<float>(pieces) * len + (k == pieces - 1 ? kStreetHalf : 0.0f);
             const float ax = x0 + ux * t0, ay = y0 + uy * t0, bx = x0 + ux * t1, by = y0 + uy * t1;
+            if (cobbled) {
+                const float v = k % 2 == 0 ? 1.0f : 0.9f;
+                glColor3f(0.5f * v, 0.48f * v, 0.45f * v);
+            } else {
+                glColor3fv(surface);
+            }
             ground_vertex(ax - qx, ay - qy, cam);
             ground_vertex(bx - qx, by - qy, cam);
             ground_vertex(bx + qx, by + qy, cam);
             ground_vertex(ax + qx, ay + qy, cam);
+        }
+        if (size < kPavedTown) continue;
+        // Pavements, a little raised, stopping short of the crossings.
+        const float from = kStreetHalf + kPavement, to = len - kStreetHalf - kPavement;
+        if (to - from < 0.05f) continue;
+        glColor3f(0.7f, 0.68f, 0.64f);
+        const int slabs = std::max(1, static_cast<int>(std::ceil((to - from) / 0.25f)));
+        for (const float side : {-1.0f, 1.0f}) {
+            // Wound the same way (counter-clockwise from above) on either side.
+            const float inner = side > 0 ? kStreetHalf : kStreetHalf + kPavement, outer = side > 0 ? kStreetHalf + kPavement : kStreetHalf;
+            for (int k = 0; k < slabs; ++k) {
+                const float t0 = from + (to - from) * static_cast<float>(k) / static_cast<float>(slabs);
+                const float t1 = from + (to - from) * static_cast<float>(k + 1) / static_cast<float>(slabs);
+                const float px = -uy * side, py = ux * side;
+                lifted(x0 + ux * t0 + px * inner, y0 + uy * t0 + py * inner, kLift + 0.003f);
+                lifted(x0 + ux * t1 + px * inner, y0 + uy * t1 + py * inner, kLift + 0.003f);
+                lifted(x0 + ux * t1 + px * outer, y0 + uy * t1 + py * outer, kLift + 0.003f);
+                lifted(x0 + ux * t0 + px * outer, y0 + uy * t0 + py * outer, kLift + 0.003f);
+            }
         }
     }
 }
