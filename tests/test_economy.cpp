@@ -169,6 +169,17 @@ TEST_CASE("a steel mill needs both iron and coal; a textile mill needs either in
     CHECK(f.eco.stock_milli(f.c("steel"), 10, 10) > 0);
 }
 
+TEST_CASE("a site's rate a year scales with its level and the economy's activity (its supply and demand)") {
+    Fixture f;
+    const IndustryType& textile = f.ind.get(f.type("textile_mill"));
+    const SiteId one = f.eco.add_site(f.ind, f.type("textile_mill"), 5, 5);
+    const SiteId three = f.eco.add_site(f.ind, f.type("textile_mill"), 12, 12, 3);
+    CHECK(f.eco.year_rate_milli(f.eco.sites()[one], textile) == textile.rate_milli);
+    CHECK(f.eco.year_rate_milli(f.eco.sites()[three], textile) == 3 * textile.rate_milli);
+    f.eco.set_activity_percent(80);
+    CHECK(f.eco.year_rate_milli(f.eco.sites()[three], textile) == 3 * textile.rate_milli * 80 / 100);
+}
+
 TEST_CASE("processors never exceed capacity") {
     Fixture f;
     const SiteId mill = f.eco.add_site(f.ind, f.type("steel_mill"), 10, 10);

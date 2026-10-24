@@ -1232,6 +1232,10 @@ constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and n
 
 } // namespace
 
+namespace {
+std::string loads(std::int64_t milli); // thousandths of a carload as loads (below)
+} // namespace
+
 int Tools::menu_items() const {
     switch (menu_page_) {
     case kMenuMain: return kMainItems;
@@ -2751,6 +2755,15 @@ std::string Tools::cell_text() const {
         if (!t.outputs.empty() && t.kind != sim::IndustryKind::House) {
             s += " (makes";
             for (sim::CargoId o : t.outputs) s += " " + world_.data().cargo.get(o).name;
+            if (t.kind == sim::IndustryKind::Processor) {
+                // And from what.
+                std::string from;
+                for (const sim::IndustryInput& in : t.inputs) {
+                    if (in.until_year && *in.until_year < world_.date().year()) continue;
+                    from += (from.empty() ? " from " : t.rule == sim::InputRule::All ? " and " : " or ") + world_.data().cargo.get(in.cargo).name;
+                }
+                s += from;
+            }
             s += ")";
         }
     }
@@ -3487,11 +3500,18 @@ std::vector<std::string> Tools::hover_card_lines(const Detail& d) const {
         const sim::Site& s = eco.sites()[d.id];
         const sim::IndustryType& t = world_.data().industries.get(s.type);
         out.push_back(site_name(d.id));
+        // Supply and demand at a glance: loads a year, and what waits to be carried.
+        const std::int64_t year_rate = eco.year_rate_milli(s, t);
         std::string makes, wants;
-        for (const sim::CargoId c : t.outputs) makes += (makes.empty() ? "" : ", ") + cargo.get(c).name;
-        for (const sim::IndustryInput& in : t.inputs) wants += (wants.empty() ? "" : ", ") + cargo.get(in.cargo).name;
-        if (!makes.empty()) out.push_back("Makes " + makes);
-        if (!wants.empty()) out.push_back("Wants " + wants);
+        for (const sim::CargoId c : t.outputs) {
+            makes += (makes.empty() ? "" : ", ") + cargo.get(c).name + " (" + loads(eco.stock_milli(c, s.cx, s.cy)) + " waiting)";
+        }
+        for (const sim::IndustryInput& in : t.inputs) {
+            if (in.until_year && *in.until_year < world_.date().year()) continue;
+            wants += (wants.empty() ? "" : t.rule == sim::InputRule::All ? " and " : " or ") + cargo.get(in.cargo).name;
+        }
+        if (!makes.empty()) out.push_back("Makes " + loads(year_rate * s.pace_permille / 1000) + " a year: " + makes);
+        if (!wants.empty()) out.push_back("Wants " + loads(year_rate) + " a year: " + wants);
         out.push_back(s.closed ? std::string("Closed") : s.owner ? "Owned by " + world_.company(*s.owner).name() : std::string("Not owned"));
         break;
     }
@@ -3826,25 +3846,36 @@ void Tools::draw_detail_panel() const {
                                              : std::string(sim::port_mode_name(s.port_mode))}));
         }
         const std::int32_t cx = s.cx, cy = s.cy;
+        // Supply and demand: what it can make a year and has waiting to be
+        // carried away, and what it wants a year of each input.
+        const std::int64_t year_rate = eco.year_rate_milli(s, type);
         if (!type.outputs.empty()) {
-            rows.push_back(heading("Makes"));
-            rows.push_back(dim({"", "This year", "Price here"}));
+            rows.push_back(heading("Supply"));
+            rows.push_back(dim({"", "A year", "Made", "Waiting", "Price"}));
             for (std::size_t i = 0; i < type.outputs.size(); ++i) {
                 const sim::CargoId c = type.outputs[i];
                 const std::int64_t made = i < s.made_milli.size() ? s.made_milli[i] : 0;
-                rows.push_back(line({cargo.get(c).name, loads(made), price_k(eco.price(c, cx, cy))}));
+                rows.push_back(line({cargo.get(c).name, loads(year_rate * s.pace_permille / 1000), loads(made),
+                                     loads(eco.stock_milli(c, cx, cy)), price_k(eco.price(c, cx, cy))}));
             }
+            if (type.kind == sim::IndustryKind::Processor)
+                rows.push_back(dim({"As much as its inputs allow; \"Waiting\" is ready to load"}));
         }
         if (!type.inputs.empty()) {
-            rows.push_back(heading(type.kind == sim::IndustryKind::Raw ? "Helped by" : "Uses"));
-            rows.push_back(dim({"", "Held", "Price here"}));
+            rows.push_back(heading(type.kind == sim::IndustryKind::Raw ? "Helped by" : "Demand"));
+            rows.push_back(dim({"", "Wants a year", "Used", "Held", "Price"}));
             for (std::size_t i = 0; i < type.inputs.size(); ++i) {
                 const sim::IndustryInput& in = type.inputs[i];
                 if (in.until_year && *in.until_year < world_.date().year()) continue;
                 const std::int32_t held = i < s.buffer.size() ? s.buffer[i] : 0;
-                rows.push_back(line({cargo.get(in.cargo).name, loads(held),
+                const std::int64_t used = i < s.used_milli.size() ? s.used_milli[i] : 0;
+                const std::int64_t wants = year_rate * eco.demand_percent(in.cargo) / 100;
+                rows.push_back(line({cargo.get(in.cargo).name, loads(wants), loads(used), loads(held),
                                      price_k(eco.price(in.cargo, cx, cy))}));
             }
+            if (type.kind == sim::IndustryKind::Processor && type.inputs.size() > 1)
+                rows.push_back(dim({type.rule == sim::InputRule::All ? "Needs all of these to make anything"
+                                                                     : "Any of these will do: " + loads(year_rate) + " a year in all"}));
         }
         if (s.received_year_milli > 0) rows.push_back(line({"Received this year", loads(s.received_year_milli) + " loads"}));
         rows.push_back(heading("Money"));

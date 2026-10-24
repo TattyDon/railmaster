@@ -248,6 +248,12 @@ public:
     }
     std::int32_t demand_percent(CargoId c) const { return c < demand_percent_.size() ? demand_percent_[c] : 100; }
     std::int32_t activity_percent() const { return activity_percent_; }
+    // What a site makes (or wants of each input) in a year at full pace, in
+    // carload thousandths: its type's rate by its level, at today's
+    // activity level.
+    std::int64_t year_rate_milli(const Site& s, const IndustryType& t) const {
+        return t.rate_milli * s.level * activity_percent_ / 100;
+    }
 
     Site& site_mut(SiteId id) { return sites_.at(id); }
     // Close the accounts of every industry for a period of `months`: work
