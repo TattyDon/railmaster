@@ -31,6 +31,8 @@ void draw_smoke(const Camera& cam, float seconds);
 void draw_weather(const Camera& cam, float amount, bool snow, float seconds);
 // Seconds of play, for what turns (windmill sails, water wheels).
 void set_animation_clock(float seconds);
+// The game's day (days since its epoch), for houses going up as towns grow.
+void set_game_day(std::int32_t days);
 // Lights after dark (lit windows, station lamps, headlamps), registered
 // as the town, stations and trains are drawn; after the world pass.
 void draw_lights(const Camera& cam);

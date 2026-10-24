@@ -15,7 +15,9 @@
 #include <chrono>
 #include <cstdlib>
 #include <future>
+#include <limits>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace railmaster::client {
@@ -44,6 +46,7 @@ struct Turning {
 };
 std::vector<Turning> g_turning_build;
 float g_animation_seconds = 0;
+std::int32_t g_day = 0; // the game's, from set_game_day
 
 // Lights seen this frame (tiles), shown after dark: a glow at each, and
 // for headlamps a pool of light on the ground ahead.
@@ -3622,11 +3625,125 @@ void draw_trees(const sim::Terrain& t, const Scene& sc, const Camera& cam) {
     }
 }
 
+// Houses going up: a plot that appears while the game runs (the town has
+// grown) is a building site for kBuildDays, drawn each frame by
+// draw_building_sites rather than in the town's display list.
+constexpr std::int32_t kBuildDays = 90;
+
+struct Construction {
+    std::unordered_map<std::uint64_t, std::int32_t> first_seen; // plot key: day
+    std::int32_t last_day = 0;
+    std::vector<bool> building; // by plot, this frame
+    std::uint64_t key = 0;      // which plots are building, for the display list
+};
+Construction g_construction;
+
+std::uint64_t plot_key(const Plot& p) {
+    return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(std::lround(p.x * 100))) << 32) |
+           static_cast<std::uint32_t>(std::lround(p.y * 100));
+}
+
+// Which of the towns' plots are building sites today. A plot already
+// standing when the towns were first seen (or after a load or a long jump in
+// time) was never a site.
+void update_construction(const TownLayout& towns) {
+    Construction& c = g_construction;
+    const bool fresh = c.first_seen.empty() || g_day < c.last_day || g_day - c.last_day > 60;
+    if (fresh) c.first_seen.clear();
+    c.last_day = g_day;
+    c.building.assign(towns.plots.size(), false);
+    std::uint64_t key = 0;
+    for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+        const std::uint64_t pk = plot_key(towns.plots[i]);
+        const auto [it, added] = c.first_seen.try_emplace(pk, fresh ? std::numeric_limits<std::int32_t>::min() / 2 : g_day);
+        if (g_day - it->second < kBuildDays) {
+            c.building[i] = true;
+            key = key * 1099511628211ull ^ pk;
+        }
+    }
+    c.key = key;
+}
+
+bool under_construction(std::size_t plot) {
+    return plot < g_construction.building.size() && g_construction.building[plot];
+}
+
+// A house going up, `t` of the way (0 to 1): its foundation, timber walls
+// rising, scaffolding round them, the roof's rafters at the end, and timber
+// stacked beside. Inside GL_QUADS.
+void building_site(const Plot& p, float t, const Camera& cam) {
+    static constexpr float kStone[3] = {0.6f, 0.58f, 0.54f}, kFrame[3] = {0.78f, 0.64f, 0.45f}, kPole[3] = {0.55f, 0.45f, 0.32f},
+                           kPlank[3] = {0.66f, 0.55f, 0.38f};
+    const float qx = -p.dy, qy = p.dx;
+    const float z = std::min({cam.ground_z(p.x - p.dx * p.hl - qx * p.hw, p.y - p.dy * p.hl - qy * p.hw),
+                              cam.ground_z(p.x + p.dx * p.hl - qx * p.hw, p.y + p.dy * p.hl - qy * p.hw),
+                              cam.ground_z(p.x + p.dx * p.hl + qx * p.hw, p.y + p.dy * p.hl + qy * p.hw),
+                              cam.ground_z(p.x - p.dx * p.hl + qx * p.hw, p.y - p.dy * p.hl + qy * p.hw)}) - 0.005f;
+    const float hl = p.hl * 0.9f, hw = p.hw * 0.85f;
+    box(p.x, p.y, z, p.dx, p.dy, hl + 0.006f, hw + 0.006f, 0.012f, kStone, kStone);
+    const float full = 0.09f * static_cast<float>(std::max(1, p.floors)) + 0.02f;
+    const float walls = full * std::clamp((t - 0.1f) / 0.6f, 0.0f, 1.0f);
+    if (walls > 0) {
+        // Planked part way up; above that the bare frame: studs round the
+        // walls and a plate along their tops.
+        const float z0 = z + 0.012f, z1 = z0 + walls;
+        for (const float side : {-1.0f, 1.0f}) {
+            box(p.x + qx * hw * side, p.y + qy * hw * side, z0, p.dx, p.dy, hl, 0.003f, walls * 0.55f, kFrame, kFrame);
+            box(p.x + p.dx * hl * side, p.y + p.dy * hl * side, z0, qx, qy, hw, 0.003f, walls * 0.55f, kFrame, kFrame);
+        }
+        const int studs = std::max(2, static_cast<int>(hl * 2 / 0.03f) + 1), end_studs = std::max(2, static_cast<int>(hw * 2 / 0.03f) + 1);
+        for (const float side : {-1.0f, 1.0f}) {
+            for (int i = 0; i < studs; ++i) {
+                const float a = -hl + 2 * hl * static_cast<float>(i) / static_cast<float>(studs - 1);
+                const float x = p.x + p.dx * a + qx * hw * side, y = p.y + p.dy * a + qy * hw * side;
+                beam(x, y, z0, x, y, z1, 0.0025f, kPole);
+            }
+            for (int i = 0; i < end_studs; ++i) {
+                const float c = -hw + 2 * hw * static_cast<float>(i) / static_cast<float>(end_studs - 1);
+                const float x = p.x + p.dx * hl * side + qx * c, y = p.y + p.dy * hl * side + qy * c;
+                beam(x, y, z0, x, y, z1, 0.0025f, kPole);
+            }
+            beam(p.x - p.dx * hl + qx * hw * side, p.y - p.dy * hl + qy * hw * side, z1, p.x + p.dx * hl + qx * hw * side,
+                 p.y + p.dy * hl + qy * hw * side, z1, 0.003f, kPole);
+        }
+    }
+    // Scaffolding a little above the walls: poles along both long sides and
+    // a plank walk at each lift.
+    const float top = z + 0.012f + walls + 0.03f;
+    const int poles = std::max(2, static_cast<int>(hl * 2 / 0.06f) + 1);
+    for (const float side : {-1.0f, 1.0f}) {
+        const float off = (hw + 0.014f) * side;
+        for (int i = 0; i < poles; ++i) {
+            const float a = -hl + 2 * hl * static_cast<float>(i) / static_cast<float>(poles - 1);
+            const float x = p.x + p.dx * a + qx * off, y = p.y + p.dy * a + qy * off;
+            beam(x, y, z, x, y, top, 0.0025f, kPole);
+        }
+        for (float lift = z + 0.04f; lift < top - 0.01f; lift += 0.04f)
+            box(p.x + qx * off, p.y + qy * off, lift, p.dx, p.dy, hl + 0.004f, 0.008f, 0.003f, kPlank, kPlank);
+    }
+    if (t > 0.7f) gable(p.x, p.y, z + 0.012f + walls, p.dx, p.dy, hl, hw * 1.05f, hw * 0.75f * std::min(1.0f, (t - 0.7f) / 0.2f), kFrame, kFrame);
+    // Timber stacked by the plot.
+    const float sx = p.x + p.dx * (hl + 0.03f), sy = p.y + p.dy * (hl + 0.03f);
+    box(sx, sy, cam.ground_z(sx, sy) - 0.003f, p.dx, p.dy, 0.012f, 0.02f, 0.012f * (1.2f - t), kPlank, kPlank);
+}
+
+void draw_building_sites(const TownLayout& towns, const Camera& cam) {
+    glBegin(GL_QUADS);
+    for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+        if (!under_construction(i)) continue;
+        const std::int32_t since = g_day - g_construction.first_seen[plot_key(towns.plots[i])];
+        building_site(towns.plots[i], static_cast<float>(since) / static_cast<float>(kBuildDays), cam);
+    }
+    glEnd();
+}
+
 // After dark, lit windows on the street fronts of the town's buildings:
 // a few on each, by the plot, warm yellow.
 void town_lights(const TownLayout& towns, const Camera& cam) {
     if (shading::night() <= 0.05f) return;
-    for (const Plot& p : towns.plots) {
+    for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+        if (under_construction(i)) continue; // nobody in yet
+        const Plot& p = towns.plots[i];
         const float fx = -p.dy * p.front, fy = p.dx * p.front;
         const float cell = p.hl * 0.7f;
         const float z = cam.ground_z(p.x, p.y);
@@ -4347,10 +4464,12 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
                 else models::draw_spinners(*t.model, t.x, t.y, t.z, t.fx, t.fy, t.size, g_animation_seconds);
             }
         };
-        const std::uint64_t key = sc.version * 4 + (year < 1890 ? 0u : year < 1930 ? 1u : 2u);
+        update_construction(towns);
+        const std::uint64_t key = (sc.version * 4 + (year < 1890 ? 0u : year < 1930 ? 1u : 2u)) * 1099511628211ull ^ g_construction.key;
         begin_lit();
         if (list != 0 && list_key == key) {
             glCallList(list);
+            draw_building_sites(towns, cam);
             draw_turning();
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
             town_lights(towns, cam);
@@ -4391,7 +4510,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const models::Model* m = models::pick(role(p), p.seed >> 5);
             return model_depth(*m, p) * 0.5f;
         };
-        for (const Plot& p : towns.plots) {
+        for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+            const Plot& p = towns.plots[i];
+            if (under_construction(i)) continue; // drawn each frame, by draw_building_sites
             if (!modelled(p)) draw_building(p, cam);
             if (p.garden > 0) garden(p, half_depth(p), cam);
         }
@@ -4428,8 +4549,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             }
         }
         glEnd();
-        for (const Plot& p : towns.plots) {
-            if (!modelled(p)) continue;
+        for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+            const Plot& p = towns.plots[i];
+            if (!modelled(p) || under_construction(i)) continue;
             const models::Model* m = models::pick(role(p), p.seed >> 5);
             const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
             const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
@@ -4439,6 +4561,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         }
         glEndList();
         list_key = key;
+        draw_building_sites(towns, cam);
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
         list_turning = g_turning_build;
         draw_turning();
@@ -4878,6 +5001,8 @@ void draw_lights(const Camera& cam) {
 }
 
 void set_animation_clock(float seconds) { g_animation_seconds = seconds; }
+
+void set_game_day(std::int32_t days) { g_day = days; }
 
 void draw_smoke(const Camera& cam, float seconds) {
     if (!cam.three_d) {

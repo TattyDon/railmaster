@@ -418,9 +418,15 @@ centre: stone, two cells deep under twin gables, a clock tower over the
 door with a tall spire (the `town_hall` role; drawn in code without it).
 Shops also come as deeper blocks under twin gables (two or three storeys).
 
+Town growth is seen: a house that appears while the game runs goes up
+over 90 days (a stone foundation, timber walls rising, studs and a plate
+above the planking, scaffolding round them, rafters at the end, timber
+stacked by the plot), with no one in it after dark until it is done. The
+client tracks this itself (houses standing when a game is started or
+loaded were never building sites).
+
 Next:
-- Town growth seen: new houses go up behind scaffolding before they are
-  finished, and a town's streets get pavements and kerbs as it grows.
+- Pavements and kerbs along larger towns' streets; cobbles in the oldest.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

@@ -1202,6 +1202,7 @@ int main(int argc, char* argv[]) {
         client::set_pixel_ratio(static_cast<float>(cam.drawable_w) / static_cast<float>(std::max(1, cam.width_px)));
         cam.apply();
         client::set_animation_clock(smoke_clock);
+        client::set_game_day(world.date().days_since_epoch());
         client::shading::set_clock(static_cast<float>(std::fmod(clock_s, 3600.0)));
         const bool shaded = cam.three_d && client::shading::active();
         if (shaded) {
