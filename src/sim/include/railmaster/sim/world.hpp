@@ -1,0 +1,482 @@
+#pragma once
+
+#include "railmaster/sim/ai.hpp"
+#include "railmaster/sim/cargo.hpp"
+#include "railmaster/sim/commands.hpp"
+#include "railmaster/sim/company.hpp"
+#include "railmaster/sim/stock.hpp"
+#include "railmaster/sim/date.hpp"
+#include "railmaster/sim/economy.hpp"
+#include "railmaster/sim/freight.hpp"
+#include "railmaster/sim/locomotive.hpp"
+#include "railmaster/sim/railway.hpp"
+#include "railmaster/sim/random.hpp"
+#include "railmaster/sim/scenario.hpp"
+#include "railmaster/sim/terrain.hpp"
+#include "railmaster/sim/territory.hpp"
+
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <utility>
+
+namespace railmaster::sim {
+
+// Map size presets (rt3-clone-spec §3.1 [I]), in map cells.
+enum class MapSize : std::uint8_t { Small, Medium, Large };
+struct MapDimensions {
+    std::int32_t width, height;
+};
+MapDimensions map_dimensions(MapSize s); // 256 x 256, 384 x 512, 768 x 1024
+
+// Map cells per economy node side for a map: about 15,000 nodes
+// (rt3-clone-spec §5.1 [D], §5.2 [I]), at least 1.
+std::int32_t default_cells_per_node(std::int32_t width_cells, std::int32_t height_cells);
+
+struct WorldConfig {
+    std::uint64_t seed = 1;
+    Date start_date = Date::from_ymd(1830, 1, 1);
+    std::int32_t width_tiles = 256; // the Small preset
+    std::int32_t height_tiles = 256;
+    std::int32_t tile_size_m = 805; // a map cell: 0.5 mile (rt3-clone-spec §3.1 [I])
+    // Map cells per economy node side; 0 picks default_cells_per_node.
+    std::int32_t cells_per_node = 0;
+    void set_map_size(MapSize s) {
+        const MapDimensions d = map_dimensions(s);
+        width_tiles = d.width;
+        height_tiles = d.height;
+    }
+    bool sandbox = false;            // sandbox: no breakdowns by default, and money is no object
+    // The player founds their company when the world is made, on these
+    // terms (default: Balance::Stock's founder investment and the full
+    // outside offer). With found_player_company off, the player starts with
+    // no company and founds one with a FoundCompany command (the client's
+    // founding dialog).
+    bool found_player_company = true;
+    std::optional<FoundCompany> founding;
+    // For tests: the player's company capital in dollars, half of it the
+    // player's own (bypasses the founding limits).
+    std::optional<std::int64_t> starting_cash;
+    bool populate = true;            // place towns and industries (when industry data is present)
+    Difficulty difficulty = Difficulty::Medium;
+    bool business_cycle = true; // the economic state moves; off holds it at Normal
+    std::int32_t rivals = 0;    // AI companies, up to the number of tycoons in the data
+    // Scenarios may lock the chair: no firing and no resigning (Go West!).
+    bool chairman_can_be_fired = true;
+    bool chairman_can_resign = true;
+    bool town_growth = true; // the editor/sandbox switch for towns growing [D]
+    bool industries_appear = true; // new industries open as the years go by [C]
+    // Split a new map into this many territories (rt3-clone-spec §3.3); 0
+    // for none, as in a sandbox map. The territory of the first town is free.
+    std::int32_t territories = 0;
+    bool rival_ai = true;       // off: rivals exist but make no decisions (for tests)
+    // A scenario's towns, founding money and medal goals (scenario_config
+    // fills in the rest of this config from it).
+    std::optional<Scenario> scenario;
+    // A hand-made landscape for the map (its size must match), in place of
+    // generated hills and rivers.
+    std::optional<Landscape> landscape;
+    // A hand-made map's towns, placed in the map editor (map cells): when
+    // there are any, the map has these towns and no others.
+    std::vector<ScenarioTown> towns{};
+    // Its industries likewise: when there are any, the map has these and
+    // no others (no random industries or ports).
+    std::vector<MapIndustry> industries{};
+    // And its territories, drawn by hand, in place of `territories` random ones.
+    std::optional<TerritoryMap> territory_map{};
+};
+
+// The config for playing a scenario: its seed, start, map size, rivals,
+// territories, chairmanship rules and the scenario itself.
+WorldConfig scenario_config(const Scenario& s, Difficulty difficulty = Difficulty::Medium);
+// Score multiplier for a difficulty level, in percent: 75, 100, 125, 150.
+std::int32_t difficulty_score_percent(Difficulty d);
+
+// Static definitions shared by the whole game, loaded from data/.
+struct GameData {
+    CargoRegistry cargo{};
+    LocomotiveRegistry locomotives{};
+    IndustryRegistry industries{};
+    Balance balance{}; // data/balance.json
+    TycoonRegistry tycoons{};
+};
+
+// Root of all simulation state. Advancing it is a pure function of its
+// current state; the client changes it only by submitting commands (see
+// commands.hpp), which keeps replays and lockstep multiplayer possible.
+class World {
+public:
+    // Fixed simulation steps per game day. Provisional; the real value
+    // should come from measuring train movement in the original game.
+    static constexpr std::int32_t kTicksPerDay = 16;
+
+    explicit World(const WorldConfig& config, GameData data = {});
+
+    void tick();
+
+    Date date() const { return date_; }
+    std::int32_t tick_of_day() const { return tick_of_day_; }
+    std::uint64_t total_ticks() const { return total_ticks_; }
+    const Terrain& terrain() const { return terrain_; }
+    Terrain& terrain() { return terrain_; }
+    const GameData& data() const { return data_; }
+    Economy& economy() { return economy_; }
+    const Economy& economy() const { return economy_; }
+
+    // --- Territories (rt3-clone-spec §3.3) ---
+    const TerritoryMap& territories() const { return territories_; }
+    // Replace the map's territories (a scenario's, or a test's). The cell
+    // grid must match the terrain's.
+    void set_territories(TerritoryMap map);
+    TerritoryId territory_at(MapPoint p) const;
+    // The name a new station here would take: the town it serves (then that
+    // town's east, west, north or south side, then Junction), else the
+    // nearest town's Junction, Crossing or Siding; numbered if all are taken.
+    // "Station N" on a map without towns.
+    std::string station_name_for(MapPoint p) const;
+    // Why a BuildStation would be refused, or nothing; and what it would cost.
+    std::optional<std::string> station_problem(const BuildStation& cmd) const;
+    Money station_build_cost(const BuildStation& cmd) const;
+    // Why a BuildIndustry would be refused, or nothing (the Industry tool
+    // shows it before the click).
+    std::optional<std::string> industry_problem(const BuildIndustry& cmd) const;
+    // Why `company` may not build at `p`, if it may not: a territory it has
+    // no access to.
+    std::optional<std::string> access_problem(CompanyId company, MapPoint p) const;
+    // Territories among these points that `company` would need access to.
+    std::vector<TerritoryId> access_needed(CompanyId company, const std::vector<MapPoint>& points) const;
+    // The company the human player chairs (company 0 unless control changed
+    // hands), or, after being fired or resigning, the one they last ran.
+    Company& company() { return market_.companies.at(player_company().value_or(last_player_company_)); }
+    const Company& company() const { return market_.companies.at(player_company().value_or(last_player_company_)); }
+    // The company the human player runs now, if any.
+    std::optional<CompanyId> player_company() const { return market_.investors.front().chairs; }
+    // Things that happened since the last call, for the news ticker:
+    // splits, grumbling investors, chairmen fired, appointed or resigning.
+    std::vector<std::string> take_news() { return std::exchange(news_, {}); }
+    // The news big enough for a newspaper's front page (RT3's newspaper
+    // dialogs): scenario news, disasters, bankruptcies, chairmen voted out,
+    // rivals founded, medals. Each is also in take_news(). Not saved.
+    std::vector<std::string> take_headlines() { return std::exchange(headlines_, {}); }
+    Company& company(CompanyId id) { return market_.companies.at(id); }
+    const Company& company(CompanyId id) const { return market_.companies.at(id); }
+    const std::vector<Company>& companies() const { return market_.companies; }
+    const std::vector<Investor>& investors() const { return market_.investors; }
+    const Market& market() const { return market_; }
+    // The AI players, in the order they act each month.
+    const std::vector<Rival>& rivals() const { return rivals_; }
+    // Found a company for a new player (an AI rival, or for tests). Returns
+    // the new player; their company is the next CompanyId.
+    PlayerId add_player_company(std::string company_name, std::string chairman);
+    bool sandbox() const { return sandbox_; }
+    Difficulty difficulty() const { return difficulty_; }
+    // Difficulty x station age, in thousandths, for income at a station.
+    // Rivals' trains earn by the AI's difficulty bonus or penalty instead
+    // of the player's (`owner`: the train's company; none: the player's).
+    std::int32_t revenue_permille(StationId s, std::optional<CompanyId> owner = std::nullopt) const;
+    Investor& investor() { return market_.investors.front(); }
+    const Investor& investor() const { return market_.investors.front(); }
+    // Shares sold automatically at the last month end because purchasing
+    // power went negative.
+    std::int64_t last_forced_sale() const { return last_forced_sale_; }
+    Railway& railway() { return railway_; }
+    const Railway& railway() const { return railway_; }
+
+    // Apply a command made by player `who`: all of it, or none of it with a reason.
+    CommandResult execute(const Command& cmd, PlayerId who = kHumanPlayer);
+    // What a BuildTrack would build and cost, without building it.
+    PlanResult preview(const BuildTrack& cmd) const;
+    // Everything spent through commands so far. A stand-in until companies
+    // and ledgers exist (M3).
+    Money total_spent() const { return spent_; }
+    // Everything trains have earned delivering freight.
+    Money total_revenue() const { return earned_; }
+
+    // The business cycle (rt3-clone-spec §5.5): checked a few times a year.
+    EconomicState economic_state() const { return economic_state_; }
+    void set_economic_state(EconomicState s); // for scenarios and tests
+    // Construction, fuel and labour costs, in percent of Normal.
+    std::int32_t cost_percent() const;
+    Money construction_cost(Money base) const { return base.scaled(cost_percent(), 100).scaled(build_cost_percent_, 100); }
+    // What electrifying a piece of track would cost now, nothing if it is.
+    Money electrify_cost(EdgeId e) const;
+    // What doubling a piece of single track would cost now.
+    Money double_upgrade_cost(EdgeId e) const;
+    // The state the economy changed to since the last call, if it did: news.
+    std::optional<EconomicState> take_economy_news();
+
+    // --- Scenario goals (rt3-clone-spec §14.3) ---
+    // The scenario being played, if any; checked on the 1st of each month.
+    const std::optional<Scenario>& scenario() const { return scenario_; }
+    // A cheat has been used in this game (rt3-clone-spec §15.8).
+    bool assisted() const { return assisted_; }
+    const ScenarioResult& scenario_result() const { return scenario_result_; }
+    // Loads (thousandths) a company has delivered that count for a deliver
+    // goal naming a town to come from or go to (rt3-clone-spec §14.3).
+    std::int64_t place_delivered_milli(CompanyId company, const Goal& g) const;
+    // Questions scenario events have put to the player, waiting for an
+    // answer (AnswerChoice) until their month runs out.
+    struct PendingChoice {
+        std::size_t event = 0;  // index into the scenario's events
+        std::size_t effect = 0; // the Choice among its effects
+        std::int32_t until_month = 0;
+    };
+    const std::vector<PendingChoice>& pending_choices() const { return pending_choices_; }
+    const EventEffect& choice_effect(const PendingChoice& c) const { return scenario_->events[c.event].effects[c.effect]; }
+    // A company's trains' average speed on the road over the last 12 months
+    // (distance run over time spent running), in mph; 0 before any running.
+    std::int64_t average_speed_mph(CompanyId c) const;
+    // A scenario's counters (rt3-clone-spec §14.4), set by its events. A
+    // name scoped to the player or their company ("@player|n", "@company|n")
+    // means the human player's own, or their present company's.
+    std::int64_t variable(const std::string& name) const {
+        const auto it = variables_.find(variable_key(name));
+        return it == variables_.end() ? 0 : it->second;
+    }
+    std::string variable_key(const std::string& name) const;
+    // A scenario's track budget: the tiles a company has left, if there is a budget.
+    std::optional<std::int64_t> track_tiles_left(CompanyId c) const;
+    // How many track builds the player can still undo.
+    std::size_t undoable_track(PlayerId who = kHumanPlayer) const {
+        return who < track_undo_.size() ? track_undo_[who].size() : 0;
+    }
+    // The score for the medal won, in thousandths; 0 without one.
+    std::int64_t scenario_score_milli() const;
+
+    // Save the whole game (binary; save.cpp), and load one. Loading takes
+    // the game data from data/ (cargo, engines, industries, tycoons, which
+    // must match the save's by key) but uses the balance the game was
+    // played with, kept in the save. Throws std::runtime_error on a bad file.
+    // Saves are compressed (zlib); load also reads uncompressed ones.
+    std::string save() const;
+    static World load(std::string_view bytes, GameData data);
+
+    // Every command given from outside the simulation (the player's, the
+    // client's), with the tick it was given at, in order. Commands the
+    // simulation gives itself (rivals') are not logged: a replay makes them
+    // again. With the config the game was made with, the log replays the
+    // game from its start (rt3-clone-spec §16: a command log for replay and
+    // debugging).
+    struct LoggedCommand {
+        std::uint64_t tick = 0; // total_ticks() when it was given
+        PlayerId who = kHumanPlayer;
+        Command cmd;
+    };
+    const std::vector<LoggedCommand>& command_log() const { return command_log_; }
+    const WorldConfig& config() const { return config_; }
+    // Play a saved game again from its start: a new world from the save's
+    // config and game data, given the logged commands at their ticks, run
+    // to the tick the save was made at. A deterministic simulation ends
+    // exactly as the save; compare their save() to check. `data` as for load.
+    static World replay(std::string_view save_bytes, GameData data);
+    template <class Ar>
+    friend void io(Ar& ar, World& v);
+
+private:
+    struct LoadTag {};
+    World(LoadTag, GameData data);
+    void on_new_day();
+    void on_new_month();
+    void on_new_year();
+
+    Random rng_;
+    Date date_;
+    std::int32_t tick_of_day_ = 0;
+    std::uint64_t total_ticks_ = 0;
+    Terrain terrain_;
+    GameData data_;
+    Economy economy_;
+    TerritoryMap territories_;
+    // Each economy node's territory and the closed ones, for the economy.
+    void apply_territory_borders();
+    void make_territories(std::int32_t count);
+    // A company's share of upkeep weighted by territory overhead, in
+    // percent: by track length for track, by station count for buildings.
+    std::pair<std::int64_t, std::int64_t> overhead_percent(CompanyId c) const;
+    Railway railway_;
+    Money spent_;
+    Money earned_;
+    bool sandbox_ = false;
+    Difficulty difficulty_ = Difficulty::Medium;
+    Market market_;
+    std::vector<Rival> rivals_;
+    std::vector<std::string> news_;
+    std::vector<std::string> headlines_; // transient, not saved
+    void headline(std::string text) {
+        news_.push_back(text);
+        headlines_.push_back(std::move(text));
+    }
+    CompanyId last_player_company_ = 0;
+    bool chairman_can_be_fired_ = true;
+    bool chairman_can_resign_ = true;
+    bool town_growth_ = true;
+    bool industries_appear_ = true;
+    std::map<std::pair<PlayerId, CompanyId>, std::int32_t> failed_attempts_; // day of the last failure
+    bool rival_ai_ = true;
+    PlayerId actor_ = kHumanPlayer; // who the command being run is for
+    WorldConfig config_;                  // as made, for replays
+    std::vector<LoggedCommand> command_log_;
+    bool ticking_ = false;                // inside tick(): commands are the simulation's own
+    void tick_inner();
+    std::int64_t last_forced_sale_ = 0;
+    bool business_cycle_ = true;
+    std::optional<EconomicState> economy_news_;
+    EconomicState economic_state_ = EconomicState::Normal;
+    std::uint64_t economy_terrain_revision_ = 0;
+    std::int32_t start_year_ = 0; // for the optional cost index
+    // Track builds each player may still undo (newest last): the pieces,
+    // their ends as built, and the first node id the build created.
+    struct TrackUndo {
+        std::vector<EdgeId> edges;
+        std::vector<std::pair<NodeId, NodeId>> ends;
+        NodeId first_new_node = 0;
+        std::int64_t tiles = 0; // from the track budget, given back by an undo
+    };
+    std::vector<std::vector<TrackUndo>> track_undo_;
+    // Stations and buildings placed since entering their tool, by player,
+    // newest last, for UndoBuild: what, its id, where (to check it is the
+    // same one) and what it cost.
+    struct BuildUndo {
+        std::uint8_t kind = 0; // 0 station, 1 tower or shed, 2 station building
+        std::uint32_t id = 0;
+        MapPoint at{};
+        Money cost{};
+    };
+    std::vector<std::vector<BuildUndo>> build_undo_;
+    void remember_build(std::uint8_t kind, std::uint32_t id, MapPoint at, Money cost);
+    void forget_builds();
+    std::optional<Scenario> scenario_;
+    bool assisted_ = false;
+    // Deliveries counting for deliver goals with a from or to town, by
+    // company and goal ("company|cargo|from|to"), thousandths.
+    std::map<std::string, std::int64_t> place_deliveries_;
+    void record_place_deliveries(CompanyId company, StationId at, const std::vector<Earnings::Delivery>& delivered);
+    ScenarioResult scenario_result_;
+    void check_scenario();
+
+    // Scenario events (events.cpp): for each, the month index from which it
+    // may fire (-1 once done); counters; and the effects in force for a
+    // while, applied to a clean copy of the game data.
+    struct Modifier {
+        EffectKind kind = EffectKind::CargoPrice;
+        std::string target;
+        std::int32_t percent = 100;
+        std::int32_t until_month = 0; // 0: for good
+    };
+    std::vector<std::int32_t> event_month_;
+    std::map<std::string, std::int64_t> variables_;
+    std::vector<Modifier> modifiers_;
+    std::vector<PendingChoice> pending_choices_;
+    // Month-end totals of each company's trains' distance run and ticks on
+    // the road, the last 13, for average speed over 12 months.
+    std::vector<std::vector<std::pair<std::int64_t, std::int64_t>>> road_samples_;
+    void sample_road();
+    CargoRegistry base_cargo_;
+    IndustryRegistry base_industries_;
+    LocomotiveRegistry base_locos_;
+    std::int32_t build_cost_percent_ = 100;
+    std::vector<PlayerId> founder_;          // who founded each company
+    std::vector<std::int64_t> track_tiles_;  // each company's track budget left
+    std::int64_t& track_tiles(CompanyId c);
+    void check_event_targets() const;
+    void run_events();
+    void fire(const ScenarioEvent& e);
+    // Carry out effects; `event` locates a Choice among them for its answer.
+    void apply_effects(const std::vector<EventEffect>& effects, std::size_t event, bool top_level);
+    void earthquake(const EventEffect& f);
+    void sabotage(const EventEffect& f);
+    void apply_modifiers();
+    std::int32_t month_index() const { return date_.year() * 12 + date_.month() - 1; }
+
+    void refresh_economy_terrain();
+
+    void pay_trackage(Train& t, Money income);
+    void run_rivals();
+    // The company of the player whose command is being run.
+    Company& acting();
+    const Company& acting() const;
+    bool money_no_object() const; // sandbox, for the human player
+    bool owns_track_at(const TrackEnd& at) const;
+    // A track plan with its costs moved by the economic state.
+    PlanResult priced(PlanResult r) const;
+    // Find where a planned run crosses existing track at ground level, and
+    // add the overpass surcharge if it is to go over.
+    void mark_crossings(TrackPlan& plan, MapPoint start, Frequency overpasses) const;
+
+    CommandResult run(const BuildTrack& cmd);
+    CommandResult run(const BuildStation& cmd);
+    CommandResult run(const BuildServiceBuilding& cmd);
+    CommandResult run(const BuyTrain& cmd);
+    CommandResult run(const ReplaceLocomotive& cmd);
+    CommandResult run(const SetConsist& cmd);
+    CommandResult run(const SetSpecialCars& cmd);
+    CommandResult run(const SetRoute& cmd);
+    CommandResult run(const SetPriority& cmd);
+    CommandResult run(const CopyTrain& cmd);
+    CommandResult run(const RetireTrain& cmd);
+    CommandResult run(const ElectrifyTrack& cmd);
+    CommandResult run(const RemoveTrack& cmd);
+    CommandResult run(const UndoTrack& cmd);
+    CommandResult run(const UpgradeTrack& cmd);
+    CommandResult run(const EndTrackUndo& cmd);
+    CommandResult run(const BuyTerritoryAccess& cmd);
+    // Why the acting company may not change train `id`, if it may not.
+    std::optional<std::string> own_train_problem(TrainId id) const;
+    CommandResult run(const IssueBond& cmd);
+    CommandResult run(const RepayBond& cmd);
+    CommandResult run(const BuyShares& cmd);
+    CommandResult run(const SellShares& cmd);
+    CommandResult run(const IssueStock& cmd);
+    CommandResult run(const BuyBackStock& cmd);
+    CommandResult run(const SetDividend& cmd);
+    CommandResult run(const AttemptTakeover& cmd);
+    CommandResult run(const AttemptMerger& cmd);
+    CommandResult run(const Resign& cmd);
+    CommandResult run(const FoundCompany& cmd);
+    CommandResult run(const DeclareBankruptcy& cmd);
+    CommandResult run(const AnswerChoice& cmd);
+    CommandResult run(const UpgradeStation& cmd);
+    CommandResult run(const Cheat& cmd);
+    CommandResult run(const RemoveStation& cmd);
+    CommandResult run(const RemoveServiceBuilding& cmd);
+    CommandResult run(const RenameStation& cmd);
+    CommandResult run(const UndoBuild& cmd);
+    CommandResult run(const EndBuildUndo& cmd);
+public:
+    // What enlarging a station a size costs now (nothing if it is large).
+    Money station_upgrade_cost(StationId id) const;
+private:
+    CommandResult run(const BuyIndustry& cmd);
+    CommandResult run(const BuildIndustry& cmd);
+    CommandResult run(const UpgradeIndustry& cmd);
+    CommandResult run(const SetPortMode& cmd);
+    CommandResult run(const BuildStationBuilding& cmd);
+    // Monthly: hotels, restaurants and taverns share each station's trade.
+    void pay_station_buildings();
+    // Post each owned industry's month to its owner's books.
+    void account_industries(std::int32_t months);
+    // Monthly: towns grow with the service they get (rt3-clone-spec §6.4).
+    void grow_towns();
+    void add_house(std::size_t town);
+    // Does some train stop at one of the town's stations?
+    bool town_connected(std::size_t town) const;
+    // Why these founding terms are not allowed for player `who`, if they are not.
+    std::optional<std::string> founding_problem(PlayerId who, const FoundCompany& terms) const;
+    CompanyId found_for(PlayerId who, const FoundCompany& terms);
+    // Year end: grumbling, and the vote to fire a chairman after too many bad years.
+    void review_chairmen();
+    // Give a company with no chairman one: its biggest shareholder who runs
+    // nothing else, or a newly arrived tycoon. Never `excluded`.
+    void appoint_chairman(CompanyId c, std::optional<PlayerId> excluded);
+    void note_player_company();
+    // Refuse a second attempt on the same company within a year of a failed one [C].
+    std::optional<std::string> too_soon(CompanyId target) const;
+    void record_failure(CompanyId target);
+    void merge(Company& buyer, CompanyId target, Money offer_per_share);
+    // Sandbox games ignore cash; otherwise the company must be able to pay.
+    std::optional<std::string> cannot_afford(Money cost) const;
+    void charge_running_costs();
+    NodeId resolve_on_track(const TrackEnd& at);
+};
+
+} // namespace railmaster::sim

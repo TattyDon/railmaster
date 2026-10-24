@@ -1,0 +1,449 @@
+{
+  "_about": "Community [C] and inferred [I] numbers, per docs/spec/rt3-clone-spec.md section 0. Edit to calibrate; keys starting with _ are comments. Units are in each key name (mm, cents, permille, bp = basis points); money without a unit is dollars. See docs/spec/balance.md.",
+  "ai": {
+    "build_interval_months_max": 24,
+    "build_interval_months_min": 3,
+    "buy_below_value_percent": 80,
+    "candidates_previewed": 8,
+    "cars_per_train": 4,
+    "cash_reserve": 250000,
+    "cover_cells": 3,
+    "max_route_km": 40,
+    "max_trains_per_route": 3,
+    "min_route_km": 8,
+    "recession_cut_percent": 50,
+    "recession_reserve_percent": 100,
+    "recession_stop_building": 80,
+    "replace_engine_age_years": 25,
+    "sell_above_value_percent": 120,
+    "short_above_value_percent": 125,
+    "waiting_carloads_for_train": 6
+  },
+  "breakdowns": {
+    "breakdown_age_years": 15,
+    "breakdown_max_days": 10,
+    "breakdown_min_days": 3,
+    "crash_age_years": 20,
+    "crash_ppb_per_tick": 342,
+    "empty_oil_multiplier": 4,
+    "maintenance_age_percent_per_year": 4,
+    "maintenance_no_oil_percent": 150,
+    "mean_distance_mm": 6400000000,
+    "repair_cost_percent": 5
+  },
+  "corporate": {
+    "grumble_after_bad_years": 2,
+    "happy_return_permille": 100,
+    "suggested_payout_percent": 30,
+    "merger_chairman_premium_percent": 125,
+    "merger_neutral_premium_percent": 110,
+    "merger_support_slope": 3,
+    "oust_after_bad_years": 3,
+    "retry_days": 365,
+    "takeover_base_support_permille": 250,
+    "takeover_below_book_permille": 250,
+    "takeover_loss_year_permille": 250
+  },
+  "demo": {
+    "track_budget_percent": 60
+  },
+  "economic_states": {
+    "activity_percent": [
+      75,
+      85,
+      100,
+      120,
+      125
+    ],
+    "checks_per_year": 2,
+    "cost_index_bp_per_year": 0,
+    "cost_percent": [
+      85,
+      92,
+      100,
+      108,
+      115
+    ],
+    "luxury_cargo": [
+      "automobiles"
+    ],
+    "luxury_demand_percent": [
+      40,
+      60,
+      100,
+      110,
+      120
+    ],
+    "prime_rate_bp": [
+      800,
+      700,
+      600,
+      500,
+      400
+    ],
+    "stay_percent": 50,
+    "stock_percent": [
+      80,
+      90,
+      100,
+      112,
+      125
+    ],
+    "toward_normal_percent": 30
+  },
+  "economy": {
+    "boost_percent": 50,
+    "cargo_price_unit": 1000,
+    "coast_conductance_permille": 1500,
+    "coupling_permille": 120,
+    "field_relax_days": 540,
+    "hill_conductance_permille": 750,
+    "hill_grade_bp": 400,
+    "history_days": 365,
+    "industry_demand_days": 730,
+    "input_buffer_days": 30,
+    "max_stock_milli": 50000,
+    "middleman_permille": 110,
+    "mountain_conductance_permille": 500,
+    "mountain_grade_bp": 700,
+    "neutral_price_percent": 100,
+    "output_full_percent": 70,
+    "output_stop_percent": 40,
+    "price_alpha_permille": 500,
+    "price_ceiling_percent": 300,
+    "price_epsilon_milli": 1000,
+    "price_floor_percent": 30,
+    "site_relax_days": 180,
+    "spoilage_per_mille_per_sensitivity": 1,
+    "supply_days": 365,
+    "town_demand_days": 365,
+    "transport_cost_percent": 1,
+    "water_conductance_permille": 2000
+  },
+  "express": {
+    "attraction_half": 2,
+    "avoid_days": 182,
+    "avoid_generation_percent": 40,
+    "avoid_lost_percent": 50,
+    "cap_milli": 20000,
+    "era_volume_percent": [
+      {
+        "percent": 100,
+        "year": 1830
+      },
+      {
+        "percent": 105,
+        "year": 1870
+      },
+      {
+        "percent": 115,
+        "year": 1910
+      },
+      {
+        "percent": 135,
+        "year": 1950
+      },
+      {
+        "percent": 150,
+        "year": 1990
+      },
+      {
+        "percent": 165,
+        "year": 2030
+      }
+    ],
+    "fare_distance_exponent_permille": 900,
+    "fare_reference_km": 50,
+    "gravity_exponent_permille": 1500,
+    "gravity_min_km": 12,
+    "mail_cap_months": 2,
+    "max_legs": 3,
+    "min_load_milli": 500,
+    "reference_speeds": [
+      {
+        "mph": 14,
+        "year": 1830
+      },
+      {
+        "mph": 29,
+        "year": 1870
+      },
+      {
+        "mph": 46,
+        "year": 1910
+      },
+      {
+        "mph": 63,
+        "year": 1950
+      },
+      {
+        "mph": 92,
+        "year": 1990
+      },
+      {
+        "mph": 126,
+        "year": 2030
+      }
+    ],
+    "speed_factor_max_permille": 1500,
+    "speed_factor_min_permille": 250,
+    "wait_loss_per_mille_per_sensitivity": 1
+  },
+  "finance": {
+    "ai_revenue_percent": [
+      90,
+      100,
+      110,
+      120
+    ],
+    "bankruptcy_debt_kept_percent": 50,
+    "bankruptcy_loss_years": 2,
+    "bankruptcy_rating_years": 5,
+    "bankruptcy_repeat_years": 10,
+    "bond_early_repayment_percent": 2,
+    "bond_face_value": 500000,
+    "bond_maturity_years": 30,
+    "bond_spread_bp": [
+      0,
+      50,
+      100,
+      200,
+      300,
+      400,
+      500,
+      600,
+      700,
+      800
+    ],
+    "bond_underwriting_percent": 2,
+    "building_upkeep_bp_per_year": 600,
+    "easy_cost_percent": 85,
+    "fuel_per_km_diesel": 23,
+    "fuel_per_km_electric": 18,
+    "fuel_per_km_steam": 28,
+    "fuel_uphill_percent_per_1pct": 25,
+    "max_bonds": 20,
+    "rating_asset_cap_doublings": 5,
+    "rating_asset_points": 1000,
+    "rating_bankruptcy_points": 2000,
+    "rating_bond_points": 100,
+    "rating_cover_cap": 5,
+    "rating_cover_points": 500,
+    "rating_profit_year_points": 500,
+    "rating_thresholds": [
+      7000,
+      6000,
+      5000,
+      4000,
+      3000,
+      2000,
+      1000,
+      0,
+      -1000
+    ],
+    "reference_engine_tons": 60,
+    "track_upkeep_bp_per_year": 200
+  },
+  "freight": {
+    "decay_ppm_per_sensitivity_day": 2300,
+    "expired_permille": 100
+  },
+  "industries": {
+    "build_cost_percent": 150,
+    "close_after_loss_years": 5,
+    "close_chance_percent": 20,
+    "convert_yield_percent": 25,
+    "footprint_cells": 4,
+    "floor_price": 300000,
+    "labour_percent": 20,
+    "overhead_per_level": 30000,
+    "port_margin_percent": 10,
+    "profit_multiple": 10,
+    "receiver_max_level": 8,
+    "receiver_upgrade_permille": 900,
+    "upgrade_cost_percent": 50,
+    "warehouse_radius_cells": 3,
+    "warehouse_spoilage_percent": 25
+  },
+  "map": {
+    "appear_chance_percent": 10,
+    "industry_near_town_cells": 8,
+    "max_count_multiple": 2,
+    "max_height_m": 400,
+    "ports": 3,
+    "processors_per_type": 2,
+    "raw_per_type": 4,
+    "river_source_percent": 60,
+    "rivers_per_map": 2,
+    "sinks_per_type": 2,
+    "territory_access_big": 10000000,
+    "territory_access_max": 2000000,
+    "territory_access_min": 600000,
+    "territory_big_percent": 15,
+    "territory_closed_percent": 10,
+    "territory_credit_percent": 20,
+    "territory_overhead_max_percent": 30,
+    "territory_station_cost_max_percent": 20,
+    "town_max_houses": 40,
+    "town_min_houses": 10,
+    "town_spacing_cells": 15,
+    "town_spread_cells": 3,
+    "towns_per_map": 8
+  },
+  "overlays": {
+    "good_return_percent": 10,
+    "held_days_for_double": 1
+  },
+  "servicing": {
+    "maintenance_facility_cost": 100000,
+    "no_sand_grade_drop_percent": 300,
+    "no_water_speed_permille": 250,
+    "oil_range_mm": 1500000000,
+    "sand_range_climb_mm": 600000,
+    "service_threshold_permille": 500,
+    "service_ticks": 4,
+    "service_tower_cost": 30000,
+    "water_range_mm": 150000000
+  },
+  "stations": {
+    "building_range_mm": 2000000,
+    "cap_milli": 20000,
+    "catchment_large": 4,
+    "catchment_medium": 3,
+    "catchment_small": 2,
+    "gather_percent_per_day": 20,
+    "hotel_cost": 100000,
+    "hotel_per_load_day": 20,
+    "large_cost": 200000,
+    "medium_cost": 100000,
+    "post_office_cost": 30000,
+    "restaurant_cost": 50000,
+    "restaurant_per_load": 50,
+    "small_cost": 50000,
+    "tavern_cost": 25000,
+    "tavern_per_load": 80,
+    "town_reach_cells": 5,
+    "wait_loss_percent": 50
+  },
+  "stock": {
+    "big_split_price_cents": 20000,
+    "book_weight_percent": 80,
+    "brokerage_permille": 10,
+    "dividend_full_years": 5,
+    "dividend_multiple": 6,
+    "eps_trend_weights": [
+      3,
+      2,
+      1
+    ],
+    "founder_fortune": 3500000,
+    "founder_investment": 3000000,
+    "founding_share_price_cents": 1000,
+    "impact_permille": 200,
+    "issue_percent": 10,
+    "margin_interest_bp": 1000,
+    "margin_percent": 50,
+    "min_founder_investment": 100000,
+    "min_share_price_cents": 50,
+    "outside_investment": 3000000,
+    "pe_by_state": [
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "pressure_keep_permille": 891,
+    "price_smoothing": 8,
+    "revenue_weight_percent": 10,
+    "salary_max_percent": 200,
+    "salary_min_percent": 50,
+    "salary_per_year": 50000,
+    "salary_return_factor_percent": 200,
+    "share_block": 1000,
+    "short_cap_percent_of_net_worth": 50,
+    "short_margin_percent": 150,
+    "split_months": 3,
+    "split_price_cents": 12000,
+    "starting_personal_cash": 500000
+  },
+  "time": {
+    "normal_seconds_per_year": 240,
+    "speed_step_percent": 200
+  },
+  "towns": {
+    "base_growth_permille": 8,
+    "express_permille_per_k_house": 3,
+    "freight_permille_per_k_house": 3,
+    "max_growth_permille": 150,
+    "max_houses_per_cell": 6,
+    "max_radius_cells": 10,
+    "star_houses": [
+      20,
+      50,
+      120,
+      300
+    ],
+    "unconnected_permille": 300
+  },
+  "track": {
+    "default_max_grade_bp": 300,
+    "double_track_percent": 170,
+    "double_upgrade_percent": 90,
+    "electrify_percent": 75,
+    "ground_per_km": 25000,
+    "overpass_multiple": 4,
+    "piece_mm": 500000,
+    "remove_refund_percent": 10,
+    "steel_bridge_multiple": 5,
+    "stone_bridge_multiple": 6,
+    "structure_frequency_percent": [
+      0,
+      25,
+      50,
+      75
+    ],
+    "suspension_bridge_multiple": 10,
+    "suspension_min_span_mm": 2000000,
+    "tunnel_cover_mm": 12000,
+    "tunnel_multiple": 15,
+    "undo_depth": 64,
+    "viaduct_clearance_mm": 10000,
+    "wood_bridge_multiple": 3
+  },
+  "trains": {
+    "car_weights": [
+      {
+        "freight_tons": 10,
+        "from_year": 1830
+      },
+      {
+        "freight_tons": 20,
+        "from_year": 1850
+      },
+      {
+        "freight_tons": 40,
+        "from_year": 1900
+      },
+      {
+        "freight_tons": 80,
+        "from_year": 1950
+      }
+    ],
+    "crossing_clear_mm": 300000,
+    "curve_comfort_radius_mm": 4000000,
+    "express_permille_of_freight": 667,
+    "follow_distance_mm": 2000000,
+    "follow_gap_mm": 500000,
+    "load_slowdown_permille": 500,
+    "min_curve_speed_permille": 250,
+    "min_grade_speed_permille": 50,
+    "min_load_speed_permille": 200,
+    "other_bridge_speed_permille": 900,
+    "reference_cars": 4,
+    "seconds_per_tick": 40,
+    "station_dwell_ticks": 8,
+    "wood_bridge_speed_permille": 500
+  },
+  "version": 1
+}
