@@ -119,6 +119,36 @@ def foursquare(material, palette):
     return {"texture": f"{PACK}/Textures/colormap-{palette}.png", "pieces": pieces}
 
 
+def double_pile(length, floors, material, palette, windows="shutters"):
+    """A building `length` cells long and two deep, under two gables side by
+    side (a double pile), its door in the middle of the front."""
+    wall = "wall-wood" if material == "wood" else "wall"
+    window = f"{wall}-window-{windows}"
+    pieces = []
+    for f in range(floors):
+        for i in range(length):
+            pieces.append(piece(f"{wall}-door" if f == 0 and i == length // 2 else window, i, 0, f, FRONT))
+            pieces.append(piece(window if (i + f) % 2 == 0 else wall, i, -1, f, BACK))
+        for j in (0, -1):
+            pieces.append(piece(window if f > 0 else wall, 0, j, f, LEFT))
+            pieces.append(piece(window if f > 0 else wall, length - 1, j, f, RIGHT))
+    for i in range(length):
+        for j in (0, -1):
+            pieces.append(piece("roof-gable", i, j, floors, 0, [1, 1, ROOF_RISE]))
+    return {"texture": f"{PACK}/Textures/colormap-{palette}.png", "pieces": pieces}
+
+
+def town_hall():
+    """Stone, two storeys and two cells deep, a clock tower over its door
+    rising two storeys more under a tall spire."""
+    b = double_pile(3, 2, "stone", "terracotta")
+    for f in range(2, 4):
+        for turn in (FRONT, BACK, LEFT, RIGHT):
+            b["pieces"].append(piece("wall-window-small" if f == 3 else "wall", 1, 0, f, turn))
+    b["pieces"].append(piece("roof-high-point", 1, 0, 4, 0))
+    return b
+
+
 def church():
     """A stone nave three cells long with a tower and spire at one end."""
     b = building(3, 2, "stone", "slate", roof="roof-high-gable", windows="shutters", chimney=False)
@@ -227,6 +257,9 @@ def main():
         "shop-stone": building(3, 2, "stone", "terracotta"),
         "shop-wood": building(3, 2, "wood", "slate", windows="small"),
         "church": church(),
+        "town-hall": town_hall(),
+        "shop-block-stone": double_pile(3, 3, "stone", "slate"),
+        "shop-block-wood": double_pile(3, 2, "wood", "terracotta", windows="small"),
         "station-small": station("small"),
         "station-medium": station("medium"),
         "station-large": station("large"),

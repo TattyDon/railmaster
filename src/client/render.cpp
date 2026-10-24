@@ -2177,8 +2177,9 @@ private:
 // along a grid of streets centred on it, one building to a plot, and what
 // they are depends on the town's size and how near the centre they stand:
 // cottages, two-storey houses and terraces outside, shops and offices
-// (taller as the town grows) in the middle, and a church.
-enum class Building : std::uint8_t { Cottage, TwoStorey, Terrace, Shop, Church };
+// (taller as the town grows) in the middle, a church, and in larger towns a
+// town hall at the heart.
+enum class Building : std::uint8_t { Cottage, TwoStorey, Terrace, Shop, Church, TownHall };
 
 struct Plot {
     float x, y;   // centre, tiles
@@ -2226,6 +2227,7 @@ constexpr float kPlotMargin = 0.1f; // clear of the cross street at each end
 constexpr float kStreetHalf = 0.045f;
 constexpr std::int64_t kGreenTown = 14;  // houses (by level) for a town to have a green
 constexpr std::int64_t kSquareTown = 30; // and for it to be a paved square
+constexpr std::int64_t kHallTown = 25;   // and for a town hall
 constexpr std::int64_t kEdgeTown = 20;   // and for a ground on its edge (two from kSquareTown)
 constexpr std::int64_t kLampTown = 10;   // and for lamps along its streets
 constexpr float kLampSpacing = 0.45f;    // tiles between them, by turns either side
@@ -2507,6 +2509,22 @@ TownLayout layout_towns(const sim::Economy& eco, const sim::IndustryRegistry& in
             out.plots[church].kind = Building::Church;
             out.plots[church].floors = 1;
         }
+        // The town hall: the shop nearest the centre.
+        if (town_size >= kHallTown) {
+            std::size_t hall = out.plots.size();
+            float hall_d = 1e9f;
+            for (std::size_t i = first; i < out.plots.size(); ++i) {
+                const float d = std::hypot(out.plots[i].x - xc, out.plots[i].y - yc);
+                if (out.plots[i].kind == Building::Shop && d < hall_d) {
+                    hall_d = d;
+                    hall = i;
+                }
+            }
+            if (hall < out.plots.size()) {
+                out.plots[hall].kind = Building::TownHall;
+                out.plots[hall].floors = 2;
+            }
+        }
         // Houses and terraces have a garden behind, shops a yard and the
         // church its churchyard, out to halfway to the next row's, unless
         // the railway, an industry or water is there.
@@ -2642,6 +2660,20 @@ void draw_building(const Plot& p, const Camera& cam) {
         glVertex3f(ox - p.dx * p.hl + fx * 0.04f, oy - p.dy * p.hl + fy * 0.04f, wz - 0.025f);
         break;
     }
+    case Building::TownHall: {
+        // Stone, two storeys under a hipped slate roof, a clock tower over the door.
+        const float stone[3] = {0.8f, 0.77f, 0.7f}, slate[3] = {0.33f, 0.34f, 0.38f}, face[3] = {0.95f, 0.93f, 0.85f};
+        const float h = floor_h * 2 + 0.03f;
+        box(p.x, p.y, z, p.dx, p.dy, p.hl, p.hw, h, stone, stone);
+        windows(p, z, floor_h, h);
+        gable(p.x, p.y, z + h, p.dx, p.dy, p.hl, p.hw * 1.08f, p.hw * 0.6f, slate, stone);
+        const float fx = -p.dy * p.front, fy = p.dx * p.front;
+        const float tx = p.x + fx * (p.hw - 0.03f), ty = p.y + fy * (p.hw - 0.03f);
+        box(tx, ty, z, p.dx, p.dy, 0.035f, 0.035f, h + 0.12f, stone, stone);
+        box(tx + fx * 0.036f, ty + fy * 0.036f, z + h + 0.06f, p.dx, p.dy, 0.018f, 0.001f, 0.036f, face, face);
+        cylinder(tx, ty, z + h + 0.12f, 0.04f, 0.1f, slate, slate, 0.002f);
+        break;
+    }
     case Building::Church: {
         const float stone[3] = {0.78f, 0.75f, 0.68f}, slate[3] = {0.33f, 0.34f, 0.38f};
         // The nave along the street, the tower and spire at one end.
@@ -2708,7 +2740,7 @@ void garden(const Plot& p, float from, const Camera& cam) {
     static constexpr float kPicket[3] = {0.9f, 0.88f, 0.82f}, kHedge[3] = {0.17f, 0.33f, 0.14f},
                            kStone[3] = {0.6f, 0.58f, 0.53f}, kBrick[3] = {0.55f, 0.32f, 0.24f};
     const float style = unit(p.seed >> 20);
-    const bool yard = p.kind == Building::Shop, churchyard = p.kind == Building::Church;
+    const bool yard = p.kind == Building::Shop || p.kind == Building::TownHall, churchyard = p.kind == Building::Church;
     const float* colour = churchyard ? kStone
                           : yard ? (style < 0.5f ? kBrick : kStone)
                           : p.kind == Building::Terrace ? kBrick
@@ -4348,6 +4380,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             case Building::Terrace: return "terrace";
             case Building::Shop: return "shop";
             case Building::Church: return "church";
+            case Building::TownHall: return models::has("town_hall") ? "town_hall" : "shop";
             }
             return "";
         };

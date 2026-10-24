@@ -44,7 +44,12 @@
     ],
     "shop": [
       "prefab:shop-stone",
-      "prefab:shop-wood"
+      "prefab:shop-wood",
+      "prefab:shop-block-stone",
+      "prefab:shop-block-wood"
+    ],
+    "town_hall": [
+      "prefab:town-hall"
     ],
     "church": [
       "prefab:church"

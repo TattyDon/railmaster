@@ -14,7 +14,7 @@ Railmaster is a desktop game: you build it from source and run it. It takes
 a few minutes. The 3D client is in its first stage: lit, textured terrain
 with rivers, woods, shadows and distance haze; towns of timber and stone
 houses (gabled, hipped, L-shaped with a back wing, cross-gabled cottages
-and square Foursquares) with gardens behind, terraces, shops, churches in their churchyards and
+and square Foursquares) with gardens behind, terraces, shops, town halls, churches in their churchyards and
 tree-lined greens (market squares with a fountain in the largest) along lamplit streets,
 allotments, cemeteries and ball grounds on their edges, and stations to
 match; brick mills and works; engines, cars and trees, all from Kenney's

@@ -28,6 +28,7 @@ every time), so a town gets a mix of houses.
 | `terrace` | Terraced rows | To its plot (neighbours join up) |
 | `shop` | Shops and offices in town centres | To its plot, front to the street |
 | `church` | Each town's church | To its plot |
+| `town_hall` | The town hall at the centre of towns of 25 houses or more (when empty, `shop` plays it) | To its plot, front to the street |
 | `station_small`, `station_medium`, `station_large` | The station building (platforms and canopies stay) | Along the platforms, front to the track |
 | `engine_steam`, `engine_diesel`, `engine_electric` | Locomotives | Its length to the engine's, front forwards |
 | `car:<cargo>` (e.g. `car:coal`, `car:lumber`, `car:oil`; keys in `data/cargo.json`) | A car carrying that cargo | Its length to the car's |

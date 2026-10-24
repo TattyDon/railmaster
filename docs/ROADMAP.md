@@ -413,8 +413,14 @@ river up to 1.6 tiles wide with land beyond is crossed by a stone bridge
 gets a landing at the street's end (a jetty on piles, a boathouse and a
 boat), up to three to a town.
 
+Towns of 25 houses or more have a town hall, the shop nearest their
+centre: stone, two cells deep under twin gables, a clock tower over the
+door with a tall spire (the `town_hall` role; drawn in code without it).
+Shops also come as deeper blocks under twin gables (two or three storeys).
+
 Next:
-- Real art: a 2x2-cell shop and a town hall for the largest towns' centres.
+- Town growth seen: new houses go up behind scaffolding before they are
+  finished, and a town's streets get pavements and kerbs as it grows.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
