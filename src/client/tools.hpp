@@ -49,6 +49,12 @@ public:
     // A box is taking typed keys (the arrows should not pan).
     bool typing() const { return find_open_ || guide_open_ || renaming_; }
     bool guide_open() const { return guide_open_; }
+    // A screen that fills the middle of the window is open (the Guide, help,
+    // Find, the Company, Market, Status, Lists or Ledger), so banners give way.
+    bool screen_open() const {
+        return guide_open_ || help_open_ || find_open_ || tool_ == Tool::Finance || tool_ == Tool::Market || tool_ == Tool::Status ||
+               tool_ == Tool::Lists || tool_ == Tool::Ledger;
+    }
 
     void draw_world_overlay() const;
     // `status` is shown at the left of the top bar (date, speed and so on).
