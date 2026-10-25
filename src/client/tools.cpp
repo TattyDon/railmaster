@@ -3836,6 +3836,19 @@ void Tools::draw_detail_panel() const {
                             r.b = 0.5f;
                         }
                         rows.push_back(r);
+                        // What it carried: its two best earners, and trips with nothing to sell.
+                        std::vector<std::pair<sim::Money, sim::CargoId>> earners;
+                        for (std::size_t c = 0; c < l.income_by_cargo.size(); ++c)
+                            if (l.income_by_cargo[c] > sim::Money{}) earners.emplace_back(l.income_by_cargo[c], static_cast<sim::CargoId>(c));
+                        std::sort(earners.begin(), earners.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+                        std::string carried;
+                        for (std::size_t k = 0; k < earners.size() && k < 2; ++k)
+                            carried += (k ? ", " : "   ") + cargo.get(earners[k].second).name + " " + format_money(earners[k].first);
+                        if (earners.size() > 2) carried += ", ...";
+                        if (earners.empty()) carried = "   nothing sold";
+                        if (l.empty_trips > 0 && !earners.empty())
+                            carried += "; " + std::to_string(l.empty_trips) + " of " + std::to_string(l.trips) + " sold nothing";
+                        rows.push_back(dim({carried}));
                     }
                     if (losing) rows.push_back(dim({"Red legs lose money: change their loads (E)"}));
                 }

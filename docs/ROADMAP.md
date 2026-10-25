@@ -475,8 +475,14 @@ from version 25).
 The Ledger's train list shows a train with a losing leg in red, naming
 the worst leg.
 
+Each leg says what it earned from (its two best cargoes) and how many of
+its trips sold nothing there (saves from version 26). On the demo's
+three-stop loops, most arrivals sell nothing: passengers and mail are
+paid only at their destination, often the next stop round.
+
 Next:
-- A train's legs say which cargo they carried, so a weak leg can be fixed.
+- Passengers and mail on a loop: let a train sell at any stop it passes
+  that is nearer the destination (or show the loop's best direction).
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

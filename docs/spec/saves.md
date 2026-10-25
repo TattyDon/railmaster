@@ -99,6 +99,7 @@ Format versions:
 - **23:** loads delivered from or to a place, for scenario goals that name one.
 - **24:** the stations and buildings each player may still undo.
 - **25:** each train's legs: by route stop, the trips into it, their income, loads delivered and distance, this year and last.
+- **26:** each leg's trips that arrived with nothing to sell, and its income by cargo.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

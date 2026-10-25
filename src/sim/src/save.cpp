@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 25; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 26; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -37,7 +37,8 @@ constexpr std::uint32_t kSaveVersion = 25; // 2: events, Grants; 3: restrictions
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
                                            // 20: cheats (assisted games); 21: more cheats;
                                            // 22: share prices by month; 23: deliveries from or to a place;
-                                           // 24: stations and buildings to undo; 25: trains' legs
+                                           // 24: stations and buildings to undo; 25: trains' legs;
+                                           // 26: legs' empty trips and income by cargo
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -334,7 +335,7 @@ void io(Ar& ar, TrainAccounts& a) {
 }
 template <class Ar>
 void io(Ar& ar, LegStats& l) {
-    fields(ar, l.trips, l.income, l.loads_milli, l.distance_mm);
+    fields(ar, l.trips, l.income, l.loads_milli, l.distance_mm, l.empty_trips, l.income_by_cargo);
 }
 template <class Ar>
 void io(Ar& ar, Train& t) {

@@ -113,6 +113,10 @@ TEST_CASE("a train's legs add up to its earnings, and the year end moves them to
             legs += l.income;
             trips += l.trips;
             if (l.trips > 0) CHECK(l.distance_mm > 0);
+            CHECK(l.empty_trips <= l.trips);
+            Money by_cargo{};
+            for (const Money& m : l.income_by_cargo) by_cargo += m;
+            CHECK(by_cargo == l.income);
         }
         CHECK(t.legs.size() <= t.route.size());
         CHECK(legs == t.accounts.freight + t.accounts.express);

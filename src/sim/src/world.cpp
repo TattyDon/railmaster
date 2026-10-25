@@ -260,14 +260,22 @@ void World::tick_inner() {
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
         for (const Earnings::Delivery& d : e.delivered) runner.record_delivery(d.cargo, d.milli);
         record_place_deliveries(t.owner, station, e.delivered);
-        // The leg into this stop.
-        if (t.stop_index < t.route.size() && t.route[t.stop_index] == station) {
+        // The leg into this stop (not a train waiting there for a full
+        // load, which "arrives" again each dwell without moving).
+        std::int64_t leg_mm = 0;
+        for (const std::int64_t mm : t.leg_mm_by_owner) leg_mm += mm;
+        if ((leg_mm > 0 || e.total > Money{}) && t.stop_index < t.route.size() && t.route[t.stop_index] == station) {
             if (t.legs.size() < t.route.size()) t.legs.resize(t.route.size());
             LegStats& leg = t.legs[t.stop_index];
             ++leg.trips;
             leg.income += e.total;
             for (const Earnings::Delivery& d : e.delivered) leg.loads_milli += d.milli;
-            for (const std::int64_t mm : t.leg_mm_by_owner) leg.distance_mm += mm;
+            if (e.total <= Money{}) ++leg.empty_trips; // nothing sold
+            for (const auto& [cargo, amount] : e.by_cargo) {
+                if (leg.income_by_cargo.size() <= cargo) leg.income_by_cargo.resize(std::size_t{cargo} + 1);
+                leg.income_by_cargo[cargo] += amount;
+            }
+            leg.distance_mm += leg_mm;
         }
         // Service to a town makes it grow.
         if (const auto town = railway_.station(station).town) {

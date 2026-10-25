@@ -174,6 +174,8 @@ struct LegStats {
     Money income{};
     std::int64_t loads_milli = 0; // delivered there
     std::int64_t distance_mm = 0; // run to get there
+    std::uint32_t empty_trips = 0; // that sold nothing there
+    std::vector<Money> income_by_cargo{}; // indexed by CargoId
 };
 
 struct Train {
