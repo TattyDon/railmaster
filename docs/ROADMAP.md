@@ -441,8 +441,13 @@ a figure for every quarter load): walking the pavements, two to four to a
 street by the town's size; shopping among a square's stalls and walking
 round its fountain; strolling a green's paths. Most go home after dark.
 
+Boats work the wider water near the camera, each going back and forth
+along a straight stretch of open water: sailing boats and barges, steam
+launches and tugs (smoking) from 1860, motor boats from 1910; ducks paddle
+by the town landings.
+
 Next:
-- Rivers: boats and barges on the wider water, and ducks by the landings.
+- Show town names and sizes more clearly from far off (a town list).
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

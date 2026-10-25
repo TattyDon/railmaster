@@ -46,6 +46,14 @@ struct Turning {
 };
 std::vector<Turning> g_turning_build;
 float g_animation_seconds = 0;
+// Each map tile's water level (tiles), from the terrain mesh; 0 on land.
+std::vector<float> g_water_level;
+int g_water_w = 0;
+float water_level(int tx, int ty) {
+    if (g_water_w <= 0 || tx < 0 || ty < 0 || tx >= g_water_w) return 0;
+    const std::size_t i = static_cast<std::size_t>(ty) * static_cast<std::size_t>(g_water_w) + static_cast<std::size_t>(tx);
+    return i < g_water_level.size() ? g_water_level[i] : 0;
+}
 std::int32_t g_day = 0; // the game's, from set_game_day
 
 // Lights seen this frame (tiles), shown after dark: a glow at each, and
@@ -399,6 +407,8 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
             }
         }
     }
+    g_water_level = level; // for what floats on it (boats, ducks)
+    g_water_w = w;
     // Banks: water lies flat at its tile's lowest corner, so where the
     // ground round it stands higher, an earth bank runs up from the water
     // to the ground along each edge; no gap to the sky shows between them.
@@ -3917,6 +3927,105 @@ void draw_people(const TownLayout& towns, const Camera& cam) {
     glEnd();
 }
 
+// Boats on the wider water near the camera, drawn each frame: each 8-tile
+// square of the map with water enough may have one going back and forth
+// along a straight stretch of open water: a sailing boat or a barge, steam
+// launches and tugs from 1860 (with smoke), motor boats from 1910. And a
+// few ducks paddling by each town landing. Still while paused.
+void draw_boats(const TownLayout& towns, std::int32_t year, const Camera& cam) {
+    if (!cam.terrain || cam.distance > 80.0f) return;
+    const sim::Terrain& t = *cam.terrain;
+    const auto water = [&](float x, float y) {
+        const int tx = static_cast<int>(std::floor(x)), ty = static_cast<int>(std::floor(y));
+        return tx >= 0 && ty >= 0 && tx < t.width() && ty < t.height() && t.ground(tx, ty) == sim::GroundType::Water;
+    };
+    const auto level = [&](float x, float y) { return water_level(static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y))); };
+    static constexpr float kHulls[][3] = {{0.35f, 0.25f, 0.18f}, {0.15f, 0.18f, 0.25f}, {0.55f, 0.15f, 0.12f}, {0.85f, 0.83f, 0.78f}};
+    static constexpr float kSail[3] = {0.93f, 0.9f, 0.82f}, kMast[3] = {0.4f, 0.3f, 0.2f}, kFunnel[3] = {0.12f, 0.12f, 0.12f},
+                           kCargo[3] = {0.55f, 0.45f, 0.3f}, kDeck[3] = {0.6f, 0.5f, 0.36f};
+    const float tt = g_animation_seconds;
+    constexpr int kSquare = 8;
+    const float reach = std::max(20.0f, cam.distance * 1.4f);
+    const int sx0 = std::max(0, static_cast<int>((cam.target_x - reach) / kSquare)), sx1 = static_cast<int>((cam.target_x + reach) / kSquare);
+    const int sy0 = std::max(0, static_cast<int>((cam.target_y - reach) / kSquare)), sy1 = static_cast<int>((cam.target_y + reach) / kSquare);
+    glBegin(GL_QUADS);
+    for (int sy = sy0; sy <= sy1; ++sy)
+        for (int sx = sx0; sx <= sx1; ++sx) {
+            const std::uint32_t h = hash(static_cast<std::uint32_t>(sx), static_cast<std::uint32_t>(sy), 97);
+            if (unit(h) < 0.35f) continue;
+            // A start in this square on water, and the longest open way of
+            // eight directions from it (up to 12 tiles).
+            const float ox = static_cast<float>(sx * kSquare) + 0.5f + static_cast<float>((h >> 4) % kSquare);
+            const float oy = static_cast<float>(sy * kSquare) + 0.5f + static_cast<float>((h >> 8) % kSquare);
+            if (!water(ox, oy)) continue;
+            float best = 0, bdx = 1, bdy = 0;
+            for (int d = 0; d < 8; ++d) {
+                const float a = 0.7853982f * static_cast<float>(d), dx = std::cos(a), dy = std::sin(a);
+                float run = 0;
+                // Open water: the way and a little either side of it.
+                while (run < 12.0f && water(ox + dx * (run + 0.5f), oy + dy * (run + 0.5f)) &&
+                       water(ox + dx * run - dy * 0.4f, oy + dy * run + dx * 0.4f) && water(ox + dx * run + dy * 0.4f, oy + dy * run - dx * 0.4f))
+                    run += 0.25f;
+                if (run > best) {
+                    best = run;
+                    bdx = dx;
+                    bdy = dy;
+                }
+            }
+            if (best < 2.5f) continue; // a pond, or a stream too narrow
+            const bool steam = year >= 1860 && unit(h >> 12) < std::clamp((static_cast<float>(year) - 1860.0f) / 60.0f, 0.0f, 0.6f);
+            const bool motor = year >= 1910 && unit(h >> 14) < 0.4f;
+            const bool barge = !motor && unit(h >> 16) < 0.4f;
+            const float speed = motor ? 0.35f : steam ? 0.18f : 0.08f;
+            const float phase = std::fmod(tt * speed / (2 * best) + unit(h >> 20), 1.0f);
+            const float dir = phase < 0.5f ? 1.0f : -1.0f, along = 0.3f + (best - 0.6f) * (phase < 0.5f ? 2 * phase : 2 - 2 * phase);
+            const float x = ox + bdx * along, y = oy + bdy * along, fx = bdx * dir, fy = bdy * dir;
+            const float z = level(x, y) - 0.004f + 0.002f * std::sin(tt * 2.0f + unit(h) * 6.0f); // a little bob
+            const float* hull = kHulls[(h >> 24) % 4];
+            if (barge) {
+                box(x, y, z, fx, fy, 0.09f, 0.025f, 0.018f, hull, kDeck);
+                for (int k = -1; k <= 1; ++k) box(x + fx * 0.05f * static_cast<float>(k), y + fy * 0.05f * static_cast<float>(k), z + 0.018f, fx, fy, 0.02f, 0.018f, 0.014f, kCargo, kCargo);
+                if (!steam && !motor) {
+                    beam(x, y, z + 0.018f, x, y, z + 0.11f, 0.003f, kMast);
+                    box(x - fx * 0.02f, y - fy * 0.02f, z + 0.035f, fx, fy, 0.022f, 0.001f, 0.07f, kSail, kSail);
+                }
+            } else {
+                // A boat: a pointed bow over the hull.
+                box(x, y, z, fx, fy, 0.045f, 0.016f, 0.015f, hull, kDeck);
+                prism_cap(x + fx * 0.045f, y + fy * 0.045f, z + 0.0075f, fx, fy, 0.016f, 1.0f, hull);
+                if (motor) {
+                    box(x - fx * 0.008f, y - fy * 0.008f, z + 0.015f, fx, fy, 0.014f, 0.012f, 0.012f, kSail, kSail);
+                } else if (steam) {
+                    box(x - fx * 0.005f, y - fy * 0.005f, z + 0.015f, fx, fy, 0.02f, 0.013f, 0.014f, kSail, hull);
+                    beam(x + fx * 0.008f, y + fy * 0.008f, z + 0.029f, x + fx * 0.008f, y + fy * 0.008f, z + 0.055f, 0.005f, kFunnel);
+                    add_smoke(x + fx * 0.008f, y + fy * 0.008f, z + 0.06f, 0.5f, true);
+                } else {
+                    beam(x + fx * 0.01f, y + fy * 0.01f, z + 0.015f, x + fx * 0.01f, y + fy * 0.01f, z + 0.11f, 0.003f, kMast);
+                    // A sail across the wind: a thin box set at a slant.
+                    const float sx2 = (fx + fy) * 0.70710678f, sy2 = (fy - fx) * 0.70710678f;
+                    box(x - fx * 0.005f, y - fy * 0.005f, z + 0.03f, sx2, sy2, 0.025f, 0.001f, 0.075f, kSail, kSail);
+                }
+            }
+            if (steam || motor) add_light(x + fx * 0.04f, y + fy * 0.04f, z + 0.03f, 0.03f, 1.0f, 0.85f, 0.6f);
+        }
+    // Ducks by the landings, paddling in small circles.
+    static constexpr float kDuck[3] = {0.4f, 0.3f, 0.2f}, kDrake[3] = {0.1f, 0.35f, 0.18f}, kWhite[3] = {0.95f, 0.95f, 0.92f};
+    for (const Crossing& c : towns.crossings) {
+        if (c.bridge || std::fabs(c.x1 - cam.target_x) > reach || std::fabs(c.y1 - cam.target_y) > reach) continue;
+        for (int k = 0; k < 4; ++k) {
+            const std::uint32_t h = hash(static_cast<std::uint32_t>(std::lround(c.x1 * 10)), static_cast<std::uint32_t>(std::lround(c.y1 * 10)), static_cast<std::uint32_t>(k + 5));
+            const float a = tt * (0.2f + 0.15f * unit(h)) + unit(h >> 8) * 6.2831853f, r = 0.05f + 0.04f * unit(h >> 16);
+            const float x = c.x1 + 0.08f * (unit(h >> 4) - 0.5f) + r * std::cos(a), y = c.y1 + 0.08f * (unit(h >> 12) - 0.5f) + r * std::sin(a);
+            if (!water(x, y)) continue;
+            const float z = level(x, y) - 0.002f, fx = -std::sin(a), fy = std::cos(a);
+            const float* body = (h >> 20) % 5 == 0 ? kWhite : kDuck;
+            box(x, y, z, fx, fy, 0.008f, 0.005f, 0.006f, body, body);
+            box(x + fx * 0.007f, y + fy * 0.007f, z + 0.006f, fx, fy, 0.003f, 0.003f, 0.005f, body == kWhite ? kWhite : kDrake, body == kWhite ? kWhite : kDrake);
+        }
+    }
+    glEnd();
+}
+
 // After dark, lit windows on the street fronts of the town's buildings:
 // a few on each, by the plot, warm yellow.
 void town_lights(const TownLayout& towns, const Camera& cam) {
@@ -4652,7 +4761,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             draw_building_sites(towns, cam);
             draw_traffic(towns, year, cam);
         draw_people(towns, cam);
+        draw_boats(towns, year, cam);
             draw_people(towns, cam);
+            draw_boats(towns, year, cam);
             draw_turning();
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
             town_lights(towns, cam);
