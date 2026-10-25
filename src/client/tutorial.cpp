@@ -106,12 +106,8 @@ void Tutorial::begin(const sim::World& world, Camera& cam, Mode mode) {
             at_b_ = b;
         }
     }
-    if (best >= 0) {
-        // Both in view, from a little way off.
-        cam.center_on({(at_a_.x_mm + at_b_.x_mm) / 2, (at_a_.y_mm + at_b_.y_mm) / 2});
-        const float tiles = static_cast<float>(best) / (cam.mm_per_tile > 0 ? cam.mm_per_tile : 805000.0f);
-        cam.distance = std::max(12.0f, tiles * 1.1f);
-    }
+    span_mm_ = std::max<std::int64_t>(0, best);
+    if (best >= 0) frame(cam, false);
     open_ = true;
     // A free game's step 0 is its opening; the tutorial's own steps follow
     // from the track, so "Look around" is passed over.
@@ -123,7 +119,17 @@ void Tutorial::begin(const sim::World& world, Camera& cam, Mode mode) {
     step_since_ = SDL_GetTicks();
 }
 
-void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& tools) {
+void Tutorial::frame(Camera& cam, bool glide) const {
+    // From far enough off that the nearer town is not at the screen's foot
+    // (the view looks down at a slant), looking a little beyond the middle.
+    const sim::MapPoint mid{(at_a_.x_mm + at_b_.x_mm) / 2, (at_a_.y_mm + at_b_.y_mm) / 2};
+    if (glide) cam.glide_to(mid);
+    else cam.center_on(mid);
+    const float tiles = static_cast<float>(span_mm_) / (cam.mm_per_tile > 0 ? cam.mm_per_tile : 805000.0f);
+    cam.distance = std::max(14.0f, tiles * 1.7f);
+}
+
+void Tutorial::update(const sim::World& world, Camera& cam, const Tools& tools) {
     if (!open_ || !world.player_company()) return;
     const sim::CompanyId me = *world.player_company();
     const sim::Railway& rw = world.railway();
@@ -165,6 +171,7 @@ void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& t
     if (done) {
         ++step_;
         step_since_ = SDL_GetTicks();
+        if (step_ == 1 && !town_a_.empty()) frame(cam, true); // the towns back in view for the track
     }
 }
 

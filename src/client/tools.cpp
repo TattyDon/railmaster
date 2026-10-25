@@ -1449,13 +1449,20 @@ std::optional<sim::BuildTrack> Tools::pending_track() const {
     return cmd;
 }
 
+std::size_t Tools::distinct_stops() const {
+    std::vector<sim::StationId> seen;
+    for (const PendingStop& p : stops_)
+        if (std::find(seen.begin(), seen.end(), p.station) == seen.end()) seen.push_back(p.station);
+    return seen.size();
+}
+
 std::optional<sim::StationId> Tools::station_at_cursor() const {
     // In 3D, by where stations are drawn on screen: a few pixels near the
     // horizon cover far more ground than near the camera, so a distance on
     // the map alone would miss far stations.
     if (cam_.three_d) {
         std::optional<sim::StationId> best;
-        float best_d = 16.0f;
+        float best_d = 28.0f; // generous: a station's building stands a little off its track
         for (const sim::Station& s : world_.railway().stations()) {
             float sx = 0, sy = 0;
             if (!cam_.to_screen(world_.railway().track().node(s.node).pos, sx, sy)) continue;
@@ -2244,6 +2251,11 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         } else if (key == SDLK_s && !stops_.empty()) {
             // Make the selected stop a service stop, or an ordinary one again.
             stops_[stop_sel_].service = !stops_[stop_sel_].service;
+        } else if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) && distinct_stops() < 2) {
+            // A train needs somewhere to go.
+            show(stops_.empty() ? "Click two stations on the map first (the train runs between them)"
+                                : "Click a second station: a train needs two stops or more",
+                 false);
         } else if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) && editing_) {
             const sim::TrainId id = *editing_;
             const sim::CommandResult r =

@@ -129,6 +129,8 @@ private:
     std::optional<sim::BuildTrack> pending_track() const;
     std::optional<sim::StationId> station_near(sim::MapPoint p) const;
     // The station under the mouse: within a few pixels on screen, else by the map.
+    // How many different stations the route being planned calls at.
+    std::size_t distinct_stops() const;
     std::optional<sim::StationId> station_at_cursor() const;
     std::vector<sim::LocoTypeId> available_locos() const;
     std::string hint() const;

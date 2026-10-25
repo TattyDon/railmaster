@@ -28,8 +28,9 @@ public:
     // built; on the screen, with the rest of the interface.
     void draw_rings(const Camera& cam) const;
     void end() { open_ = false; }
-    // Check the step against the game; call once a frame.
-    void update(const sim::World& world, const Camera& cam, const Tools& tools);
+    // Check the step against the game; call once a frame. When the track
+    // step begins it brings both towns back into view.
+    void update(const sim::World& world, Camera& cam, const Tools& tools);
     // Enter passes the last step (and closes); Shift+Tab skips a step.
     bool key(SDL_Keycode key, Uint16 mod);
     void draw(float width, float height) const;
@@ -37,7 +38,10 @@ public:
     bool click(float x, float y);
 
 private:
+    // Both towns in view, comfortably inside the screen.
+    void frame(Camera& cam, bool glide) const;
     bool open_ = false;
+    std::int64_t span_mm_ = 0; // between the towns
     Mode mode_ = Mode::Tutorial;
     std::string company_, cash_; // for the first steps' opening
     mutable float hide_box_[4] = {0, 0, 0, 0};
