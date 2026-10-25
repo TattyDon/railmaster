@@ -51,6 +51,9 @@ public:
     bool guide_open() const { return guide_open_; }
     // The Guide's best `n` lines not yet served, for the big map.
     std::vector<MapLink> guide_links(std::size_t n) const;
+    // Go to the `n`th of those (from 0), with its line planned as the
+    // Guide's Enter does: B prices it, B again builds it.
+    bool follow_guide_link(std::size_t n);
     // A screen that fills the middle of the window is open (the Guide, help,
     // Find, the Company, Market, Status, Lists or Ledger), so banners give way.
     bool screen_open() const {
@@ -327,6 +330,7 @@ private:
         // from and to name the towns, not sites.
         bool towns = false;
     };
+    void go_to_opportunity(const Opportunity& o);
     std::string opp_from_name(const Opportunity& o) const;
     std::string opp_to_name(const Opportunity& o) const;
     // Each end's map cell, and where its station should go.

@@ -458,9 +458,12 @@ On it, every railroad's track shows in its colour (yours white, as in the
 world) with a key, and Tab adds the Guide's ten best unserved lines,
 dashed in gold and numbered, with what each would earn.
 
+Clicking one of those lines (or its number), or pressing its number key,
+goes to it with the line planned as the Guide's Enter does: B prices it,
+B again builds it.
+
 Next:
-- Clicking a numbered line on the big map goes to it with the Guide's plan
-  ready (B to price it, B again to build).
+- The Guide and the big map skip lines a rival already runs.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

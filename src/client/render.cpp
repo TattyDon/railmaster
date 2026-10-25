@@ -5308,7 +5308,11 @@ void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, fl
         }
         ky += 6;
         glColor3f(0.7f, 0.68f, 0.62f);
-        draw_text(kx, ky, "Ctrl+G for details; Tab hides", 2);
+        draw_text(kx, ky, "Click a line or press its number to go", 2);
+        ky += 20;
+        draw_text(kx, ky, "there with it planned: B prices it,", 2);
+        ky += 20;
+        draw_text(kx, ky, "B again builds it.  Tab hides", 2);
     } else {
         glColor3f(0.7f, 0.68f, 0.62f);
         draw_text(kx, ky, "Tab: best lines to build", 2);

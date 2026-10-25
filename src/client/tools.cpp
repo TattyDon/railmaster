@@ -4324,6 +4324,40 @@ std::string Tools::site_name(sim::SiteId id) const {
     return as_written(world_.data().industries.get(s.type).name) + " near " + town;
 }
 
+void Tools::go_to_opportunity(const Opportunity& o) {
+    // Go to where the cargo is made, its panel open, and say where it sells.
+    const auto [cx, cy] = opp_cell(o, true);
+    jump_ = world_.economy().node_centre(cx, cy);
+    hover_ = *jump_;
+    select(Tool::Inspect);
+    if (o.towns) {
+        detail_.reset();
+    } else {
+        open_detail(DetailKind::Industry, o.from);
+    }
+    link_ = o;
+    link_armed_until_ = 0;
+    const bool town = o.towns || world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
+    show((o.towns ? "Passengers and mail from " + opp_from_name(o) + " to "
+                  : as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ")) +
+             opp_to_name(o) + ", " +
+             std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) +
+             " more a load.  B builds the line for you",
+         true);
+}
+
+bool Tools::follow_guide_link(std::size_t n) {
+    std::size_t i = 0;
+    for (const Opportunity& o : find_opportunities()) {
+        if (o.served) continue;
+        if (i++ == n) {
+            go_to_opportunity(o);
+            return true;
+        }
+    }
+    return false;
+}
+
 std::vector<MapLink> Tools::guide_links(std::size_t n) const {
     std::vector<MapLink> out;
     for (const Opportunity& o : find_opportunities()) {
@@ -4472,26 +4506,7 @@ bool Tools::guide_key(SDL_Keycode key) {
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
         if (guide_tab_ == 0 && guide_sel_ < guide_opps_.size()) {
-            // Go to where the cargo is made, its panel open, and say where it sells.
-            const Opportunity& o = guide_opps_[guide_sel_];
-            const auto [cx, cy] = opp_cell(o, true);
-            jump_ = world_.economy().node_centre(cx, cy);
-            hover_ = *jump_;
-            select(Tool::Inspect);
-            if (o.towns) {
-                detail_.reset();
-            } else {
-                open_detail(DetailKind::Industry, o.from);
-            }
-            link_ = o;
-            link_armed_until_ = 0;
-            const bool town = o.towns || world_.economy().sites()[o.to].kind == sim::IndustryKind::House;
-            show((o.towns ? "Passengers and mail from " + opp_from_name(o) + " to "
-                          : as_written(world_.data().cargo.get(o.cargo).name) + " from here sells " + (town ? "in " : "to the ")) +
-                     opp_to_name(o) + ", " +
-                     std::to_string(o.tenths_of_miles / 10) + " miles away, for " + price_k(o.per_load) +
-                     " more a load.  B builds the line for you",
-                 true);
+            go_to_opportunity(guide_opps_[guide_sel_]);
             guide_open_ = false;
         }
         return true;

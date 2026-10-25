@@ -625,6 +625,28 @@ int main(int argc, char* argv[]) {
     const auto big_size = [&] { return std::min(static_cast<float>(cam.width_px) - 80.0f, static_cast<float>(cam.height_px) - 160.0f); };
     const auto big_x = [&] { return std::max(20.0f, (static_cast<float>(cam.width_px) - big_size()) / 2 - 220.0f); };
     const auto big_y = [&] { return 90.0f; };
+    // Which of the shown lines is under a click on the big map: by its
+    // number's badge, or within a few pixels of the line.
+    const auto link_at = [&](float px, float py) -> std::optional<std::size_t> {
+        const float k = big_size() / static_cast<float>(std::max(world.terrain().width(), world.terrain().height()));
+        const auto sx = [&](sim::MapPoint p) { return big_x() + static_cast<float>(p.x_mm) / cam.mm_per_tile * k; };
+        const auto sy = [&](sim::MapPoint p) { return big_y() + static_cast<float>(p.y_mm) / cam.mm_per_tile * k; };
+        std::optional<std::size_t> best;
+        float best_d = 8.0f;
+        for (std::size_t i = 0; i < map_links.size(); ++i) {
+            const float ax = sx(map_links[i].a), ay = sy(map_links[i].a), bx = sx(map_links[i].b), by = sy(map_links[i].b);
+            const float mx = (ax + bx) / 2, my = (ay + by) / 2;
+            if (std::hypot(px - mx, py - my) <= 11.0f) return i; // the badge
+            const float len2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+            const float t = len2 > 0 ? std::clamp(((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / len2, 0.0f, 1.0f) : 0.0f;
+            const float d = std::hypot(px - (ax + (bx - ax) * t), py - (ay + (by - ay) * t));
+            if (d < best_d) {
+                best_d = d;
+                best = i;
+            }
+        }
+        return best;
+    };
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
     Uint64 last = SDL_GetPerformanceCounter();
@@ -724,8 +746,16 @@ int main(int argc, char* argv[]) {
                     right_drag = 0;
                     break;
                 }
-                // A click on the big map goes there and closes it.
+                // A click on the big map goes there and closes it: on one of
+                // the Guide's numbered lines, to it with its plan ready.
                 if (big_map) {
+                    if (big_map_links) {
+                        const auto i = link_at(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y));
+                        if (i && tools.follow_guide_link(*i)) {
+                            big_map = false;
+                            break;
+                        }
+                    }
                     if (const auto p = client::radar_point(world, cam, big_x(), big_y(), big_size(), static_cast<float>(ev.button.x),
                                                            static_cast<float>(ev.button.y))) {
                         cam.glide_to(*p);
@@ -765,6 +795,12 @@ int main(int argc, char* argv[]) {
                 }
                 if (big_map && ev.key.keysym.sym == SDLK_ESCAPE) {
                     big_map = false;
+                    break;
+                }
+                // With the lines shown, 1 to 9 and 0 (the tenth) go to one.
+                if (big_map && big_map_links && ev.key.keysym.sym >= SDLK_0 && ev.key.keysym.sym <= SDLK_9) {
+                    const std::size_t i = ev.key.keysym.sym == SDLK_0 ? 9 : static_cast<std::size_t>(ev.key.keysym.sym - SDLK_1);
+                    if (i < map_links.size() && tools.follow_guide_link(i)) big_map = false;
                     break;
                 }
                 if (big_map && ev.key.keysym.sym == SDLK_TAB) {
