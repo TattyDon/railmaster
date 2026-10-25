@@ -429,8 +429,15 @@ Towns of 10 houses or more have pale raised pavements either side of
 their streets (the lamps stand on them), stopping short of the crossings;
 towns of 30 or more cobble their streets until asphalt comes in 1930.
 
+Town streets carry traffic, drawn each frame near the camera: a vehicle
+or two on each street going back and forth on its side of the road, more
+in larger towns. Covered wagons behind a horse at first; motor cars mix in
+from 1905 and are all there is by 1925, with lorries from 1915; their
+headlamps light the streets after dark. They stand still while the game
+is paused.
+
 Next:
-- Traffic in towns: carts and wagons, later motor cars, along the streets.
+- People: passengers waiting on platforms, crowds in market squares.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

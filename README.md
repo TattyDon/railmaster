@@ -15,7 +15,8 @@ a few minutes. The 3D client is in its first stage: lit, textured terrain
 with rivers, woods, shadows and distance haze; towns of timber and stone
 houses (gabled, hipped, L-shaped with a back wing, cross-gabled cottages
 and square Foursquares) with gardens behind, terraces, shops, town halls, churches in their churchyards and
-tree-lined greens (market squares with a fountain in the largest) along lamplit streets,
+tree-lined greens (market squares with a fountain in the largest) along lamplit streets busy with
+wagons and, later, motor cars,
 allotments, cemeteries and ball grounds on their edges, and stations to
 match; brick mills and works; engines, cars and trees, all from Kenney's
 CC0 kits; track, mines, farms and ports drawn in code; smoke from engines and chimneys; and a camera you can turn and tilt
