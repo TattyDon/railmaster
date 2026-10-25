@@ -618,6 +618,11 @@ int main(int argc, char* argv[]) {
     bool snowing = false;
     // The radar, bottom left above the tool bar.
     constexpr float kRadar = 170.0f;
+    // The big map (Shift+M): centred, as large as the window allows.
+    bool big_map = false;
+    const auto big_size = [&] { return std::min(static_cast<float>(cam.width_px) - 80.0f, static_cast<float>(cam.height_px) - 160.0f); };
+    const auto big_x = [&] { return (static_cast<float>(cam.width_px) - big_size()) / 2; };
+    const auto big_y = [&] { return 90.0f; };
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
     Uint64 last = SDL_GetPerformanceCounter();
@@ -717,6 +722,15 @@ int main(int argc, char* argv[]) {
                     right_drag = 0;
                     break;
                 }
+                // A click on the big map goes there and closes it.
+                if (big_map) {
+                    if (const auto p = client::radar_point(world, cam, big_x(), big_y(), big_size(), static_cast<float>(ev.button.x),
+                                                           static_cast<float>(ev.button.y))) {
+                        cam.glide_to(*p);
+                    }
+                    big_map = false;
+                    break;
+                }
                 // A click on the radar moves the view there.
                 if (const auto p = client::radar_point(world, cam, radar_x(), radar_y(), kRadar, static_cast<float>(ev.button.x),
                                                        static_cast<float>(ev.button.y))) {
@@ -739,6 +753,15 @@ int main(int argc, char* argv[]) {
                 // A box being typed in (Find) takes every key.
                 if (tools.typing()) {
                     tools.on_key(ev.key.keysym.sym, ev.key.keysym.mod);
+                    break;
+                }
+                // Shift+M opens and closes the big map; Esc closes it.
+                if (ev.key.keysym.sym == SDLK_m && (ev.key.keysym.mod & KMOD_SHIFT) != 0) {
+                    big_map = !big_map;
+                    break;
+                }
+                if (big_map && ev.key.keysym.sym == SDLK_ESCAPE) {
+                    big_map = false;
                     break;
                 }
                 // Ctrl+S saves the game, Ctrl+L loads the last save.
@@ -1286,9 +1309,26 @@ int main(int argc, char* argv[]) {
             SDL_GL_SwapWindow(window);
             continue;
         }
-        if (!tools.founding_open()) client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
+        if (!tools.founding_open()) {
+            client::draw_radar(world, cam, radar_x(), radar_y(), kRadar);
+            const auto tw = static_cast<float>(client::text_width("Shift+M: big map", 2));
+            client::ui::chip(radar_x() - 1, radar_y() - 32, radar_x() + tw + 10, radar_y() - 12, 0.75f);
+            glColor3f(1.0f, 0.9f, 0.68f);
+            client::draw_text(radar_x() + 4, radar_y() - 29, "Shift+M: big map", 2);
+        }
         if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         else tools.draw_ui(status);
+        if (big_map && !tools.founding_open()) {
+            // Dim the world behind it.
+            glColor4f(0.04f, 0.03f, 0.02f, 0.7f);
+            glBegin(GL_QUADS);
+            glVertex2f(0, 0);
+            glVertex2f(static_cast<float>(cam.width_px), 0);
+            glVertex2f(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
+            glVertex2f(0, static_cast<float>(cam.height_px));
+            glEnd();
+            client::draw_big_map(world, cam, big_x(), big_y(), big_size());
+        }
         if (!editor.open() && !tools.founding_open() && !tools.menu_open() && !tools.newspaper_open()) {
             // A free game's first steps, once the company is founded (and
             // only if it has built nothing yet).
@@ -1303,7 +1343,7 @@ int main(int argc, char* argv[]) {
                 tools.show(met, true);
                 client::audio::play(client::audio::Sound::Bell, 0.6f);
             }
-            if (!tutorial.open() && !title.open() && !tools.screen_open()) goals.draw(world, static_cast<float>(cam.width_px));
+            if (!tutorial.open() && !title.open() && !tools.screen_open() && !big_map) goals.draw(world, static_cast<float>(cam.width_px));
             tutorial.draw_rings(cam);
             tutorial.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         }

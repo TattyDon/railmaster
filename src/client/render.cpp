@@ -5170,6 +5170,51 @@ void draw_territory_names(const sim::TerritoryMap& map, const Camera& cam, const
     }
 }
 
+void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, float size) {
+    draw_radar(w, cam, x0, y0, size);
+    const sim::Terrain& t = w.terrain();
+    const float k = size / static_cast<float>(std::max(t.width(), t.height()));
+    const auto at = [&](sim::MapPoint p, float& sx, float& sy) {
+        sx = x0 + static_cast<float>(p.x_mm) / cam.mm_per_tile * k;
+        sy = y0 + static_cast<float>(p.y_mm) / cam.mm_per_tile * k;
+    };
+    // Industries as small dark squares, coloured by kind: raw (farms, mines)
+    // green, works orange, ports blue.
+    const sim::Economy& eco = w.economy();
+    glBegin(GL_QUADS);
+    for (const sim::Site& site : eco.sites()) {
+        if (site.closed) continue;
+        const sim::IndustryKind kind = w.data().industries.get(site.type).kind;
+        if (kind == sim::IndustryKind::House || kind == sim::IndustryKind::Sink) continue;
+        if (kind == sim::IndustryKind::Raw) glColor3f(0.25f, 0.5f, 0.2f);
+        else if (kind == sim::IndustryKind::Port) glColor3f(0.2f, 0.35f, 0.75f);
+        else glColor3f(0.75f, 0.42f, 0.15f);
+        float sx, sy;
+        at(eco.node_centre(site.cx, site.cy), sx, sy);
+        glVertex2f(sx - 2.5f, sy - 2.5f);
+        glVertex2f(sx + 2.5f, sy - 2.5f);
+        glVertex2f(sx + 2.5f, sy + 2.5f);
+        glVertex2f(sx - 2.5f, sy + 2.5f);
+    }
+    glEnd();
+    // Town names, with stars.
+    for (std::size_t i = 0; i < eco.towns().size(); ++i) {
+        const sim::Town& town = eco.towns()[i];
+        float sx, sy;
+        at(eco.node_centre(town.cx, town.cy), sx, sy);
+        const int stars = sim::town_stars(eco.town_houses(i), w.data().balance.towns);
+        const std::string label = town.name + std::string(static_cast<std::size_t>(stars), '*');
+        const auto tw = static_cast<float>(text_width(label, 2));
+        ui::chip(sx - tw / 2 - 4, sy + 4, sx + tw / 2 + 4, sy + 22, 0.55f);
+        glColor3f(1.0f, 0.97f, 0.88f);
+        draw_text(sx - tw / 2, sy + 6, label, 2);
+    }
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(x0, y0 - 28, "Map", 3);
+    glColor3f(0.8f, 0.78f, 0.7f);
+    draw_text(x0 + 70, y0 - 22, "Click to go there.  Farms and mines green, works orange, ports blue.  Shift+M or Esc closes", 2);
+}
+
 void draw_radar(const sim::World& w, const Camera& cam, float x0, float y0, float size) {
     const sim::Terrain& t = w.terrain();
     const float across = static_cast<float>(std::max(t.width(), t.height()));

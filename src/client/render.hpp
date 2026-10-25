@@ -83,6 +83,9 @@ void draw_marker(sim::MapPoint p, const Camera& cam, float half_px, float r, flo
 // `size` pixels at (x0, y0) on screen, with towns, your stations and where
 // the view is looking. radar_point gives the map point under a click on it.
 void draw_radar(const sim::World& w, const Camera& cam, float x0, float y0, float size);
+// The map, large (Shift+M): the radar at `size`, with each town's name and
+// industries as small squares; radar_point reads clicks on it.
+void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, float size);
 std::optional<sim::MapPoint> radar_point(const sim::World& w, const Camera& cam, float x0, float y0, float size, float sx, float sy);
 
 } // namespace railmaster::client

@@ -451,8 +451,11 @@ their stars, houses, your stations there and miles from the view (Enter
 goes there). Town names carry further the bigger the town, and where
 labels crowd it is the small towns' that give way.
 
+Shift+M opens the big map: the radar across the window with every town
+named, industries marked by kind, and your lines; a click goes there.
+
 Next:
-- A map view (M or the radar enlarged) with towns, industries and lines.
+- Overlays on the big map: what each town wants, and rivals' lines.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
