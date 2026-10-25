@@ -113,7 +113,12 @@ void Title::show() {
     scan_scenarios();
     open_ = true;
     page_ = 0;
-    sel_ = 0;
+    // A first game (nothing saved yet) starts on the tutorial.
+    sel_ = first_time() ? 4 : 0;
+}
+
+bool Title::first_time() const {
+    return std::all_of(slots_.begin(), slots_.end(), [](const auto& s) { return s.second == "Empty"; });
 }
 
 int Title::items() const {
@@ -241,15 +246,18 @@ void Title::click(float sx, float sy) {
 
 void Title::draw(float width, float height, const std::string& build) const {
     boxes_.clear();
-    // Darken the running game towards the left, where the menu stands.
+    // Darken the running game behind the menu (fully, so its text reads even
+    // over snow), fading out to the right.
+    const float solid = std::min(width * 0.5f, 560.0f);
+    fill(0, 0, solid, height, 0.04f, 0.03f, 0.02f, 0.82f);
     glBegin(GL_QUADS);
     glColor4f(0.04f, 0.03f, 0.02f, 0.82f);
-    glVertex2f(0, 0);
+    glVertex2f(solid, 0);
     glColor4f(0.04f, 0.03f, 0.02f, 0.05f);
-    glVertex2f(width * 0.75f, 0);
-    glVertex2f(width * 0.75f, height);
+    glVertex2f(std::max(solid + 1, width * 0.8f), 0);
+    glVertex2f(std::max(solid + 1, width * 0.8f), height);
     glColor4f(0.04f, 0.03f, 0.02f, 0.82f);
-    glVertex2f(0, height);
+    glVertex2f(solid, height);
     glEnd();
     fill(0, height - 46, width, height, 0.04f, 0.03f, 0.02f, 0.6f);
 
@@ -284,8 +292,23 @@ void Title::draw(float width, float height, const std::string& build) const {
     std::string foot;
     switch (page_) {
     case 0: {
-        const char* names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor", "Tutorial", "Quit"};
+        const std::string names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor",
+                                     first_time() ? "Tutorial - start here" : "Tutorial", "Quit"};
         for (int i = 0; i < 6; ++i) item(names[i], i == sel_, 380, kScale + 1);
+        // What the highlighted choice is.
+        static const char* const kAbout[] = {
+            "A free game on a new map: no deadline. Build the railroad you like; the first steps are shown as you go.",
+            "Set challenges with goals and a deadline: win a bronze, silver or gold medal.",
+            "Carry on where you left off.",
+            "Shape your own land, towns and industries, and play on it.",
+            "New to Railmaster? A guided first railroad: track, stations and a train, about ten minutes.",
+            "Leave the game."};
+        y += 10;
+        glColor3f(0.8f, 0.76f, 0.66f);
+        for (const std::string& l : wrap(kAbout[std::clamp(sel_, 0, 5)], kScale, 400)) {
+            draw_text(x0, y, l, kScale);
+            y += 20;
+        }
         foot = "Up/Down and Enter, or click";
         break;
     }

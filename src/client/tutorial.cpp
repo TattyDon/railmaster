@@ -52,6 +52,16 @@ constexpr Step kSteps[] = {
 };
 constexpr int kStepCount = sizeof(kSteps) / sizeof(kSteps[0]);
 
+// A free game's first steps open with what it is for, then the tutorial's
+// steps from the track on.
+constexpr Step kAim = {
+    "Your railroad",
+    "You run {CO}, with {CASH} to spend. A free game has no deadline: your aim is a railroad that makes money, "
+    "growing its profits, its worth and its share price (F10 shows how you stand; Scenarios on the title screen set "
+    "goals and medals). A good first line joins {A} and {B}, ringed in gold. Press Enter to begin, or just start "
+    "building."};
+constexpr int kFirstGameSkip = 1; // "Look around"
+
 std::vector<std::string> wrap(const std::string& text, int scale, float width) {
     std::vector<std::string> lines;
     std::istringstream words(text);
@@ -71,7 +81,15 @@ std::vector<std::string> wrap(const std::string& text, int scale, float width) {
 
 } // namespace
 
-void Tutorial::begin(const sim::World& world, Camera& cam) {
+void Tutorial::begin(const sim::World& world, Camera& cam, Mode mode) {
+    mode_ = mode;
+    company_.clear();
+    cash_.clear();
+    if (world.player_company()) {
+        const sim::Company& co = world.company(*world.player_company());
+        company_ = co.name();
+        cash_ = format_money(co.cash());
+    }
     // The two towns nearest each other: the first line joins them.
     const sim::Economy& eco = world.economy();
     std::int64_t best = -1;
@@ -95,6 +113,8 @@ void Tutorial::begin(const sim::World& world, Camera& cam) {
         cam.distance = std::max(12.0f, tiles * 1.1f);
     }
     open_ = true;
+    // A free game's step 0 is its opening; the tutorial's own steps follow
+    // from the track, so "Look around" is passed over.
     step_ = 0;
     start_distance_ = cam.distance;
     start_x_ = cam.target_x;
@@ -119,6 +139,15 @@ void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& t
     std::size_t towers = 0;
     for (const sim::ServiceBuilding& sb : rw.service_buildings()) towers += sb.owner == me && sb.type == sim::ServiceType::ServiceTower;
     bool done = false;
+    if (mode_ == Mode::FirstGame && step_ == 0) {
+        // The opening passes on Enter, or once building has begun.
+        done = edges >= 1;
+        if (done) {
+            step_ = kFirstGameSkip;
+            step_since_ = SDL_GetTicks();
+        }
+        return;
+    }
     switch (step_) {
     case 0:
         done = std::fabs(cam.distance - start_distance_) > 0.5f || std::fabs(cam.yaw - start_yaw_) > 0.1f ||
@@ -141,38 +170,74 @@ void Tutorial::update(const sim::World& world, const Camera& cam, const Tools& t
 
 bool Tutorial::key(SDL_Keycode key, Uint16 mod) {
     if (!open_) return false;
+    if (mode_ == Mode::FirstGame && step_ == 0 && (key == SDLK_RETURN || key == SDLK_KP_ENTER)) {
+        step_ = kFirstGameSkip;
+        step_since_ = SDL_GetTicks();
+        return true;
+    }
     if (step_ == kStepCount - 1 && (key == SDLK_RETURN || key == SDLK_KP_ENTER)) {
         open_ = false;
         return true;
     }
     if (key == SDLK_TAB && (mod & KMOD_SHIFT) != 0) {
         // Skip a step (or close at the end).
-        if (++step_ >= kStepCount) open_ = false;
+        step_ = mode_ == Mode::FirstGame && step_ == 0 ? kFirstGameSkip : step_ + 1;
+        if (step_ >= kStepCount) open_ = false;
         step_since_ = SDL_GetTicks();
         return true;
     }
     return false;
 }
 
-void Tutorial::draw_world_overlay(const Camera& cam) const {
-    if (!open_ || town_a_.empty() || step_ < 1 || step_ > 3) return;
-    const float pulse = 10.0f + 3.0f * std::sin(static_cast<float>(SDL_GetTicks()) / 250.0f);
-    draw_marker(at_a_, cam, pulse, 1.0f, 0.85f, 0.3f);
-    draw_marker(at_b_, cam, pulse, 1.0f, 0.85f, 0.3f);
+void Tutorial::draw_rings(const Camera& cam) const {
+    if (!open_ || town_a_.empty() || (step_ < 1 && mode_ != Mode::FirstGame) || step_ > 3) return;
+    const float pulse = std::sin(static_cast<float>(SDL_GetTicks()) / 250.0f);
+    const auto ring = [&](sim::MapPoint p, const std::string& label) {
+        float sx, sy;
+        if (!cam.to_screen(p, sx, sy)) return;
+        const float r = 40.0f + 4.0f * pulse;
+        glLineWidth(3.0f);
+        glColor4f(1.0f, 0.82f, 0.3f, 0.95f);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 48; ++i) {
+            const float a = 6.2831853f * static_cast<float>(i) / 48.0f;
+            glVertex2f(sx + r * std::cos(a), sy + r * 0.6f * std::sin(a));
+        }
+        glEnd();
+        glLineWidth(1.0f);
+        // The label under the ring, on a dark backing.
+        const auto tw = static_cast<float>(text_width(label, kScale));
+        const float lx = sx - tw / 2, ly = sy + r * 0.6f + 6;
+        ui::panel(lx - 8, ly - 4, lx + tw + 8, ly + 20);
+        glColor3f(1.0f, 0.86f, 0.5f);
+        draw_text(lx, ly, label, kScale);
+    };
+    ring(at_a_, "Start here: " + town_a_);
+    ring(at_b_, "Then: " + town_b_);
+}
+
+bool Tutorial::click(float x, float y) {
+    if (!open_ || mode_ != Mode::FirstGame) return false;
+    if (x < hide_box_[0] || x > hide_box_[2] || y < hide_box_[1] || y > hide_box_[3]) return false;
+    open_ = false;
+    return true;
 }
 
 void Tutorial::draw(float width, float /*height*/) const {
     if (!open_) return;
-    const Step& s = kSteps[std::min(step_, kStepCount - 1)];
-    // The step's text, with the first line's towns named.
+    const bool first_game = mode_ == Mode::FirstGame;
+    const Step& s = first_game && step_ == 0 ? kAim : kSteps[std::min(step_, kStepCount - 1)];
+    // The step's text, with the first line's towns (and the company) named.
     std::string body = s.text;
+    const auto put = [&](const std::string& from, const std::string& to) {
+        for (std::size_t at = body.find(from); at != std::string::npos; at = body.find(from, at + to.size())) body.replace(at, from.size(), to);
+    };
     if (!town_a_.empty()) {
-        const auto put = [&](const std::string& from, const std::string& to) {
-            for (std::size_t at = body.find(from); at != std::string::npos; at = body.find(from, at + to.size())) body.replace(at, from.size(), to);
-        };
         put("{A}", town_a_);
         put("{B}", town_b_);
     }
+    put("{CO}", company_.empty() ? std::string("your railroad") : company_);
+    put("{CASH}", cash_.empty() ? std::string("money") : cash_);
     const float w = 430, x0 = width - w - 16, y0 = 60;
     const auto lines = wrap(body, kScale, w - 32);
     const float h = 70 + 19.0f * static_cast<float>(lines.size()) + 30;
@@ -180,7 +245,10 @@ void Tutorial::draw(float width, float /*height*/) const {
     // A brief glow when a step is newly reached.
     const float fresh = std::max(0.0f, 1.0f - static_cast<float>(SDL_GetTicks() - step_since_) / 900.0f);
     glColor3f(0.65f + 0.35f * fresh, 0.6f + 0.35f * fresh, 0.5f);
-    const std::string count = "Tutorial  " + std::to_string(std::min(step_ + 1, kStepCount)) + " of " + std::to_string(kStepCount);
+    // Counted from the opening in a free game (which passes over "Look around").
+    const int shown = first_game ? (step_ == 0 ? 1 : step_ - kFirstGameSkip + 2) : std::min(step_ + 1, kStepCount);
+    const int total = first_game ? kStepCount - kFirstGameSkip + 1 : kStepCount;
+    const std::string count = (first_game ? "First steps  " : "Tutorial  ") + std::to_string(shown) + " of " + std::to_string(total);
     draw_text(x0 + 16, y0 + 10, count, kScale);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 16, y0 + 30, s.title, kScale + 1);
@@ -191,7 +259,19 @@ void Tutorial::draw(float width, float /*height*/) const {
         y += 19;
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 16, y0 + h - 24, step_ == kStepCount - 1 ? "Enter closes" : "Shift+Tab skips this step", kScale);
+    const char* foot = step_ == kStepCount - 1 ? "Enter closes" : first_game && step_ == 0 ? "Enter begins" : "Shift+Tab skips this step";
+    draw_text(x0 + 16, y0 + h - 24, foot, kScale);
+    if (first_game) {
+        // A way to put the tips away for good.
+        const std::string hide = "Hide these tips";
+        const float tw = static_cast<float>(text_width(hide, kScale)), hx = x0 + w - 16 - tw, hy = y0 + h - 24;
+        glColor3f(0.85f, 0.75f, 0.5f);
+        draw_text(hx, hy, hide, kScale);
+        hide_box_[0] = hx - 4;
+        hide_box_[1] = hy - 4;
+        hide_box_[2] = hx + tw + 4;
+        hide_box_[3] = hy + 20;
+    }
 }
 
 } // namespace railmaster::client

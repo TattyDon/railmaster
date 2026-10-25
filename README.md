@@ -71,8 +71,15 @@ there):
   between two towns, a station at each end, a train, the clock and the
   books; each step passes when you have done it, Shift+Tab skips one), **Scenarios** (each with its briefing),
   **Load a saved game**, or **Quit**. Up/Down and Enter, or click.
+- New to the game? Start with **Tutorial** (it is picked for you on the
+  first launch); the highlighted menu choice says what each is.
 - A new railroad or scenario opens with the founding dialog: Enter founds
-  your railroad on the usual terms.
+  your railroad on the usual terms. A new railroad then shows its first
+  steps: what a free game is for (no deadline: a railroad that makes
+  money, growing its profits, worth and share price; Scenarios set goals
+  and medals), and the way to a first line between two nearby towns,
+  ringed in gold, each step passing as you do it ("Hide these tips" puts
+  them away).
 - `--quick` skips the title screen and the dialog and starts on the demo
   network: three towns, their stations and two trains, built for you.
 - Every game starts paused: Space starts the clock, + and - change the

@@ -508,6 +508,8 @@ int main(int argc, char* argv[]) {
     client::Title title(data_dir, maps_dir, scenarios_dir, save_slots());
     client::Editor editor(world, cam);
     client::Tutorial tutorial;
+    // A free game shows its first steps once the company is founded.
+    bool first_steps_pending = false;
     std::string editor_path; // where the map being edited was last saved
     if (title_at_start) {
         title.show();
@@ -720,6 +722,7 @@ int main(int argc, char* argv[]) {
                     break;
                 }
                 client::audio::play(client::audio::Sound::Click, 0.35f);
+                if (tutorial.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) break;
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
                 break;
             case SDL_MOUSEBUTTONUP:
@@ -987,6 +990,7 @@ int main(int argc, char* argv[]) {
             case client::Tools::MenuRequest::Kind::Load: load_game(req->path); break;
             case client::Tools::MenuRequest::Kind::MainMenu:
                 tutorial.end();
+                first_steps_pending = false;
                 title.set_slots(save_slots());
                 title.show();
                 break;
@@ -1006,9 +1010,12 @@ int main(int argc, char* argv[]) {
                     cfg.territory_map = std::move(extras.territories);
                 }
                 start_world(cfg);
+                tutorial.end();
+                first_steps_pending = true;
                 break;
             }
             case client::Title::Request::Kind::Scenario:
+                first_steps_pending = false;
                 try {
                     sim::WorldConfig cfg = scenario_world_config(req->path, load_game_data(data_dir).balance.map.max_height_m);
                     cfg.found_player_company = false;
@@ -1018,6 +1025,7 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             case client::Title::Request::Kind::Load:
+                first_steps_pending = false;
                 load_game(req->path);
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
                 modal_paused = false;
@@ -1030,6 +1038,7 @@ int main(int argc, char* argv[]) {
                 cfg.seed = 7;
                 cfg.rivals = 0;
                 cfg.found_player_company = true;
+                first_steps_pending = false;
                 start_world(cfg);
                 tutorial.begin(world, cam);
                 break;
@@ -1246,7 +1255,6 @@ int main(int argc, char* argv[]) {
         client::draw_lights(cam);
         if (editor.open()) editor.draw_world_overlay();
         else tools.draw_world_overlay();
-        tutorial.draw_world_overlay(cam);
         if (shaded) client::shading::end_world();
         glDisable(GL_FOG);
         glDisable(GL_DEPTH_TEST);
@@ -1279,7 +1287,16 @@ int main(int argc, char* argv[]) {
         if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         else tools.draw_ui(status);
         if (!editor.open() && !tools.founding_open() && !tools.menu_open() && !tools.newspaper_open()) {
+            // A free game's first steps, once the company is founded (and
+            // only if it has built nothing yet).
+            if (first_steps_pending && world.player_company()) {
+                first_steps_pending = false;
+                bool built = false;
+                for (const sim::TrackEdge& e : world.railway().track().edges()) built |= !e.removed && e.owner == *world.player_company();
+                if (!built) tutorial.begin(world, cam, client::Tutorial::Mode::FirstGame);
+            }
             tutorial.update(world, cam, tools);
+            tutorial.draw_rings(cam);
             tutorial.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         }
         // Which build this is, bottom right above the hint bar, so players

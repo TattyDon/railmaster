@@ -33,6 +33,8 @@ public:
     void show();
     void hide() { open_ = false; }
     void set_slots(std::vector<std::pair<std::string, std::string>> slots) { slots_ = std::move(slots); }
+    // Nothing saved yet: the player is new.
+    bool first_time() const;
     std::optional<Request> take_request() { return std::exchange(request_, std::nullopt); }
 
     void key(SDL_Keycode key);
