@@ -171,7 +171,9 @@ private:
     void draw_lists_panel() const;
     bool lists_key(SDL_Keycode key);
     std::size_t list_size() const;
-    int list_kind_ = 0;            // 0 trains, 1 stations, 2 companies
+    int list_kind_ = 0;            // 0 trains, 1 stations, 2 companies, 3 towns
+    // The towns, biggest first (the Lists' Towns page).
+    std::vector<std::size_t> towns_by_size() const;
 
     // The detail panel (rt3-clone-spec §15.4): a train, station or industry
     // opened by a click in the Look tool or Enter in the lists, shown at the

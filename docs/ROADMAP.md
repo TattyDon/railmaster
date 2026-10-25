@@ -446,8 +446,13 @@ along a straight stretch of open water: sailing boats and barges, steam
 launches and tugs (smoking) from 1860, motor boats from 1910; ducks paddle
 by the town landings.
 
+Finding towns: the Lists (F11) have a Towns page, biggest first, with
+their stars, houses, your stations there and miles from the view (Enter
+goes there). Town names carry further the bigger the town, and where
+labels crowd it is the small towns' that give way.
+
 Next:
-- Show town names and sizes more clearly from far off (a town list).
+- A map view (M or the radar enlarged) with towns, industries and lines.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

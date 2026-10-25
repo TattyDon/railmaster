@@ -3013,15 +3013,24 @@ std::size_t Tools::list_size() const {
         return n;
     }
     case 1: return world_.railway().stations().size();
-    default: return world_.companies().size();
+    case 2: return world_.companies().size();
+    default: return world_.economy().towns().size();
     }
+}
+
+std::vector<std::size_t> Tools::towns_by_size() const {
+    const sim::Economy& eco = world_.economy();
+    std::vector<std::size_t> order(eco.towns().size());
+    for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return eco.town_houses(a) > eco.town_houses(b); });
+    return order;
 }
 
 bool Tools::lists_key(SDL_Keycode key) {
     const std::size_t n = list_size();
     switch (key) {
     case SDLK_TAB:
-        list_kind_ = (list_kind_ + 1) % 3;
+        list_kind_ = (list_kind_ + 1) % 4;
         list_sel_ = 0;
         return true;
     case SDLK_UP:
@@ -3049,11 +3058,16 @@ bool Tools::lists_key(SDL_Keycode key) {
         } else if (list_kind_ == 1) {
             jump_ = rw.track().node(rw.stations()[list_sel_].node).pos;
             open = Detail{DetailKind::Station, static_cast<std::uint32_t>(list_sel_)};
-        } else {
+        } else if (list_kind_ == 2) {
             // A company: its market entry.
             market_choice_ = static_cast<sim::CompanyId>(list_sel_);
             select(Tool::Market);
             return true;
+        } else {
+            // A town: go and look at it.
+            const sim::Town& t = world_.economy().towns()[towns_by_size()[list_sel_]];
+            jump_ = world_.economy().node_centre(t.cx, t.cy);
+            show(as_written(t.name), true);
         }
         if (jump_) hover_ = *jump_;
         select(Tool::Inspect);
@@ -3114,6 +3128,24 @@ void Tools::draw_lists_panel() const {
             row_colour(i, mine(s.owner),
                        {as_written(s.name), owner_name(s.owner), sizes[static_cast<int>(s.size)],
                         s.town ? as_written(world_.economy().towns()[*s.town].name) : "", format_money(s.income_last_year())});
+        }
+    } else if (list_kind_ == 3) {
+        cols = {x0 + 14, x0 + 400, x0 + 540, x0 + 860, x0 + 1160};
+        cells({"Towns, biggest first", "Stars", "Houses", "Your stations", "Miles from the view"}, 1.0f, 0.9f, 0.5f);
+        const sim::Economy& eco = world_.economy();
+        const std::vector<std::size_t> order = towns_by_size();
+        for (std::size_t i = first; i < n && i < first + kShown; ++i) {
+            const std::size_t ti = order[i];
+            const sim::Town& t = eco.towns()[ti];
+            std::size_t yours = 0;
+            for (const sim::Station& st : rw.stations()) yours += st.town == ti && mine(st.owner);
+            const sim::MapPoint c = eco.node_centre(t.cx, t.cy);
+            const float tx = static_cast<float>(c.x_mm) / cam_.mm_per_tile, ty = static_cast<float>(c.y_mm) / cam_.mm_per_tile;
+            const auto miles = static_cast<std::int64_t>(std::hypot(tx - cam_.target_x, ty - cam_.target_y) * cam_.mm_per_tile / 1'609'344.0f);
+            const int stars = sim::town_stars(eco.town_houses(ti), world_.data().balance.towns);
+            row_colour(i, yours > 0,
+                       {as_written(t.name), std::string(static_cast<std::size_t>(stars), '*'), std::to_string(eco.town_houses(ti)),
+                        yours > 0 ? std::to_string(yours) : "none", std::to_string(miles)});
         }
     } else {
         cols = {x0 + 14, x0 + 600, x0 + 790, x0 + 960, x0 + 1060, x0 + 1160};
@@ -3277,7 +3309,7 @@ const char* tool_tip(Tool t) {
     case Tool::Market: return "Market: buy and sell shares, take over or merge railroads";
     case Tool::Industry: return "Industry: buy, build or upgrade mines, farms and works";
     case Tool::Status: return "Status: the scenario's goals and medals";
-    case Tool::Lists: return "Lists: every train, station and company; click one to go there";
+    case Tool::Lists: return "Lists: every train, station, company and town; click one to go there";
     case Tool::Ledger: return "Ledger: the year's accounts and reports";
     }
     return "";
@@ -3424,7 +3456,7 @@ std::string Tools::hint() const {
     case Tool::Status:
         return world_.scenario() ? "Scenario goals, checked at each month end" : "No scenario: a free game";
     case Tool::Lists:
-        return "Tab trains/stations/companies   Up/Down, PgUp/PgDn, wheel or click choose   Enter or click again: go to it";
+        return "Tab trains/stations/companies/towns   Up/Down, PgUp/PgDn, wheel or click choose   Enter or click again: go to it";
     case Tool::Finance:
         if (company_tab_ == 3) return "Tab next page   Up/Down choose a territory   T buy access to it";
         return "Tab next page   B/R bond issue/repay   A/S buy/sell 1,000 shares (Shift 5,000)   I/Y issue/buy back stock   "

@@ -207,7 +207,7 @@ Early development. Done so far:
   `data/scenarios/`)
 - saved games that load and play on exactly as the original
 - map overlays (holdings, profit, grade, traffic, cargo prices) and lists
-  of trains, stations and companies
+  of trains, stations, companies and towns
 - compressed saves with a command log that replays a game exactly
 - a first 3D client (lit terrain, trees, houses, industries, track and
   trains as simple shapes, chimney smoke; turn, tilt and zoom) with a demo network of
@@ -289,7 +289,7 @@ and checks the economy against the spec's targets
 | F10 | Status screen: the scenario's briefing, each medal's deadline and goals with progress, and the medal won |
 | Esc (Look tool, nothing open) | The game menu (rt3-clone-spec §15.4 File Options), pausing the game: Resume, Save game, Load game, Briefing and goals, Settings (sound volume, scrolling at the window's edge, time of day, frames a second; kept between games), Main menu (back to the title screen) and Quit (both ask first). Saving and loading offer six named games, kept in your own folder (on a Mac `~/Library/Application Support/Railmaster/Railmaster/`), with the quick save; each slot shows the date, company and net worth it holds. Number keys pick a slot. The game also saves itself at every new year, to an Autosave slot listed when loading (and on the title screen) |
 | Ctrl+S, Ctrl+L | Quick save to `railmaster.sav` in the working directory, and load it back (`--load=FILE` starts from any save) |
-| F11 | Lists of trains, stations and companies (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station and opens its detail panel (or the company's market entry) |
+| F11 | Lists of trains, stations, companies and towns (rt3-clone-spec §15.4): Tab switches list, Up/Down and PgUp/PgDn choose, Enter goes to the train or station and opens its detail panel (or the company's market entry, or the town). Towns come biggest first, with their stars, houses, your stations there and how far they are from the view |
 | M | Message history (rt3-clone-spec §15.4): every piece of news, newest first, with its month (Up/Down and PgUp/PgDn scroll; M or Esc closes). Not in the Market and Industry tools, where M has its own use |
 | Newspaper | Big news makes the front page of the Railroad Gazette, and the game waits while you read it: scenario news, earthquakes and sabotage, bankruptcies, chairmen voted out, rivals founding companies, the economy turning, medals. Esc, Enter, Space or a click closes it (and the game carries on); Shift+N brings the last one back |
 | Tab | Hide the interface, leaving only the railway and the town names (Tab again shows it; the stations' signs, with their name, owner's colour and loads of passengers, mail and freight waiting, hide with the rest); questions, the menu and the newspaper still show. In the Company, Ledger and Lists screens Tab turns their pages |

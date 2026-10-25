@@ -4947,14 +4947,24 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
         const float tx = static_cast<float>(c.x_mm) / cell_mm, ty = static_cast<float>(c.y_mm) / cell_mm;
         labels.push_back({i, sx, sy, std::hypot(tx - cam.target_x, ty - cam.target_y)});
     }
-    std::sort(labels.begin(), labels.end(), [](const Label& l, const Label& r) { return l.dist < r.dist; });
+    // Bigger towns first (then nearer), so when the view is crowded it is
+    // the small ones that give way.
+    std::sort(labels.begin(), labels.end(), [&](const Label& l, const Label& r) {
+        const std::int64_t hl = eco.town_houses(l.town), hr = eco.town_houses(r.town);
+        const int sl = sim::town_stars(hl, towns), sr = sim::town_stars(hr, towns);
+        return sl != sr ? sl > sr : l.dist < r.dist;
+    });
     struct Box {
         float x0, y0, x1, y1;
     };
     std::vector<Box> placed;
-    const float fade_from = cam.distance * 2.0f, fade_to = cam.distance * 5.0f;
     for (const Label& l : labels) {
         const sim::Town& t = eco.towns()[l.town];
+        // Far towns fade, the bigger ones later: a two-star town's name
+        // carries half as far again as a hamlet's.
+        const int size = sim::town_stars(eco.town_houses(l.town), towns);
+        const float carry = 1.0f + 0.25f * static_cast<float>(size);
+        const float fade_from = cam.distance * 2.5f * carry, fade_to = cam.distance * 6.0f * carry;
         const float alpha = cam.three_d ? std::clamp((fade_to - l.dist) / std::max(1.0f, fade_to - fade_from), 0.0f, 1.0f) : 1.0f;
         if (alpha <= 0.02f) continue;
         const std::string& label = t.name;
