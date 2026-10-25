@@ -225,6 +225,13 @@ public:
     const std::vector<Town>& towns() const { return towns_; }
     // Houses in a town: the levels of its house cells.
     std::int64_t town_houses(std::size_t t) const;
+    // A good first line for a new railroad: of the town pairs between
+    // `min_mm` and `max_mm` apart, the one whose smaller town is biggest,
+    // weighted by the square root of the distance (a first line's trade
+    // follows its smaller town, and pays more the further it runs, up to
+    // the length one early train can work). The nearest pair if none is in
+    // range; nothing with fewer than two towns.
+    std::optional<std::pair<std::size_t, std::size_t>> first_line(std::int64_t min_mm, std::int64_t max_mm) const;
 
     // Derive each node's conductance and water from the terrain, whose grid
     // is cells_per_node times finer. Until called, every node is flat land.

@@ -90,21 +90,19 @@ void Tutorial::begin(const sim::World& world, Camera& cam, Mode mode) {
         company_ = co.name();
         cash_ = format_money(co.cash());
     }
-    // The two towns nearest each other: the first line joins them.
+    // A first line that pays: towns 5 to 16 miles apart, the smaller as big
+    // as can be (Economy::first_line).
     const sim::Economy& eco = world.economy();
+    constexpr std::int64_t kMile = 1'609'344;
     std::int64_t best = -1;
-    for (std::size_t i = 0; i < eco.towns().size(); ++i) {
-        for (std::size_t j = i + 1; j < eco.towns().size(); ++j) {
-            const sim::MapPoint a = eco.node_centre(eco.towns()[i].cx, eco.towns()[i].cy);
-            const sim::MapPoint b = eco.node_centre(eco.towns()[j].cx, eco.towns()[j].cy);
-            const std::int64_t d = sim::distance_mm(a, b);
-            if (best >= 0 && d >= best) continue;
-            best = d;
-            town_a_ = eco.towns()[i].name;
-            town_b_ = eco.towns()[j].name;
-            at_a_ = a;
-            at_b_ = b;
-        }
+    if (const auto pair = eco.first_line(5 * kMile, 16 * kMile)) {
+        // The bigger town first: the line starts there.
+        const auto [i, j] = eco.town_houses(pair->first) >= eco.town_houses(pair->second) ? *pair : std::pair{pair->second, pair->first};
+        town_a_ = eco.towns()[i].name;
+        town_b_ = eco.towns()[j].name;
+        at_a_ = eco.node_centre(eco.towns()[i].cx, eco.towns()[i].cy);
+        at_b_ = eco.node_centre(eco.towns()[j].cx, eco.towns()[j].cy);
+        best = sim::distance_mm(at_a_, at_b_);
     }
     span_mm_ = std::max<std::int64_t>(0, best);
     if (best >= 0) frame(cam, false);

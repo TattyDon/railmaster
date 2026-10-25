@@ -304,3 +304,28 @@ TEST_CASE("a new world is populated with towns and industries on dry land") {
     }
     CHECK(eco.active(*w.data().cargo.find("coal")));
 }
+
+TEST_CASE("a first line joins towns in range whose smaller is biggest, else the nearest pair") {
+    Fixture f;
+    // Four towns on a line, a km apart in cells: small, big, big, small.
+    const std::int32_t xs[4] = {2, 6, 12, 14};
+    const std::int32_t houses[4] = {1, 5, 6, 1};
+    for (int t = 0; t < 4; ++t) {
+        Town town;
+        town.name = "T" + std::to_string(t);
+        town.cx = xs[t];
+        town.cy = 5;
+        for (int h = 0; h < houses[t]; ++h) town.houses.push_back(f.eco.add_site(f.ind, f.type("house"), xs[t], 5 + h));
+        f.eco.add_town(std::move(town));
+    }
+    // In range (3 to 8 km): T0-T1 (4 km, min 1), T1-T2 (6 km, min 5), T2-T3 too near, T1-T3 (8 km, min 1).
+    const auto pick = f.eco.first_line(3 * kKm, 8 * kKm);
+    REQUIRE(pick);
+    CHECK(pick->first == 1);
+    CHECK(pick->second == 2);
+    // Nothing in range: the nearest pair.
+    const auto near = f.eco.first_line(100 * kKm, 200 * kKm);
+    REQUIRE(near);
+    CHECK(near->first == 2);
+    CHECK(near->second == 3);
+}

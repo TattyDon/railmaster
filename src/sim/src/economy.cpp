@@ -755,6 +755,28 @@ std::int64_t Economy::town_houses(std::size_t t) const {
     return n;
 }
 
+std::optional<std::pair<std::size_t, std::size_t>> Economy::first_line(std::int64_t min_mm, std::int64_t max_mm) const {
+    std::optional<std::pair<std::size_t, std::size_t>> best, nearest;
+    std::int64_t best_score = -1, nearest_mm = -1;
+    for (std::size_t i = 0; i < towns_.size(); ++i) {
+        for (std::size_t j = i + 1; j < towns_.size(); ++j) {
+            const std::int64_t d = distance_mm(node_centre(towns_[i].cx, towns_[i].cy), node_centre(towns_[j].cx, towns_[j].cy));
+            if (nearest_mm < 0 || d < nearest_mm) {
+                nearest_mm = d;
+                nearest = std::pair{i, j};
+            }
+            if (d < min_mm || d > max_mm) continue;
+            // Integers only: the smaller town's houses x sqrt(distance in metres).
+            const std::int64_t score = std::min(town_houses(i), town_houses(j)) * isqrt(d / 1000);
+            if (score > best_score) {
+                best_score = score;
+                best = std::pair{i, j};
+            }
+        }
+    }
+    return best ? best : nearest;
+}
+
 Money annual_profit(const Site& s) {
     if (s.monthly_profit.empty()) return Money{};
     Money sum;
