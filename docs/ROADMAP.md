@@ -436,8 +436,13 @@ from 1905 and are all there is by 1925, with lorries from 1915; their
 headlamps light the streets after dark. They stand still while the game
 is paused.
 
+People are about the towns too (as passengers already wait on platforms,
+a figure for every quarter load): walking the pavements, two to four to a
+street by the town's size; shopping among a square's stalls and walking
+round its fountain; strolling a green's paths. Most go home after dark.
+
 Next:
-- People: passengers waiting on platforms, crowds in market squares.
+- Rivers: boats and barges on the wider water, and ducks by the landings.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

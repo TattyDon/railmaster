@@ -3250,6 +3250,21 @@ void draw_square(const Green& g, const Camera& cam) {
 // Large: longer platforms with canopies, a stone hall with wings and a clock
 // tower, and a footbridge over the tracks. The house stands on the -across
 // side, (dy, -dx). Inside GL_QUADS.
+// A person standing at (x, y, z), facing (dx, dy), `s` times the usual
+// size (a little larger than life, like the lamps, so they read at a
+// distance): coat, head and, on some, a hat; their look from `h`. Inside
+// GL_QUADS.
+void figure(float x, float y, float z, float dx, float dy, float s, std::uint32_t h) {
+    static constexpr float kCoats[][3] = {{0.2f, 0.22f, 0.35f}, {0.45f, 0.12f, 0.1f}, {0.18f, 0.3f, 0.2f}, {0.3f, 0.26f, 0.22f},
+                                         {0.55f, 0.5f, 0.42f},  {0.12f, 0.12f, 0.13f}, {0.5f, 0.35f, 0.15f}, {0.35f, 0.2f, 0.4f}};
+    static constexpr float kSkin[3] = {0.9f, 0.72f, 0.58f}, kHat[3] = {0.1f, 0.09f, 0.08f};
+    const float* coat = kCoats[(h >> 8) % 8];
+    const float tall = (0.024f + 0.006f * unit(h >> 4)) * s;
+    box(x, y, z, dx, dy, 0.0052f * s, 0.0045f * s, tall, coat, coat);
+    box(x, y, z + tall, dx, dy, 0.0037f * s, 0.0037f * s, 0.0075f * s, kSkin, kSkin);
+    if ((h >> 12) % 3 == 0) box(x, y, z + tall + 0.0075f * s, dx, dy, 0.0048f * s, 0.0048f * s, 0.003f * s, kHat, kHat);
+}
+
 // What waits on a station's platform, drawn each frame: a figure for every
 // quarter load of passengers (up to two dozen) in coats of many colours,
 // mail sacks at one end and freight crates at the other, so a busy station
@@ -3276,21 +3291,13 @@ void platform_life(const sim::Station& st, const sim::CargoRegistry& cargo, floa
         ox = x + dx * along - qx * across;
         oy = y + dy * along - qy * across;
     };
-    static constexpr float kCoats[][3] = {{0.2f, 0.22f, 0.35f}, {0.45f, 0.12f, 0.1f}, {0.18f, 0.3f, 0.2f}, {0.3f, 0.26f, 0.22f},
-                                         {0.55f, 0.5f, 0.42f},  {0.12f, 0.12f, 0.13f}, {0.5f, 0.35f, 0.15f}, {0.35f, 0.2f, 0.4f}};
-    const float skin[3] = {0.9f, 0.72f, 0.58f}, hat[3] = {0.1f, 0.09f, 0.08f};
     float cx, cy;
     for (int i = 0; i < people; ++i) {
         // Spread along the middle of the platform, in loose groups.
         const std::uint32_t h = hash(st.id, static_cast<std::uint32_t>(i), 41);
         const float along = (unit(h) * 1.4f - 0.7f) * len, across = off + (unit(h >> 16) - 0.5f) * pw * 1.2f;
         at(along, across, cx, cy);
-        const float* coat = kCoats[(h >> 8) % 8];
-        // A little larger than life, like the lamps, so they read at a distance.
-        const float tall = (0.024f + 0.006f * unit(h >> 4)) * s;
-        box(cx, cy, top, dx, dy, 0.0052f * s, 0.0045f * s, tall, coat, coat);
-        box(cx, cy, top + tall, dx, dy, 0.0037f * s, 0.0037f * s, 0.0075f * s, skin, skin);
-        if ((h >> 12) % 3 == 0) box(cx, cy, top + tall + 0.0075f * s, dx, dy, 0.0048f * s, 0.0048f * s, 0.003f * s, hat, hat);
+        figure(cx, cy, top, dx, dy, s, h);
     }
     const float sack[3] = {0.72f, 0.66f, 0.5f}, sack_top[3] = {0.8f, 0.74f, 0.58f};
     for (int i = 0; i < sacks; ++i) {
@@ -3832,6 +3839,79 @@ void draw_traffic(const TownLayout& towns, std::int32_t year, const Camera& cam)
             }
             for (const float a : {-0.012f, 0.012f}) beam(x + fx * a, y + fy * a, z, x + fx * a, y + fy * a, z + 0.004f, 0.005f, kTyre);
             add_light(x + fx * 0.02f, y + fy * 0.02f, z + 0.008f, 0.03f, 1.0f, 0.9f, 0.6f, fx, fy);
+        }
+    }
+    glEnd();
+}
+
+// People about the town, drawn each frame near the camera: walking the
+// pavements of towns that have them, shopping at a square's stalls and
+// standing round its fountain, strolling a green's paths. Most go home
+// after dark. They stand still while the game is paused.
+void draw_people(const TownLayout& towns, const Camera& cam) {
+    if (cam.distance > 45.0f) return; // too small to see
+    const float reach = std::max(14.0f, cam.distance * 1.3f);
+    const float t = g_animation_seconds;
+    const bool dark = shading::night() > 0.5f;
+    const auto near = [&](float x, float y) { return std::fabs(x - cam.target_x) <= reach && std::fabs(y - cam.target_y) <= reach; };
+    const auto ground = [&](float x, float y, float lift) { return cam.ground_z(x, y) + lift; };
+    glBegin(GL_QUADS);
+    // On the pavements.
+    for (std::size_t i = 0; i + 3 < towns.streets.size(); i += 4) {
+        const float x0 = towns.streets[i], y0 = towns.streets[i + 1], x1 = towns.streets[i + 2], y1 = towns.streets[i + 3];
+        if (!near((x0 + x1) * 0.5f, (y0 + y1) * 0.5f)) continue;
+        const std::int64_t size = i / 4 < towns.street_town.size() ? towns.street_town[i / 4] : 0;
+        const float len = std::hypot(x1 - x0, y1 - y0);
+        const float from = kStreetHalf + kPavement, to = len - kStreetHalf - kPavement;
+        if (size < kPavedTown || to - from < 0.1f) continue;
+        const float ux = (x1 - x0) / len, uy = (y1 - y0) / len;
+        const auto seg = static_cast<std::uint32_t>(i / 4);
+        const int walkers = size >= 30 ? 4 : size >= 20 ? 3 : 2;
+        for (int v = 0; v < walkers; ++v) {
+            const std::uint32_t h = hash(seg, static_cast<std::uint32_t>(v), 61);
+            if (dark && unit(h >> 20) > 0.25f) continue; // gone home
+            const float speed = 0.02f + 0.015f * unit(h >> 8); // tiles a second
+            const float span = to - from;
+            const float phase = std::fmod(t * speed / (2 * span) + unit(h), 1.0f);
+            const float dir = phase < 0.5f ? 1.0f : -1.0f;
+            const float along = from + span * (phase < 0.5f ? 2 * phase : 2 - 2 * phase);
+            const float side = (h >> 3) % 2 == 0 ? 1.0f : -1.0f, across = (kStreetHalf + kPavement * 0.5f) * side;
+            const float x = x0 + ux * along - uy * across, y = y0 + uy * along + ux * across;
+            figure(x, y, ground(x, y, kLift + 0.003f), ux * dir, uy * dir, 1.0f, h);
+        }
+    }
+    // In the squares and on the greens.
+    for (const Green& g : towns.greens) {
+        const float cx = (g.x0 + g.x1) * 0.5f, cy = (g.y0 + g.y1) * 0.5f;
+        if (!near(cx, cy)) continue;
+        if (g.use == GroundUse::Square) {
+            // Shoppers standing about the square, and a few walking round the fountain.
+            const int standing = dark ? 3 : 16;
+            for (int k = 0; k < standing; ++k) {
+                const std::uint32_t h = hash(g.seed, static_cast<std::uint32_t>(k), 71);
+                float x = g.x0 + 0.06f + (g.x1 - g.x0 - 0.12f) * unit(h), y = g.y0 + 0.06f + (g.y1 - g.y0 - 0.12f) * unit(h >> 16);
+                if (std::hypot(x - cx, y - cy) < 0.1f) x += 0.12f; // not in the fountain
+                const float a = unit(h >> 6) * 6.2831853f;
+                figure(x, y, ground(x, y, kPatchLift - 0.003f), std::cos(a), std::sin(a), 1.0f, h);
+            }
+            for (int k = 0; k < (dark ? 0 : 5); ++k) {
+                const std::uint32_t h = hash(g.seed, static_cast<std::uint32_t>(k), 73);
+                const float a = t * 0.18f + unit(h) * 6.2831853f, r = 0.11f + 0.02f * unit(h >> 8);
+                const float x = cx + r * std::cos(a), y = cy + r * std::sin(a);
+                figure(x, y, ground(x, y, kPatchLift - 0.003f), -std::sin(a), std::cos(a), 1.0f, h);
+            }
+        } else if (g.use == GroundUse::Green) {
+            // Strolling along the crossing paths, corner to corner and back.
+            for (int k = 0; k < (dark ? 0 : 6); ++k) {
+                const std::uint32_t h = hash(g.seed, static_cast<std::uint32_t>(k), 79);
+                const bool second = k % 2 == 1;
+                const float ax = g.x0, ay = second ? g.y1 : g.y0, bx = g.x1, by = second ? g.y0 : g.y1;
+                const float len = std::hypot(bx - ax, by - ay);
+                const float phase = std::fmod(t * (0.015f + 0.01f * unit(h >> 8)) / (2 * len) + unit(h), 1.0f);
+                const float u = 0.08f + 0.84f * (phase < 0.5f ? 2 * phase : 2 - 2 * phase), dir = phase < 0.5f ? 1.0f : -1.0f;
+                const float x = ax + (bx - ax) * u, y = ay + (by - ay) * u;
+                figure(x, y, ground(x, y, kPatchLift - 0.003f), (bx - ax) / len * dir, (by - ay) / len * dir, 1.0f, h);
+            }
         }
     }
     glEnd();
@@ -4571,6 +4651,8 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             glCallList(list);
             draw_building_sites(towns, cam);
             draw_traffic(towns, year, cam);
+        draw_people(towns, cam);
+            draw_people(towns, cam);
             draw_turning();
             g_smoke.insert(g_smoke.end(), list_smoke.begin(), list_smoke.end());
             town_lights(towns, cam);
