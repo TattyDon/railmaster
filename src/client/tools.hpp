@@ -369,6 +369,7 @@ private:
     std::string site_name(sim::SiteId id) const;
     std::array<float, 4> guide_button() const;
     bool help_open_ = false; // the help card (?)
+    int help_page_ = 0;      // 0 the keys, 1 what makes a line pay (Tab turns)
     void draw_help() const;
     // The help button, after the tool buttons.
     std::array<float, 4> help_button() const;

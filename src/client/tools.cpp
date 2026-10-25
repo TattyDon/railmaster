@@ -1900,9 +1900,8 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (help_open_) {
-        if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_SLASH || key == SDLK_QUESTION || key == SDLK_F1) {
-            help_open_ = false;
-        }
+        if (key == SDLK_TAB) help_page_ = 1 - help_page_;
+        else if (key == SDLK_ESCAPE || key == SDLK_RETURN || key == SDLK_SLASH || key == SDLK_QUESTION || key == SDLK_F1) help_open_ = false;
         return true;
     }
     if (key == SDLK_QUESTION || (key == SDLK_SLASH && (mod & KMOD_SHIFT) != 0)) {
@@ -3394,13 +3393,49 @@ void Tools::draw_help() const {
           {"Ctrl+H", "Hide the trees"},
           {"Esc", "Menu: save, load, settings; Ctrl+S quick save"}}},
     };
-    const float w = std::min(1100.0f, static_cast<float>(cam_.width_px) - 20), h = 400;
+    const float w = std::min(1100.0f, static_cast<float>(cam_.width_px) - 20), h = help_page_ == 0 ? 400.0f : 350.0f;
     const float x0 = (static_cast<float>(cam_.width_px) - w) / 2, y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2);
     fill_rect(0, 0, static_cast<float>(cam_.width_px), static_cast<float>(cam_.height_px), 0.0f, 0.0f, 0.0f, 0.35f);
     ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
-    draw_text(x0 + 18, y0 + 10, "Help: the main keys", kScale + 1);
+    draw_text(x0 + 18, y0 + 10, help_page_ == 0 ? "Help: the main keys" : "Help: what makes a line pay", kScale + 1);
+    glColor3f(0.7f, 0.68f, 0.62f);
+    const std::string turn = help_page_ == 0 ? "Tab: what makes a line pay" : "Tab: the main keys";
+    draw_text(x0 + w - 18 - static_cast<float>(text_width(turn, kScale)), y0 + 14, turn, kScale);
     ui::rule(x0 + 10, x0 + w - 10, y0 + 40);
+    if (help_page_ == 1) {
+        // Tips from playing and measuring the game (docs/ROADMAP.md has the figures).
+        static const char* const kTips[] = {
+            "A first line joins two good-sized towns 5 to 16 miles apart. Its trade follows the smaller town: on test maps, "
+            "the pair whose smaller town was biggest earned about three times what the two nearest towns did.",
+            "Longer lines pay more a load: in tests, first lines earned more the longer they ran, up to the 16 miles tried.",
+            "Freight pays where it sells for more. The Guide (Ctrl+G) ranks lines by a year's worth; Enter goes to one, "
+            "B prices it, B again builds it all. Shift+M then Tab shows them on the map.",
+            "Steam engines need water: put a service tower (F4) by a station on every line, or trains crawl.",
+            "Running empty is cheap: a train's running costs are a few percent of what a good line earns. Waiting for "
+            "full loads (W) earned 1 to 40% less in tests, so let trains run.",
+            "Click a train to see its legs: each run into a stop, what it earned and carried. Red legs lose money, and "
+            "the Ledger (L) marks trains that have one.",
+            "Lines a rival already runs are marked in the Guide and left off the map's best lines: open ones pay best.",
+            "Towns grow with the trade at their stations, and bigger towns send more passengers and mail.",
+        };
+        float y = y0 + 54;
+        for (const char* tip : kTips) {
+            bool first = true;
+            for (const std::string& l : wrap(tip, kScale, w - 70)) {
+                glColor3f(1.0f, 0.86f, 0.5f);
+                if (first) draw_text(x0 + 22, y, "-", kScale);
+                glColor3f(0.9f, 0.88f, 0.82f);
+                draw_text(x0 + 40, y, l, kScale);
+                y += 19;
+                first = false;
+            }
+            y += 6;
+        }
+        glColor3f(0.6f, 0.58f, 0.54f);
+        draw_text(x0 + 18, y0 + h - 26, "Tab turns the page.   ? or Esc or a click closes this", kScale);
+        return;
+    }
     for (int i = 0; i < 4; ++i) {
         const float cx = x0 + 20 + static_cast<float>(i % 2) * (w / 2);
         float y = y0 + 52 + static_cast<float>(i / 2) * 160;
@@ -3416,7 +3451,7 @@ void Tools::draw_help() const {
         }
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 18, y0 + h - 26, "The bottom bar always shows the current tool's keys.   ? or Esc or a click closes this", kScale);
+    draw_text(x0 + 18, y0 + h - 26, "The bottom bar always shows the current tool's keys.   Tab: tips.   ? or Esc or a click closes this", kScale);
 }
 
 std::string Tools::hint() const {

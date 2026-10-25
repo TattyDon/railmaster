@@ -489,8 +489,12 @@ empty is cheap and fares fall with the time a trip takes, so the hint
 pointing to W was taken out; the panel just counts the trips that sold
 nothing.
 
+The help card (?) has a second page (Tab): what makes a line pay, from
+these measurements.
+
 Next:
-- A player's guide page in the help (?) on what makes a line pay.
+- Check a long game: a player following the tips through to 1850, and
+  what the goals ladder asks of them by then.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
