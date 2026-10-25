@@ -16,6 +16,7 @@ add_executable(railmaster
     title.cpp
     tools.cpp
     tutorial.cpp
+    goals.cpp
     ui.cpp
 )
 

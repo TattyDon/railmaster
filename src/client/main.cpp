@@ -25,6 +25,7 @@
 #include "shading.hpp"
 #include "ui.hpp"
 #include "tools.hpp"
+#include "goals.hpp"
 #include "tutorial.hpp"
 
 #include "railmaster/sim/demo.hpp"
@@ -508,6 +509,7 @@ int main(int argc, char* argv[]) {
     client::Title title(data_dir, maps_dir, scenarios_dir, save_slots());
     client::Editor editor(world, cam);
     client::Tutorial tutorial;
+    client::Goals goals; // a free game's goals, once the first steps are done
     // A free game shows its first steps once the company is founded.
     bool first_steps_pending = false;
     std::string editor_path; // where the map being edited was last saved
@@ -723,6 +725,7 @@ int main(int argc, char* argv[]) {
                 }
                 client::audio::play(client::audio::Sound::Click, 0.35f);
                 if (tutorial.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) break;
+                if (!tutorial.open() && goals.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) break;
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
                 break;
             case SDL_MOUSEBUTTONUP:
@@ -1296,6 +1299,11 @@ int main(int argc, char* argv[]) {
                 if (!built) tutorial.begin(world, cam, client::Tutorial::Mode::FirstGame);
             }
             tutorial.update(world, cam, tools);
+            if (const std::string met = goals.update(world); !met.empty()) {
+                tools.show(met, true);
+                client::audio::play(client::audio::Sound::Bell, 0.6f);
+            }
+            if (!tutorial.open() && !title.open()) goals.draw(world, static_cast<float>(cam.width_px));
             tutorial.draw_rings(cam);
             tutorial.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         }

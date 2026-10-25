@@ -80,6 +80,11 @@ there):
   and medals), and the way to a first line between two nearby towns,
   ringed in gold, each step passing as you do it ("Hide these tips" puts
   them away).
+- After that, a free game sets you goals, one at a time, in a banner under
+  the toolbar with how far along you are and a hint (click it to fold the
+  hint away): run a paying train, reach a third town, carry freight, run
+  four trains, make $250,000 a year, double your share price, make
+  $2,000,000 a year. A bell and a message mark each one met.
 - `--quick` skips the title screen and the dialog and starts on the demo
   network: three towns, their stations and two trains, built for you.
 - Every game starts paused: Space starts the clock, + and - change the
