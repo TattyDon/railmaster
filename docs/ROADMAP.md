@@ -462,8 +462,12 @@ Clicking one of those lines (or its number), or pressing its number key,
 goes to it with the line planned as the Guide's Enter does: B prices it,
 B again builds it.
 
+The Guide puts lines a rival already runs (its stations reach both ends)
+after the open ones, dimmed and marked with who runs them; the big map's
+best lines leave them out.
+
 Next:
-- The Guide and the big map skip lines a rival already runs.
+- A train's panel shows what it carries each way and where it loses money.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

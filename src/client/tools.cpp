@@ -4349,7 +4349,7 @@ void Tools::go_to_opportunity(const Opportunity& o) {
 bool Tools::follow_guide_link(std::size_t n) {
     std::size_t i = 0;
     for (const Opportunity& o : find_opportunities()) {
-        if (o.served) continue;
+        if (o.served || o.rival) continue;
         if (i++ == n) {
             go_to_opportunity(o);
             return true;
@@ -4361,7 +4361,7 @@ bool Tools::follow_guide_link(std::size_t n) {
 std::vector<MapLink> Tools::guide_links(std::size_t n) const {
     std::vector<MapLink> out;
     for (const Opportunity& o : find_opportunities()) {
-        if (o.served) continue;
+        if (o.served || o.rival) continue;
         const auto [ax, ay] = opp_cell(o, true);
         const auto [bx, by] = opp_cell(o, false);
         const std::string what = o.towns ? std::string("Passengers") : as_written(world_.data().cargo.get(o.cargo).name);
@@ -4378,14 +4378,23 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
     const sim::Railway& rw = world_.railway();
     const std::int32_t year = world_.date().year();
     const auto me = world_.player_company();
-    // Whether one of your stations reaches a site.
-    const auto served = [&](const sim::Site& site) {
+    // Whether one of a company's stations (yours by default) reaches a site.
+    const auto served_by = [&](const sim::Site& site, std::optional<sim::CompanyId> who) {
         for (const sim::Station& st : rw.stations()) {
-            if (!me || st.owner != *me) continue;
+            if (!who || st.owner != *who) continue;
             const sim::MapPoint at = rw.track().node(st.node).pos;
             if (eco.reaches(site, at, eco.cells_mm(sim::catchment_radius(st.size, world_.data().balance)))) return true;
         }
         return false;
+    };
+    const auto served = [&](const sim::Site& site) { return served_by(site, me); };
+    // A rival whose stations reach both ends.
+    const auto rival_at = [&](const sim::Site& a, const sim::Site& b) -> std::optional<sim::CompanyId> {
+        for (const sim::Company& c : world_.companies()) {
+            if (c.defunct() || (me && c.id() == *me)) continue;
+            if (served_by(a, c.id()) && served_by(b, c.id())) return c.id();
+        }
+        return std::nullopt;
     };
     const auto wants = [&](const sim::Site& d, sim::CargoId c) {
         if (d.closed || d.kind == sim::IndustryKind::Raw) return false;
@@ -4422,6 +4431,7 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
             }
             if (best) {
                 best->served = served(from) && served(eco.sites()[best->to]);
+                best->rival = rival_at(from, eco.sites()[best->to]);
                 out.push_back(*best);
             }
         }
@@ -4443,12 +4453,13 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
             }
         }
         const std::int32_t era = sim::express_era_percent(year, world_.data().balance);
-        const auto served_town = [&](const sim::Town& t) {
-            sim::Site probe;
-            probe.cx = t.cx;
-            probe.cy = t.cy;
-            return served(probe);
+        const auto probe = [](const sim::Town& t) {
+            sim::Site p;
+            p.cx = t.cx;
+            p.cy = t.cy;
+            return p;
         };
+        const auto served_town = [&](const sim::Town& t) { return served(probe(t)); };
         for (std::size_t i = 0; i < towns.size(); ++i) {
             for (std::size_t j = i + 1; j < towns.size(); ++j) {
                 const double dx = towns[j].cx - towns[i].cx, dy = towns[j].cy - towns[i].cy;
@@ -4469,19 +4480,28 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
                 const bool swap = houses[j] > houses[i];
                 Opportunity o{*world_.data().cargo.find("passengers"), static_cast<sim::SiteId>(swap ? j : i), static_cast<sim::SiteId>(swap ? i : j), fares / kinds,
                               made * kinds, static_cast<std::int64_t>(miles * 10), served_town(towns[i]) && served_town(towns[j]), true};
+                o.rival = rival_at(probe(towns[i]), probe(towns[j]));
                 out.push_back(o);
             }
         }
     }
-    // Unserved first, then by what a year of it would bring.
+    // Open ones first, then those a rival runs, then yours; within each,
+    // by what a year of it would bring.
     std::sort(out.begin(), out.end(), [](const Opportunity& a, const Opportunity& b) {
         if (a.served != b.served) return !a.served;
+        if (a.rival.has_value() != b.rival.has_value()) return !a.rival.has_value();
         const std::int64_t va = a.per_load * a.loads_milli / 1000 / 1000, vb = b.per_load * b.loads_milli / 1000 / 1000;
         if (va != vb) return va > vb; // to the thousand dollars
         return a.tenths_of_miles < b.tenths_of_miles; // then the shorter line, cheaper to build
     });
-    if (out.size() > 40) out.resize(40);
-    return out;
+    // The best 30 open ones, then up to 10 already run (so you can see who runs what).
+    std::vector<Opportunity> kept;
+    std::size_t open = 0, run = 0;
+    for (const Opportunity& o : out) {
+        const bool taken = o.served || o.rival;
+        if (taken ? run++ < 10 : open++ < 30) kept.push_back(o);
+    }
+    return kept;
 }
 
 void Tools::open_guide() {
@@ -4543,7 +4563,7 @@ void Tools::draw_guide() const {
     if (guide_tab_ == 0) {
         glColor3f(0.75f, 0.73f, 0.68f);
         draw_text(x0 + 16, y,
-                  "Lines worth building: passengers and mail between towns, and freight to where it sells for more. Estimates; served ones last.",
+                  "Lines worth building: passengers and mail between towns, and freight to where it sells for more. Estimates; ones a rival runs, then yours, last.",
                   kScale);
         y += kRow + 4;
         const float c_from = x0 + 165, c_to = x0 + 500, c_miles = x0 + 860, c_load = x0 + 960, c_loads = x0 + 1060,
@@ -4567,11 +4587,15 @@ void Tools::draw_guide() const {
             const bool sel = i == guide_sel_;
             if (sel) ui::selection(x0 + 8, y - 2, x0 + w - 8, y + kRow - 3);
             if (sel) glColor3f(1.0f, 0.95f, 0.7f);
-            else if (o.served) glColor3f(0.6f, 0.58f, 0.55f);
+            else if (o.served || o.rival) glColor3f(0.6f, 0.58f, 0.55f);
             else glColor3f(0.9f, 0.88f, 0.82f);
             draw_text(x0 + 16, y, o.towns ? std::string("Passengers, mail") : as_written(cargo.get(o.cargo).name), kScale);
             draw_text(c_from, y, opp_from_name(o), kScale);
-            draw_text(c_to, y, opp_to_name(o) + (o.served ? "  (served)" : ""), kScale);
+            draw_text(c_to, y,
+                      opp_to_name(o) + (o.served ? "  (served)"
+                                        : o.rival ? "  (" + as_written(world_.company(*o.rival).name()) + " runs it)"
+                                                  : ""),
+                      kScale);
             right(c_miles, y, std::to_string(o.tenths_of_miles / 10));
             right(c_load, y, "+" + price_k(o.per_load));
             right(c_loads, y, loads(o.loads_milli));

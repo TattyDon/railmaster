@@ -329,6 +329,8 @@ private:
         // Passengers and mail between two towns (cargo is then passengers):
         // from and to name the towns, not sites.
         bool towns = false;
+        // A rival's stations already reach both ends (they may run it).
+        std::optional<sim::CompanyId> rival{};
     };
     void go_to_opportunity(const Opportunity& o);
     std::string opp_from_name(const Opportunity& o) const;
