@@ -479,12 +479,18 @@ Each leg says what it earned from (its two best cargoes) and how many of
 its trips sold nothing there (saves from version 26). On the demo most
 trips sell nothing, and a closer look showed why: its two trains call
 every six days or so, faster than the towns fill a car (express loads go
-when half a car waits), so they mostly leave empty. When most of a
-train's trips sell nothing, its panel says so and points to W (wait for a
-full load).
+when half a car waits), so they mostly leave empty.
+
+Measured (three maps, 18 months, the demo's two trains): waiting for a
+full load does not pay. As built earned most on two maps of three;
+waiting for one car at every stop earned 1 to 14% less, two cars 34 to
+40% less, and one train instead of two 13% less to 7% more. Running
+empty is cheap and fares fall with the time a trip takes, so the hint
+pointing to W was taken out; the panel just counts the trips that sold
+nothing.
 
 Next:
-- The demo network's trains wait for a fuller load at their busiest stop.
+- A player's guide page in the help (?) on what makes a line pay.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

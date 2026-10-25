@@ -3860,16 +3860,6 @@ void Tools::draw_detail_panel() const {
                         rows.push_back(dim({carried}));
                     }
                     if (losing) rows.push_back(dim({"Red legs lose money: change their loads (E)"}));
-                    // Mostly running empty: more trains than traffic.
-                    std::uint32_t trips = 0, empty = 0;
-                    for (const LegProfit& lp : profits) {
-                        trips += legs[lp.stop].trips;
-                        empty += legs[lp.stop].empty_trips;
-                    }
-                    if (trips >= 6 && empty * 2 > trips) {
-                        rows.push_back(dim({"Most trips sell nothing: too little traffic for it."}));
-                        rows.push_back(dim({"W makes it wait for a full load at a stop"}));
-                    }
                 }
             }
             rows.push_back(money_row("Earned since bought", t.revenue));
