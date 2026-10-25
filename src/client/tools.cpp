@@ -4324,6 +4324,20 @@ std::string Tools::site_name(sim::SiteId id) const {
     return as_written(world_.data().industries.get(s.type).name) + " near " + town;
 }
 
+std::vector<MapLink> Tools::guide_links(std::size_t n) const {
+    std::vector<MapLink> out;
+    for (const Opportunity& o : find_opportunities()) {
+        if (o.served) continue;
+        const auto [ax, ay] = opp_cell(o, true);
+        const auto [bx, by] = opp_cell(o, false);
+        const std::string what = o.towns ? std::string("Passengers") : as_written(world_.data().cargo.get(o.cargo).name);
+        out.push_back({world_.economy().node_centre(ax, ay), world_.economy().node_centre(bx, by),
+                       what + ": " + opp_from_name(o) + " - " + opp_to_name(o) + ", " + price_k(o.per_load * o.loads_milli / 1000) + "/yr"});
+        if (out.size() >= n) break;
+    }
+    return out;
+}
+
 std::vector<Tools::Opportunity> Tools::find_opportunities() const {
     const sim::Economy& eco = world_.economy();
     const sim::IndustryRegistry& types = world_.data().industries;

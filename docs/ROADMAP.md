@@ -454,8 +454,13 @@ labels crowd it is the small towns' that give way.
 Shift+M opens the big map: the radar across the window with every town
 named, industries marked by kind, and your lines; a click goes there.
 
+On it, every railroad's track shows in its colour (yours white, as in the
+world) with a key, and Tab adds the Guide's ten best unserved lines,
+dashed in gold and numbered, with what each would earn.
+
 Next:
-- Overlays on the big map: what each town wants, and rivals' lines.
+- Clicking a numbered line on the big map goes to it with the Guide's plan
+  ready (B to price it, B again to build).
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

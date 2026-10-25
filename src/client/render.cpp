@@ -5170,7 +5170,7 @@ void draw_territory_names(const sim::TerritoryMap& map, const Camera& cam, const
     }
 }
 
-void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, float size) {
+void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, float size, const std::vector<MapLink>* links) {
     draw_radar(w, cam, x0, y0, size);
     const sim::Terrain& t = w.terrain();
     const float k = size / static_cast<float>(std::max(t.width(), t.height()));
@@ -5197,6 +5197,55 @@ void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, fl
         glVertex2f(sx - 2.5f, sy + 2.5f);
     }
     glEnd();
+    // Track in its owner's colour (yours white, as in the world), over a
+    // dark outline so it reads on the land.
+    const auto company_rgb = [&](sim::CompanyId c, float& r, float& g, float& b) { owner_rgb(c, w.player_company(), r, g, b); };
+    const sim::TrackNetwork& net = w.railway().track();
+    for (const bool outline : {true, false}) {
+        glLineWidth(outline ? 5.0f : 3.0f);
+        glBegin(GL_LINES);
+        for (const sim::TrackEdge& e : net.edges()) {
+            if (e.removed) continue;
+            float r = 0.08f, g = 0.07f, b = 0.06f;
+            if (!outline) company_rgb(e.owner, r, g, b);
+            glColor3f(r, g, b);
+            for (const sim::NodeId n : {e.a, e.b}) {
+                float sx, sy;
+                at(net.node(n).pos, sx, sy);
+                glVertex2f(sx, sy);
+            }
+        }
+        glEnd();
+    }
+    glLineWidth(1.0f);
+    // The Guide's best links, in gold, numbered.
+    if (links) {
+        glLineWidth(2.0f);
+        glEnable(GL_LINE_STIPPLE);
+        glLineStipple(2, 0xF0F0);
+        glBegin(GL_LINES);
+        glColor3f(1.0f, 0.9f, 0.3f);
+        for (const MapLink& l : *links) {
+            float ax, ay, bx, by;
+            at(l.a, ax, ay);
+            at(l.b, bx, by);
+            glVertex2f(ax, ay);
+            glVertex2f(bx, by);
+        }
+        glEnd();
+        glDisable(GL_LINE_STIPPLE);
+        glLineWidth(1.0f);
+        for (std::size_t i = 0; i < links->size(); ++i) {
+            float ax, ay, bx, by;
+            at((*links)[i].a, ax, ay);
+            at((*links)[i].b, bx, by);
+            const std::string n = std::to_string(i + 1);
+            const float mx = (ax + bx) / 2, my = (ay + by) / 2;
+            ui::chip(mx - 9, my - 9, mx + 9, my + 9, 0.85f);
+            glColor3f(1.0f, 0.9f, 0.3f);
+            draw_text(mx - static_cast<float>(text_width(n, 2)) / 2, my - 7, n, 2);
+        }
+    }
     // Town names, with stars.
     for (std::size_t i = 0; i < eco.towns().size(); ++i) {
         const sim::Town& town = eco.towns()[i];
@@ -5213,6 +5262,57 @@ void draw_big_map(const sim::World& w, const Camera& cam, float x0, float y0, fl
     draw_text(x0, y0 - 28, "Map", 3);
     glColor3f(0.8f, 0.78f, 0.7f);
     draw_text(x0 + 70, y0 - 22, "Click to go there.  Farms and mines green, works orange, ports blue.  Shift+M or Esc closes", 2);
+    // The key: each company's colour, then the links' list.
+    float ky = y0 + 4;
+    const float kx = x0 + size + 16;
+    glColor3f(1.0f, 0.86f, 0.5f);
+    draw_text(kx, ky, "Railroads", 2);
+    ky += 22;
+    for (const sim::Company& c : w.companies()) {
+        if (c.defunct()) continue;
+        float r, g, b;
+        company_rgb(c.id(), r, g, b);
+        glBegin(GL_QUADS);
+        glColor3f(0.08f, 0.07f, 0.06f);
+        glVertex2f(kx - 1, ky + 3);
+        glVertex2f(kx + 19, ky + 3);
+        glVertex2f(kx + 19, ky + 11);
+        glVertex2f(kx - 1, ky + 11);
+        glColor3f(r, g, b);
+        glVertex2f(kx, ky + 4);
+        glVertex2f(kx + 18, ky + 4);
+        glVertex2f(kx + 18, ky + 10);
+        glVertex2f(kx, ky + 10);
+        glEnd();
+        glColor3f(0.92f, 0.9f, 0.84f);
+        draw_text(kx + 24, ky, c.name() + (w.player_company() && c.id() == *w.player_company() ? " (you)" : ""), 2);
+        ky += 20;
+    }
+    ky += 12;
+    if (links) {
+        glColor3f(1.0f, 0.86f, 0.5f);
+        draw_text(kx, ky, "Best lines to build", 2);
+        ky += 22;
+        for (std::size_t i = 0; i < links->size(); ++i) {
+            glColor3f(0.92f, 0.9f, 0.84f);
+            // Cut to the window, keeping the value at its end.
+            std::string text = std::to_string(i + 1) + ". " + (*links)[i].label;
+            const float room = static_cast<float>(cam.width_px) - kx - 12;
+            const std::size_t comma = text.rfind(", ");
+            const std::string value = comma == std::string::npos ? "" : text.substr(comma);
+            std::string head = comma == std::string::npos ? text : text.substr(0, comma);
+            while (head.size() > 8 && static_cast<float>(text_width(head + "..." + value, 2)) > room) head.pop_back();
+            if (head.size() + value.size() < text.size()) text = head + "..." + value;
+            draw_text(kx, ky, text, 2);
+            ky += 20;
+        }
+        ky += 6;
+        glColor3f(0.7f, 0.68f, 0.62f);
+        draw_text(kx, ky, "Ctrl+G for details; Tab hides", 2);
+    } else {
+        glColor3f(0.7f, 0.68f, 0.62f);
+        draw_text(kx, ky, "Tab: best lines to build", 2);
+    }
 }
 
 void draw_radar(const sim::World& w, const Camera& cam, float x0, float y0, float size) {

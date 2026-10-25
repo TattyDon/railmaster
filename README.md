@@ -317,7 +317,7 @@ and checks the economy against the spec's targets
 | `--look=X,Y` | Start with the view close over map tile (X, Y) |
 | Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |
 | Radar (bottom left) | The whole map, with towns, stations, track and where you are looking; click it to go there |
-| Shift+M | The big map: the whole map across the window, every town named with its stars, industries marked (farms and mines green, works orange, ports blue), your lines and stations; click to go there (Shift+M or Esc closes) |
+| Shift+M | The big map: the whole map across the window, every town named with its stars, industries marked (farms and mines green, works orange, ports blue), every railroad's track in its colour (yours white) with a key; Tab adds the Guide's ten best lines to build, dashed in gold and numbered, listed by the key with what each would earn a year. Click to go there (Shift+M or Esc closes) |
 | + / -, Pause (or Space) | Game speed: Paused, Very Slow, Slow, Normal, Fast, Very Fast. Every game starts paused; Normal is about four minutes a game year |
 
 The bottom bar always shows what the current tool does and its options. While

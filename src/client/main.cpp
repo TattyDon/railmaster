@@ -620,8 +620,10 @@ int main(int argc, char* argv[]) {
     constexpr float kRadar = 170.0f;
     // The big map (Shift+M): centred, as large as the window allows.
     bool big_map = false;
+    bool big_map_links = false;            // Tab on the big map: the Guide's best lines
+    std::vector<client::MapLink> map_links; // worked out when shown
     const auto big_size = [&] { return std::min(static_cast<float>(cam.width_px) - 80.0f, static_cast<float>(cam.height_px) - 160.0f); };
-    const auto big_x = [&] { return (static_cast<float>(cam.width_px) - big_size()) / 2; };
+    const auto big_x = [&] { return std::max(20.0f, (static_cast<float>(cam.width_px) - big_size()) / 2 - 220.0f); };
     const auto big_y = [&] { return 90.0f; };
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
@@ -758,10 +760,16 @@ int main(int argc, char* argv[]) {
                 // Shift+M opens and closes the big map; Esc closes it.
                 if (ev.key.keysym.sym == SDLK_m && (ev.key.keysym.mod & KMOD_SHIFT) != 0) {
                     big_map = !big_map;
+                    if (big_map && big_map_links) map_links = tools.guide_links(10);
                     break;
                 }
                 if (big_map && ev.key.keysym.sym == SDLK_ESCAPE) {
                     big_map = false;
+                    break;
+                }
+                if (big_map && ev.key.keysym.sym == SDLK_TAB) {
+                    big_map_links = !big_map_links;
+                    if (big_map_links) map_links = tools.guide_links(10);
                     break;
                 }
                 // Ctrl+S saves the game, Ctrl+L loads the last save.
@@ -1327,7 +1335,7 @@ int main(int argc, char* argv[]) {
             glVertex2f(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
             glVertex2f(0, static_cast<float>(cam.height_px));
             glEnd();
-            client::draw_big_map(world, cam, big_x(), big_y(), big_size());
+            client::draw_big_map(world, cam, big_x(), big_y(), big_size(), big_map_links ? &map_links : nullptr);
         }
         if (!editor.open() && !tools.founding_open() && !tools.menu_open() && !tools.newspaper_open()) {
             // A free game's first steps, once the company is founded (and
