@@ -1090,6 +1090,12 @@ bool Tools::click_row(float sx, float sy) {
 }
 
 bool Tools::on_wheel(float sx, float sy, int steps) {
+    // Over a detail panel, the wheel scrolls it (when it is taller than the window).
+    if (detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3]) {
+        if (steps > 0) detail_skip_ = detail_skip_ > static_cast<std::size_t>(steps) * 2 ? detail_skip_ - static_cast<std::size_t>(steps) * 2 : 0;
+        else detail_skip_ += static_cast<std::size_t>(-steps) * 2; // clamped when drawn
+        return true;
+    }
     // Over a list's rows (or between them), the wheel moves its choice.
     float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
     std::optional<RowPanel> panel;
@@ -3514,7 +3520,10 @@ std::optional<sim::MapPoint> Tools::take_jump() {
 }
 
 void Tools::open_detail(DetailKind kind, std::uint32_t id) {
-    if (!detail_ || detail_->kind != kind || detail_->id != id) follow_ = false;
+    if (!detail_ || detail_->kind != kind || detail_->id != id) {
+        follow_ = false;
+        detail_skip_ = 0;
+    }
     detail_ = Detail{kind, id};
     renaming_ = false;
 }
@@ -3851,6 +3860,16 @@ void Tools::draw_detail_panel() const {
                         rows.push_back(dim({carried}));
                     }
                     if (losing) rows.push_back(dim({"Red legs lose money: change their loads (E)"}));
+                    // Mostly running empty: more trains than traffic.
+                    std::uint32_t trips = 0, empty = 0;
+                    for (const LegProfit& lp : profits) {
+                        trips += legs[lp.stop].trips;
+                        empty += legs[lp.stop].empty_trips;
+                    }
+                    if (trips >= 6 && empty * 2 > trips) {
+                        rows.push_back(dim({"Most trips sell nothing: too little traffic for it."}));
+                        rows.push_back(dim({"W makes it wait for a full load at a stop"}));
+                    }
                 }
             }
             rows.push_back(money_row("Earned since bought", t.revenue));
@@ -4026,11 +4045,27 @@ void Tools::draw_detail_panel() const {
     };
     for (const DetailRow& r : rows) h += row_h(r);
     const float max_h = static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 10;
+    // Too tall: skip rows under the title (no further than lets the last fit).
+    if (h <= max_h) {
+        detail_skip_ = 0;
+    } else {
+        float tail = 16 + 20; // margins and the "more" line
+        std::size_t most = rows.size() - 1;
+        if (!rows.empty()) tail += row_h(rows.front());
+        while (most > 1 && tail + row_h(rows[most]) <= max_h) tail += row_h(rows[most--]);
+        detail_skip_ = std::min(detail_skip_, most);
+    }
     ui::panel(x0, y0, x0 + kW, y0 + std::min(h, max_h));
     detail_box_ = {x0, y0, x0 + kW, y0 + std::min(h, max_h)};
     float y = y0 + 8;
-    for (const DetailRow& r : rows) {
-        if (y + kRow > y0 + max_h) break;
+    bool cut = false;
+    for (std::size_t ri = 0; ri < rows.size(); ++ri) {
+        if (ri >= 1 && ri <= detail_skip_) continue;
+        const DetailRow& r = rows[ri];
+        if (y + row_h(r) > y0 + max_h - (h > max_h ? 20 : 0)) {
+            cut = true;
+            break;
+        }
         switch (r.style) {
         case DetailRow::Style::Title:
             glColor3f(r.r, r.g, r.b);
@@ -4108,6 +4143,12 @@ void Tools::draw_detail_panel() const {
             break;
         }
         }
+    }
+    if (h > max_h) {
+        // There is more: say how to see it.
+        glColor3f(0.85f, 0.75f, 0.5f);
+        const char* more = cut ? (detail_skip_ > 0 ? "Wheel: more above and below" : "Wheel over this panel: more below") : "Wheel: more above";
+        draw_text(x0 + 14, y0 + max_h - 22, more, kScale);
     }
 }
 

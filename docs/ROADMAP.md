@@ -476,13 +476,15 @@ The Ledger's train list shows a train with a losing leg in red, naming
 the worst leg.
 
 Each leg says what it earned from (its two best cargoes) and how many of
-its trips sold nothing there (saves from version 26). On the demo's
-three-stop loops, most arrivals sell nothing: passengers and mail are
-paid only at their destination, often the next stop round.
+its trips sold nothing there (saves from version 26). On the demo most
+trips sell nothing, and a closer look showed why: its two trains call
+every six days or so, faster than the towns fill a car (express loads go
+when half a car waits), so they mostly leave empty. When most of a
+train's trips sell nothing, its panel says so and points to W (wait for a
+full load).
 
 Next:
-- Passengers and mail on a loop: let a train sell at any stop it passes
-  that is nearer the destination (or show the loop's best direction).
+- The demo network's trains wait for a fuller load at their busiest stop.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

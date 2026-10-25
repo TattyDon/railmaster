@@ -191,6 +191,9 @@ private:
     std::optional<Detail> detail_{};
     bool follow_ = false; // the view follows the detail panel's train
     mutable std::array<float, 4> detail_box_{}; // where the panel was last drawn: x0, y0, x1, y1
+    // Rows scrolled past (under the title) when the panel is taller than the
+    // window; the wheel over it moves this.
+    mutable std::size_t detail_skip_ = 0;
     void open_detail(DetailKind kind, std::uint32_t id);
     // A train, else a station, else an industry under the cursor; false if none.
     bool open_detail_under_cursor();
