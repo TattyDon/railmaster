@@ -17,6 +17,29 @@ namespace railmaster::client {
 
 namespace {
 
+// A train's legs with their profit after a share of its running costs by
+// distance: this year's, or last year's before any this year. Empty when
+// there is nothing to show.
+struct LegProfit {
+    std::size_t stop; // the route stop the leg runs into
+    sim::Money profit;
+};
+std::vector<LegProfit> leg_profits(const sim::Train& t, bool& this_year) {
+    this_year = std::any_of(t.legs.begin(), t.legs.end(), [](const sim::LegStats& l) { return l.trips > 0; });
+    const std::vector<sim::LegStats>& legs = this_year ? t.legs : t.legs_last_year;
+    const sim::TrainAccounts& acc = this_year ? t.accounts : t.accounts_last_year;
+    std::int64_t total_mm = 0;
+    for (const sim::LegStats& l : legs) total_mm += l.distance_mm;
+    std::vector<LegProfit> out;
+    if (total_mm <= 0 || t.route.size() < 2) return out;
+    for (std::size_t i = 0; i < legs.size() && i < t.route.size(); ++i) {
+        if (legs[i].trips == 0) continue;
+        out.push_back({i, legs[i].income - acc.costs().scaled(legs[i].distance_mm, total_mm)});
+    }
+    return out;
+}
+
+
 sim::Frequency next_frequency(sim::Frequency f, bool back) {
     return static_cast<sim::Frequency>((static_cast<int>(f) + (back ? 3 : 1)) % 4);
 }
@@ -574,6 +597,7 @@ void Tools::draw_ledger_panel() const {
             const float b = i == sel ? 1.0f : 0.9f;
             std::vector<std::string> cells;
             std::string label;
+            bool losing_row = false; // a train with a leg that loses money
             switch (ledger_tab_) {
             case 5: {
                 const sim::Train& tr = rw.train(id);
@@ -584,6 +608,17 @@ void Tools::draw_ledger_panel() const {
                          format_money(a.costs()), format_money(a.profit()),
                          sim::Date::from_days(tr.built_day).year() < world_.date().year() ? format_money(tr.accounts_last_year.profit())
                                                                                           : std::string("-")};
+                // Its worst leg, if it loses money.
+                bool this_year = false;
+                std::optional<LegProfit> worst;
+                for (const LegProfit& lp : leg_profits(tr, this_year))
+                    if (lp.profit < sim::Money{} && (!worst || lp.profit < worst->profit)) worst = lp;
+                if (worst) {
+                    const std::size_t n = tr.route.size();
+                    label += "   losing: " + as_written(rw.station(tr.route[(worst->stop + n - 1) % n]).name) + " > " +
+                             as_written(rw.station(tr.route[worst->stop]).name);
+                    losing_row = true;
+                }
                 break;
             }
             case 6: {
@@ -618,12 +653,13 @@ void Tools::draw_ledger_panel() const {
                 break;
             }
             }
-            t.line(label, cells, b, b * (i == sel ? 0.95f : 0.98f), b * (i == sel ? 0.7f : 0.92f));
+            if (losing_row) t.line(label, cells, 1.0f, 0.6f, 0.55f);
+            else t.line(label, cells, b, b * (i == sel ? 0.95f : 0.98f), b * (i == sel ? 0.7f : 0.92f));
         }
         glColor3f(0.68f, 0.66f, 0.62f);
         std::string foot = std::to_string(sel + 1) + " of " + std::to_string(items.size()) + "   Up/Down choose   Enter ";
         foot += ledger_tab_ == 8 ? "shows its price map" : "opens it on the map";
-        if (ledger_tab_ == 5) foot += "   Figures are this year's so far";
+        if (ledger_tab_ == 5) foot += "   Figures are this year's so far; red: a leg loses money (its panel shows which)";
         draw_text(x0 + 14, y0 + h - 26, foot, kScale);
         break;
     }
@@ -1234,6 +1270,7 @@ constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and n
 
 namespace {
 std::string loads(std::int64_t milli); // thousandths of a carload as loads (below)
+
 } // namespace
 
 int Tools::menu_items() const {
@@ -3776,12 +3813,10 @@ void Tools::draw_detail_panel() const {
             // share of the running costs (by distance). This year's, or last
             // year's early on.
             {
-                const bool this_year = std::any_of(t.legs.begin(), t.legs.end(), [](const sim::LegStats& l) { return l.trips > 0; });
+                bool this_year = false;
+                const std::vector<LegProfit> profits = leg_profits(t, this_year);
                 const std::vector<sim::LegStats>& legs = this_year ? t.legs : t.legs_last_year;
-                const sim::TrainAccounts& acc = this_year ? now : last;
-                std::int64_t total_mm = 0;
-                for (const sim::LegStats& l : legs) total_mm += l.distance_mm;
-                if (total_mm > 0 && t.route.size() >= 2) {
+                if (!profits.empty()) {
                     rows.push_back(heading(this_year ? "Legs this year" : "Legs last year"));
                     rows.push_back(dim({"", "Trips", "A trip", "Profit"}));
                     const auto short_name = [&](sim::StationId sid) {
@@ -3789,15 +3824,12 @@ void Tools::draw_detail_panel() const {
                         return n.size() > 11 ? n.substr(0, 10) + "." : n;
                     };
                     bool losing = false;
-                    for (std::size_t i = 0; i < legs.size() && i < t.route.size(); ++i) {
-                        const sim::LegStats& l = legs[i];
-                        if (l.trips == 0) continue;
-                        const sim::StationId from = t.route[(i + t.route.size() - 1) % t.route.size()];
-                        const sim::Money cost = acc.costs().scaled(l.distance_mm, total_mm);
-                        const sim::Money profit = l.income - cost;
-                        DetailRow r = line({short_name(from) + " > " + short_name(t.route[i]), std::to_string(l.trips),
-                                            format_money(l.income.scaled(1, l.trips)), format_money(profit)});
-                        if (profit < sim::Money{}) {
+                    for (const LegProfit& lp : profits) {
+                        const sim::LegStats& l = legs[lp.stop];
+                        const sim::StationId from = t.route[(lp.stop + t.route.size() - 1) % t.route.size()];
+                        DetailRow r = line({short_name(from) + " > " + short_name(t.route[lp.stop]), std::to_string(l.trips),
+                                            format_money(l.income.scaled(1, l.trips)), format_money(lp.profit)});
+                        if (lp.profit < sim::Money{}) {
                             losing = true;
                             r.r = 1.0f;
                             r.g = 0.55f;
@@ -3805,7 +3837,7 @@ void Tools::draw_detail_panel() const {
                         }
                         rows.push_back(r);
                     }
-                    if (losing) rows.push_back(dim({"Red legs cost more than they earn: change what is loaded there (E)"}));
+                    if (losing) rows.push_back(dim({"Red legs lose money: change their loads (E)"}));
                 }
             }
             rows.push_back(money_row("Earned since bought", t.revenue));

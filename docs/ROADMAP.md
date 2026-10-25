@@ -472,8 +472,11 @@ share of the train's running costs by distance; losing legs show red with
 a hint to change what is loaded there. The simulation keeps them (saves
 from version 25).
 
+The Ledger's train list shows a train with a losing leg in red, naming
+the worst leg.
+
 Next:
-- The Ledger's train list flags trains with a losing leg.
+- A train's legs say which cargo they carried, so a weak leg can be fixed.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
