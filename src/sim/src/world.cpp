@@ -260,6 +260,15 @@ void World::tick_inner() {
         for (const auto& [cargo, amount] : e.by_cargo) runner.post(revenue_line(data_.cargo.get(cargo)), amount);
         for (const Earnings::Delivery& d : e.delivered) runner.record_delivery(d.cargo, d.milli);
         record_place_deliveries(t.owner, station, e.delivered);
+        // The leg into this stop.
+        if (t.stop_index < t.route.size() && t.route[t.stop_index] == station) {
+            if (t.legs.size() < t.route.size()) t.legs.resize(t.route.size());
+            LegStats& leg = t.legs[t.stop_index];
+            ++leg.trips;
+            leg.income += e.total;
+            for (const Earnings::Delivery& d : e.delivered) leg.loads_milli += d.milli;
+            for (const std::int64_t mm : t.leg_mm_by_owner) leg.distance_mm += mm;
+        }
         // Service to a town makes it grow.
         if (const auto town = railway_.station(station).town) {
             Town& tw = economy_.town_mut(*town);
@@ -825,6 +834,7 @@ void World::on_new_year() {
     for (const Train& t : railway_.trains()) {
         Train& m = railway_.train_mut(t.id);
         m.accounts_last_year = std::exchange(m.accounts, TrainAccounts{});
+        m.legs_last_year = std::exchange(m.legs, {});
     }
     review_chairmen();
     const Economy::YearEnd sites = economy_.close_year(data_.industries, data_.balance.industries, rng_);

@@ -167,6 +167,15 @@ struct TrainAccounts {
     Money profit() const { return revenue() - costs(); }
 };
 
+// A train's legs (rt3-clone-spec §15.4's per-stop view, ours): what its
+// runs into one route stop earned. Kept by route stop, for the year.
+struct LegStats {
+    std::uint32_t trips = 0;
+    Money income{};
+    std::int64_t loads_milli = 0; // delivered there
+    std::int64_t distance_mm = 0; // run to get there
+};
+
 struct Train {
     TrainId id = 0;
     CompanyId owner = 0;
@@ -226,6 +235,10 @@ struct Train {
     Money profit_last_year() const;
     TrainAccounts accounts{}; // since the books last closed
     TrainAccounts accounts_last_year{};
+    // By route stop: the runs into it since the books closed, and last year's.
+    // Cleared when the route changes.
+    std::vector<LegStats> legs{};
+    std::vector<LegStats> legs_last_year{};
     Money last_income;                // from the most recent stop
     std::uint64_t last_income_tick = 0;
 

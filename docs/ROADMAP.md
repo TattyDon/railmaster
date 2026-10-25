@@ -466,8 +466,14 @@ The Guide puts lines a rival already runs (its stations reach both ends)
 after the open ones, dimmed and marked with who runs them; the big map's
 best lines leave them out.
 
+A train's panel shows its legs: for each run into a stop this year (or
+last, early on), the trips, what a trip earned, and the profit after its
+share of the train's running costs by distance; losing legs show red with
+a hint to change what is loaded there. The simulation keeps them (saves
+from version 25).
+
 Next:
-- A train's panel shows what it carries each way and where it loses money.
+- The Ledger's train list flags trains with a losing leg.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

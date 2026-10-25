@@ -649,6 +649,11 @@ void Railway::set_route(TrainId id, std::vector<StationId> route, std::vector<st
     }
     const StationId current = t.route[t.stop_index];
     const auto kept = std::find(route.begin(), route.end(), current);
+    if (route != t.route) {
+        // The legs are new ones.
+        t.legs.clear();
+        t.legs_last_year.clear();
+    }
     t.route = std::move(route);
     t.rules = std::move(rules);
     t.service_stop = std::move(service_stop);

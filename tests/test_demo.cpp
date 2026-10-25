@@ -92,3 +92,38 @@ TEST_CASE("an era factor scales the passengers waiting at a station") {
     CHECK(one > 0);
     CHECK(two > one * 3 / 2);
 }
+
+TEST_CASE("a train's legs add up to its earnings, and the year end moves them to last year") {
+    WorldConfig cfg;
+    cfg.seed = 1;
+    cfg.rivals = 0;
+    cfg.found_player_company = true;
+    World w(cfg, shipped());
+    build_demo_network(w);
+    const auto run_days = [&](int days) {
+        for (int d = 0; d < days; ++d)
+            for (int i = 0; i < World::kTicksPerDay; ++i) w.tick();
+    };
+    run_days(200);
+    bool some = false;
+    for (const Train& t : w.railway().trains()) {
+        Money legs{};
+        std::uint32_t trips = 0;
+        for (const LegStats& l : t.legs) {
+            legs += l.income;
+            trips += l.trips;
+            if (l.trips > 0) CHECK(l.distance_mm > 0);
+        }
+        CHECK(t.legs.size() <= t.route.size());
+        CHECK(legs == t.accounts.freight + t.accounts.express);
+        some |= trips > 0;
+    }
+    CHECK(some);
+    const Money before = w.railway().trains()[0].accounts.freight + w.railway().trains()[0].accounts.express;
+    run_days(200); // past the new year
+    const Train& t = w.railway().trains()[0];
+    Money last{};
+    for (const LegStats& l : t.legs_last_year) last += l.income;
+    CHECK(last == t.accounts_last_year.freight + t.accounts_last_year.express);
+    CHECK(last >= before);
+}

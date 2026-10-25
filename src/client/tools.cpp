@@ -3772,6 +3772,42 @@ void Tools::draw_detail_panel() const {
                 r.r = r.g = r.b = 1.0f;
                 rows.push_back(r);
             }
+            // Its legs: what the runs into each stop earned, against their
+            // share of the running costs (by distance). This year's, or last
+            // year's early on.
+            {
+                const bool this_year = std::any_of(t.legs.begin(), t.legs.end(), [](const sim::LegStats& l) { return l.trips > 0; });
+                const std::vector<sim::LegStats>& legs = this_year ? t.legs : t.legs_last_year;
+                const sim::TrainAccounts& acc = this_year ? now : last;
+                std::int64_t total_mm = 0;
+                for (const sim::LegStats& l : legs) total_mm += l.distance_mm;
+                if (total_mm > 0 && t.route.size() >= 2) {
+                    rows.push_back(heading(this_year ? "Legs this year" : "Legs last year"));
+                    rows.push_back(dim({"", "Trips", "A trip", "Profit"}));
+                    const auto short_name = [&](sim::StationId sid) {
+                        std::string n = as_written(rw.station(sid).name);
+                        return n.size() > 11 ? n.substr(0, 10) + "." : n;
+                    };
+                    bool losing = false;
+                    for (std::size_t i = 0; i < legs.size() && i < t.route.size(); ++i) {
+                        const sim::LegStats& l = legs[i];
+                        if (l.trips == 0) continue;
+                        const sim::StationId from = t.route[(i + t.route.size() - 1) % t.route.size()];
+                        const sim::Money cost = acc.costs().scaled(l.distance_mm, total_mm);
+                        const sim::Money profit = l.income - cost;
+                        DetailRow r = line({short_name(from) + " > " + short_name(t.route[i]), std::to_string(l.trips),
+                                            format_money(l.income.scaled(1, l.trips)), format_money(profit)});
+                        if (profit < sim::Money{}) {
+                            losing = true;
+                            r.r = 1.0f;
+                            r.g = 0.55f;
+                            r.b = 0.5f;
+                        }
+                        rows.push_back(r);
+                    }
+                    if (losing) rows.push_back(dim({"Red legs cost more than they earn: change what is loaded there (E)"}));
+                }
+            }
             rows.push_back(money_row("Earned since bought", t.revenue));
             // Its profit month by month: the last 12, then this one so far.
             if (!t.profit_months.empty()) {
@@ -4017,8 +4053,9 @@ void Tools::draw_detail_panel() const {
             // Two cells: the second at the right edge; more: the table's columns.
             static const std::vector<float> kTwo = {kW - 14};
             static const std::vector<float> kThree = {250, kW - 14};
+            static const std::vector<float> kFour = {210, 310, kW - 14};
             static const std::vector<float> kFive = {200, 262, 324, kW - 14};
-            const std::vector<float>& edges = r.cells.size() <= 2 ? kTwo : r.cells.size() == 3 ? kThree : kFive;
+            const std::vector<float>& edges = r.cells.size() <= 2 ? kTwo : r.cells.size() == 3 ? kThree : r.cells.size() == 4 ? kFour : kFive;
             for (std::size_t i = 1; i < r.cells.size() && i - 1 < edges.size(); ++i) {
                 draw_text(x0 + edges[i - 1] - static_cast<float>(text_width(r.cells[i], kScale)), y, r.cells[i], kScale);
             }

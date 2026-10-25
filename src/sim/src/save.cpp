@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 24; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 25; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -37,7 +37,7 @@ constexpr std::uint32_t kSaveVersion = 24; // 2: events, Grants; 3: restrictions
                                            // 18: a scenario's hand-made map; 19: travellers giving up;
                                            // 20: cheats (assisted games); 21: more cheats;
                                            // 22: share prices by month; 23: deliveries from or to a place;
-                                           // 24: stations and buildings to undo
+                                           // 24: stations and buildings to undo; 25: trains' legs
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -333,6 +333,10 @@ void io(Ar& ar, TrainAccounts& a) {
     fields(ar, a.freight, a.express, a.maintenance, a.fuel, a.repairs);
 }
 template <class Ar>
+void io(Ar& ar, LegStats& l) {
+    fields(ar, l.trips, l.income, l.loads_milli, l.distance_mm);
+}
+template <class Ar>
 void io(Ar& ar, Train& t) {
     fields(ar, t.id, t.owner, t.loco, t.cars, t.priority, t.route, t.rules, t.service_stop, t.caboose, t.diner, t.holding, t.stop_index);
     fields(ar, t.state, t.at_node, t.path, t.step, t.offset_mm, t.speed_mm_per_tick, t.wait_ticks_left, t.yielding,
@@ -341,6 +345,7 @@ void io(Ar& ar, Train& t) {
     fields(ar, t.stops_made, t.service_stops, t.breakdowns, t.road_ticks, t.built_day, t.distance_mm, t.fuel_kg_km, t.leg_mm_by_owner);
     fields(ar, t.revenue, t.last_income, t.last_income_tick, t.profit_this_month, t.profit_months);
     fields(ar, t.accounts, t.accounts_last_year);
+    fields(ar, t.legs, t.legs_last_year);
 }
 
 // --- Economy ---
