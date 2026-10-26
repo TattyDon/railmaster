@@ -41,6 +41,13 @@ void set_foliage(bool on);
 // map's size in tiles. The ground takes it in full (set_ground around the
 // terrain), the trees' leaves in part (set_foliage).
 void set_occlusion(unsigned texture, float inv_w, float inv_h);
+// What stands round the town building about to be drawn, as 12 floats:
+// across + (top z, gap), across - (top z, gap), along + (top z, gap),
+// along - (top z, gap), then its axis along (x, y), the z of its ground
+// and of its eaves.
+// A gap of 0: nothing near on that side. nullptr: not a town building.
+// Recorded in display lists, so it may be set while compiling one.
+void set_neighbours(const float* near);
 void set_ground(bool on);
 // The land's height (tiles) at each map corner, as a 16-bit luminance
 // texture `corners_w` x `corners_h` spanning z_min to z_min + z_range: the

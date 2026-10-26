@@ -540,8 +540,16 @@ The chosen chain line also says how the works stands now: idle and
 waiting for this line, or running at some percent and holding so many
 loads, its product ready to carry.
 
+Shade between buildings (shaders): each town building is told, side by
+side, the nearest neighbour across from each wall (how tall, how far off,
+how much of the wall it faces), and its walls lose sky light by the angle
+that neighbour hides, most at their foot, so alleys and the gaps between
+houses darken. A soft band of shade runs under every building's eaves (for
+the art, where its roof's sloping faces start).
+
 Next:
-- More shading: occlusion between buildings themselves (eaves, alleys).
+- Discrete LOD for the art: lighter stand-ins for house and industry
+  models far off, so a big town seen from afar stays fast.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

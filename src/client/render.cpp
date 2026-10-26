@@ -2737,6 +2737,100 @@ void draw_building(const Plot& p, const Camera& cam) {
     }
 }
 
+// A town building as it stands, for the shade its neighbours cast: its
+// footprint, the ground under it, its eaves and its height to the roof's
+// middle (what hides the sky from a wall across the way).
+struct Bulk {
+    float x, y, dx, dy, hl, hw; // tiles; (dx, dy) along the street
+    float base, eave, top;      // z
+};
+
+Bulk code_bulk(const Plot& p, float z) {
+    const float floor_h = 0.085f;
+    switch (p.kind) {
+    case Building::Shop: {
+        const float h = z + floor_h * static_cast<float>(p.floors) + 0.025f;
+        return {p.x, p.y, p.dx, p.dy, p.hl, p.hw, z, h, h + 0.015f};
+    }
+    case Building::TownHall: {
+        const float h = z + floor_h * 2 + 0.03f;
+        return {p.x, p.y, p.dx, p.dy, p.hl, p.hw, z, h, h + p.hw * 0.3f};
+    }
+    case Building::Church: return {p.x, p.y, p.dx, p.dy, p.hl * 0.95f, std::min(p.hw, 0.1f), z, z + 0.12f, z + 0.16f};
+    default: {
+        const float h = z + floor_h * static_cast<float>(p.floors) + 0.02f;
+        return {p.x, p.y, p.dx, p.dy, p.hl, p.hw, z, h, h + p.hw * 0.37f};
+    }
+    }
+}
+
+// For each building, what stands nearest across from each of its four
+// walls (shading::set_neighbours' 12 floats): the neighbour that hides
+// most sky (height over distance), its height scaled down by how little of
+// the wall it faces. Neighbours come from a grid of half-tile cells.
+std::vector<std::array<float, 12>> neighbours(const std::vector<Bulk>& bulks) {
+    constexpr float kCell = 0.5f, kReach = 0.6f;
+    std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> grid;
+    const auto cell = [](float v) { return static_cast<std::int32_t>(std::floor(v / kCell)); };
+    const auto key = [](std::int32_t cx, std::int32_t cy) {
+        return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(cx)) << 32) | static_cast<std::uint32_t>(cy);
+    };
+    for (std::size_t i = 0; i < bulks.size(); ++i) grid[key(cell(bulks[i].x), cell(bulks[i].y))].push_back(static_cast<std::uint32_t>(i));
+    std::vector<std::array<float, 12>> out(bulks.size());
+    for (std::size_t i = 0; i < bulks.size(); ++i) {
+        const Bulk& b = bulks[i];
+        std::array<float, 12>& o = out[i];
+        o.fill(0.0f);
+        o[8] = b.dx;
+        o[9] = b.dy;
+        o[10] = b.base;
+        o[11] = b.eave;
+        // Sides: across +, across -, along +, along -.
+        const float ax = -b.dy, ay = b.dx;
+        const float ux[4] = {ax, -ax, b.dx, -b.dx}, uy[4] = {ay, -ay, b.dy, -b.dy};
+        const float reach[4] = {b.hw, b.hw, b.hl, b.hl}, half[4] = {b.hl, b.hl, b.hw, b.hw};
+        float best[4] = {0, 0, 0, 0};
+        const std::int32_t cx = cell(b.x), cy = cell(b.y);
+        for (std::int32_t gy = cy - 2; gy <= cy + 2; ++gy)
+            for (std::int32_t gx = cx - 2; gx <= cx + 2; ++gx) {
+                const auto it = grid.find(key(gx, gy));
+                if (it == grid.end()) continue;
+                for (const std::uint32_t j : it->second) {
+                    if (j == i) continue;
+                    const Bulk& q = bulks[j];
+                    // The neighbour's corners, relative to this building.
+                    float cxs[4], cys[4];
+                    for (int c = 0; c < 4; ++c) {
+                        const float sl = (c & 1) ? q.hl : -q.hl, sw = (c & 2) ? q.hw : -q.hw;
+                        cxs[c] = q.x + q.dx * sl - q.dy * sw - b.x;
+                        cys[c] = q.y + q.dy * sl + q.dx * sw - b.y;
+                    }
+                    for (int side = 0; side < 4; ++side) {
+                        const float vx = -uy[side], vy = ux[side];
+                        float u0 = 1e9f, u1 = -1e9f, v0 = 1e9f, v1 = -1e9f;
+                        for (int c = 0; c < 4; ++c) {
+                            const float u = cxs[c] * ux[side] + cys[c] * uy[side], v = cxs[c] * vx + cys[c] * vy;
+                            u0 = std::min(u0, u);
+                            u1 = std::max(u1, u);
+                            v0 = std::min(v0, v);
+                            v1 = std::max(v1, v);
+                        }
+                        if (u1 <= reach[side] || u0 - reach[side] > kReach) continue;
+                        const float faced = (std::min(v1, half[side]) - std::max(v0, -half[side])) / (2 * half[side]);
+                        if (faced <= 0) continue;
+                        const float gap = std::max(u0 - reach[side], 0.01f);
+                        const float rise = (q.top - b.base) * std::min(faced, 1.0f);
+                        if (rise <= 0 || rise / gap <= best[side]) continue;
+                        best[side] = rise / gap;
+                        o[static_cast<std::size_t>(side * 2)] = b.base + rise;
+                        o[static_cast<std::size_t>(side * 2 + 1)] = gap;
+                    }
+                }
+            }
+    }
+    return out;
+}
+
 void frustum(float x, float y, float z0, float r0, float z1, float r1, const float* colour);
 
 // A small round-topped tree (fruit trees at 1, a green's trees larger), its
@@ -4804,10 +4898,35 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const models::Model* m = models::pick(role(p), p.seed >> 5);
             return model_depth(*m, p) * 0.5f;
         };
+        // The ground under a building: its lowest corner's.
+        const auto base_z = [&](const Plot& p) {
+            const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
+            return std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
+                             cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
+        };
+        // How each building stands, so the walls facing each other across
+        // an alley shade each other.
+        std::vector<Bulk> bulks;
+        bulks.reserve(towns.plots.size());
+        for (const Plot& p : towns.plots) {
+            if (!modelled(p)) {
+                bulks.push_back(code_bulk(p, base_z(p) - 0.01f));
+                continue;
+            }
+            const models::Model* m = models::pick(role(p), p.seed >> 5);
+            const float sx = p.hl * 2.1f / std::max(1e-4f, m->max[0] - m->min[0]), z = base_z(p) - 0.005f;
+            const float tall = (m->max[2] - m->min[2]) * sx, eave = (m->eave > 0 ? m->eave * sx : tall * 0.6f);
+            bulks.push_back({p.x, p.y, p.dx, p.dy, p.hl * 1.05f, model_depth(*m, p) * 0.5f, z, z + eave, z + eave + 0.4f * (tall - eave)});
+        }
+        const std::vector<std::array<float, 12>> near = neighbours(bulks);
         for (std::size_t i = 0; i < towns.plots.size(); ++i) {
             const Plot& p = towns.plots[i];
             if (under_construction(i)) continue; // drawn each frame, by draw_building_sites
-            if (!modelled(p)) draw_building(p, cam);
+            if (!modelled(p)) {
+                shading::set_neighbours(near[i].data());
+                draw_building(p, cam);
+                shading::set_neighbours(nullptr);
+            }
             if (p.garden > 0) garden(p, half_depth(p), cam);
         }
         for (const sim::Site& s : eco.sites()) {
@@ -4847,12 +4966,11 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             const Plot& p = towns.plots[i];
             if (!modelled(p) || under_construction(i)) continue;
             const models::Model* m = models::pick(role(p), p.seed >> 5);
-            const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
-            const float z = std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
-                                      cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
             // Its front to the street, fitted as model_depth says.
-            models::draw(*m, p.x, p.y, z - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, model_depth(*m, p));
+            shading::set_neighbours(near[i].data());
+            models::draw(*m, p.x, p.y, base_z(p) - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, model_depth(*m, p));
         }
+        shading::set_neighbours(nullptr);
         glEndList();
         list_key = key;
         draw_building_sites(towns, cam);

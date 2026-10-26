@@ -83,6 +83,19 @@ float to_srgb(float c) { return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow
 
 // `texture`, when given, replaces every textured material's texture (a
 // recoloured palette, say).
+// Where a model's roof starts, from the heights of its upward sloping
+// faces: the lowest above 45% of its height (below that are porches and
+// awnings), and the lowest of all for prefabs built from it.
+void find_eave(Model& m, const std::vector<float>& sloped) {
+    const float floor = m.min[2] + 0.45f * (m.max[2] - m.min[2]);
+    float eave = 1e30f;
+    for (const float z : sloped) {
+        m.roof_low = std::min(m.roof_low, z);
+        if (z >= floor) eave = std::min(eave, z);
+    }
+    m.eave = eave < 1e29f ? eave - m.min[2] : 0.0f;
+}
+
 std::optional<Model> load(const std::filesystem::path& path, const std::string& texture = {}) {
     cgltf_options options{};
     cgltf_data* data = nullptr;
@@ -107,6 +120,7 @@ std::optional<Model> load(const std::filesystem::path& path, const std::string& 
                                           : texture_file(texture);
         }
     }
+    std::vector<float> sloped; // heights of upward sloping faces' corners
     m.list = glGenLists(1);
     glNewList(m.list, GL_COMPILE);
     for (cgltf_size ni = 0; ni < data->nodes_count; ++ni) {
@@ -178,6 +192,7 @@ std::optional<Model> load(const std::filesystem::path& path, const std::string& 
                     m.min[k] = std::min(m.min[k], mp[k]);
                     m.max[k] = std::max(m.max[k], mp[k]);
                 }
+                if (ny > 0.3f && ny < 0.97f) sloped.push_back(mp[2]);
                 glNormal3f(nx, nz, ny);
                 glTexCoord2f(t[0], t[1]);
                 glVertex3f(mp[0], mp[1], mp[2]);
@@ -194,6 +209,7 @@ std::optional<Model> load(const std::filesystem::path& path, const std::string& 
         std::fprintf(stderr, "models: %s has no triangles\n", path.string().c_str());
         return std::nullopt;
     }
+    find_eave(m, sloped);
     return m;
 }
 
@@ -255,9 +271,11 @@ std::optional<Model> assemble(const std::filesystem::path& root, const std::stri
     Model m;
     m.min[0] = m.min[1] = m.min[2] = 1e30f;
     m.max[0] = m.max[1] = m.max[2] = -1e30f;
+    std::vector<float> sloped; // where each piece's roof starts
     m.list = glGenLists(1);
     glNewList(m.list, GL_COMPILE);
     for (const Placed& pl : placed) {
+        if (pl.model->roof_low < 1e29f) sloped.push_back(pl.at[2] + pl.model->roof_low * pl.scale[2]);
         if (pl.spin) {
             m.spinners.push_back(*pl.spin); // drawn each frame, but counted in the bounds
         } else {
@@ -284,6 +302,7 @@ std::optional<Model> assemble(const std::filesystem::path& root, const std::stri
         m.triangles += pl.model->triangles;
     }
     glEndList();
+    find_eave(m, sloped);
     return m;
 }
 

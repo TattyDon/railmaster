@@ -33,6 +33,7 @@ PFNGLUNIFORM1FPROC p_uniform1f = nullptr;
 PFNGLUNIFORM3FPROC p_uniform3f = nullptr;
 PFNGLUNIFORMMATRIX4FVPROC p_uniform_matrix4fv = nullptr;
 PFNGLACTIVETEXTUREPROC p_active_texture = nullptr;
+void(APIENTRY* p_multi_tex_coord4f)(GLenum, GLfloat, GLfloat, GLfloat, GLfloat) = nullptr; // GL 1.3, not in every header's typedefs
 PFNGLGENFRAMEBUFFERSPROC p_gen_framebuffers = nullptr;
 PFNGLBINDFRAMEBUFFERPROC p_bind_framebuffer = nullptr;
 PFNGLFRAMEBUFFERTEXTURE2DPROC p_framebuffer_texture_2d = nullptr;
@@ -63,6 +64,7 @@ bool load_all() {
     ok &= load(p_uniform3f, "glUniform3f");
     ok &= load(p_uniform_matrix4fv, "glUniformMatrix4fv");
     ok &= load(p_active_texture, "glActiveTexture", "glActiveTextureARB");
+    ok &= load(p_multi_tex_coord4f, "glMultiTexCoord4f", "glMultiTexCoord4fARB");
     ok &= load(p_gen_framebuffers, "glGenFramebuffers", "glGenFramebuffersEXT");
     ok &= load(p_bind_framebuffer, "glBindFramebuffer", "glBindFramebufferEXT");
     ok &= load(p_framebuffer_texture_2d, "glFramebufferTexture2D", "glFramebufferTexture2DEXT");
@@ -97,6 +99,7 @@ varying vec3 v_normal;
 varying vec4 v_color;
 varying vec2 v_uv;
 varying float v_depth;
+varying vec4 v_near1, v_near2, v_near3;
 uniform mat4 u_view_inv;
 void main() {
     // Back from eye space to the map, so models drawn with their own
@@ -106,6 +109,9 @@ void main() {
     v_normal = mat3(u_view_inv) * (gl_NormalMatrix * gl_Normal);
     v_color = gl_Color;
     v_uv = gl_MultiTexCoord0.xy;
+    v_near1 = gl_MultiTexCoord1;
+    v_near2 = gl_MultiTexCoord2;
+    v_near3 = gl_MultiTexCoord3;
     v_depth = -eye.z;
     gl_Position = ftransform();
 }
@@ -140,6 +146,9 @@ varying vec3 v_normal;
 varying vec4 v_color;
 varying vec2 v_uv;
 varying float v_depth;
+// A town building's neighbours (set_neighbours): for each side, the top of
+// what stands across from it and how far off; its axis and its eaves.
+varying vec4 v_near1, v_near2, v_near3;
 
 // How much sun reaches a point: 3x3 samples of the shadow map, fading out
 // towards the map's edge so its end never shows as a line.
@@ -225,6 +234,20 @@ void main() {
             }
             ambient *= 1.0 - occ;
             sun *= 1.0 - occ * 0.6;
+        }
+        if (u_ao_mode == 3 && dot(v_near3.xy, v_near3.xy) > 0.5 && abs(n.z) < 0.7) {
+            // A wall sees less sky where another building stands close across
+            // from it (most at its foot, down an alley), and less again just
+            // under its own eaves.
+            vec2 along = v_near3.xy, across = vec2(-along.y, along.x);
+            vec2 out_dir = normalize(n.xy);
+            float ca = dot(out_dir, across), cl = dot(out_dir, along);
+            vec2 near = abs(ca) >= abs(cl) ? (ca > 0.0 ? v_near1.xy : v_near1.zw) : (cl > 0.0 ? v_near2.xy : v_near2.zw);
+            float alley = near.y > 0.0 ? atan(max(near.x - v_world.z, 0.0) / near.y) / 1.5708 : 0.0;
+            float eave = v_near3.w;
+            float under = smoothstep(eave - 0.03, eave, v_world.z) * (1.0 - smoothstep(eave + 0.004, eave + 0.012, v_world.z));
+            ambient *= (1.0 - 0.7 * alley) * (1.0 - 0.35 * under);
+            sun *= 1.0 - 0.25 * under;
         }
         rgb = base.rgb * (ambient + u_sun_colour * ndl * sun);
         rgb *= 1.0 + 0.45 * roof_snow; // snow stays bright out of the sun
@@ -564,6 +587,15 @@ void set_heights(unsigned texture, int corners_w, int corners_h, float z_min, fl
         p_uniform3f(u_height_map, g_height_map[0], g_height_map[1], 0.0f);
         p_uniform3f(u_height_range, z_min, z_range, 0.0f);
     }
+}
+
+void set_neighbours(const float* near) {
+    if (!g_active || !p_multi_tex_coord4f) return;
+    static constexpr float kNone[12] = {};
+    const float* v = near ? near : kNone;
+    p_multi_tex_coord4f(GL_TEXTURE1, v[0], v[1], v[2], v[3]);
+    p_multi_tex_coord4f(GL_TEXTURE2, v[4], v[5], v[6], v[7]);
+    p_multi_tex_coord4f(GL_TEXTURE3, v[8], v[9], v[10], v[11]);
 }
 
 void set_occlusion(unsigned texture, float inv_w, float inv_h) {

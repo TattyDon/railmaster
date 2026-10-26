@@ -34,6 +34,12 @@ struct Model {
     float max[3] = {0, 0, 0};
     std::size_t triangles = 0;
     std::vector<Spinner> spinners{};
+    // Where its roof starts (its eaves), in its own units above min[2]; 0:
+    // no roof found. The lowest sloping upward face above 45% of its height.
+    float eave = 0;
+    // The lowest sloping upward face at all (absolute, own units), for a
+    // prefab finding its eaves among its pieces; above max[2]: none.
+    float roof_low = 1e30f;
 };
 
 // After the GL context exists: read the manifest under `data_dir` and load
