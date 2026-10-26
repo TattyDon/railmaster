@@ -563,8 +563,9 @@ centre of a mid-distance view is the same with the art everywhere and with
 houses switched by distance (the switch falls well beyond it).
 
 Next:
-- Packaging, Linux first: `cmake --install` puts the game, its data and a
-  desktop entry in place, so it starts from the menu, not the build folder.
+- Contact shadows for small things: lamps, benches, fences and people
+  stand on the ground without a shadow of their own at a distance; a
+  soft dark spot under each would ground them.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -633,7 +634,10 @@ Still to do:
   (kept in saves).
 - Replay viewing in the client: done (title screen, Load, W: a save played
   again from its start at any speed, watch-only until Ctrl+R takes it over).
-- Localisation, packaging for Windows/macOS/Linux.
+- Packaging: Linux done (`cmake --install`: the game, its data under
+  `share/railmaster`, found relative to the program, a desktop entry and
+  an icon, drawn by `tools/icon/make_icon.py`; the window has the icon
+  too). Still to do: Windows and macOS bundles, and localisation.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

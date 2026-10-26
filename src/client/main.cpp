@@ -63,6 +63,19 @@ std::string read_file(const std::string& path) {
     return ss.str();
 }
 
+// Where the game's data is: installed beside the program (cmake --install
+// puts it at RAILMASTER_INSTALLED_DATA, relative to the program's folder),
+// else the source tree the build came from.
+std::string default_data_dir() {
+    if (char* base = SDL_GetBasePath()) {
+        const std::filesystem::path installed = std::filesystem::path(base) / RAILMASTER_INSTALLED_DATA;
+        SDL_free(base);
+        std::error_code ec;
+        if (std::filesystem::exists(installed / "balance.json", ec)) return installed.lexically_normal().string();
+    }
+    return RAILMASTER_DEFAULT_DATA_DIR;
+}
+
 sim::GameData load_game_data(const std::string& dir) {
     sim::GameData d;
     d.balance = sim::Balance::from_json(read_file(dir + "/balance.json"));
@@ -240,7 +253,7 @@ sim::WorldConfig scenario_world_config(const std::string& path, std::int32_t max
 }
 
 int main(int argc, char* argv[]) {
-    std::string data_dir = RAILMASTER_DEFAULT_DATA_DIR;
+    std::string data_dir = default_data_dir();
     bool empty = false;
     bool quick = false; // skip the founding dialog: found on the usual terms
     bool use_shaders = true; // --no-shaders: the fixed-function renderer
@@ -396,6 +409,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     SDL_GL_SetSwapInterval(1);
+    // The window's icon (the desktop entry has the same picture).
+    {
+        int iw = 0, ih = 0, channels = 0;
+        if (stbi_uc* px = stbi_load((data_dir + "/icon.png").c_str(), &iw, &ih, &channels, 4)) {
+            if (SDL_Surface* icon = SDL_CreateRGBSurfaceWithFormatFrom(px, iw, ih, 32, iw * 4, SDL_PIXELFORMAT_RGBA32)) {
+                SDL_SetWindowIcon(window, icon);
+                SDL_FreeSurface(icon);
+            }
+            stbi_image_free(px);
+        }
+    }
+    std::printf("data: %s\n", data_dir.c_str());
     std::printf("renderer: %s\n", client::shading::init(use_shaders) ? "shaders and shadows" : "fixed-function");
     client::models::init(data_dir);
     client::init_font(data_dir + "/fonts/SourceSans3-Semibold.ttf");

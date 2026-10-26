@@ -64,6 +64,12 @@ there):
 ./build/src/client/railmaster
 ```
 
+Or install it (Linux): `sudo cmake --install build`, or
+`cmake --install build --prefix ~/.local` for yourself only, puts
+`railmaster` on your path, its data in `share/railmaster` beside it, and
+Railmaster in the applications menu with its icon. The installed game
+finds its data wherever the install put it.
+
 - The game opens on the title screen, over a demo railway running on its
   own: **New railroad** (choose the map size, rival railroads, territories,
   difficulty, the landscape (generated, or one of the hand-made maps in
@@ -340,6 +346,8 @@ dark tunnels), with its price next to the cursor.
 | `tests/` | Unit tests for the simulation |
 | `tools/calibrate/` | Headless balance check against the spec's targets |
 | `tools/replay/` | Replays a saved game from its command log and checks it ends as saved |
+| `tools/icon/` | Draws the game's icon, `data/icon.png` |
+| `packaging/linux/` | The desktop entry `cmake --install` puts in the applications menu |
 | `data/` | Game data in original JSON formats; `balance.json` holds every tunable number ([docs/spec/balance.md](docs/spec/balance.md)) |
 | `docs/spec/` | Sourced specification of the original game's rules |
 | `docs/ROADMAP.md` | Milestones and research backlog |

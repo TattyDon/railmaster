@@ -50,8 +50,23 @@ target_link_libraries(railmaster PRIVATE
     railmaster_warnings)
 
 # Lets the client run straight from the build tree; pass a path to override.
+# Installed (cmake --install), it finds its data where the install put it,
+# relative to its own folder.
+file(RELATIVE_PATH RAILMASTER_INSTALLED_DATA ${CMAKE_INSTALL_FULL_BINDIR} ${CMAKE_INSTALL_FULL_DATADIR}/railmaster)
 target_compile_definitions(railmaster PRIVATE
-    RAILMASTER_DEFAULT_DATA_DIR="${PROJECT_SOURCE_DIR}/data")
+    RAILMASTER_DEFAULT_DATA_DIR="${PROJECT_SOURCE_DIR}/data"
+    RAILMASTER_INSTALLED_DATA="${RAILMASTER_INSTALLED_DATA}")
+
+# cmake --install: the game, its data (the art's licences are in it), and on
+# Linux a desktop entry and icon, so it starts from the applications menu.
+install(TARGETS railmaster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/railmaster)
+install(FILES ${PROJECT_SOURCE_DIR}/LICENSE ${PROJECT_SOURCE_DIR}/README.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
+if(UNIX AND NOT APPLE)
+    install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/railmaster.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    install(FILES ${PROJECT_SOURCE_DIR}/data/icon.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+            RENAME railmaster.png)
+endif()
 
 if(TARGET SDL2::SDL2main)
     target_link_libraries(railmaster PRIVATE SDL2::SDL2main)
