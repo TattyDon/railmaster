@@ -652,10 +652,14 @@ Still to do:
   `share/railmaster`, found relative to the program, a desktop entry and
   an icon, drawn by `tools/icon/make_icon.py`; the window has the icon
   too). macOS: `packaging/macos/install.sh` builds the game and makes
-  Railmaster.app in ~/Applications (a launcher for the build, with the
-  icon), and `update.sh` pulls, rebuilds and refreshes it. Still to do: a
-  self-contained macOS bundle to hand to others, Windows, and
-  localisation.
+  Railmaster.app in ~/Applications (the game and its data inside, with
+  the icon, signed ad hoc for that Mac and registered with Launch
+  Services), and `update.sh` pulls, rebuilds and refreshes it. A first
+  version that launched the build through a shell script would not open
+  from Spotlight ("SystemIntents does not have permission"). Started from
+  the root folder, as an app opened from the Finder is, the game works
+  from its own saves folder. Still to do: a bundle to hand to others
+  (SDL2 inside it, signed and notarised), Windows, and localisation.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

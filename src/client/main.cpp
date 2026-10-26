@@ -65,13 +65,16 @@ std::string read_file(const std::string& path) {
 
 // Where the game's data is: installed beside the program (cmake --install
 // puts it at RAILMASTER_INSTALLED_DATA, relative to the program's folder),
-// else the source tree the build came from.
+// or in a Mac app's Resources (SDL's base path there) as data/; else the
+// source tree the build came from.
 std::string default_data_dir() {
     if (char* base = SDL_GetBasePath()) {
-        const std::filesystem::path installed = std::filesystem::path(base) / RAILMASTER_INSTALLED_DATA;
+        const std::filesystem::path at(base);
         SDL_free(base);
-        std::error_code ec;
-        if (std::filesystem::exists(installed / "balance.json", ec)) return installed.lexically_normal().string();
+        for (const std::filesystem::path& dir : {at / RAILMASTER_INSTALLED_DATA, at / "data"}) {
+            std::error_code ec;
+            if (std::filesystem::exists(dir / "balance.json", ec)) return dir.lexically_normal().string();
+        }
     }
     return RAILMASTER_DEFAULT_DATA_DIR;
 }
@@ -253,6 +256,18 @@ sim::WorldConfig scenario_world_config(const std::string& path, std::int32_t max
 }
 
 int main(int argc, char* argv[]) {
+    // An app opened from the Finder or Launchpad starts in the root folder,
+    // where nothing can be saved: work from the game's own folder instead,
+    // so quick saves (railmaster.sav) have somewhere to go.
+    {
+        std::error_code ec;
+        if (std::filesystem::current_path(ec) == std::filesystem::path("/")) {
+            if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+                std::filesystem::current_path(pref, ec);
+                SDL_free(pref);
+            }
+        }
+    }
     std::string data_dir = default_data_dir();
     bool empty = false;
     bool quick = false; // skip the founding dialog: found on the usual terms

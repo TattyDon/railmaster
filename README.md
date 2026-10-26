@@ -65,7 +65,8 @@ there):
 ```
 
 On a Mac, `packaging/macos/install.sh` builds the game and puts
-Railmaster.app in your Applications folder (in your home folder), so it
+Railmaster.app, with the game and its data inside it, in your
+Applications folder (in your home folder), so it
 opens from Launchpad, Spotlight or the Dock; `packaging/macos/update.sh`
 fetches the latest version, rebuilds it and refreshes the app. Saves made
 with Ctrl+S then go in `~/Library/Application Support/Railmaster`.

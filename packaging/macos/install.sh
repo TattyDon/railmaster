@@ -1,9 +1,10 @@
 #!/bin/bash
 # Builds the game from this checkout and puts Railmaster.app in
 # ~/Applications, so it starts from Launchpad, Spotlight or the Dock like
-# any other app. The app runs the game built here, so after an update
-# (update.sh) it opens the new version. Saves made with Ctrl+S, and the
-# game's own folder, are in ~/Library/Application Support/Railmaster.
+# any other app: the game and its data inside the app, signed for this Mac
+# (ad hoc) and registered with Launch Services. Run it again, or update.sh,
+# to replace the app with a newer build. Saves, Ctrl+S's included, are in
+# ~/Library/Application Support/Railmaster.
 #
 #   packaging/macos/install.sh
 set -euo pipefail
@@ -22,15 +23,10 @@ app="$HOME/Applications/Railmaster.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
-# The app's program: start the game from a folder of its own, so its
-# quick saves have somewhere to go.
-cat > "$app/Contents/MacOS/Railmaster" <<LAUNCH
-#!/bin/bash
-mkdir -p "\$HOME/Library/Application Support/Railmaster"
-cd "\$HOME/Library/Application Support/Railmaster"
-exec "$game" "\$@"
-LAUNCH
-chmod +x "$app/Contents/MacOS/Railmaster"
+# The game itself, and its data in the app's Resources, where it looks
+# from inside an app.
+cp "$game" "$app/Contents/MacOS/Railmaster"
+cp -R data "$app/Contents/Resources/data"
 
 # The icon, from data/icon.png, at the sizes macOS asks for.
 iconset="$(mktemp -d)/railmaster.iconset"
@@ -61,6 +57,10 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Let Finder and Launchpad notice the new app (and its icon).
+# Signed for this Mac (ad hoc), so macOS will open it, and registered, so
+# Spotlight and Launchpad know it.
+codesign --force --deep --sign - "$app" || echo "Could not sign the app; it may still open."
 touch "$app"
+lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+if [ -x "$lsregister" ]; then "$lsregister" -f "$app"; fi
 echo "Railmaster.app is in $HOME/Applications: open it from Launchpad or Spotlight (Cmd+Space, Railmaster)."
