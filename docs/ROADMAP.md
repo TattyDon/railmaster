@@ -527,10 +527,18 @@ spec's economy and stays. The Guide now shows variety instead: at most
 three freight links of a cargo rank among the open ones before the rest
 of that cargo; town pairs are not capped.
 
+Chains in the Guide: freight into a works shows what the works would
+make of it ("Livestock > Meat"), and for the chosen line, the best place
+to carry that on and what it could bring. Measured (both legs built, on
+three maps): nothing the first year; by the fourth, two of three meat
+legs earned within 5% of the estimate ($137K for $133K, $120K for
+$125K), the third nothing that year; the works made 1.4 to 1.6 loads a
+year, under the 2.2 fed. So the Guide says "up to", "once it runs (a
+year or two)", and the chain does not lift a line's rank.
+
 Next:
-- Processing chains in the Guide: a link into a plant that would start
-  it making (livestock into a meat plant, then meat to towns) shown as a
-  chain with what both legs would bring.
+- Show the works' own state in the Guide's chain line (running or idle,
+  what it holds), so a player sees when the second leg is ready.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

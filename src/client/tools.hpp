@@ -334,6 +334,13 @@ private:
         bool towns = false;
         // A rival's stations already reach both ends (they may run it).
         std::optional<sim::CompanyId> rival{};
+        // Freight into a works: what it would make of it, and the best place
+        // to carry that on to (a chain: both lines together).
+        std::optional<sim::CargoId> then_cargo{};
+        sim::SiteId then_to = 0;
+        std::int64_t then_per_load = 0;   // dollars
+        std::int64_t then_loads_milli = 0; // a year: as much as this line feeds it, up to its capacity
+        std::int64_t then_tenths_of_miles = 0;
     };
     void go_to_opportunity(const Opportunity& o);
     std::string opp_from_name(const Opportunity& o) const;

@@ -4592,6 +4592,31 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
                 }
             }
             if (best) {
+                // Into a works: what it would make, carried on to where that sells best.
+                const sim::Site& works = eco.sites()[best->to];
+                if (works.kind == sim::IndustryKind::Processor) {
+                    const sim::IndustryType& wt = types.get(works.type);
+                    const std::int64_t fed = std::min(best->loads_milli, wt.rate_milli * std::max(1, works.level));
+                    for (const sim::CargoId c2 : wt.outputs) {
+                        const sim::CargoType& ct2 = world_.data().cargo.get(c2);
+                        if (ct2.cargo_class != sim::CargoClass::Freight || ct2.available_year > year) continue;
+                        const std::int64_t at_works = reach_price(works, c2);
+                        for (const sim::Site& to2 : eco.sites()) {
+                            if (to2.id == works.id || !wants(to2, c2)) continue;
+                            const double ex = to2.cx - works.cx, ey = to2.cy - works.cy;
+                            const double miles2 = std::sqrt(ex * ex + ey * ey) * cell_miles;
+                            if (miles2 < 3.0 || miles2 > 35.0) continue;
+                            const std::int64_t gain2 = reach_price(to2, c2) - at_works;
+                            if (gain2 > 0 && gain2 * fed > best->then_per_load * best->then_loads_milli) {
+                                best->then_cargo = c2;
+                                best->then_to = to2.id;
+                                best->then_per_load = gain2;
+                                best->then_loads_milli = fed;
+                                best->then_tenths_of_miles = static_cast<std::int64_t>(miles2 * 10);
+                            }
+                        }
+                    }
+                }
                 best->served = served(from) && served(eco.sites()[best->to]);
                 best->rival = rival_at(from, eco.sites()[best->to]);
                 out.push_back(*best);
@@ -4717,7 +4742,7 @@ void Tools::draw_guide() const {
     constexpr float kRow = 19.0f;
     constexpr std::size_t kShown = 24;
     const float w = std::min(1180.0f, static_cast<float>(cam_.width_px) - 20), x0 = (static_cast<float>(cam_.width_px) - w) / 2;
-    const float y0 = 56, h = 120 + kRow * kShown;
+    const float y0 = 56, h = 142 + kRow * kShown;
     ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 16, y0 + 10, "Guide", kScale + 1);
@@ -4768,7 +4793,10 @@ void Tools::draw_guide() const {
             if (sel) glColor3f(1.0f, 0.95f, 0.7f);
             else if (o.served || o.rival) glColor3f(0.6f, 0.58f, 0.55f);
             else glColor3f(0.9f, 0.88f, 0.82f);
-            draw_text(x0 + 16, y, o.towns ? std::string("Passengers, mail") : as_written(cargo.get(o.cargo).name), kScale);
+            draw_text(x0 + 16, y,
+                      o.towns ? std::string("Passengers, mail")
+                              : as_written(cargo.get(o.cargo).name) + (o.then_cargo ? " > " + as_written(cargo.get(*o.then_cargo).name) : ""),
+                      kScale);
             draw_text(c_from, y, opp_from_name(o), kScale);
             draw_text(c_to, y,
                       opp_to_name(o) + (o.served ? "  (served)"
@@ -4836,6 +4864,17 @@ void Tools::draw_guide() const {
             draw_text(c_wanted, y, clip(names(c.id, false), x0 + w - 16 - c_wanted), kScale);
             y += kRow;
         }
+    }
+    // The chosen line's chain, spelled out.
+    if (guide_tab_ == 0 && guide_sel_ < guide_opps_.size() && guide_opps_[guide_sel_].then_cargo) {
+        const Opportunity& o = guide_opps_[guide_sel_];
+        glColor3f(1.0f, 0.86f, 0.5f);
+        draw_text(x0 + 16, y0 + h - 48,
+                  "Then: the " + opp_to_name(o) + " makes " + as_written(cargo.get(*o.then_cargo).name) + "; on to " +
+                      (world_.economy().sites()[o.then_to].kind == sim::IndustryKind::House ? std::string() : std::string("the ")) +
+                      site_name(o.then_to) + ", " + std::to_string(o.then_tenths_of_miles / 10) + " miles: up to " +
+                      price_k(o.then_per_load * o.then_loads_milli / 1000) + " a year more, once it runs (a year or two)",
+                  kScale);
     }
     glColor3f(0.6f, 0.58f, 0.54f);
     draw_text(x0 + 16, y0 + h - 26,
