@@ -4656,6 +4656,23 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
         if (va != vb) return va > vb; // to the thousand dollars
         return a.tenths_of_miles < b.tenths_of_miles; // then the shorter line, cheaper to build
     });
+    // Variety: at most three open freight links of a cargo in the ranking proper
+    // (several ranches near meat plants would otherwise fill it with
+    // livestock); the rest follow the other open ones.
+    {
+        std::vector<Opportunity> first, later;
+        std::unordered_map<std::uint32_t, int> seen;
+        for (const Opportunity& o : out) {
+            const bool open = !o.served && !o.rival;
+            // (Town pairs are each a different line: not capped.)
+            if (open && !o.towns && seen[o.cargo]++ >= 3) later.push_back(o);
+            else first.push_back(o);
+        }
+        // The deferred go after the last open link kept first.
+        const auto last_open = std::find_if(first.begin(), first.end(), [](const Opportunity& o) { return o.served || o.rival; });
+        first.insert(last_open, later.begin(), later.end());
+        out = std::move(first);
+    }
     // The best 30 open ones, then up to 10 already run (so you can see who runs what).
     std::vector<Opportunity> kept;
     std::size_t open = 0, run = 0;

@@ -519,9 +519,18 @@ income: the sites' own prices overstated it by about 13%, the reach
 prices were within 2%. The ranking hardly changed (the two methods' top
 picks earned the same within 1%); the figures shown are now honest.
 
+Why livestock led the Guide on every map: every raw producer makes about
+2.2 loads a year (spec 6.1) and livestock's median price is $90k against
+$30-45k for most raw cargo (spec 4.1), so its best link was worth about
+$310k a year against $105-190k for the others (four maps). That is the
+spec's economy and stays. The Guide now shows variety instead: at most
+three freight links of a cargo rank among the open ones before the rest
+of that cargo; town pairs are not capped.
+
 Next:
-- The Guide's freight list is mostly livestock on every map: check the
-  cargo prices and rates so other freight competes.
+- Processing chains in the Guide: a link into a plant that would start
+  it making (livestock into a meat plant, then meat to towns) shown as a
+  chain with what both legs would bring.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
