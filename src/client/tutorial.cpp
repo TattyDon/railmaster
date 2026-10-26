@@ -23,8 +23,8 @@ struct Step {
 
 constexpr Step kSteps[] = {
     {"Look around",
-     "Drag with the right mouse button to turn and tilt the view. The mouse wheel, a pinch on the trackpad, or "
-     "Option and Up/Down zoom in and out; the arrow keys move the view. Try one."},
+     "Drag with the right mouse button to turn and tilt the view. The mouse wheel, a two-finger scroll, "
+     "Cmd and = or -, or the + and - by the minimap zoom in and out; the arrow keys move the view. Try one."},
     {"Lay some track",
      "Press F2 for the Track tool. Click in the middle of {A} (ringed in gold) to start, then click in {B}: each "
      "click builds track to the cursor and carries on from there. Right-click stops. The price shows by the cursor."},

@@ -119,8 +119,10 @@ finds its data wherever the install put it.
 - The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade, alleys and eaves shaded, lamps and people on soft spots of shade) where the graphics card allows; houses far off are drawn lighter, so wide views stay quick
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
-- Zoom with the mouse wheel, a two-finger scroll or pinch on a trackpad,
-  or Option (Alt) + Up/Down; arrow keys pan; Shift+arrows or dragging with the
+- Zoom with the mouse wheel or a two-finger scroll (Settings turns the
+  direction round), the + and - buttons beside the minimap (hold them to
+  keep zooming), Cmd (Ctrl) + = and -, or Option (Alt) + Up/Down; a pinch
+  works where the system passes it on; arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
 
 Map editor (title screen, Map editor): start from flat land, generated
@@ -329,7 +331,7 @@ and checks the economy against the spec's targets
 | PgUp / PgDn (Inspect) | Go to your next or previous train |
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), travel (an arc from each station to every place its waiting passengers, in blue, mail, gold, and troops, green, want to go, wider the more are waiting; hovering a station lists them), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
 | Arrows, mouse at the window edge | Pan |
-| Mouse wheel, two-finger scroll, pinch, Option (Alt) + Up/Down | Zoom in and out |
+| Mouse wheel, two-finger scroll, + and - by the minimap, Cmd (Ctrl) + = and -, Option (Alt) + Up/Down, pinch | Zoom in and out (Settings: which way a scroll zooms) |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | V | Switch between the 3D view and the flat top-down map |
 | Sound | Made in code, no recordings: a steam whistle's chord as trains near the view leave a station (diesels and electrics a deeper horn), a bell as they arrive, the engine nearest the middle of the view chuffing at its speed (a diesel rumbles and an electric whines instead, rising in pitch as it speeds up), a cash register when your trains are paid, and clicks. Closer views are louder; the menu's Settings set the volume. Music: three original tunes in the manner of the period (a march-time rag, a waltz and a slow folk air), synthesised as piano and played in turn, quietly; Settings set its volume (Off to 100%) |

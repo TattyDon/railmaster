@@ -118,6 +118,7 @@ public:
         bool cheats = false; // the debug console (.) is allowed
         bool seasons = true; // snow in winter, leaves turning in autumn
         bool clouds = true;  // clouds' shadows drifting over the land
+        bool reverse_zoom = false; // a scroll the other way zooms in (as some trackpads feel natural)
     };
     Settings& settings() { return settings_; }
     // Whether the menu changed them since the last call (to save them).

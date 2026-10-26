@@ -496,6 +496,7 @@ int main(int argc, char* argv[]) {
             else if (name == "cheats") st.cheats = value != 0;
             else if (name == "seasons") st.seasons = value != 0;
             else if (name == "clouds") st.clouds = value != 0;
+            else if (name == "reverse_zoom") st.reverse_zoom = value != 0;
             else if (name == "music") st.music = std::clamp(value, 0, 10);
         }
     }
@@ -504,7 +505,8 @@ int main(int argc, char* argv[]) {
         const client::Tools::Settings& st = tools.settings();
         std::ofstream out(settings_path);
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
-            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\nmusic " << st.music << "\n";
+            << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\nmusic " << st.music
+            << "\nreverse_zoom " << st.reverse_zoom << "\n";
     };
     const auto save_game = [&](const std::string& file, bool quiet = false) {
         try {
@@ -730,6 +732,17 @@ int main(int argc, char* argv[]) {
     };
     const auto radar_x = [] { return 8.0f; };
     const auto radar_y = [&] { return static_cast<float>(cam.height_px) - 44.0f - kRadar - 10.0f; };
+    // Zoom buttons beside the radar, for a trackpad that will not pinch:
+    // +1 the upper (in), -1 the lower (out), 0 elsewhere. Held, they keep zooming.
+    constexpr float kZoomButton = 30.0f;
+    const auto zoom_button_at = [&](float x, float y) {
+        const float x0 = radar_x() + kRadar + 6, y0 = radar_y();
+        if (x < x0 || x >= x0 + kZoomButton) return 0;
+        if (y >= y0 && y < y0 + kZoomButton) return 1;
+        if (y >= y0 + kZoomButton + 6 && y < y0 + 2 * kZoomButton + 6) return -1;
+        return 0;
+    };
+    int zoom_held = 0;
     Uint64 last = SDL_GetPerformanceCounter();
     // What each train was doing last frame, to hear it start, stop and be paid.
     struct Heard {
@@ -803,7 +816,8 @@ int main(int argc, char* argv[]) {
                     tools.on_wheel(static_cast<float>(mx), static_cast<float>(my), ev.wheel.y)) {
                     break;
                 }
-                if (amount != 0.0f) cam.zoom_at(static_cast<float>(mx), static_cast<float>(my), std::pow(1.15f, amount));
+                const float signed_amount = tools.settings().reverse_zoom ? -amount : amount;
+                if (amount != 0.0f) cam.zoom_at(static_cast<float>(mx), static_cast<float>(my), std::pow(1.15f, signed_amount));
                 tools.on_mouse_move(static_cast<float>(mx), static_cast<float>(my));
                 break;
             }
@@ -844,6 +858,14 @@ int main(int argc, char* argv[]) {
                     big_map = false;
                     break;
                 }
+                // The zoom buttons: a step now, and on while held.
+                if (!tools.founding_open() && ev.button.button == SDL_BUTTON_LEFT) {
+                    if (const int z = zoom_button_at(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y)); z != 0) {
+                        zoom_held = z;
+                        cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2, z > 0 ? 1.25f : 0.8f);
+                        break;
+                    }
+                }
                 // A click on the radar moves the view there.
                 if (const auto p = client::radar_point(world, cam, radar_x(), radar_y(), kRadar, static_cast<float>(ev.button.x),
                                                        static_cast<float>(ev.button.y))) {
@@ -856,6 +878,7 @@ int main(int argc, char* argv[]) {
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
                 break;
             case SDL_MOUSEBUTTONUP:
+                if (ev.button.button == SDL_BUTTON_LEFT) zoom_held = 0;
                 // A right click that did not turn the view: stop the line or route.
                 if (ev.button.button == SDL_BUTTON_RIGHT && right_drag <= 4) {
                     tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), true);
@@ -894,6 +917,14 @@ int main(int argc, char* argv[]) {
                     (ev.key.keysym.sym == SDLK_s || ev.key.keysym.sym == SDLK_l)) {
                     if (ev.key.keysym.sym == SDLK_s) save_game(kQuickSave);
                     else load_game(kQuickSave);
+                    break;
+                }
+                // Cmd (or Ctrl) and = or - zoom in and out, as in other Mac apps.
+                if ((ev.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)) != 0 &&
+                    (ev.key.keysym.sym == SDLK_EQUALS || ev.key.keysym.sym == SDLK_PLUS || ev.key.keysym.sym == SDLK_KP_PLUS ||
+                     ev.key.keysym.sym == SDLK_MINUS || ev.key.keysym.sym == SDLK_KP_MINUS)) {
+                    const bool in = ev.key.keysym.sym != SDLK_MINUS && ev.key.keysym.sym != SDLK_KP_MINUS;
+                    cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2, in ? 1.25f : 0.8f);
                     break;
                 }
                 // Ctrl+R takes a replay being watched over: the game is the player's from here.
@@ -997,6 +1028,11 @@ int main(int argc, char* argv[]) {
         const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
         const bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
         const float turn = static_cast<float>(dt) * 1.5f;
+        if (zoom_held != 0) {
+            const float step = std::pow(2.0f, static_cast<float>(dt));
+            cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2,
+                        zoom_held > 0 ? step : 1.0f / step);
+        }
         if (alt) {
             // Option (Alt) + Up/Down zooms, for laptops without a wheel.
             const float step = std::pow(3.0f, static_cast<float>(dt));
@@ -1475,6 +1511,23 @@ int main(int argc, char* argv[]) {
             client::ui::chip(radar_x() - 1, radar_y() - 32, radar_x() + tw + 10, radar_y() - 12, 0.75f);
             glColor3f(1.0f, 0.9f, 0.68f);
             client::draw_text(radar_x() + 4, radar_y() - 29, "Shift+M: big map", 2);
+            // The zoom buttons.
+            for (const int z : {1, -1}) {
+                const float x0 = radar_x() + kRadar + 6, y0 = radar_y() + (z > 0 ? 0.0f : kZoomButton + 6);
+                client::ui::chip(x0, y0, x0 + kZoomButton, y0 + kZoomButton, zoom_held == z ? 0.95f : 0.75f);
+                glColor3f(1.0f, 0.9f, 0.68f);
+                glLineWidth(2.5f);
+                glBegin(GL_LINES);
+                const float cx = x0 + kZoomButton / 2, cy = y0 + kZoomButton / 2, a = kZoomButton * 0.28f;
+                glVertex2f(cx - a, cy);
+                glVertex2f(cx + a, cy);
+                if (z > 0) {
+                    glVertex2f(cx, cy - a);
+                    glVertex2f(cx, cy + a);
+                }
+                glEnd();
+                glLineWidth(1.0f);
+            }
         }
         if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));
         else tools.draw_ui(status);
