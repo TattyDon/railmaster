@@ -651,7 +651,11 @@ Still to do:
 - Packaging: Linux done (`cmake --install`: the game, its data under
   `share/railmaster`, found relative to the program, a desktop entry and
   an icon, drawn by `tools/icon/make_icon.py`; the window has the icon
-  too). Still to do: Windows and macOS bundles, and localisation.
+  too). macOS: `packaging/macos/install.sh` builds the game and makes
+  Railmaster.app in ~/Applications (a launcher for the build, with the
+  icon), and `update.sh` pulls, rebuilds and refreshes it. Still to do: a
+  self-contained macOS bundle to hand to others, Windows, and
+  localisation.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

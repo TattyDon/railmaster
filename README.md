@@ -64,6 +64,12 @@ there):
 ./build/src/client/railmaster
 ```
 
+On a Mac, `packaging/macos/install.sh` builds the game and puts
+Railmaster.app in your Applications folder (in your home folder), so it
+opens from Launchpad, Spotlight or the Dock; `packaging/macos/update.sh`
+fetches the latest version, rebuilds it and refreshes the app. Saves made
+with Ctrl+S then go in `~/Library/Application Support/Railmaster`.
+
 Or install it (Linux): `sudo cmake --install build`, or
 `cmake --install build --prefix ~/.local` for yourself only, puts
 `railmaster` on your path, its data in `share/railmaster` beside it, and
@@ -352,6 +358,7 @@ dark tunnels), with its price next to the cursor.
 | `tools/replay/` | Replays a saved game from its command log and checks it ends as saved |
 | `tools/icon/` | Draws the game's icon, `data/icon.png` |
 | `packaging/linux/` | The desktop entry `cmake --install` puts in the applications menu |
+| `packaging/macos/` | `install.sh` makes Railmaster.app from a build; `update.sh` pulls, rebuilds and refreshes it |
 | `data/` | Game data in original JSON formats; `balance.json` holds every tunable number ([docs/spec/balance.md](docs/spec/balance.md)) |
 | `docs/spec/` | Sourced specification of the original game's rules |
 | `docs/ROADMAP.md` | Milestones and research backlog |
