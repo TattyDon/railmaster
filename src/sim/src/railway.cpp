@@ -287,9 +287,7 @@ void Railway::remove_station(StationId id) {
     const auto renumber = [&](std::uint32_t s) { return s > id ? s - 1 : s; };
     stations_.erase(stations_.begin() + id);
     for (Station& st : stations_) {
-        st.id = renumber(st.id);
-        std::erase_if(st.express, [&](const ExpressWaiting& e) { return e.destination == id; });
-        for (ExpressWaiting& e : st.express) e.destination = renumber(e.destination);
+        st.id = renumber(st.id); // waiting travellers go to homes, not stations: they stay
     }
     constexpr std::uint32_t kGone = 0xFFFFFFFFu; // a load from the removed station: still never sold back "there"
     for (Train& t : trains_) {

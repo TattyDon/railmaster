@@ -223,6 +223,10 @@ public:
     void add_town(Town t) { towns_.push_back(std::move(t)); }
     Town& town_mut(std::size_t i) { return towns_.at(i); }
     const std::vector<Town>& towns() const { return towns_; }
+    // The town each site belongs to, by SiteId: a house's own town, anything
+    // else the nearest; -1 on a map without towns. For naming where
+    // travellers are going.
+    std::vector<std::int32_t> town_by_site() const;
     // Houses in a town: the levels of its house cells.
     std::int64_t town_houses(std::size_t t) const;
     // A good first line for a new railroad: of the town pairs between

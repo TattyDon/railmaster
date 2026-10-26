@@ -180,7 +180,11 @@ Early development. Done so far:
   price field along which cargo drifts, shown as a cargo price overlay
 - freight by rail: stations gather cargo, trains load the most valuable,
   and deliveries earn the price difference
-- passengers, mail and troops with destinations, paid by distance
+- passengers, mail and troops travelling from their homes to others' homes
+  (a town's houses shared by the stations that reach them, any station by
+  the destination will do, changing trains up to twice), paid by distance
+  and speed; homes whose travellers keep giving up avoid the railway for a
+  while
 - a company with cash, running costs, yearly accounts, credit rating and
   bonds, shown on a finance screen
 - a personal account and a stock market: trade shares on margin, issue or

@@ -502,7 +502,7 @@ void World::on_new_day() {
 // Running costs for the month just ended are charged on the 1st, before a
 // new year's accounts are opened, so December's land in the old year.
 void World::on_new_month() {
-    start_new_month(railway_, date_.days_since_epoch());
+    start_new_month(railway_, economy_, data_.cargo, data_.industries, date_.days_since_epoch());
     charge_running_costs();
     railway_.close_month();
     account_industries(1);

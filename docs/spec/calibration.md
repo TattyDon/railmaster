@@ -198,6 +198,15 @@ same ($1.67M a year, 36% freight).
   car.
 - **Town growth** coefficients rose from 1 to 3 per thousand houses served,
   so served towns grow visibly with the lower passenger volumes.
+- **Travellers from homes** (rt3-clone-spec §8.3 [D]): a town's houses are
+  shared among the stations that reach them instead of counted once for
+  each, so where rivals serve the same towns as the demo network there are
+  fewer travellers in all. Served towns then grew 23% in ten years (from
+  26.7%) and the share price after ten years fell from $26.8 to $15.7. The
+  express growth coefficient rose from 3 to 4 per thousand houses: growth
+  29.7%, share price $17.8, every metric in range. On the demo network
+  without rivals, passenger and mail revenue stayed within about 10% of
+  before (three maps, ten years; one map's mail 26% lower).
 
 ## Re-running
 

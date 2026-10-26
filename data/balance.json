@@ -373,7 +373,7 @@
   },
   "towns": {
     "base_growth_permille": 8,
-    "express_permille_per_k_house": 3,
+    "express_permille_per_k_house": 4,
     "freight_permille_per_k_house": 3,
     "max_growth_permille": 150,
     "max_houses_per_cell": 6,

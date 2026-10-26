@@ -55,7 +55,8 @@ struct Line {
         st.waiting.resize(cargo.all().size());
         st.waiting[c(key)] = {loads * kMilli, std::int64_t{loads} * kMilli * 1'000};
     }
-    void passengers(int loads) { rw.station_mut(a).express.push_back({c("passengers"), b, loads * kMilli}); }
+    // Passengers at A bound for a home by B (the works' site, the only one there).
+    void passengers(int loads) { rw.station_mut(a).express.push_back({c("passengers"), 0, loads * kMilli}); }
     void arrive_at_a() { handle_arrival(rw, eco, cargo, ind, t, a, 0, 0); }
     std::int32_t count(const char* key) const {
         std::int32_t n = 0;

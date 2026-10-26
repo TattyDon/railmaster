@@ -44,14 +44,49 @@ void size_pool(Station& s, const CargoRegistry& cargo) {
     if (s.received_this_month.size() != cargo.all().size()) s.received_this_month.resize(cargo.all().size());
 }
 
-ExpressWaiting& express_pool(Station& s, CargoId c, StationId dest) {
-    const auto key = [](const ExpressWaiting& e) { return std::pair{e.cargo, e.destination}; };
-    auto it = std::lower_bound(s.express.begin(), s.express.end(), std::pair{c, dest},
+ExpressWaiting& express_pool(Station& s, CargoId c, SiteId home) {
+    const auto key = [](const ExpressWaiting& e) { return std::pair{e.cargo, e.home}; };
+    auto it = std::lower_bound(s.express.begin(), s.express.end(), std::pair{c, home},
                                [&](const ExpressWaiting& e, const std::pair<CargoId, std::uint32_t>& k) {
                                    return key(e) < k;
                                });
-    if (it == s.express.end() || key(*it) != std::pair{c, dest}) it = s.express.insert(it, {c, dest, 0});
+    if (it == s.express.end() || key(*it) != std::pair{c, home}) it = s.express.insert(it, {c, home, 0});
     return *it;
+}
+
+// A home's yearly rate, in thousandths of a carload: what it makes (or
+// takes) of each express cargo it deals in.
+std::int64_t home_rate(const IndustryRegistry& industries, const Site& s) {
+    return std::int64_t{industries.get(s.type).rate_milli} * s.level;
+}
+
+// The homes in reach of each station for an express cargo: the sites that
+// make it (where travellers set out from) and those that take it (where
+// they are going), houses and barracks (rt3-clone-spec §8.3 [D]).
+struct Homes {
+    std::vector<std::vector<SiteId>> makes, takes; // by StationId
+};
+Homes express_homes(const Economy& eco, const Railway& rw, const IndustryRegistry& industries, CargoId c) {
+    const std::size_t n = rw.stations().size();
+    Homes out{std::vector<std::vector<SiteId>>(n), std::vector<std::vector<SiteId>>(n)};
+    std::vector<MapPoint> at(n);
+    std::vector<std::int64_t> r_mm(n);
+    for (StationId s = 0; s < n; ++s) {
+        at[s] = rw.track().node(rw.station(s).node).pos;
+        r_mm[s] = eco.cells_mm(catchment_radius(rw.station(s).size, rw.balance()));
+    }
+    for (const Site& site : eco.sites()) {
+        const IndustryType& t = industries.get(site.type);
+        const bool makes = std::find(t.outputs.begin(), t.outputs.end(), c) != t.outputs.end();
+        const bool takes = std::any_of(t.inputs.begin(), t.inputs.end(), [&](const IndustryInput& in) { return in.cargo == c; });
+        if (!makes && !takes) continue;
+        for (StationId s = 0; s < n; ++s) {
+            if (!eco.reaches(site, at[s], r_mm[s])) continue;
+            if (makes) out.makes[s].push_back(site.id);
+            if (takes) out.takes[s].push_back(site.id);
+        }
+    }
+    return out;
 }
 
 // Stations that share a train route with each station.
@@ -70,16 +105,19 @@ std::vector<std::vector<StationId>> route_partners(const Railway& rw) {
     return partners;
 }
 
-bool on_route(const Train& t, StationId s) { return std::find(t.route.begin(), t.route.end(), s) != t.route.end(); }
 
 
-// How many trains it takes from every station to `to` (0 there; -1 where
-// no run of trains reaches it): a breadth-first walk over stations that
-// share a train.
-std::vector<std::int32_t> legs_to(const std::vector<std::vector<StationId>>& partners, StationId to) {
+// How many trains it takes from every station to the nearest of `to` (0
+// there; -1 where no run of trains reaches one): a breadth-first walk over
+// stations that share a train.
+std::vector<std::int32_t> legs_to_any(const std::vector<std::vector<StationId>>& partners, const std::vector<StationId>& to) {
     std::vector<std::int32_t> legs(partners.size(), -1);
-    std::vector<StationId> frontier{to};
-    legs[to] = 0;
+    std::vector<StationId> frontier;
+    for (StationId s : to) {
+        if (s >= legs.size() || legs[s] == 0) continue;
+        legs[s] = 0;
+        frontier.push_back(s);
+    }
     while (!frontier.empty()) {
         std::vector<StationId> next;
         for (StationId s : frontier) {
@@ -100,7 +138,7 @@ std::vector<std::int32_t> legs_to(const std::vector<std::vector<StationId>>& par
 std::vector<std::vector<StationId>> express_reach(const std::vector<std::vector<StationId>>& partners, std::int32_t max_legs) {
     std::vector<std::vector<StationId>> reach(partners.size());
     for (std::size_t to = 0; to < partners.size(); ++to) {
-        const std::vector<std::int32_t> legs = legs_to(partners, static_cast<StationId>(to));
+        const std::vector<std::int32_t> legs = legs_to_any(partners, {static_cast<StationId>(to)});
         for (std::size_t s = 0; s < partners.size(); ++s) {
             if (s != to && legs[s] > 0 && legs[s] <= max_legs) reach[s].push_back(static_cast<StationId>(to));
         }
@@ -159,6 +197,23 @@ std::int64_t catchment_rate(const Economy& eco, const Railway& rw, const Industr
     return total;
 }
 
+HomesAvoiding homes_avoiding(const Economy& eco, const Railway& rw, const IndustryRegistry& industries, StationId s,
+                             CargoId c, std::int32_t today) {
+    HomesAvoiding out;
+    const Station& st = rw.station(s);
+    const MapPoint p = rw.track().node(st.node).pos;
+    const std::int64_t r_mm = eco.cells_mm(catchment_radius(st.size, rw.balance()));
+    for (const Site& site : eco.sites()) {
+        const IndustryType& t = industries.get(site.type);
+        if (std::find(t.outputs.begin(), t.outputs.end(), c) == t.outputs.end() || !eco.reaches(site, p, r_mm)) continue;
+        ++out.homes;
+        if (!rw.home_avoids(site.id, c, today)) continue;
+        ++out.avoiding;
+        out.until = std::max(out.until, rw.home_avoided_until().at(site.id)[c]);
+    }
+    return out;
+}
+
 Money express_base_fare(const CargoType& c, std::int64_t distance_mm, const Balance& b) {
     const std::int64_t ref_mm = std::int64_t{b.express.fare_reference_km} * 1'000'000;
     const std::int64_t scaled_mm = ref_mm * pow_ratio_permille(distance_mm, ref_mm, b.express.fare_distance_exponent_permille) / 1000;
@@ -199,20 +254,56 @@ std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t tick
         std::clamp<std::int64_t>(f, b.express.speed_factor_min_permille, b.express.speed_factor_max_permille));
 }
 
-void start_new_month(Railway& rw, std::int32_t today) {
+void start_new_month(Railway& rw, const Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
+                     std::int32_t today) {
     const Balance::Express& b = rw.balance().express;
+    // What each station's travellers lost waiting last month is laid at the
+    // doors of the homes that made them, in proportion to what each made
+    // there. A home that lost too many avoids the railway for a while
+    // (rt3-clone-spec §8.3 [D]), whichever station they tried.
+    for (const CargoType& c : cargo.all()) {
+        if (c.cargo_class != CargoClass::Express) continue;
+        const auto made_at = [&](StationId s) {
+            const Station& st = rw.station(s);
+            return c.id < st.express_made_month.size() ? std::int64_t{st.express_made_month[c.id]} : 0;
+        };
+        bool any = false;
+        for (StationId s = 0; s < rw.stations().size(); ++s) any |= made_at(s) > 0;
+        if (!any) continue;
+        const Homes homes = express_homes(eco, rw, industries, c.id);
+        std::map<SiteId, std::int32_t> sharing;
+        for (StationId s = 0; s < rw.stations().size(); ++s)
+            if (made_at(s) > 0)
+                for (SiteId h : homes.makes[s]) ++sharing[h];
+        std::map<SiteId, std::pair<std::int64_t, std::int64_t>> tally; // made, lost
+        for (StationId s = 0; s < rw.stations().size(); ++s) {
+            const std::int64_t made = made_at(s);
+            if (made <= 0) continue;
+            const Station& st = rw.station(s);
+            const std::int64_t lost = c.id < st.express_lost_month.size() ? st.express_lost_month[c.id] : 0;
+            std::int64_t total = 0;
+            for (SiteId h : homes.makes[s]) total += home_rate(industries, eco.sites()[h]) / sharing[h];
+            if (total <= 0) continue;
+            for (SiteId h : homes.makes[s]) {
+                const std::int64_t w = home_rate(industries, eco.sites()[h]) / sharing[h];
+                tally[h].first += made * w / total;
+                tally[h].second += lost * w / total;
+            }
+        }
+        for (const auto& [h, ml] : tally) {
+            if (ml.first < kMilli || ml.second * 100 <= ml.first * b.avoid_lost_percent) continue;
+            std::vector<std::int32_t>& until = rw.home_avoided_until_mut()[h];
+            if (until.size() <= c.id) until.resize(std::size_t{c.id} + 1, 0);
+            until[c.id] = std::max(until[c.id], today + b.avoid_days);
+        }
+    }
+    // Homes whose time is up are forgotten.
+    std::erase_if(rw.home_avoided_until_mut(), [&](const auto& kv) {
+        return std::all_of(kv.second.begin(), kv.second.end(), [&](std::int32_t d) { return d <= today; });
+    });
     for (StationId s = 0; s < rw.stations().size(); ++s) {
         Station& st = rw.station_mut(s);
         std::fill(st.received_this_month.begin(), st.received_this_month.end(), 0);
-        // Too many gave up waiting last month: the place avoids rail for a while.
-        for (std::size_t c = 0; c < st.express_made_month.size(); ++c) {
-            const std::int64_t made = st.express_made_month[c];
-            const std::int64_t lost = c < st.express_lost_month.size() ? st.express_lost_month[c] : 0;
-            if (made >= kMilli && lost * 100 > made * b.avoid_lost_percent) {
-                if (st.avoided_until.size() <= c) st.avoided_until.resize(c + 1, 0);
-                st.avoided_until[c] = std::max(st.avoided_until[c], today + b.avoid_days);
-            }
-        }
         std::fill(st.express_made_month.begin(), st.express_made_month.end(), 0);
         std::fill(st.express_lost_month.begin(), st.express_lost_month.end(), 0);
     }
@@ -327,7 +418,11 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                 per_mille = per_mille * rw.balance().stations.wait_loss_percent / 100;
             }
             if (e.milli > 0) {
-                const std::int32_t gone = std::max(1, e.milli * per_mille / 1000);
+                // Rounded up or down by a fixed pattern over the days, so a
+                // small pool loses its share on average rather than nothing
+                // (or a whole thousandth) every day.
+                const auto dither = static_cast<std::int32_t>((std::uint32_t(today) * 7919u + e.home * 104729u + e.cargo * 31u) % 1000u);
+                const std::int32_t gone = std::min(e.milli, (e.milli * per_mille + dither) / 1000);
                 e.milli -= gone;
                 if (st.express_lost_month.size() <= e.cargo) st.express_lost_month.resize(std::size_t{e.cargo} + 1, 0);
                 st.express_lost_month[e.cargo] += gone;
@@ -337,49 +432,81 @@ void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     }
     const auto reach = express_reach(route_partners(rw), rw.balance().express.max_legs);
     const std::int32_t era_percent = express_era_percent(year, rw.balance());
+    const auto& xb = rw.balance().express;
+    const std::int64_t min_mm = std::int64_t{std::max(1, xb.gravity_min_km)} * 1'000'000;
+    const std::int64_t half = std::int64_t{xb.attraction_half} * kMilli;
+    std::vector<char> seen(eco.sites().size());
     for (const CargoType& c : cargo.all()) {
         if (c.cargo_class != CargoClass::Express || c.generation <= 0 || year < c.available_year) continue;
-        std::vector<std::int64_t> attraction(n_stations);
-        for (StationId s = 0; s < n_stations; ++s) {
-            attraction[s] = catchment_rate(eco, rw, industries, rw.station(s), c.id, false);
-        }
+        const Homes homes = express_homes(eco, rw, industries, c.id);
+        // Travellers set out from homes, each using a station that reaches
+        // their home (rt3-clone-spec §7.1 [D]); a home in reach of several
+        // shares its travellers among those with somewhere to go.
+        std::map<SiteId, std::int32_t> sharing;
+        for (StationId s = 0; s < n_stations; ++s)
+            if (!reach[s].empty())
+                for (SiteId h : homes.makes[s]) ++sharing[h];
         for (StationId sid = 0; sid < n_stations; ++sid) {
-            const std::int64_t produced = catchment_rate(eco, rw, industries, rw.station(sid), c.id, true);
-            if (produced == 0) continue;
-            // produced is already in thousandths
-            std::int64_t daily = produced * c.generation * c.demand_percent / 100 * era_percent / 100 / 365;
-            // A place that gave up on the railway makes fewer travellers for a while.
-            const Station& here = rw.station(sid);
-            if (c.id < here.avoided_until.size() && today < here.avoided_until[c.id]) {
-                daily = daily * rw.balance().express.avoid_generation_percent / 100;
+            if (reach[sid].empty()) continue;
+            std::int64_t produced = 0; // already in thousandths
+            for (SiteId h : homes.makes[sid]) {
+                std::int64_t r = home_rate(industries, eco.sites()[h]) / sharing[h];
+                // A home that gave up on the railway makes fewer travellers for a while.
+                if (rw.home_avoids(h, c.id, today)) r = r * xb.avoid_generation_percent / 100;
+                produced += r;
             }
-            // How many in all: more for every destination with a pull, each
-            // saturating [I]. Then shared out by gravity: pull over distance
-            // squared (rt3-clone-spec §8.3 [I]).
-            const auto& xb = rw.balance().express;
-            const MapPoint from = rw.track().node(here.node).pos;
-            const std::int64_t min_mm = std::int64_t{std::max(1, xb.gravity_min_km)} * 1'000'000;
+            if (produced == 0) continue;
+            const std::int64_t daily = produced * c.generation * c.demand_percent / 100 * era_percent / 100 / 365;
+            // Where they go: the homes in reach of the stations a train
+            // connects this one to, each once, and none this one reaches
+            // itself. How many in all: more for every station with homes to
+            // go to, each saturating [I]; shared among the homes by gravity,
+            // pull over distance^1.5 (rt3-clone-spec §8.3 [I]).
+            std::fill(seen.begin(), seen.end(), 0);
+            for (SiteId h : homes.takes[sid]) seen[h] = 1;
+            const MapPoint from = rw.track().node(rw.station(sid).node).pos;
             std::int64_t total = 0, weights = 0;
-            std::vector<std::int64_t> weight(reach[sid].size(), 0);
-            for (std::size_t i = 0; i < reach[sid].size(); ++i) {
-                const std::int64_t a = attraction[reach[sid][i]];
-                if (a == 0) continue;
-                total += daily * a / (a + std::int64_t{xb.attraction_half} * kMilli);
-                const std::int64_t mm = std::max(min_mm, distance_mm(from, rw.track().node(rw.station(reach[sid][i]).node).pos));
-                weight[i] = a * 1000 / std::max<std::int64_t>(1000, pow_ratio_permille(mm, min_mm, xb.gravity_exponent_permille));
-                weights += weight[i];
+            std::vector<std::pair<SiteId, std::int64_t>> dest;
+            for (StationId r : reach[sid]) {
+                std::int64_t pull = 0;
+                for (SiteId h : homes.takes[r]) {
+                    if (seen[h]) continue;
+                    seen[h] = 1;
+                    const Site& site = eco.sites()[h];
+                    const std::int64_t a = home_rate(industries, site);
+                    if (a == 0) continue;
+                    pull += a;
+                    const std::int64_t mm = std::max(min_mm, distance_mm(from, eco.node_centre(site.cx, site.cy)));
+                    const std::int64_t w =
+                        a * 1000 / std::max<std::int64_t>(1000, pow_ratio_permille(mm, min_mm, xb.gravity_exponent_permille));
+                    dest.emplace_back(h, w);
+                    weights += w;
+                }
+                if (pull > 0) total += daily * pull / (pull + half);
             }
             if (weights == 0) continue;
-            for (std::size_t i = 0; i < reach[sid].size(); ++i) {
-                if (weight[i] == 0) continue;
-                const StationId dest = reach[sid][i];
-                Station& origin = rw.station_mut(sid);
-                ExpressWaiting& pool = express_pool(origin, c.id, dest);
-                const auto add = static_cast<std::int32_t>(total * weight[i] / weights);
-                const std::int32_t kept = std::min(rw.balance().express.cap_milli, pool.milli + add) - pool.milli;
+            Station& origin = rw.station_mut(sid);
+            if (origin.express_made_month.size() <= c.id) origin.express_made_month.resize(std::size_t{c.id} + 1, 0);
+            if (origin.express_lost_month.size() <= c.id) origin.express_lost_month.resize(std::size_t{c.id} + 1, 0);
+            // The day's travellers, a thousandth at a time, each to the home
+            // whose share of the weights it falls in, starting at a point
+            // that moves from day to day: every home gets its share exactly
+            // on average, however small, and none is lost to rounding.
+            std::vector<std::int32_t> adds(dest.size(), 0);
+            const auto phase = static_cast<std::int64_t>((std::uint32_t(today) * 7919u + sid * 104729u + c.id * 31u) % 1000u);
+            std::size_t i = 0;
+            std::int64_t below = dest.empty() ? 0 : dest[0].second; // weights up to and including home i
+            for (std::int64_t k = 0; k < total; ++k) {
+                const std::int64_t point = (k * 1000 + phase) * weights / (total * 1000);
+                while (i + 1 < dest.size() && point >= below) below += dest[++i].second;
+                ++adds[i];
+            }
+            for (std::size_t j = 0; j < dest.size(); ++j) {
+                const std::int32_t add = adds[j];
+                if (add == 0) continue;
+                ExpressWaiting& pool = express_pool(origin, c.id, dest[j].first);
+                const std::int32_t kept = std::min(xb.cap_milli, pool.milli + add) - pool.milli;
                 pool.milli += kept;
-                if (origin.express_made_month.size() <= c.id) origin.express_made_month.resize(std::size_t{c.id} + 1, 0);
-                if (origin.express_lost_month.size() <= c.id) origin.express_lost_month.resize(std::size_t{c.id} + 1, 0);
                 origin.express_made_month[c.id] += add;
                 origin.express_lost_month[c.id] += add - kept; // no room to wait
             }
@@ -417,8 +544,8 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
                                      .scaled(diner, 100)
                                      .scaled(appeal, 100)
                                      .scaled(speed, 1000));
-                if (left > 0) {
-                    std::int32_t& pool = express_pool(st, c.id, *car.destination).milli;
+                if (left > 0 && car.home) {
+                    std::int32_t& pool = express_pool(st, c.id, *car.home).milli;
                     pool = std::min(rw.balance().express.cap_milli, pool + car.milli);
                 }
                 car = Car{};
@@ -488,9 +615,31 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         std::optional<StationId> destination;
         std::int64_t gain;
         std::optional<StationId> via{};
+        std::vector<SiteId> homes{}; // express: the homes of those going this way, who share cars
     };
     const auto partners = route_partners(rw);
-    std::map<StationId, std::vector<std::int32_t>> legs_cache; // trains to each destination, from every station
+    // For each home travellers here are going to: the stations that reach
+    // it (any of them will do), and how many trains it takes from every
+    // station to the nearest of those.
+    struct Ways {
+        std::vector<StationId> stations;
+        std::vector<std::int32_t> legs;
+    };
+    std::map<SiteId, Ways> ways_cache;
+    const auto ways_to = [&](SiteId home) -> const Ways& {
+        auto it = ways_cache.find(home);
+        if (it != ways_cache.end()) return it->second;
+        Ways w;
+        const Site& site = eco.sites()[home];
+        for (StationId s = 0; s < rw.stations().size(); ++s) {
+            const Station& other = rw.station(s);
+            if (eco.reaches(site, rw.track().node(other.node).pos, eco.cells_mm(catchment_radius(other.size, rw.balance())))) {
+                w.stations.push_back(s);
+            }
+        }
+        w.legs = legs_to_any(partners, w.stations);
+        return ways_cache.emplace(home, std::move(w)).first->second;
+    };
     std::vector<Candidate> candidates;
     for (const CargoType& c : cargo.all()) {
         const WaitingCargo& pool = st.waiting[c.id];
@@ -503,26 +652,47 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         if (gain > 0) candidates.push_back({c.id, std::nullopt, gain});
     }
     for (const ExpressWaiting& e : st.express) {
-        if (e.milli < express_min || !allowed(cargo.get(e.cargo))) continue;
-        if (on_route(t, e.destination)) {
-            candidates.push_back({e.cargo, e.destination,
-                                  express_fare(cargo.get(e.cargo), rw, station_id, e.destination).whole_dollars()});
+        if (e.milli <= 0 || !allowed(cargo.get(e.cargo)) || e.home >= eco.sites().size()) continue;
+        const Ways& ways = ways_to(e.home);
+        const Site& home = eco.sites()[e.home];
+        const MapPoint home_at = eco.node_centre(home.cx, home.cy);
+        // Straight there: the stop of this train that reaches their home,
+        // the one nearest it if several do.
+        std::optional<StationId> direct;
+        std::int64_t nearest = 0;
+        for (StationId h : t.route) {
+            if (h == station_id || std::find(ways.stations.begin(), ways.stations.end(), h) == ways.stations.end()) continue;
+            const std::int64_t d = distance_mm(rw.track().node(rw.station(h).node).pos, home_at);
+            if (!direct || d < nearest) {
+                direct = h;
+                nearest = d;
+            }
+        }
+        // Travellers for different homes getting off at the same stop (or
+        // changing at the same hub for the same station) share cars.
+        const auto board = [&](StationId to, std::optional<StationId> via, std::int64_t gain) {
+            for (Candidate& k : candidates) {
+                if (k.homes.empty() || k.cargo != e.cargo || k.destination != to || k.via != via) continue;
+                k.homes.push_back(e.home);
+                return;
+            }
+            candidates.push_back({e.cargo, to, gain, via, {e.home}});
+        };
+        if (direct) {
+            board(*direct, std::nullopt, express_fare(cargo.get(e.cargo), rw, station_id, *direct).whole_dollars());
             continue;
         }
-        // No direct train: ride to the stop of this train from which the
-        // destination is fewest trains away (and nearer in trains than from
-        // here), the one nearest the destination among equals.
-        auto known = legs_cache.find(e.destination);
-        if (known == legs_cache.end()) known = legs_cache.emplace(e.destination, legs_to(partners, e.destination)).first;
-        const std::vector<std::int32_t>& legs = known->second;
+        // No direct train: ride to the stop of this train from which a
+        // station by their home is fewest trains away (and nearer in trains
+        // than from here), the one nearest the home among equals.
+        const std::vector<std::int32_t>& legs = ways.legs;
         std::optional<StationId> hub;
         std::int64_t best = 0;
         std::int32_t best_legs = 0;
-        const MapPoint dest_at = rw.track().node(rw.station(e.destination).node).pos;
         const std::int32_t from_here = legs[station_id] < 0 ? std::numeric_limits<std::int32_t>::max() : legs[station_id];
         for (StationId h : t.route) {
             if (h == station_id || legs[h] < 1 || legs[h] >= from_here) continue;
-            const std::int64_t d = distance_mm(rw.track().node(rw.station(h).node).pos, dest_at);
+            const std::int64_t d = distance_mm(rw.track().node(rw.station(h).node).pos, home_at);
             if (!hub || legs[h] < best_legs || (legs[h] == best_legs && d < best)) {
                 hub = h;
                 best = d;
@@ -530,8 +700,17 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
             }
         }
         if (hub) {
-            candidates.push_back({e.cargo, e.destination, express_fare(cargo.get(e.cargo), rw, station_id, *hub).whole_dollars(),
-                                  hub});
+            // Bound for the station by their home nearest it, by way of the hub.
+            StationId to = ways.stations.front();
+            std::int64_t closest = -1;
+            for (StationId w : ways.stations) {
+                const std::int64_t d = distance_mm(rw.track().node(rw.station(w).node).pos, home_at);
+                if (closest < 0 || d < closest) {
+                    to = w;
+                    closest = d;
+                }
+            }
+            board(to, hub, express_fare(cargo.get(e.cargo), rw, station_id, *hub).whole_dollars());
         }
     }
     std::stable_sort(candidates.begin(), candidates.end(),
@@ -539,7 +718,10 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
 
     Train& train = rw.train_mut(train_id);
     const auto waiting_milli = [&](const Candidate& c) {
-        return c.destination ? express_pool(st, c.cargo, *c.destination).milli : st.waiting[c.cargo].milli;
+        if (c.homes.empty()) return st.waiting[c.cargo].milli;
+        std::int32_t sum = 0;
+        for (SiteId h : c.homes) sum += express_pool(st, c.cargo, h).milli;
+        return sum;
     };
     // A custom consist takes each listed car once (a cargo listed twice, twice).
     std::vector<std::int32_t> wanted(cargo.all().size(), 0);
@@ -562,12 +744,23 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
         const Candidate& pick = candidates[next];
         --wanted[pick.cargo];
         if (pick.destination) {
-            std::int32_t& pool = express_pool(st, pick.cargo, *pick.destination).milli;
-            const std::int32_t load = std::min(kMilli, pool);
-            pool -= load;
+            // Up to a carload from the homes going this way, the most first;
+            // the car is reckoned to be going to the home most of them are.
+            std::vector<SiteId> homes = pick.homes;
+            std::stable_sort(homes.begin(), homes.end(), [&](SiteId a, SiteId b) {
+                return express_pool(st, pick.cargo, a).milli > express_pool(st, pick.cargo, b).milli;
+            });
+            std::int32_t load = 0;
+            for (SiteId h : homes) {
+                std::int32_t& pool = express_pool(st, pick.cargo, h).milli;
+                const std::int32_t take = std::min(kMilli - load, pool);
+                pool -= take;
+                load += take;
+                if (load == kMilli) break;
+            }
             if (cargo.get(pick.cargo).key == "passengers") st.passengers_boarded_milli += load;
             car = Car{pick.cargo, load, 0, today, station_id, pick.destination, static_cast<std::int32_t>(pick.gain), tick,
-                      pick.via};
+                      pick.via, homes.front()};
         } else {
             WaitingCargo& pool = st.waiting[pick.cargo];
             const std::int32_t price = pool.average_price();
@@ -596,3 +789,5 @@ std::int64_t best_price_within_reach(const Economy& eco, const Balance& b, MapPo
 }
 
 } // namespace railmaster::sim
+
+

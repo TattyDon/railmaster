@@ -331,7 +331,7 @@ struct Balance {
     // towns no train serves grow at a fraction of that. Stars by houses.
     struct Towns {
         std::int32_t base_growth_permille = 8;            // 0.5-1% [I]
-        std::int32_t express_permille_per_k_house = 3;
+        std::int32_t express_permille_per_k_house = 4;
         std::int32_t freight_permille_per_k_house = 3;
         std::int32_t max_growth_permille = 150;
         std::int32_t unconnected_permille = 300;

@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 26; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 27; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -38,7 +38,8 @@ constexpr std::uint32_t kSaveVersion = 26; // 2: events, Grants; 3: restrictions
                                            // 20: cheats (assisted games); 21: more cheats;
                                            // 22: share prices by month; 23: deliveries from or to a place;
                                            // 24: stations and buildings to undo; 25: trains' legs;
-                                           // 26: legs' empty trips and income by cargo
+                                           // 26: legs' empty trips and income by cargo;
+                                           // 27: travellers from and to homes
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -299,14 +300,14 @@ void io(Ar& ar, WaitingCargo& w) {
 }
 template <class Ar>
 void io(Ar& ar, ExpressWaiting& e) {
-    fields(ar, e.cargo, e.destination, e.milli);
+    fields(ar, e.cargo, e.home, e.milli);
 }
 template <class Ar>
 void io(Ar& ar, Station& s) {
     fields(ar, s.id, s.name, s.node, s.size, s.owner, s.waiting, s.express, s.received_this_month, s.town, s.built_day,
            s.passengers_boarded_milli, s.passengers_arrived_milli, s.passengers_waiting_milli_days, s.income_this_month,
            s.income_months);
-    fields(ar, s.express_made_month, s.express_lost_month, s.avoided_until);
+    fields(ar, s.express_made_month, s.express_lost_month);
 }
 template <class Ar>
 void io(Ar& ar, Crossing& c) {
@@ -327,7 +328,7 @@ void io(Ar& ar, ConsistRule& r) {
 template <class Ar>
 void io(Ar& ar, Car& c) {
     fields(ar, c.cargo, c.milli, c.pickup_price, c.loaded_day, c.loaded_at, c.destination, c.expected_value,
-           c.loaded_tick, c.via);
+           c.loaded_tick, c.via, c.home);
 }
 template <class Ar>
 void io(Ar& ar, TrainAccounts& a) {
@@ -495,7 +496,7 @@ template <class Ar>
 void io(Ar& ar, Railway& r) {
     fields(ar, r.track_, r.stations_, r.service_buildings_, r.station_buildings_, r.trains_, r.arrivals_, r.crashes_,
            r.breakdowns_, r.crossings_, r.traffic_, r.traffic_last_, r.held_, r.held_last_,
-           r.today_, r.year_, r.rules_.breakdowns, r.rules_.crashes, r.rules_.speed_percent, r.rng_);
+           r.today_, r.year_, r.rules_.breakdowns, r.rules_.crashes, r.rules_.speed_percent, r.rng_, r.home_avoided_until_);
 }
 
 template <class Ar>

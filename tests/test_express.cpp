@@ -57,9 +57,11 @@ struct Towns {
     void gather(int days) {
         for (int i = 0; i < days; ++i) gather_at_stations(rw, eco, cargo, ind, 1850, i);
     }
+    // Travellers waiting at `at` for the home in the town of station `dest`
+    // (each town is one house site, numbered as its station).
     std::int32_t waiting(StationId at, CargoId c, StationId dest) const {
         for (const ExpressWaiting& e : rw.station(at).express)
-            if (e.cargo == c && e.destination == dest) return e.milli;
+            if (e.cargo == c && e.home == dest) return e.milli;
         return 0;
     }
     Money arrive(TrainId t, StationId s, std::int32_t day, std::int32_t appeal = 0) {
@@ -196,7 +198,7 @@ TEST_CASE("a town stops paying for mail beyond its monthly demand") {
     };
     CHECK(deliver_mail(10) > Money{});
     CHECK(deliver_mail(11) == Money{}); // 1 load received >= cap of 6 * 1000 / 12 * 2 = 1000
-    start_new_month(w.rw, 30);
+    start_new_month(w.rw, w.eco, w.cargo, w.ind, 30);
     CHECK(deliver_mail(40) > Money{});
 
     // Passengers have no such cap.
@@ -225,7 +227,7 @@ TEST_CASE("travellers change trains at a hub, and each train is paid for its leg
     REQUIRE(w.waiting(w.st[0], w.pax(), w.st[2]) >= kMilli);
     // Keep only passengers for the third town at the first, so they board.
     for (ExpressWaiting& e : w.rw.station_mut(w.st[0]).express)
-        if (e.destination != w.st[2] || e.cargo != w.pax()) e.milli = 0;
+        if (e.home != w.st[2] || e.cargo != w.pax()) e.milli = 0;
     w.arrive(first, w.st[0], 100);
     const Car& car = w.rw.train(first).cars[0];
     REQUIRE(car.destination == w.st[2]);
@@ -237,7 +239,7 @@ TEST_CASE("travellers change trains at a hub, and each train is paid for its leg
     CHECK(w.waiting(w.st[1], w.pax(), w.st[2]) > before);
     // The second train takes them on.
     for (ExpressWaiting& e : w.rw.station_mut(w.st[1]).express)
-        if (e.destination != w.st[2] || e.cargo != w.pax()) e.milli = 0;
+        if (e.home != w.st[2] || e.cargo != w.pax()) e.milli = 0;
     w.arrive(second, w.st[1], 102);
     REQUIRE(w.rw.train(second).cars[0].destination == w.st[2]);
     CHECK_FALSE(w.rw.train(second).cars[0].via.has_value());
@@ -268,7 +270,7 @@ TEST_CASE("travellers reach places two changes of trains away, changing where th
     // Loaded at 0 for 3, they ride the first train to 1, the hub nearer in trains.
     const TrainId first = 0;
     for (auto& e : w.rw.station_mut(w.st[0]).express) {
-        if (e.destination != w.st[3]) e.milli = 0; // only the far travellers wait
+        if (e.home != w.st[3]) e.milli = 0; // only the far travellers wait
     }
     w.arrive(first, w.st[0], 31);
     bool bound_for_3 = false;
@@ -293,22 +295,23 @@ TEST_CASE("travellers reach places two changes of trains away, changing where th
     CHECK(near.waiting(near.st[0], near.pax(), near.st[3]) == 0);
 }
 
-TEST_CASE("when most travellers give up waiting, the town avoids the railway for six months") {
+TEST_CASE("when most travellers give up waiting, their homes avoid the railway for six months") {
     Towns w({5, 25}, 30);
     w.rw.add_train(0, 4, {w.st[0], w.st[1]}); // a train that never comes: it stays where it is
     const auto avoided = [&] {
-        const auto& a = w.rw.station(w.st[0]).avoided_until;
-        return w.pax() < a.size() ? a[w.pax()] : 0;
+        const auto& m = w.rw.home_avoided_until();
+        const auto it = m.find(0); // the first town's houses
+        return it != m.end() && w.pax() < it->second.size() ? it->second[w.pax()] : 0;
     };
     // The first month the waiting room is still filling: few have given up yet.
     int day = 0;
     for (; day < 30; ++day) gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, day);
-    start_new_month(w.rw, day);
+    start_new_month(w.rw, w.eco, w.cargo, w.ind, day);
     CHECK(avoided() == 0);
     // Once it is full, nearly everyone made gives up: the town avoids the railway.
     for (int month = 0; month < 6 && avoided() == 0; ++month) {
         for (int i = 0; i < 30; ++i, ++day) gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, day);
-        start_new_month(w.rw, day);
+        start_new_month(w.rw, w.eco, w.cargo, w.ind, day);
     }
     const std::int32_t until = avoided();
     REQUIRE(until > 0);
@@ -343,4 +346,76 @@ TEST_CASE("travellers go more to near places than far ones: pull over a power of
         CHECK(near / far > want * 0.93);
         CHECK(near / far < want * 1.07);
     }
+}
+
+TEST_CASE("a home in reach of two stations shares its travellers between them, not twice over (§7.1 [D])") {
+    const auto made_at_first_town = [](bool second_station) {
+        Towns w({5, 25}, 20);
+        std::vector<StationId> from{w.st[0]};
+        if (second_station) {
+            // Another station in the first town, beside the first, on its own line to the second town.
+            const NodeId n = w.rw.track().add_node(cell_centre(5, 6), 0);
+            w.rw.track().add_edge(w.rw.station(w.st[0]).node, n);
+            from.push_back(w.rw.add_station("T0b", n, StationSize::Small));
+            w.rw.add_train(0, 4, {from.back(), w.st[1]});
+        }
+        w.rw.add_train(0, 4, {w.st[0], w.st[1]});
+        w.gather(5);
+        std::int64_t sum = 0;
+        for (StationId s : from)
+            for (const ExpressWaiting& e : w.rw.station(s).express)
+                if (e.cargo == w.pax()) sum += e.milli;
+        return sum;
+    };
+    const std::int64_t one = made_at_first_town(false), two = made_at_first_town(true);
+    REQUIRE(one > 0);
+    CHECK(two * 100 >= one * 98);
+    CHECK(two * 100 <= one * 102);
+}
+
+TEST_CASE("travellers get off at any station by their home (§8.3 [D])") {
+    Towns w({5, 25, 45}, 40);
+    // A second station in the third town, which the train runs to instead.
+    const NodeId n = w.rw.track().add_node(cell_centre(45, 6), 0);
+    w.rw.track().add_edge(w.rw.station(w.st[2]).node, n);
+    const StationId other = w.rw.add_station("T2b", n, StationSize::Small);
+    const TrainId t = w.rw.add_train(0, 2, {w.st[0], other});
+    w.gather(60);
+    // Bound for the houses of the third town, though no train calls at its first station.
+    REQUIRE(w.waiting(w.st[0], w.pax(), w.st[2]) >= kMilli);
+    for (ExpressWaiting& e : w.rw.station_mut(w.st[0]).express)
+        if (e.home != w.st[2] || e.cargo != w.pax()) e.milli = 0;
+    w.arrive(t, w.st[0], 100);
+    const Car& car = w.rw.train(t).cars[0];
+    REQUIRE(car.destination == other);
+    CHECK(car.home == std::optional<std::uint32_t>(w.st[2]));
+    CHECK(w.arrive(t, other, 102) > Money{});
+}
+
+TEST_CASE("a home that gave up avoids the railway at any station, old or new") {
+    Towns w({5, 25}, 30);
+    w.rw.add_train(0, 4, {w.st[0], w.st[1]}); // never comes
+    int day = 0;
+    for (int month = 0; month < 6; ++month) {
+        for (int i = 0; i < 30; ++i, ++day) gather_at_stations(w.rw, w.eco, w.cargo, w.ind, 1850, day);
+        start_new_month(w.rw, w.eco, w.cargo, w.ind, day);
+    }
+    REQUIRE(w.rw.home_avoids(0, w.pax(), day));
+    // A new station beside the old one, with a train of its own: the
+    // first town's houses still avoid the railway, wherever they set out.
+    const auto made_by_new_station = [&](Towns& at, std::int32_t when) {
+        const NodeId n = at.rw.track().add_node(cell_centre(5, 6), 0);
+        at.rw.track().add_edge(at.rw.station(at.st[0]).node, n);
+        const StationId fresh = at.rw.add_station("T0b", n, StationSize::Small);
+        at.rw.add_train(0, 4, {fresh, at.st[1]});
+        at.rw.train_mut(0).route = {at.st[0]}; // the old line closes
+        gather_at_stations(at.rw, at.eco, at.cargo, at.ind, 1850, when);
+        return at.waiting(fresh, at.pax(), at.st[1]);
+    };
+    Towns keen({5, 25}, 30);
+    keen.rw.add_train(0, 4, {keen.st[0], keen.st[1]});
+    const std::int32_t sulking = made_by_new_station(w, day);
+    const std::int32_t willing = made_by_new_station(keen, day);
+    REQUIRE(willing > 0);
+    CHECK(sulking * 100 <= willing * (default_balance().express.avoid_generation_percent + 5));
 }

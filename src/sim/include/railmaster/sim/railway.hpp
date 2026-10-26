@@ -9,6 +9,7 @@
 #include "railmaster/sim/track.hpp"
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -36,10 +37,13 @@ struct WaitingCargo {
     std::int32_t average_price() const { return milli > 0 ? static_cast<std::int32_t>(value / milli) : 0; }
 };
 
-// Express loads (passengers, mail, troops) waiting at a station for one destination.
+// Express loads (passengers, mail, troops) waiting at a station, all going
+// to one home: the house (or barracks) at the far end, a SiteId in the
+// economy (rt3-clone-spec §8.3 [D]: each traveller has an origin house and a
+// destination house). They may get off at any station that reaches it.
 struct ExpressWaiting {
     CargoId cargo = 0;
-    std::uint32_t destination = 0; // StationId
+    std::uint32_t home = 0; // SiteId
     std::int32_t milli = 0;
 };
 
@@ -50,14 +54,13 @@ struct Station {
     StationSize size = StationSize::Small;
     CompanyId owner = 0; // any company's trains may use it [D]
     std::vector<WaitingCargo> waiting{}; // indexed by CargoId; sized by the freight code
-    std::vector<ExpressWaiting> express{}; // sorted by (cargo, destination)
+    std::vector<ExpressWaiting> express{}; // sorted by (cargo, home)
     std::vector<std::int32_t> received_this_month{}; // express milli delivered here, by CargoId
-    // Express made here and lost waiting this month, by CargoId (milli), and
-    // the day until which travellers avoid the station after too many gave
-    // up (rt3-clone-spec §8.3 [D]); 0 for none.
+    // Express made here and lost waiting this month, by CargoId (milli): at
+    // the month's end the losses are laid at the doors of the homes that made
+    // them, which may then avoid the railway (Railway::home_avoided_until).
     std::vector<std::int32_t> express_made_month{};
     std::vector<std::int32_t> express_lost_month{};
-    std::vector<std::int32_t> avoided_until{};
     std::optional<std::size_t> town{}; // index into Economy::towns(); none in open country
     std::int32_t built_day = 0;
     // Passenger traffic this month, for the station-area buildings: loads
@@ -146,12 +149,15 @@ struct Car {
     std::int32_t pickup_price = 0; // dollars per carload where it was collected
     std::int32_t loaded_day = 0;   // Date::days_since_epoch() when loaded
     std::uint32_t loaded_at = 0;   // StationId where loaded; never sold back there
-    std::optional<std::uint32_t> destination; // express only: the StationId it must reach
+    std::optional<std::uint32_t> destination; // express only: the StationId it gets off at
     std::int32_t expected_value = 0; // dollars this load should earn; decides meets at equal priority
     std::uint64_t loaded_tick = 0;   // World::total_ticks() when loaded: express pay goes by trip time
     // Express only: the hub where this load changes trains, when no train
     // runs from where it boarded to its destination (rt3-clone-spec §8.3).
     std::optional<std::uint32_t> via{};
+    // Express only: the home (SiteId) it is going to, near `destination`;
+    // at a hub it waits again for that home.
+    std::optional<std::uint32_t> home{};
 };
 
 // A train's own accounts for one year (rt3-clone-spec §15.4, the train
@@ -390,6 +396,15 @@ public:
                       std::int32_t priority = 0, CompanyId owner = 0);
     Train& train_mut(TrainId id) { return trains_.at(id); }
     Station& station_mut(StationId id) { return stations_.at(id); }
+    // Homes (economy sites: houses, barracks) whose travellers avoid the
+    // railway after too many gave up, by SiteId: the day it ends, by CargoId
+    // (rt3-clone-spec §8.3 [D]: they go home and avoid rail for a while).
+    const std::map<std::uint32_t, std::vector<std::int32_t>>& home_avoided_until() const { return home_avoided_until_; }
+    std::map<std::uint32_t, std::vector<std::int32_t>>& home_avoided_until_mut() { return home_avoided_until_; }
+    bool home_avoids(std::uint32_t site, CargoId c, std::int32_t today) const {
+        const auto it = home_avoided_until_.find(site);
+        return it != home_avoided_until_.end() && c < it->second.size() && today < it->second[c];
+    }
 
     // Hand everything `from` owns (track, stations, buildings, trains) to `to`.
     void transfer_owner(CompanyId from, CompanyId to);
@@ -446,6 +461,7 @@ private:
 
     TrackNetwork track_;
     std::vector<Station> stations_;
+    std::map<std::uint32_t, std::vector<std::int32_t>> home_avoided_until_;
     std::vector<ServiceBuilding> service_buildings_;
     std::vector<StationBuilding> station_buildings_;
     std::vector<Train> trains_;

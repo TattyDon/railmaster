@@ -110,6 +110,8 @@ Format versions:
 - **24:** the stations and buildings each player may still undo.
 - **25:** each train's legs: by route stop, the trips into it, their income, loads delivered and distance, this year and last.
 - **26:** each leg's trips that arrived with nothing to sell, and its income by cargo.
+- **27:** travellers from and to homes: waiting loads by destination home,
+  each express car's home, and the homes avoiding the railway.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

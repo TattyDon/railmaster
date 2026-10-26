@@ -234,6 +234,26 @@ void Economy::apply_borders() {
     }
 }
 
+std::vector<std::int32_t> Economy::town_by_site() const {
+    std::vector<std::int32_t> out(sites_.size(), -1);
+    if (towns_.empty()) return out;
+    for (std::size_t t = 0; t < towns_.size(); ++t)
+        for (SiteId h : towns_[t].houses)
+            if (h < out.size()) out[h] = static_cast<std::int32_t>(t);
+    for (const Site& s : sites_) {
+        if (out[s.id] >= 0) continue;
+        std::int64_t best = -1;
+        for (std::size_t t = 0; t < towns_.size(); ++t) {
+            const std::int64_t dx = towns_[t].cx - s.cx, dy = towns_[t].cy - s.cy, d = dx * dx + dy * dy;
+            if (best < 0 || d < best) {
+                best = d;
+                out[s.id] = static_cast<std::int32_t>(t);
+            }
+        }
+    }
+    return out;
+}
+
 bool Economy::within(std::int32_t cx, std::int32_t cy, MapPoint p, std::int64_t r_mm) const {
     const MapPoint c = node_centre(cx, cy);
     return std::abs(c.x_mm - p.x_mm) <= r_mm && std::abs(c.y_mm - p.y_mm) <= r_mm;

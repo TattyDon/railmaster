@@ -2839,10 +2839,16 @@ std::string Tools::cell_text() const {
         // Where the travellers waiting at the station under the cursor want to go, most first.
         if (const auto st = station_at_cursor()) {
             const sim::Railway& rw = world_.railway();
+            // By the town each traveller's home is in.
+            const std::vector<std::int32_t> town_of = eco.town_by_site();
+            std::map<std::pair<sim::CargoId, std::int32_t>, std::int32_t> bound;
+            for (const sim::ExpressWaiting& e : rw.station(*st).express)
+                if (e.home < town_of.size() && town_of[e.home] >= 0) bound[{e.cargo, town_of[e.home]}] += e.milli;
             std::vector<std::pair<std::int32_t, std::string>> to;
-            for (const sim::ExpressWaiting& e : rw.station(*st).express) {
-                if (e.milli < sim::kMilli / 10 || e.destination >= rw.stations().size()) continue;
-                to.emplace_back(e.milli, world_.data().cargo.get(e.cargo).name + " to " + rw.station(e.destination).name);
+            for (const auto& [key, milli] : bound) {
+                if (milli < sim::kMilli / 10) continue;
+                to.emplace_back(milli, world_.data().cargo.get(key.first).name + " to " +
+                                           eco.towns()[static_cast<std::size_t>(key.second)].name);
             }
             std::sort(to.begin(), to.end(), [](const auto& l, const auto& r) { return l.first > r.first; });
             if (!s.empty()) s += ".  ";
@@ -3966,11 +3972,15 @@ void Tools::draw_detail_panel() const {
         }
         if (!any) rows.push_back(dim({"Nothing made or wanted within reach"}));
         rows.push_back(dim({"Made and wanted: loads a year"}));
-        // Travellers who gave up on the railway here (rt3-clone-spec §8.3).
-        for (std::size_t c = 0; c < s.avoided_until.size(); ++c) {
-            if (s.avoided_until[c] <= today) continue;
-            DetailRow r = line({cargo.get(static_cast<sim::CargoId>(c)).name + " avoid the railway here",
-                                "until " + sim::Date::from_days(s.avoided_until[c]).month_year_label()});
+        // Homes whose travellers gave up on the railway (rt3-clone-spec §8.3).
+        for (const sim::CargoType& c : cargo.all()) {
+            if (c.cargo_class != sim::CargoClass::Express) continue;
+            const sim::HomesAvoiding a = sim::homes_avoiding(world_.economy(), world_.railway(), world_.data().industries,
+                                                             s.id, c.id, today);
+            if (a.avoiding == 0) continue;
+            DetailRow r = line({c.name + ": " + std::to_string(a.avoiding) + " of " + std::to_string(a.homes) +
+                                    (a.homes == 1 ? " home" : " homes") + " avoid the railway",
+                                "until " + sim::Date::from_days(a.until).month_year_label()});
             r.r = 1.0f;
             r.g = 0.6f;
             r.b = 0.5f;

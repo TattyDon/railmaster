@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <future>
 #include <limits>
+#include <map>
 #include <tuple>
 #include <unordered_map>
 #include <unordered_set>
@@ -4613,40 +4614,46 @@ void draw_analysis_overlay(const sim::World& w, MapOverlay mode, const Camera& c
     case MapOverlay::Travel: {
         const auto& cargo = w.data().cargo;
         const std::optional<sim::CargoId> passengers = cargo.find("passengers"), mail = cargo.find("mail");
-        std::int32_t most = 1;
+        // Travellers go to homes; drawn by the town each home is in, so a
+        // station's lines go to the towns its travellers are bound for.
+        const sim::Economy& eco = w.economy();
+        const std::vector<std::int32_t> town_of = eco.town_by_site();
+        std::map<std::tuple<sim::StationId, sim::CargoId, std::int32_t>, std::int32_t> bound; // station, cargo, town: milli
         for (const sim::Station& s : rw.stations())
-            for (const sim::ExpressWaiting& e : s.express) most = std::max(most, e.milli);
+            for (const sim::ExpressWaiting& e : s.express)
+                if (e.milli > 0 && e.home < town_of.size() && town_of[e.home] >= 0) bound[{s.id, e.cargo, town_of[e.home]}] += e.milli;
+        std::int32_t most = 1;
+        for (const auto& [key, milli] : bound) most = std::max(most, milli);
         glEnable(GL_BLEND);
-        for (const sim::Station& s : rw.stations()) {
-            for (const sim::ExpressWaiting& e : s.express) {
-                if (e.milli <= 0 || e.destination >= rw.stations().size()) continue;
-                const float k = std::sqrt(static_cast<float>(e.milli) / static_cast<float>(most));
-                if (e.cargo == passengers) glColor4f(0.35f, 0.7f, 1.0f, 0.35f + 0.6f * k);
-                else if (e.cargo == mail) glColor4f(1.0f, 0.85f, 0.35f, 0.35f + 0.6f * k);
-                else glColor4f(0.45f, 0.85f, 0.4f, 0.35f + 0.6f * k);
-                glLineWidth(1.5f + 7.0f * k);
-                const sim::TrackNode& a = net.node(s.node);
-                const sim::TrackNode& d = net.node(rw.station(e.destination).node);
-                const float ax = tiles(a.pos.x_mm, cam), ay = tiles(a.pos.y_mm, cam), dx = tiles(d.pos.x_mm, cam),
-                            dy = tiles(d.pos.y_mm, cam);
-                const float len = std::hypot(dx - ax, dy - ay);
-                // Bowed to the right of the way it goes, so the two directions
-                // between a pair part; raised in 3D.
-                const float sx = len > 0 ? (dy - ay) / len : 0, sy = len > 0 ? -(dx - ax) / len : 0;
-                const float bow = len * 0.08f;
-                glBegin(GL_LINE_STRIP);
-                constexpr int kSteps = 24;
-                for (int i = 0; i <= kSteps; ++i) {
-                    const float t = static_cast<float>(i) / kSteps, lift = 4.0f * t * (1.0f - t);
-                    const float x = ax + (dx - ax) * t + sx * bow * lift, y = ay + (dy - ay) * t + sy * bow * lift;
-                    // A smooth arc between the two stations, kept above hills on the way.
-                    const float za = cam.ground_z(ax, ay), zd = cam.ground_z(dx, dy);
-                    const float z = za + (zd - za) * t + 0.05f + len * 0.12f * lift;
-                    if (cam.three_d) glVertex3f(x, y, std::max(z, cam.ground_z(x, y) + 0.05f));
-                    else glVertex2f(x, y);
-                }
-                glEnd();
+        for (const auto& [key, milli] : bound) {
+            const auto& [station, cargo_id, town] = key;
+            const float k = std::sqrt(static_cast<float>(milli) / static_cast<float>(most));
+            if (cargo_id == passengers) glColor4f(0.35f, 0.7f, 1.0f, 0.35f + 0.6f * k);
+            else if (cargo_id == mail) glColor4f(1.0f, 0.85f, 0.35f, 0.35f + 0.6f * k);
+            else glColor4f(0.45f, 0.85f, 0.4f, 0.35f + 0.6f * k);
+            glLineWidth(1.5f + 7.0f * k);
+            const sim::TrackNode& a = net.node(rw.station(station).node);
+            const sim::Town& to = eco.towns()[static_cast<std::size_t>(town)];
+            const sim::MapPoint d = eco.node_centre(to.cx, to.cy);
+            const float ax = tiles(a.pos.x_mm, cam), ay = tiles(a.pos.y_mm, cam), dx = tiles(d.x_mm, cam),
+                        dy = tiles(d.y_mm, cam);
+            const float len = std::hypot(dx - ax, dy - ay);
+            // Bowed to the right of the way it goes, so the two directions
+            // between a pair part; raised in 3D.
+            const float sx = len > 0 ? (dy - ay) / len : 0, sy = len > 0 ? -(dx - ax) / len : 0;
+            const float bow = len * 0.08f;
+            glBegin(GL_LINE_STRIP);
+            constexpr int kSteps = 24;
+            for (int i = 0; i <= kSteps; ++i) {
+                const float t = static_cast<float>(i) / kSteps, lift = 4.0f * t * (1.0f - t);
+                const float x = ax + (dx - ax) * t + sx * bow * lift, y = ay + (dy - ay) * t + sy * bow * lift;
+                // A smooth arc from the station to the town, kept above hills on the way.
+                const float za = cam.ground_z(ax, ay), zd = cam.ground_z(dx, dy);
+                const float z = za + (zd - za) * t + 0.05f + len * 0.12f * lift;
+                if (cam.three_d) glVertex3f(x, y, std::max(z, cam.ground_z(x, y) + 0.05f));
+                else glVertex2f(x, y);
             }
+            glEnd();
         }
         glDisable(GL_BLEND);
         return;

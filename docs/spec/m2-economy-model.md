@@ -224,9 +224,15 @@ Researched [economy-cargo.md §2, §8; trains-track-operations.md §2]:
 
 How we implement them (code: `freight.hpp`):
 
-1. **Generation (daily).** For each station, *production* is the summed
-   yearly rate of catchment sites that output the cargo (houses: 0.1 per
-   house) × the cargo's `generation` multiplier × an era factor
+1. **Generation (daily).** Travellers have homes (rt3-clone-spec §8.3
+   [D]): the economy's house sites (one per town node, 0.1 a year per
+   house) and barracks. A home's travellers use a station only if it
+   reaches the home (§7.1 [D]); a home in reach of several stations with
+   somewhere to go shares its travellers equally among them [I], so a
+   second station in the same town, yours or a rival's, splits the town's
+   travellers rather than doubling them. For each station, *production* is
+   the summed yearly rate of the homes it reaches, each divided among the
+   stations sharing it, × the cargo's `generation` multiplier × an era factor
    (rt3-clone-spec §8.3 [I]: 100% in 1830, 105% in 1870, 115% in 1910,
    135% in 1950, 150% in 1990 and 165% in 2030, interpolated between;
    `express.era_volume_percent`). The factor keeps later eras as
@@ -234,41 +240,52 @@ How we implement them (code: `freight.hpp`):
    more fuel and break down more, for passengers a town makes at the same
    rate. For every station it can reach by train (changing up to
    `max_legs` times), the year's new loads grow by production × A ÷ (A + 2),
-   where A is the destination's *attraction*: the summed rate of its
-   catchment sites that take the cargo. Each extra destination adds
-   traffic, and a big town draws more than a village but not without limit.
+   where A is the destination's *attraction*: the summed rate of the homes
+   it reaches that take the cargo, counting each home once (a home two
+   connected stations reach counts for the first) and none the origin
+   station reaches itself. Each extra destination adds traffic, and a big
+   town draws more than a village but not without limit.
    - **Where they go** (rt3-clone-spec §8.3 [I]: a gravity model,
-     population ÷ distance²): the total is shared among the destinations
-     in proportion to A ÷ distance^1.5, distances under 12 km counting as
-     12 (`express.gravity_exponent_permille`, `gravity_min_km`). Near, big
+     population ÷ distance²): to destination *homes*, the total shared
+     among them in proportion to each home's rate ÷ its distance^1.5 from
+     the station, distances under 12 km counting as 12
+     (`express.gravity_exponent_permille`, `gravity_min_km`). Near, big
      towns get the most travellers. The spec proposes distance²; that sent
      so many on short, cheap trips that the calibrated networks' returns
      and town growth fell out of range (calibration.md), so we use 1.5.
-     The spec picks origin and destination *houses*; we pick stations, the
-     houses being pooled in each catchment.
+     Loads are pooled at each station by destination home; a day's new
+     loads (in thousandths) are dealt out to the homes exactly by their
+     weights, from a starting point that moves day by day, so a small
+     home gets its share on average and nothing is lost to rounding.
 2. **Waiting.** Each pool loses 0.1% a day per point of decay sensitivity
-   (passengers 0.9%, mail 1%), half the on-train rate [C], and holds at most
-   20 loads.
+   (passengers 0.9%, mail 1%), half the on-train rate [C], rounded up or
+   down by a fixed pattern over the days so small pools lose their share
+   on average, and holds at most 20 loads.
    - **Giving up** (rt3-clone-spec §8.3 [D]: travellers who cannot get
-     through go home and avoid rail for a while): what a station makes and
-     what it loses waiting (decay, and loads with no room to wait) are
-     counted each month. When more than `avoid_lost_percent` (50%) is lost,
-     the place avoids the railway for `avoid_days` (182, the spec's 6
-     months [I]) and makes only `avoid_generation_percent` (40%) as many.
-     The station's detail panel says so.
+     through go home and avoid rail for a while, "for that house" [I]):
+     what each station makes and loses waiting (decay, and loads with no
+     room to wait) is counted each month, and at the month's end laid at
+     the doors of the homes that made them, in proportion to what each made
+     there. A home that lost more than `avoid_lost_percent` (50%) avoids
+     the railway for `avoid_days` (182, the spec's 6 months [I]) and makes
+     only `avoid_generation_percent` (40%) as many, at every station,
+     including ones built later. The station's detail panel says how many
+     of its homes avoid the railway, and until when.
 3. **Loading.** Express loads compete with freight for empty cars, valued
-   at their fare. Loads whose destination is on this train's route ride
-   straight there. Otherwise a load may ride to a stop of this train from
-   which another train runs to its destination, choosing the one nearest
-   the destination. At that hub it gets off and waits with the others for
-   its destination (rt3-clone-spec §8.3 [D]: travellers go to a hub to
-   catch a direct train). Journeys may take up to `express.max_legs`
-   trains (3, so two changes) [I]: a load rides to the stop of its train
-   from which its destination is fewest trains away, nearest the
-   destination among equals, and changes there.
-   - **Destinations:** stations generate passengers and mail for every
-     station they can reach within `max_legs` trains, so joining networks
-     (your own or a rival's) brings more traffic [D].
+   at their fare. Any station that reaches a load's home will do to get
+   off at. If a stop of this train is one, the load rides straight there
+   (the one nearest the home, if several). Otherwise it may ride to a stop
+   of this train from which a station by its home is fewest trains away,
+   nearest the home among equals, gets off there and waits with the
+   others for its home (rt3-clone-spec §8.3 [D]: travellers go to a hub
+   to catch a direct train). Journeys may take up to `express.max_legs`
+   trains (3, so two changes) [I]. Loads for different homes getting off
+   at the same stop, or changing at the same hub, share cars, so a car
+   fills from the pools of many homes; at a hub the car's travellers wait
+   again for the home most of them were going to.
+   - **Destinations:** stations generate passengers and mail for the homes
+     reached by every station they can reach within `max_legs` trains, so
+     joining networks (your own or a rival's) brings more traffic [D].
    - **Fares:** each train is paid for its own leg, from the station where
      the load boarded it.
    - **Patience:** it starts again at the hub [I].

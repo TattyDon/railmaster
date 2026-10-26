@@ -41,7 +41,7 @@ are done too: T, B and G in the Track tool.
 Per-stop consists and custom cars can be set in the client too (Train
 tool, rt3-clone-spec §9.3).
 
-## M2: The economy (in progress)
+## M2: The economy (done)
 Done in the first slice: the economy-node grid and cargo price field, with
 off-rail drift of cargo along price gradients; industries and production
 chains; houses; map population with towns and industries; a year of
@@ -100,11 +100,19 @@ Consist rules (rt3-clone-spec §9.3): per-stop auto or custom consists with
 minimum and maximum cars, waiting for full loads, caboose and dining car,
 copying and retiring trains; empty cars are no longer hauled.
 
-Still to do:
-- Express units with homes (express loads have destination stations
-  chosen by gravity, pull ÷ distance^1.5, change trains up to twice, and a
-  town whose travellers mostly give up avoids rail for six months; origin
-  and destination *houses* are not modelled).
+Done since: express units with homes (rt3-clone-spec §8.3 [D]).
+Travellers set out from a house (or barracks) and go to one: a home's
+travellers are shared by the stations that reach it rather than counted
+again for each, they may get off at any station by their destination
+home and change trains towards any of them, loads for different homes
+bound the same way share cars, and a home whose travellers mostly gave up
+avoids the railway for six months at every station, new ones included.
+The travel overlay draws where they are going by town. See
+[spec/m2-economy-model.md](spec/m2-economy-model.md) and, for the
+calibration, [spec/calibration.md](spec/calibration.md).
+
+Nothing left in M2 from the spec's list; the research backlog below
+would sharpen its numbers.
 
 Later eras are calibrated too: the demo network started in 1900 and 1950
 runs the era's fastest steam or diesel engine and returns about what it

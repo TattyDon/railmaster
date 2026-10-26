@@ -87,15 +87,27 @@ std::int32_t express_speed_permille(std::int64_t distance_mm, std::uint64_t tick
                                     const Balance& b = default_balance());
 
 // Each day: every station draws in the freight around it that some train
-// calling there could sell for more at another stop on its route, and its
-// houses and barracks generate express loads for each station that shares
-// a train route with it (more connections, more traffic). Waiting express
-// loads dwindle as passengers give up and mail goes stale.
+// calling there could sell for more at another stop on its route, and the
+// houses and barracks it reaches (shared with any other station that
+// reaches them) generate express loads for the homes reached by the
+// stations its trains connect it to (more connections, more traffic).
+// Waiting express loads dwindle as passengers give up and mail goes stale.
 void gather_at_stations(Railway& rw, Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
                         std::int32_t year, std::int32_t today);
 
-// Monthly: reset the mail demand caps.
-void start_new_month(Railway& rw, std::int32_t today);
+// Monthly: homes whose travellers mostly gave up last month avoid the
+// railway for a while; then reset the month's counts and the mail demand caps.
+void start_new_month(Railway& rw, const Economy& eco, const CargoRegistry& cargo, const IndustryRegistry& industries,
+                     std::int32_t today);
+
+// For a station's panel: of the homes it reaches that make cargo `c`, how
+// many avoid the railway now, and until when (the latest).
+struct HomesAvoiding {
+    std::int32_t avoiding = 0, homes = 0;
+    std::int32_t until = 0; // a day, Date::days_since_epoch()
+};
+HomesAvoiding homes_avoiding(const Economy& eco, const Railway& rw, const IndustryRegistry& industries, StationId s,
+                             CargoId c, std::int32_t today);
 
 // A train has arrived at a station. Unload every car whose cargo sells here
 // for more than it cost: RT3 unloads at the first such stop. Cargo is never
