@@ -554,9 +554,17 @@ triangles each against a few thousand). On a wide tilted view of the
 quick game, trees hidden, under software rendering a frame took 231 ms
 against 456-461 ms with the art everywhere; far off the two look alike.
 (People and boats in towns were drawn twice a frame; now once.)
+Tried and left out: the same for the industries' art. Measured the same
+way it saved nothing (250-257 ms against 231 ms with only houses
+switched, within the runs' noise), and the code-drawn industries look
+different far off (smaller, some buildings missing), so industries keep
+their art at every distance. Checked too: held still, a town at the
+centre of a mid-distance view is the same with the art everywhere and with
+houses switched by distance (the switch falls well beyond it).
 
 Next:
-- The same for the industries' art far off.
+- Map editor: conditions and choices for events on the Events tab
+  (written by hand in the scenario file so far).
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
