@@ -562,10 +562,16 @@ their art at every distance. Checked too: held still, a town at the
 centre of a mid-distance view is the same with the art everywhere and with
 houses switched by distance (the switch falls well beyond it).
 
+Contact shadows: street lamps, people and carts and cars each stand on a
+soft dark spot fading out from their foot, following the slope, so they
+sit on the ground even where the sun's shadow map is too coarse to show
+them. The spots are drawn before what stands on them and not written to
+depth: at a town's distance the depth buffer cannot tell a spot from the
+feet on it, and written, the spots hid the people (seen, then fixed).
+
 Next:
-- Contact shadows for small things: lamps, benches, fences and people
-  stand on the ground without a shadow of their own at a distance; a
-  soft dark spot under each would ground them.
+- Trains far off: the same soft shade under engines and cars in wide
+  views, where the sun's shadow map no longer reaches them.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
