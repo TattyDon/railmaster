@@ -547,9 +547,16 @@ that neighbour hides, most at their foot, so alleys and the gaps between
 houses darken. A soft band of shade runs under every building's eaves (for
 the art, where its roof's sloping faces start).
 
+Houses far off (discrete LOD): the town buildings that come from the art
+are kept in display lists by 16-tile chunks, two each: the art near the
+camera, the same buildings drawn in code further off (a few dozen
+triangles each against a few thousand). On a wide tilted view of the
+quick game, trees hidden, under software rendering a frame took 231 ms
+against 456-461 ms with the art everywhere; far off the two look alike.
+(People and boats in towns were drawn twice a frame; now once.)
+
 Next:
-- Discrete LOD for the art: lighter stand-ins for house and industry
-  models far off, so a big town seen from afar stays fast.
+- The same for the industries' art far off.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

@@ -4803,6 +4803,95 @@ void update_occlusion(const sim::Economy& eco, const sim::IndustryRegistry& indu
     else job = std::async(std::launch::async, [in = std::move(in)] { return compute_occlusion(in); });
 }
 
+// Which art a town building comes from, if the art has it.
+const char* plot_role(const Plot& p) {
+    switch (p.kind) {
+    case Building::Cottage: return models::has("cottage") ? "cottage" : "house";
+    case Building::TwoStorey: return "house";
+    case Building::Terrace: return "terrace";
+    case Building::Shop: return "shop";
+    case Building::Church: return "church";
+    case Building::TownHall: return models::has("town_hall") ? "town_hall" : "shop";
+    }
+    return "";
+}
+
+bool plot_modelled(const Plot& p) { return models::has(plot_role(p)); }
+
+// The ground under a building: its lowest corner's.
+float plot_base_z(const Plot& p, const Camera& cam) {
+    const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
+    return std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
+                     cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
+}
+
+// The town buildings that come from the art, by chunks of kHouseChunk
+// tiles, each with two display lists: near the camera the art (a few
+// thousand triangles a house), further off the same buildings drawn in
+// code (a few dozen), so a wide view over a big town stays quick. Lists
+// are rebuilt when the towns' list is (`key`), a few a frame.
+constexpr int kHouseChunk = 16;
+
+void draw_houses(const TownLayout& towns, const std::vector<std::array<float, 12>>& near, std::uint64_t key, const Camera& cam) {
+    struct Lod {
+        GLuint list = 0;
+        std::uint64_t key = 0;
+    };
+    struct Chunk {
+        Lod near, far;
+        std::vector<std::uint32_t> plots;
+    };
+    static std::unordered_map<std::uint64_t, Chunk> chunks;
+    static std::uint64_t sorted_for = 0;
+    static const TownLayout* sorted_of = nullptr;
+    const auto chunk_key = [](std::int32_t cx, std::int32_t cy) {
+        return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(cx)) << 32) | static_cast<std::uint32_t>(cy);
+    };
+    if (sorted_for != key || sorted_of != &towns) {
+        for (auto& [k, c] : chunks) c.plots.clear();
+        for (std::size_t i = 0; i < towns.plots.size(); ++i) {
+            const Plot& p = towns.plots[i];
+            if (!plot_modelled(p)) continue;
+            const auto cx = static_cast<std::int32_t>(std::floor(p.x / kHouseChunk)), cy = static_cast<std::int32_t>(std::floor(p.y / kHouseChunk));
+            chunks[chunk_key(cx, cy)].plots.push_back(static_cast<std::uint32_t>(i));
+        }
+        sorted_for = key;
+        sorted_of = &towns;
+    }
+    const float detail = std::min(cam.distance * 1.5f + 10.0f, 48.0f);
+    int builds = 0;
+    for (auto& [ck, c] : chunks) {
+        if (c.plots.empty()) continue;
+        const auto cx = static_cast<std::int32_t>(ck >> 32), cy = static_cast<std::int32_t>(ck & 0xffffffffu);
+        const float mx = (static_cast<float>(cx) + 0.5f) * kHouseChunk, my = (static_cast<float>(cy) + 0.5f) * kHouseChunk;
+        const bool close = std::hypot(mx - cam.target_x, my - cam.target_y) < detail + kHouseChunk * 0.5f;
+        Lod& l = close ? c.near : c.far;
+        if (l.key != key && (builds < 4 || l.list == 0)) {
+            if (l.list == 0) l.list = glGenLists(1);
+            glNewList(l.list, GL_COMPILE);
+            if (!close) glBegin(GL_QUADS);
+            for (const std::uint32_t i : c.plots) {
+                if (under_construction(i)) continue; // drawn each frame, by draw_building_sites
+                const Plot& p = towns.plots[i];
+                if (i < near.size()) shading::set_neighbours(near[i].data());
+                if (close) {
+                    const models::Model* m = models::pick(plot_role(p), p.seed >> 5);
+                    // Its front to the street, fitted as model_depth says.
+                    models::draw(*m, p.x, p.y, plot_base_z(p, cam) - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, model_depth(*m, p));
+                } else {
+                    draw_building(p, cam);
+                }
+            }
+            if (!close) glEnd();
+            shading::set_neighbours(nullptr);
+            glEndList();
+            l.key = key;
+            ++builds;
+        }
+        glCallList(l.list);
+    }
+}
+
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
                 std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
@@ -4841,6 +4930,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         static std::uint64_t list_key = 0;
         static std::vector<SmokeSource> list_smoke;
         static std::vector<Turning> list_turning;
+        static std::vector<std::array<float, 12>> list_near; // each plot's neighbours, as compiled
         const auto draw_turning = [&] {
             for (const Turning& t : list_turning) {
                 if (t.to_height) models::draw_spinners_to_height(*t.model, t.x, t.y, t.z, t.fx, t.fy, t.size, g_animation_seconds);
@@ -4852,10 +4942,9 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         begin_lit();
         if (list != 0 && list_key == key) {
             glCallList(list);
+            draw_houses(towns, list_near, key, cam);
             draw_building_sites(towns, cam);
             draw_traffic(towns, year, cam);
-        draw_people(towns, cam);
-        draw_boats(towns, year, cam);
             draw_people(towns, cam);
             draw_boats(towns, year, cam);
             draw_turning();
@@ -4880,30 +4969,15 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         for (std::size_t i = 0; i + 1 < towns.lamps.size(); i += 2) street_lamp(towns.lamps[i], towns.lamps[i + 1], cam);
         // Houses come from the art where there is some (drawn after this
         // batch); the rest are drawn in code.
-        const auto role = [](const Plot& p) {
-            switch (p.kind) {
-            case Building::Cottage: return models::has("cottage") ? "cottage" : "house";
-            case Building::TwoStorey: return "house";
-            case Building::Terrace: return "terrace";
-            case Building::Shop: return "shop";
-            case Building::Church: return "church";
-            case Building::TownHall: return models::has("town_hall") ? "town_hall" : "shop";
-            }
-            return "";
-        };
-        const auto modelled = [&](const Plot& p) { return models::has(role(p)); };
+        const auto role = plot_role;
+        const auto modelled = plot_modelled;
         // How far back from its plot's centre a building reaches, as drawn.
         const auto half_depth = [&](const Plot& p) {
             if (!modelled(p)) return p.hw;
             const models::Model* m = models::pick(role(p), p.seed >> 5);
             return model_depth(*m, p) * 0.5f;
         };
-        // The ground under a building: its lowest corner's.
-        const auto base_z = [&](const Plot& p) {
-            const float qx = -p.dy * p.hw, qy = p.dx * p.hw, ax = p.dx * p.hl, ay = p.dy * p.hl;
-            return std::min({cam.ground_z(p.x - ax - qx, p.y - ay - qy), cam.ground_z(p.x + ax - qx, p.y + ay - qy),
-                             cam.ground_z(p.x + ax + qx, p.y + ay + qy), cam.ground_z(p.x - ax + qx, p.y - ay + qy)});
-        };
+        const auto base_z = [&](const Plot& p) { return plot_base_z(p, cam); };
         // How each building stands, so the walls facing each other across
         // an alley shade each other.
         std::vector<Bulk> bulks;
@@ -4962,19 +5036,15 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             }
         }
         glEnd();
-        for (std::size_t i = 0; i < towns.plots.size(); ++i) {
-            const Plot& p = towns.plots[i];
-            if (!modelled(p) || under_construction(i)) continue;
-            const models::Model* m = models::pick(role(p), p.seed >> 5);
-            // Its front to the street, fitted as model_depth says.
-            shading::set_neighbours(near[i].data());
-            models::draw(*m, p.x, p.y, base_z(p) - 0.005f, -p.dy * p.front, p.dx * p.front, p.hl * 2.1f, model_depth(*m, p));
-        }
-        shading::set_neighbours(nullptr);
         glEndList();
         list_key = key;
+        list_near = near;
+        // The houses from the art, by chunk (drawn lighter far off).
+        draw_houses(towns, list_near, key, cam);
         draw_building_sites(towns, cam);
         draw_traffic(towns, year, cam);
+        draw_people(towns, cam);
+        draw_boats(towns, year, cam);
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
         list_turning = g_turning_build;
         draw_turning();
