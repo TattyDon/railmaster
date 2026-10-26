@@ -4742,7 +4742,7 @@ void Tools::draw_guide() const {
     constexpr float kRow = 19.0f;
     constexpr std::size_t kShown = 24;
     const float w = std::min(1180.0f, static_cast<float>(cam_.width_px) - 20), x0 = (static_cast<float>(cam_.width_px) - w) / 2;
-    const float y0 = 56, h = 142 + kRow * kShown;
+    const float y0 = 56, h = 164 + kRow * kShown;
     ui::panel(x0, y0, x0 + w, y0 + h);
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 16, y0 + 10, "Guide", kScale + 1);
@@ -4868,6 +4868,19 @@ void Tools::draw_guide() const {
     // The chosen line's chain, spelled out.
     if (guide_tab_ == 0 && guide_sel_ < guide_opps_.size() && guide_opps_[guide_sel_].then_cargo) {
         const Opportunity& o = guide_opps_[guide_sel_];
+        // The works as it is now: idle, or running, and what of this cargo it holds.
+        const sim::Site& works = world_.economy().sites()[o.to];
+        const sim::IndustryType& wt = world_.data().industries.get(works.type);
+        std::int64_t held = 0;
+        for (std::size_t i = 0; i < wt.inputs.size() && i < works.buffer.size(); ++i)
+            if (wt.inputs[i].cargo == o.cargo) held += works.buffer[i];
+        const std::string state =
+            works.utilisation_permille > 0
+                ? "Now: the works runs at " + std::to_string(works.utilisation_permille / 10) + "%, holding " + loads(held) + " loads of " +
+                      as_written(cargo.get(o.cargo).name) + " - its " + as_written(cargo.get(*o.then_cargo).name) + " is ready to carry."
+                : "Now: the works is idle, waiting for " + as_written(cargo.get(o.cargo).name) + ": build this line first.";
+        glColor3f(works.utilisation_permille > 0 ? 0.6f : 0.95f, works.utilisation_permille > 0 ? 0.9f : 0.7f, 0.55f);
+        draw_text(x0 + 16, y0 + h - 70, state, kScale);
         glColor3f(1.0f, 0.86f, 0.5f);
         draw_text(x0 + 16, y0 + h - 48,
                   "Then: the " + opp_to_name(o) + " makes " + as_written(cargo.get(*o.then_cargo).name) + "; on to " +

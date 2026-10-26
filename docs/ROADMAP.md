@@ -536,9 +536,11 @@ $125K), the third nothing that year; the works made 1.4 to 1.6 loads a
 year, under the 2.2 fed. So the Guide says "up to", "once it runs (a
 year or two)", and the chain does not lift a line's rank.
 
+The chosen chain line also says how the works stands now: idle and
+waiting for this line, or running at some percent and holding so many
+loads, its product ready to carry.
+
 Next:
-- Show the works' own state in the Guide's chain line (running or idle,
-  what it holds), so a player sees when the second leg is ready.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
