@@ -133,7 +133,7 @@ railroad, the highest value, industry profit, stations in so many of
 the painted territories, or so many loads of goods delivered to a town), each with its target, and the deadline. Events: up to eight, each from a template (a headline you type, a
 cargo's price or an industry's output rising or falling for a while,
 building costs changing, a grant to your company, an earthquake near a
-town, an engine arriving early) on a month and year; Delete removes one. Save the scenario, or save
+town, an engine arriving early) on a month and year, and if you like only once a goal is met (any of the medal goals), with a chance each month, and asked first: an offer the player accepts or declines, free or at a price; Delete removes one. Save the scenario, or save
 it and play it at once; saved scenarios (in a `scenarios/` folder beside
 your maps) are listed with the others on the title screen, and a
 scenario file names its map with `"landscape": "../maps/NAME.png"`. A map

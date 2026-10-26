@@ -563,8 +563,8 @@ centre of a mid-distance view is the same with the art everywhere and with
 houses switched by distance (the switch falls well beyond it).
 
 Next:
-- Map editor: conditions and choices for events on the Events tab
-  (written by hand in the scenario file so far).
+- Replay viewing in the client: play back a saved game's command log
+  (`railmaster_replay` checks them) at speed, to watch how a game went.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -616,8 +616,11 @@ Still to do:
   restrictions, and up to two goals a medal (industry profit,
   territories and goods delivered to a town among them). Events come from templates on an Events tab
   (headline, cargo price, industry output, building costs, grant,
-  earthquake, early engine), dated; conditions and choices are still
-  written by hand in the file.
+  earthquake, early engine), dated, and each may wait for a goal (any
+  medal goal), fire with a chance (75, 50 or 25% each month) and be asked
+  first as an offer (Accept, free or for $100,000 to $1,000,000, or
+  Decline; two months to answer). Counters and choices of more than
+  accept or decline are still written by hand in the file.
 
 ## M6: Multiplayer and polish
 - Lockstep multiplayer over the deterministic simulation.

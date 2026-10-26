@@ -613,6 +613,13 @@ constexpr std::int64_t kEventGrant[] = {100'000, 250'000, 500'000, 1'000'000, 2'
 constexpr std::int32_t kEventMonths[] = {6, 12, 24, 36, 0}; // 0: for good
 constexpr const char* kMonthNames[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 constexpr int kMaxEvents = 8;
+constexpr std::int32_t kEventChance[] = {100, 75, 50, 25};
+constexpr int kChanceSteps = 4;
+// An event asked first: an offer the player accepts or declines, free or
+// at a price (the steps after the first).
+constexpr std::int64_t kAskPrice[] = {0, 0, 100'000, 250'000, 500'000, 1'000'000};
+constexpr int kAskSteps = 6;
+bool can_ask(int kind) { return kind != kNews && kind != kQuake; }
 
 std::string with_commas(std::int64_t n) {
     std::string d = std::to_string(n), out;
@@ -763,6 +770,11 @@ std::vector<std::string> Editor::event_choices(int kind) const {
     return out;
 }
 
+std::string Editor::event_question(const ScenarioDraft::Event& e) const {
+    const std::int64_t price = kAskPrice[std::clamp(e.ask, 0, kAskSteps - 1)];
+    return "An offer: " + event_headline(e) + ". Will you take it" + (price > 0 ? " for $" + with_commas(price) : std::string()) + "?";
+}
+
 std::string Editor::event_amount_text(const ScenarioDraft::Event& e) const {
     if (e.kind == kGrant) return "$" + with_commas(kEventGrant[e.amount]);
     const std::int32_t p = kEventPercent[e.amount];
@@ -827,7 +839,22 @@ nlohmann::json Editor::events_json() const {
         case kEngine: effects.push_back({{"kind", "unlock_engine"}, {"target", key_of(world_.data().locomotives.all(), all)}}); break;
         default: break;
         }
-        out.push_back({{"id", "event_" + std::to_string(i + 1)}, {"when", {{"after", date}}}, {"effects", effects}});
+        if (e.ask > 0 && can_ask(e.kind)) {
+            // Asked first: the effects become the answer Accept (paying the
+            // price, if any); Decline lets it pass. Two months to answer.
+            const std::int64_t price = kAskPrice[std::clamp(e.ask, 0, kAskSteps - 1)];
+            if (price > 0) effects.insert(effects.begin(), nlohmann::json{{"kind", "company_cash"}, {"amount", -price}});
+            const nlohmann::json accept = {{"label", price > 0 ? "Accept, for $" + with_commas(price) : std::string("Accept")},
+                                           {"effects", effects}};
+            const nlohmann::json decline = {{"label", "Decline"}, {"effects", nlohmann::json::array()}};
+            effects = nlohmann::json::array({{{"kind", "choice"}, {"text", event_question(e)}, {"months", 2},
+                                              {"options", {accept, decline}}}});
+        }
+        nlohmann::json when = {{"after", date}};
+        if (e.only_if.kind >= 0) when["goals"] = nlohmann::json::array({goal_json(e.only_if)});
+        const std::int32_t chance = kEventChance[std::clamp(e.chance, 0, kChanceSteps - 1)];
+        if (chance < 100) when["chance_percent"] = chance;
+        out.push_back({{"id", "event_" + std::to_string(i + 1)}, {"when", when}, {"effects", effects}});
     }
     return out;
 }
@@ -849,6 +876,10 @@ std::vector<Editor::ScenLine> Editor::scen_lines() const {
             if (kind == kCargoPrice || kind == kOutput || kind == kQuake || kind == kEngine) lines.push_back({ScenRow::EventWhat, e});
             if (kind == kCargoPrice || kind == kOutput || kind == kBuildCost || kind == kGrant) lines.push_back({ScenRow::EventAmount, e});
             if (kind == kCargoPrice || kind == kOutput || kind == kBuildCost) lines.push_back({ScenRow::EventFor, e});
+            lines.push_back({ScenRow::EventIf, e});
+            if (scen_.events[i].only_if.kind >= 0) lines.push_back({ScenRow::EventIfTarget, e});
+            lines.push_back({ScenRow::EventChance, e});
+            if (can_ask(kind)) lines.push_back({ScenRow::EventAsk, e});
         }
         if (scen_.events.size() < kMaxEvents) lines.push_back({ScenRow::AddEvent});
     } else {
@@ -919,6 +950,18 @@ void Editor::scen_change(int step) {
     case ScenRow::EventFor:
         if (ev) ev->months = std::clamp(ev->months + step, 0, 4);
         break;
+    case ScenRow::EventIf:
+        if (ev) next_kind(ev->only_if, true);
+        break;
+    case ScenRow::EventIfTarget:
+        if (ev) ev->only_if.level = std::clamp(ev->only_if.level + step, 0, ladder_size(ev->only_if.kind, towns, terr) - 1);
+        break;
+    case ScenRow::EventChance:
+        if (ev) ev->chance = std::clamp(ev->chance + step, 0, kChanceSteps - 1);
+        break;
+    case ScenRow::EventAsk:
+        if (ev) ev->ask = std::clamp(ev->ask + step, 0, kAskSteps - 1);
+        break;
     default: break;
     }
 }
@@ -981,8 +1024,15 @@ bool Editor::scen_key(SDL_Keycode key) {
         }
         if (row == ScenRow::Save || row == ScenRow::Play) {
             // Connecting towns needs towns to connect, and territories painted.
+            // (Events' conditions are goals too.)
+            std::vector<ScenarioDraft::Goal> goals;
             for (const ScenarioDraft::Medal& md : scen_.medals) {
-                for (const ScenarioDraft::Goal& g : {md.goal, md.also}) {
+                goals.push_back(md.goal);
+                goals.push_back(md.also);
+            }
+            for (const ScenarioDraft::Event& e : scen_.events) goals.push_back(e.only_if);
+            {
+                for (const ScenarioDraft::Goal& g : goals) {
                     std::string why;
                     if (g.kind == 0 && towns_.size() < 2) {
                         why = "A goal connects towns, but the map has fewer than two: place towns with the Town brush";
@@ -1134,6 +1184,30 @@ void Editor::draw_scenario(float width, float height) const {
         case ScenRow::EventText:
             label = "    headline";
             if (ev) value = ev->text + (scen_text_ == 3 && scen_text_event_ == static_cast<std::size_t>(ln.medal) && blink ? "|" : "");
+            break;
+        case ScenRow::EventIf:
+            label = "    only if";
+            if (ev) value = "<  " + std::string(ev->only_if.kind < 0 ? "Always" : kGoalNames[ev->only_if.kind]) + "  >";
+            break;
+        case ScenRow::EventIfTarget:
+            label = "      met";
+            if (ev) value = "<  " + goal_text(ev->only_if) + "  >";
+            break;
+        case ScenRow::EventChance:
+            label = "    chance";
+            if (ev) {
+                const std::int32_t c = kEventChance[std::clamp(ev->chance, 0, kChanceSteps - 1)];
+                value = "<  " + (c == 100 ? std::string("Certain") : std::to_string(c) + "%") +
+                        (ev->only_if.kind >= 0 && c < 100 ? " each month once met" : c < 100 ? " each month from then" : "") + "  >";
+            }
+            break;
+        case ScenRow::EventAsk:
+            label = "    asked first";
+            if (ev) {
+                const std::int64_t price = kAskPrice[std::clamp(ev->ask, 0, kAskSteps - 1)];
+                value = "<  " + (ev->ask == 0 ? std::string("No, it just happens") : price == 0 ? std::string("Yes, an offer, free")
+                                                                               : "Yes, an offer for $" + with_commas(price)) + "  >";
+            }
             break;
         case ScenRow::AddEvent:
             y += 6;

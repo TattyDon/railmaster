@@ -94,6 +94,9 @@ private:
             int amount = 3;          // a step on the kind's ladder
             int months = 2;          // how long, a step on the duration ladder
             std::string text = "Big news on the line";
+            Goal only_if{-1, 0};     // a goal that must be met first; -1 none
+            int chance = 0;          // a step on the chance ladder (100% first)
+            int ask = 0;             // 0 just happens; else an offer, at a step on the price ladder
         };
         std::vector<Event> events;
     };
@@ -105,7 +108,7 @@ private:
     std::size_t scen_text_event_ = 0; // the event whose headline is typed
     enum class ScenRow { Name, Briefing, Start, Rivals, Money, Budget, Connected, OneCompany, ChairLocked,
                          Goal, Target, Also, AlsoTarget, By, EventKind, EventWhen, EventWhat, EventAmount, EventFor,
-                         EventText, AddEvent, Save, Play, Close };
+                         EventText, EventIf, EventIfTarget, EventChance, EventAsk, AddEvent, Save, Play, Close };
     struct ScenLine {
         ScenRow row;
         int medal = 0;
@@ -119,6 +122,7 @@ private:
     std::string event_headline(const ScenarioDraft::Event& e) const;
     nlohmann::json events_json() const;
     nlohmann::json goal_json(const ScenarioDraft::Goal& g) const;
+    std::string event_question(const ScenarioDraft::Event& e) const; // an event asked first, as the player sees it
     int territory_count() const;
     void draw_scenario(float width, float height) const;
     void industry_click();
