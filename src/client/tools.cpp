@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 namespace railmaster::client {
 
@@ -4553,6 +4554,15 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
     };
     const sim::MapPoint one = eco.node_centre(0, 0), next = eco.node_centre(1, 0);
     const double cell_miles = static_cast<double>(sim::distance_mm(one, next)) / 1'609'344.0;
+    // The best price a medium station by a site would reach, worked out once a site and cargo.
+    std::unordered_map<std::uint64_t, std::int64_t> reach_cache;
+    const auto reach_price = [&](const sim::Site& site, sim::CargoId c) {
+        const std::uint64_t k = (std::uint64_t{site.id} << 16) | c;
+        if (const auto it = reach_cache.find(k); it != reach_cache.end()) return it->second;
+        const std::int64_t p = sim::best_price_within_reach(eco, world_.data().balance, eco.node_centre(site.cx, site.cy), c);
+        reach_cache.emplace(k, p);
+        return p;
+    };
     std::vector<Opportunity> out;
     for (const sim::Site& from : eco.sites()) {
         if (from.closed || from.kind == sim::IndustryKind::House || from.kind == sim::IndustryKind::Sink) continue;
@@ -4566,12 +4576,16 @@ std::vector<Tools::Opportunity> Tools::find_opportunities() const {
             if (from.kind != sim::IndustryKind::Raw) made = made * from.utilisation_permille / 1000;
             if (made <= 0) continue;
             std::optional<Opportunity> best;
+            // Bought and sold at the stations' prices, the best each would reach
+            // (as the AI plans; within 2% of what a first year earned in tests,
+            // where the sites' own prices overstated it by about 13%).
+            const std::int64_t here = reach_price(from, c);
             for (const sim::Site& to : eco.sites()) {
                 if (to.id == from.id || !wants(to, c)) continue;
                 const double dx = to.cx - from.cx, dy = to.cy - from.cy;
                 const double miles = std::sqrt(dx * dx + dy * dy) * cell_miles;
                 if (miles < 3.0 || miles > 35.0) continue;
-                const std::int64_t gain = eco.price(c, to.cx, to.cy) - eco.price(c, from.cx, from.cy);
+                const std::int64_t gain = reach_price(to, c) - here;
                 if (gain <= 0) continue;
                 if (!best || gain * made > best->per_load * best->loads_milli) {
                     best = Opportunity{c, from.id, to.id, gain, made, static_cast<std::int64_t>(miles * 10), false};

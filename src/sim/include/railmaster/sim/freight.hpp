@@ -48,6 +48,12 @@ struct CatchmentPrices {
 };
 CatchmentPrices catchment_prices(const Economy& eco, const Railway& rw, const Station& s, CargoId c);
 
+// The best price for cargo `c` a station of `size` at `at` would reach: as
+// catchment_prices gives a built one, for planning one (the AI's lines and
+// the Guide's links).
+std::int64_t best_price_within_reach(const Economy& eco, const Balance& b, MapPoint at, CargoId c,
+                                     StationSize size = StationSize::Medium);
+
 // Share of a load's value left after `days` in transit, in thousandths;
 // 0 once it falls below the expiry level.
 std::int32_t value_left_permille(const CargoType& c, std::int32_t days, const Balance& b = default_balance());

@@ -108,12 +108,7 @@ std::int64_t town_rate(const World& w, const Town& town, CargoId c, bool outputs
 // What a medium station at `p` would buy or sell cargo `c` for: the best
 // price in its catchment, as the freight code uses.
 std::int64_t station_price(const World& w, const Place& p, CargoId c) {
-    const Economy& eco = w.economy();
-    const std::int64_t r = eco.cells_mm(catchment_radius(StationSize::Medium, w.data().balance));
-    std::int64_t best = 0;
-    eco.for_nodes_within(eco.node_centre(p.cx, p.cy), r,
-                         [&](std::int32_t x, std::int32_t y) { best = std::max<std::int64_t>(best, eco.price(c, x, y)); });
-    return best;
+    return best_price_within_reach(w.economy(), w.data().balance, w.economy().node_centre(p.cx, p.cy), c);
 }
 
 std::vector<Candidate> candidates(const World& w, const Tycoon& ty) {

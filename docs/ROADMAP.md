@@ -512,10 +512,16 @@ $3.8M by 1860. The town-linking player stayed at $0.9-1.6M. So the last
 goal sits where its hint says, on freight and industries, about 1838 to
 1855 for a player who builds them.
 
+The Guide now prices freight links as the AI does, at the best price a
+station at each end would reach (sim::best_price_within_reach, shared).
+Tested on 18 links over three maps against a first year's actual freight
+income: the sites' own prices overstated it by about 13%, the reach
+prices were within 2%. The ranking hardly changed (the two methods' top
+picks earned the same within 1%); the figures shown are now honest.
+
 Next:
-- Bring the rivals' freight planning to the player: the Guide's freight
-  links use the same reckoning the AI does (catchment prices, not just the
-  sites' own).
+- The Guide's freight list is mostly livestock on every map: check the
+  cargo prices and rates so other freight competes.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:

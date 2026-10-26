@@ -588,4 +588,11 @@ Earnings handle_arrival(Railway& rw, Economy& eco, const CargoRegistry& cargo, c
     return income;
 }
 
+std::int64_t best_price_within_reach(const Economy& eco, const Balance& b, MapPoint at, CargoId c, StationSize size) {
+    std::int64_t best = 0;
+    eco.for_nodes_within(at, eco.cells_mm(catchment_radius(size, b)),
+                         [&](std::int32_t x, std::int32_t y) { best = std::max<std::int64_t>(best, eco.price(c, x, y)); });
+    return best;
+}
+
 } // namespace railmaster::sim
