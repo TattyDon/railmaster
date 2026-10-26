@@ -65,6 +65,16 @@ match and 1 when the replay differs, which means something in the
 simulation is not deterministic. It exits 2 when the save cannot be read.
 A test replays a busy game with rivals this way.
 
+The client can also play a save back to watch it (title screen, Load, W):
+a world from the save's config and balance is given the logged commands
+one at a time as their ticks come round (`World::play_logged`), so it runs
+at the game's speeds. Meanwhile the world is watch-only
+(`World::set_watch_only`): commands from anywhere else are refused, so the
+watcher cannot change what happens, until they take it over (Ctrl+R). A
+replay watched to its end saves to the same bytes as the save (tested).
+Questions, newspapers and the year's ledger do not stop a replay; its
+headlines go to the message history.
+
 Games changed outside commands (tests that edit the terrain directly, for
 example) do not replay; the client changes the game only through commands.
 A replay also needs the simulation code the save was made with: a save

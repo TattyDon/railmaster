@@ -269,6 +269,14 @@ public:
     // to the tick the save was made at. A deterministic simulation ends
     // exactly as the save; compare their save() to check. `data` as for load.
     static World replay(std::string_view save_bytes, GameData data);
+    // Watching a replay as it plays (the client): a world made from a
+    // save's config and data, to be given the save's logged commands one by
+    // one with play_logged as its ticks come round. While watch_only is
+    // on, commands from anywhere else are refused (the game is the save's,
+    // not the watcher's); turning it off takes the game over from there.
+    void set_watch_only(bool on) { watch_only_ = on; }
+    bool watch_only() const { return watch_only_; }
+    CommandResult play_logged(const LoggedCommand& c);
     template <class Ar>
     friend void io(Ar& ar, World& v);
 
@@ -316,6 +324,7 @@ private:
     PlayerId actor_ = kHumanPlayer; // who the command being run is for
     WorldConfig config_;                  // as made, for replays
     std::vector<LoggedCommand> command_log_;
+    bool watch_only_ = false;             // a replay being watched: only play_logged commands (not saved)
     bool ticking_ = false;                // inside tick(): commands are the simulation's own
     void tick_inner();
     std::int64_t last_forced_sale_ = 0;

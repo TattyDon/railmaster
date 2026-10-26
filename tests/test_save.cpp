@@ -147,6 +147,35 @@ TEST_CASE("a save replays from its command log to the same game, byte for byte (
     CHECK(World::replay(loaded.save(), shipped()).save() == loaded.save());
 }
 
+TEST_CASE("a replay watched as it plays ends as the save did, and refuses the watcher's commands") {
+    World w = busy_world();
+    run_days(w, 30);
+    REQUIRE(w.execute(IssueBond{}).ok);
+    run_days(w, 30);
+    REQUIRE(w.execute(SetPriority{.train = 0, .priority = 3}).ok);
+    run_days(w, 10);
+    const std::string saved = w.save();
+    const World original = World::load(saved, shipped());
+
+    GameData d = shipped();
+    d.balance = original.data().balance;
+    World watched(original.config(), std::move(d));
+    watched.set_watch_only(true);
+    std::size_t next = 0;
+    const auto& log = original.command_log();
+    while (watched.total_ticks() < original.total_ticks() || next < log.size()) {
+        while (next < log.size() && log[next].tick <= watched.total_ticks()) REQUIRE(watched.play_logged(log[next++]).ok);
+        if (watched.total_ticks() < original.total_ticks()) watched.tick();
+    }
+    // The watcher may not play the game; taking it over lets them.
+    const CommandResult refused = watched.execute(SetPriority{.train = 0, .priority = 1});
+    CHECK_FALSE(refused.ok);
+    CHECK(refused.error.find("replay") != std::string::npos);
+    CHECK(watched.save() == saved);
+    watched.set_watch_only(false);
+    CHECK(watched.execute(SetPriority{.train = 0, .priority = 1}).ok);
+}
+
 TEST_CASE("saves are compressed") {
     const World w = busy_world();
     const std::string saved = w.save();

@@ -229,6 +229,12 @@ void Title::key(SDL_Keycode key) {
     case SDLK_RETURN:
     case SDLK_KP_ENTER:
     case SDLK_SPACE: choose(); return;
+    case SDLK_w:
+        // A saved game, watched from its start.
+        if (page_ == 3 && !slots_.empty() && slots_[static_cast<std::size_t>(sel_)].second != "Empty") {
+            request_ = Request{Request::Kind::Watch, {}, slots_[static_cast<std::size_t>(sel_)].first};
+        }
+        return;
     default: return;
     }
 }
@@ -392,7 +398,7 @@ void Title::draw(float width, float height, const std::string& build) const {
             else glColor3f(0.85f, 0.82f, 0.75f);
             draw_text(x0 + 140, row, slots_[i].second, kScale);
         }
-        foot = "Up/Down choose   Enter loads   Esc back";
+        foot = "Up/Down choose   Enter loads   W watches it from the start   Esc back";
         break;
     }
     }

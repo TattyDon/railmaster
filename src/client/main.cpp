@@ -418,6 +418,17 @@ int main(int argc, char* argv[]) {
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
     bool modal_paused = false; // the newspaper or menu paused the game, and closing it resumes
+    // A saved game watched from its start (the title screen's load page, W):
+    // its logged commands are given as their ticks come round, while the
+    // player only watches, until Ctrl+R takes the game over from there.
+    struct Watching {
+        std::vector<sim::World::LoggedCommand> log;
+        std::size_t next = 0;
+        std::uint64_t end = 0; // the tick the save was made at
+        std::string name, end_label;
+        bool done = false;
+    };
+    std::optional<Watching> watching;
     // Saving and loading, from Ctrl+S and Ctrl+L (the quick save, in the
     // working directory) and the game menu's slots (in the player's own
     // folder). Beside each save, a line saying what it holds, for the menu.
@@ -474,6 +485,7 @@ int main(int argc, char* argv[]) {
     const auto load_game = [&](const std::string& file) {
         try {
             world = sim::World::load(read_file(file), load_game_data(data_dir));
+            watching.reset();
             demo_pending = false;
             tools.select(tools.tool()); // drop half-made lines and routes
             // What the loaded game has already been told.
@@ -518,14 +530,17 @@ int main(int argc, char* argv[]) {
         speed.toggle_pause(); // the railway behind the title runs
     }
     // A new game from the title screen: a fresh world and fresh tools.
-    const auto start_world = [&](const sim::WorldConfig& cfg) {
+    // `game_data`: the game data to play with (a replay's comes from its save);
+    // `watch`: a replay to watch rather than a game to play.
+    const auto start_world = [&](const sim::WorldConfig& cfg, std::optional<sim::GameData> game_data = std::nullopt, bool watch = false) {
         tutorial.end();
         try {
-            world = sim::World(cfg, load_game_data(data_dir));
+            world = sim::World(cfg, game_data ? std::move(*game_data) : load_game_data(data_dir));
         } catch (const std::exception& e) {
             tools.show(e.what(), false);
-            return;
+            return false;
         }
+        if (!watch) watching.reset();
         demo_pending = false;
         // The tools keep only choices in progress; start them afresh.
         // (C++20 lets an object with reference members be replaced in place.)
@@ -543,10 +558,35 @@ int main(int argc, char* argv[]) {
         for (const std::string& n : world.take_news()) tools.log(n, true);
         (void)world.take_headlines();
         if (world.scenario()) tools.select(client::Tool::Status);
-        if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
+        if (!world.player_company() && !watch) tools.open_founding(/*cancellable=*/false);
         if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause(); // every game starts paused [D]
         modal_paused = false;
         title.hide();
+        return true;
+    };
+    // Watch a saved game from its start: a new world from the save's config
+    // and balance, given the save's commands as it runs (World::play_logged).
+    const auto start_replay = [&](const std::string& file) {
+        try {
+            const sim::World saved = sim::World::load(read_file(file), load_game_data(data_dir));
+            sim::GameData d = load_game_data(data_dir);
+            d.balance = saved.data().balance; // played with the save's balance, as load does
+            Watching w{saved.command_log(), 0, saved.total_ticks(), std::filesystem::path(file).stem().string(),
+                       saved.date().month_year_label(), false};
+            watching = std::move(w);
+            if (!start_world(saved.config(), std::move(d), true)) {
+                watching.reset();
+                return;
+            }
+            world.set_watch_only(true);
+            speed.toggle_pause(); // it plays at once
+            tools.show("Watching " + watching->name + " from its start, to " + watching->end_label +
+                           ". +/- change speed, Space pauses, Ctrl+R takes the game over",
+                       true);
+        } catch (const std::exception& e) {
+            watching.reset();
+            tools.show(e.what(), false);
+        }
     };
     // The map editor: a map with nothing on it yet, to shape and save.
     const auto start_editor = [&](const client::Title::Request& req) {
@@ -572,6 +612,7 @@ int main(int argc, char* argv[]) {
             std::fprintf(stderr, "Map editor: %s\n", e.what());
             return;
         }
+        watching.reset();
         const client::Tools::Settings kept = tools.settings();
         tools.~Tools();
         new (&tools) client::Tools(world, cam);
@@ -815,6 +856,14 @@ int main(int argc, char* argv[]) {
                     else load_game(kQuickSave);
                     break;
                 }
+                // Ctrl+R takes a replay being watched over: the game is the player's from here.
+                if ((ev.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)) != 0 && ev.key.keysym.sym == SDLK_r && watching) {
+                    watching.reset();
+                    world.set_watch_only(false);
+                    tools.show("The game is yours from here", true);
+                    if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
+                    break;
+                }
                 // Ctrl+H hides the trees, to see the track and towns (rt3-clone-spec §15.7).
                 if ((ev.key.keysym.mod & (KMOD_CTRL | KMOD_GUI)) != 0 && ev.key.keysym.sym == SDLK_h) {
                     cam.show_trees = !cam.show_trees;
@@ -976,6 +1025,25 @@ int main(int argc, char* argv[]) {
         tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
                             1000.0 * sim::World::kTicksPerDay;
         for (int guard = 0; tick_accumulator >= 1.0 && guard < 4096; ++guard) {
+            if (watching && !watching->done) {
+                // The save's commands, at the ticks they were given.
+                Watching& w = *watching;
+                while (w.next < w.log.size() && w.log[w.next].tick <= world.total_ticks()) {
+                    const sim::CommandResult r = world.play_logged(w.log[w.next++]);
+                    if (!r.ok) {
+                        w.done = true;
+                        tools.show("The replay went astray (" + r.error + "): Ctrl+R plays on from here", false);
+                        break;
+                    }
+                }
+                if (!w.done && world.total_ticks() >= w.end && w.next >= w.log.size()) {
+                    w.done = true;
+                    if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+                    tools.show("The end of the replay: " + w.name + " as it was saved. Ctrl+R plays on from here", true);
+                    tick_accumulator = 0;
+                    break;
+                }
+            }
             world.tick();
             tick_accumulator -= 1.0;
         }
@@ -1015,16 +1083,17 @@ int main(int argc, char* argv[]) {
         if (!title.open() && !editor.open()) tools.check_trains();
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
-        if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+        // (Not in a replay: its answer comes from the save.)
+        if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused && !watching) speed.toggle_pause();
         choices_seen = world.pending_choices().size();
         // The year's books are closed: show the ledger, paused, as RT3 does.
         if (world.date().year() != ledger_year) {
             ledger_year = world.date().year();
             // Keep the game safe: save it at every new year, quietly.
-            if (world.player_company() && !title.open() && !editor.open()) {
+            if (world.player_company() && !title.open() && !editor.open() && !watching) {
                 save_game(tools.slot_path(client::Tools::kAutosaveSlot), true);
             }
-            if (world.player_company() && !tools.founding_open()) {
+            if (world.player_company() && !tools.founding_open() && !watching) {
                 tools.open_ledger();
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
             }
@@ -1048,7 +1117,10 @@ int main(int argc, char* argv[]) {
             }
             tools.show(text, !bad);
         }
-        if (auto heads = world.take_headlines(); !heads.empty()) {
+        if (auto heads = world.take_headlines(); !heads.empty() && watching) {
+            // A replay runs on: its headlines go in the message history.
+            for (const std::string& h : heads) tools.log(h, true);
+        } else if (!heads.empty()) {
             const std::string first = heads.front();
             heads.erase(heads.begin());
             tools.open_newspaper(first, std::move(heads));
@@ -1093,6 +1165,10 @@ int main(int argc, char* argv[]) {
                 } catch (const std::exception& e) {
                     std::fprintf(stderr, "Failed to load scenario %s: %s\n", req->path.c_str(), e.what());
                 }
+                break;
+            case client::Title::Request::Kind::Watch:
+                first_steps_pending = false;
+                start_replay(req->path);
                 break;
             case client::Title::Request::Kind::Load:
                 first_steps_pending = false;
@@ -1399,6 +1475,16 @@ int main(int argc, char* argv[]) {
             client::ui::chip(x - 7, y - 5, x + w + 7, y + 19);
             glColor3f(0.85f, 0.85f, 0.8f);
             client::draw_text(x, y, build_label, 2);
+            if (watching && !title.open()) {
+                // What is being watched, and how far it has got.
+                const std::string label = "Replay of " + watching->name + ": " + world.date().month_year_label() + " of " +
+                                          watching->end_label + (watching->done ? " (the end)" : "") + "   Ctrl+R takes over";
+                const auto lw = static_cast<float>(client::text_width(label, 2));
+                const float lx = (static_cast<float>(cam.width_px) - lw) * 0.5f, ly = static_cast<float>(cam.height_px) - 44.0f - 34.0f;
+                client::ui::chip(lx - 9, ly - 6, lx + lw + 9, ly + 21);
+                glColor3f(1.0f, 0.85f, 0.5f);
+                client::draw_text(lx, ly, label, 2);
+            }
             if (tools.settings().show_fps) {
                 char fps[48];
                 std::snprintf(fps, sizeof fps, "%.0f fps  %.1f ms", 1000.0 / std::max(0.1, frame_ms), frame_ms);

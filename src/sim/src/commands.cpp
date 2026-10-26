@@ -142,6 +142,7 @@ PlanResult World::priced(PlanResult r) const {
 
 CommandResult World::execute(const Command& cmd, PlayerId who) {
     if (who >= market_.investors.size()) return fail("unknown player");
+    if (watch_only_ && !ticking_) return fail("this game is a replay being watched");
     actor_ = who;
     CommandResult r = std::visit(
         [this](const auto& c) {
@@ -160,6 +161,14 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
     if (r.ok && who == kHumanPlayer) spent_ += r.cost;
     // Commands from outside the simulation, for replays; failed ones change nothing.
     if (r.ok && !ticking_) command_log_.push_back({total_ticks_, who, cmd});
+    return r;
+}
+
+CommandResult World::play_logged(const LoggedCommand& c) {
+    const bool watching = watch_only_;
+    watch_only_ = false;
+    CommandResult r = execute(c.cmd, c.who);
+    watch_only_ = watching;
     return r;
 }
 

@@ -563,8 +563,8 @@ centre of a mid-distance view is the same with the art everywhere and with
 houses switched by distance (the switch falls well beyond it).
 
 Next:
-- Replay viewing in the client: play back a saved game's command log
-  (`railmaster_replay` checks them) at speed, to watch how a game went.
+- Packaging, Linux first: `cmake --install` puts the game, its data and a
+  desktop entry in place, so it starts from the menu, not the build folder.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -631,7 +631,9 @@ Still to do:
   engines, production, train speed, no crashes, breaking down or crashing
   a train, forcing a medal or a loss. Using it marks the game as assisted
   (kept in saves).
-- Replay viewing in the client, localisation, packaging for Windows/macOS/Linux.
+- Replay viewing in the client: done (title screen, Load, W: a save played
+  again from its start at any speed, watch-only until Ctrl+R takes it over).
+- Localisation, packaging for Windows/macOS/Linux.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

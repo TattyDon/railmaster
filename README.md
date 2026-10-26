@@ -247,7 +247,12 @@ goals ([docs/spec/scenarios.md](docs/spec/scenarios.md)).
 
 `./build/tools/replay/railmaster_replay railmaster.sav` replays a saved game
 from its start using the command log in the save, and checks it ends
-exactly as saved ([docs/spec/saves.md](docs/spec/saves.md)).
+exactly as saved ([docs/spec/saves.md](docs/spec/saves.md)). To watch one
+instead: on the title screen's Load a saved game page, W plays the chosen
+save again from its start, at any speed (+/-, Space pauses); you can look
+round, open lists and panels, but not play, until Ctrl+R takes the game
+over from where the replay has got to. It stops, paused, where the save
+was made.
 
 `./build/tools/calibrate/railmaster_calibrate` plays a few headless games
 and checks the economy against the spec's targets
@@ -294,6 +299,7 @@ and checks the economy against the spec's targets
 | M | Message history (rt3-clone-spec §15.4): every piece of news, newest first, with its month (Up/Down and PgUp/PgDn scroll; M or Esc closes). Not in the Market and Industry tools, where M has its own use |
 | Newspaper | Big news makes the front page of the Railroad Gazette, and the game waits while you read it: scenario news, earthquakes and sabotage, bankruptcies, chairmen voted out, rivals founding companies, the economy turning, medals. Esc, Enter, Space or a click closes it (and the game carries on); Shift+N brings the last one back |
 | Tab | Hide the interface, leaving only the railway and the town names (Tab again shows it; the stations' signs, with their name, owner's colour and loads of passengers, mail and freight waiting, hide with the rest); questions, the menu and the newspaper still show. In the Company, Ledger and Lists screens Tab turns their pages |
+| Ctrl+R | While watching a replay (title screen, Load, W): take the game over from here |
 | Ctrl+H | Hide the trees, to see the track and towns (rt3-clone-spec §15.7); again to show them |
 | . (with Debug console on in Settings) | The debug console (rt3-clone-spec §15.8): 1 to 4 give $1M or $10M to you or your company; 5 access to every territory; 6 every engine available; 7 twice the production; 8 and 9 switch twice the train speed and no crashes on or off; K and C break down or crash the train whose panel is open; B, S and G win the scenario with that medal, L loses it. Using one marks the game as assisted, for good: F10 and the save slots say so |
 | Mouse in lists | In the F11 lists, the Ledger's lists, the Market, the Territories tab and Find, a click chooses a row and a click on the chosen row opens it (as Enter); the wheel over a list scrolls it. The debug console's rows are buttons |
