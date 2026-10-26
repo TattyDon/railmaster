@@ -100,6 +100,9 @@ public:
     };
     std::optional<MenuRequest> take_menu_request() { return std::exchange(menu_request_, std::nullopt); }
     bool menu_open() const { return menu_open_; }
+    // Whether (sx, sy) is on the interface rather than the map: the bars at
+    // the top and bottom, an open panel or screen, a dialog.
+    bool over_ui(float sx, float sy) const;
     void open_menu();
     // Where the menu's save slots live (a folder of the player's own); the
     // quick save (Ctrl+S) stays at `quick`.

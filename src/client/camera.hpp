@@ -62,6 +62,12 @@ struct Camera {
     // Glide there over a moment instead (3D; the top-down map jumps). A pan
     // stops it; update moves along it each frame.
     void glide_to(sim::MapPoint p);
+    // The same, coming in (or going out) to `to_distance` on the way (3D;
+    // in 2D, to a zoom showing about as much).
+    void glide_to(sim::MapPoint p, float to_distance);
+    // Move the view so the ground under screen point (sx0, sy0) comes to
+    // (sx1, sy1): dragging the map.
+    void drag(float sx0, float sy0, float sx1, float sy1);
     void update(float dt);
     bool gliding() const { return glide_.has_value(); }
     // Move the view by (dx, dy) screen-ish units: right and down on screen.
@@ -79,6 +85,7 @@ private:
     std::array<float, 16> view_inverse_{};
     void project(float x, float y, float z, float& sx, float& sy, float& w) const;
     std::optional<std::pair<float, float>> glide_{}; // where a glide is heading (tiles)
+    std::optional<float> glide_distance_{};          // and how far from it the eye ends up
 };
 
 } // namespace railmaster::client

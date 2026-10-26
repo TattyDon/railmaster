@@ -219,6 +219,7 @@ sim::MapPoint Camera::to_map(float sx, float sy) const {
 }
 
 void Camera::zoom_at(float sx, float sy, float factor) {
+    glide_distance_.reset(); // the player's own zoom wins
     if (three_d) {
         distance = std::clamp(distance / factor, 3.0f, 600.0f);
         return;
@@ -245,10 +246,50 @@ void Camera::glide_to(sim::MapPoint p) {
     glide_ = std::pair{static_cast<float>(p.x_mm) / mm_per_tile, static_cast<float>(p.y_mm) / mm_per_tile};
 }
 
+void Camera::glide_to(sim::MapPoint p, float to_distance) {
+    if (!three_d) {
+        // About as much on screen as the 3D view shows at that distance (never further out).
+        zoom = std::clamp(static_cast<float>(height_px) / (to_distance * 1.1f), zoom, 200.0f);
+        center_on(p);
+        return;
+    }
+    glide_to(p);
+    glide_distance_ = std::clamp(to_distance, 3.0f, 600.0f);
+}
+
+void Camera::drag(float sx0, float sy0, float sx1, float sy1) {
+    glide_.reset(); // the player has taken over
+    glide_distance_.reset();
+    const sim::MapPoint a = to_map(sx0, sy0), b = to_map(sx1, sy1);
+    float dx = static_cast<float>(a.x_mm - b.x_mm) / mm_per_tile, dy = static_cast<float>(a.y_mm - b.y_mm) / mm_per_tile;
+    // Near the horizon a pixel is a long way: never jump far at once.
+    const float most = three_d ? distance * 0.5f : 1e9f;
+    dx = std::clamp(dx, -most, most);
+    dy = std::clamp(dy, -most, most);
+    if (!three_d) {
+        pan_x += dx;
+        pan_y += dy;
+        return;
+    }
+    target_x += dx;
+    target_y += dy;
+    if (terrain) {
+        target_x = std::clamp(target_x, 0.0f, static_cast<float>(terrain->width()));
+        target_y = std::clamp(target_y, 0.0f, static_cast<float>(terrain->height()));
+    }
+}
+
 void Camera::update(float dt) {
-    if (!glide_) return;
     // Most of the way in about half a second, slowing as it arrives.
     const float k = 1.0f - std::exp(-dt / 0.15f);
+    if (glide_distance_) {
+        distance += (*glide_distance_ - distance) * k;
+        if (std::fabs(*glide_distance_ - distance) < 0.01f) {
+            distance = *glide_distance_;
+            glide_distance_.reset();
+        }
+    }
+    if (!glide_) return;
     target_x += (glide_->first - target_x) * k;
     target_y += (glide_->second - target_y) * k;
     if (std::hypot(glide_->first - target_x, glide_->second - target_y) < 0.01f) {
@@ -260,6 +301,7 @@ void Camera::update(float dt) {
 
 void Camera::pan(float dx, float dy) {
     glide_.reset(); // the player has taken over
+    glide_distance_.reset();
     if (!three_d) {
         pan_x += dx;
         pan_y += dy;

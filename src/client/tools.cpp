@@ -1090,6 +1090,12 @@ bool Tools::click_row(float sx, float sy) {
     return true;
 }
 
+bool Tools::over_ui(float sx, float sy) const {
+    if (screen_open() || menu_open_ || paper_open_ || founding_ || typing()) return true;
+    if (sy < 52.0f || sy > static_cast<float>(cam_.height_px) - 46.0f) return true; // the tool bar, the status bar
+    return detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3];
+}
+
 bool Tools::on_wheel(float sx, float sy, int steps) {
     // Over a detail panel, the wheel scrolls it (when it is taller than the window).
     if (detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3]) {
@@ -3388,7 +3394,8 @@ void Tools::draw_help() const {
           {"M  Ctrl+G", "Messages; the Guide: who wants what, best links"},
           {"Shift+M", "The big map: towns, industries, lines; click to go"}}},
         {"Getting around",
-         {{"Arrows", "Pan (or the mouse at the window's edge)"},
+         {{"Drag", "Move the map (F1); double-click goes there"},
+          {"Arrows", "Pan (or the mouse at the window's edge)"},
           {"Wheel  Cmd+= / -", "Zoom (or the + and - by the minimap)"},
           {"Shift+arrows", "Turn and tilt (or right-drag)"},
           {"Ctrl+F", "Find a town or station"},
@@ -3402,7 +3409,7 @@ void Tools::draw_help() const {
           {"Ctrl+H", "Hide the trees"},
           {"Esc", "Menu: save, load, settings; Ctrl+S quick save"}}},
     };
-    const float w = std::min(1100.0f, static_cast<float>(cam_.width_px) - 20), h = help_page_ == 0 ? 400.0f : 350.0f;
+    const float w = std::min(1100.0f, static_cast<float>(cam_.width_px) - 20), h = help_page_ == 0 ? 420.0f : 350.0f;
     const float x0 = (static_cast<float>(cam_.width_px) - w) / 2, y0 = std::max(60.0f, (static_cast<float>(cam_.height_px) - h) / 2);
     fill_rect(0, 0, static_cast<float>(cam_.width_px), static_cast<float>(cam_.height_px), 0.0f, 0.0f, 0.0f, 0.35f);
     ui::panel(x0, y0, x0 + w, y0 + h);

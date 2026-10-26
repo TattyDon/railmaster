@@ -743,6 +743,28 @@ int main(int argc, char* argv[]) {
         return 0;
     };
     int zoom_held = 0;
+    // In the Look tool a press on the map waits to see what it is: let go
+    // where it was and it is a click; move and it drags the view.
+    std::optional<std::pair<float, float>> map_press, map_last;
+    bool map_dragging = false;
+    // A double click goes to the place: to a town, closer in, if it is on
+    // or near one.
+    const auto go_to_place = [&](float sx, float sy) {
+        const sim::MapPoint at = cam.to_map(sx, sy);
+        const sim::Economy& eco = world.economy();
+        std::optional<sim::MapPoint> town;
+        double best = 0;
+        for (const sim::Town& t : eco.towns()) {
+            const sim::MapPoint c = eco.node_centre(t.cx, t.cy);
+            const double d = std::hypot(static_cast<double>(c.x_mm - at.x_mm), static_cast<double>(c.y_mm - at.y_mm));
+            if (!town || d < best) {
+                town = c;
+                best = d;
+            }
+        }
+        if (town && best <= 10.0 * static_cast<double>(cam.mm_per_tile)) cam.glide_to(*town, std::min(cam.distance, 14.0f));
+        else cam.glide_to(at);
+    };
     Uint64 last = SDL_GetPerformanceCounter();
     // What each train was doing last frame, to hear it start, stop and be paid.
     struct Heard {
@@ -829,6 +851,13 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             case SDL_MOUSEMOTION:
+                // Left-drag on the map (Look tool) moves the view.
+                if (map_press && (ev.motion.state & SDL_BUTTON_LMASK) != 0) {
+                    const auto x = static_cast<float>(ev.motion.x), y = static_cast<float>(ev.motion.y);
+                    if (!map_dragging && std::hypot(x - map_press->first, y - map_press->second) > 5.0f) map_dragging = true;
+                    if (map_dragging) cam.drag(map_last->first, map_last->second, x, y);
+                    map_last = std::pair{x, y};
+                }
                 // Right-drag turns and tilts the view.
                 if ((ev.motion.state & SDL_BUTTON_RMASK) != 0 && cam.three_d) {
                     right_drag += std::abs(ev.motion.xrel) + std::abs(ev.motion.yrel);
@@ -875,10 +904,27 @@ int main(int argc, char* argv[]) {
                 client::audio::play(client::audio::Sound::Click, 0.35f);
                 if (tutorial.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) break;
                 if (!tutorial.open() && !tools.screen_open() && goals.click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) break;
+                if (ev.button.button == SDL_BUTTON_LEFT && tools.tool() == client::Tool::Inspect &&
+                    !tools.over_ui(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) {
+                    if (ev.button.clicks >= 2) {
+                        go_to_place(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y));
+                        map_press.reset();
+                        break;
+                    }
+                    map_press = map_last = std::pair{static_cast<float>(ev.button.x), static_cast<float>(ev.button.y)};
+                    map_dragging = false;
+                    break;
+                }
                 tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), false);
                 break;
             case SDL_MOUSEBUTTONUP:
-                if (ev.button.button == SDL_BUTTON_LEFT) zoom_held = 0;
+                if (ev.button.button == SDL_BUTTON_LEFT) {
+                    zoom_held = 0;
+                    // A press on the map that did not drag: the click it was.
+                    if (map_press && !map_dragging) tools.on_click(map_press->first, map_press->second, false);
+                    map_press.reset();
+                    map_dragging = false;
+                }
                 // A right click that did not turn the view: stop the line or route.
                 if (ev.button.button == SDL_BUTTON_RIGHT && right_drag <= 4) {
                     tools.on_click(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y), true);
