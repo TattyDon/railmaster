@@ -21,6 +21,10 @@ struct Goal {
     const char* hint;
 };
 
+// The ladder, checked against a scripted player following the help's tips
+// (towns 5 to 16 miles apart, then up to 30, a train a line): by 1850 it
+// reached 7 to 11 towns, about $1M a year and 90 to 280 loads of freight.
+// The last two rungs need freight and industries.
 constexpr Goal kGoals[] = {
     {"Run a paying train", "Join two towns with track, put a station in each and buy a train between them (the first steps show how)."},
     {"Reach a third town",
@@ -30,9 +34,12 @@ constexpr Goal kGoals[] = {
      "Freight pays where it is wanted. Ctrl+G opens the Guide: who makes each cargo and who pays most for it. Put a station "
      "by a farm, mine or mill and run a train to a town or plant that wants what it makes."},
     {"Run four trains", "More trains on the lines that pay: F6, click the stations, Enter. The Ledger (L) shows which trains earn most."},
-    {"Make $250,000 a year", "Profit over the last twelve months. Drop or re-route trains that lose money; carry what sells for more."},
-    {"Double your share price", "The market pays for steady, growing profits. F7 shows the price; dividends (D) please investors."},
-    {"Make $2,000,000 a year", "Link your lines into a network, carry freight to where prices are high, and buy industries that feed it."},
+    {"Make $250,000 a year", "Profit over the last twelve months. Click a train to see which legs pay; carry what sells for more."},
+    {"Pay a dividend", "Shareholders like a share of the profits: F7 for the Company, then D (or the buttons) sets a dividend."},
+    {"Serve eight towns", "Join more towns to your network: the bigger the smaller town of a pair, the more a line earns."},
+    {"Make $1,000,000 a year", "More lines and more trains on the best ones. The big map (Shift+M, then Tab) shows the best lines left."},
+    {"Deliver 100 loads of freight", "Lines linking towns run out: freight is where the growth is. The Guide's freight links, and industries you buy (F9), feed it."},
+    {"Make $2,000,000 a year", "A network carrying freight to where prices are high, with industries that feed it."},
 };
 constexpr int kCount = sizeof(kGoals) / sizeof(kGoals[0]);
 
@@ -60,20 +67,26 @@ Goals::Progress Goals::progress(const sim::World& world) {
         if (c.cargo_class == sim::CargoClass::Freight) freight += co.delivered_milli(c.id);
     const sim::Money profit = co.trailing_profit().value_or(sim::Money{});
     const auto dollars = [](sim::Money m) { return format_money(m); };
-    const sim::Money founding = sim::Money::cents(world.data().balance.stock.founding_share_price_cents);
 
     struct Check {
         bool met;
         std::string status;
     };
+    // The bigger profit goals count a full year's (not the first months' annualised).
+    const bool full_year = co.history().size() >= 2;
+    bool dividend = co.dividend_per_share() > sim::Money{};
+    for (const sim::YearAccounts& y : co.history()) dividend |= y.dividends_paid > sim::Money{};
     const Check checks[kCount] = {
         {paid, paid ? "done" : std::to_string(trains) + (trains == 1 ? " train" : " trains") + ", not paid yet"},
         {towns.size() >= 3, std::to_string(towns.size()) + " of 3 towns"},
         {freight >= sim::kMilli, std::to_string(freight / sim::kMilli) + " of 1 load delivered"},
         {trains >= 4, std::to_string(trains) + " of 4 trains"},
         {profit >= sim::Money::dollars(250'000), dollars(profit) + " of $250,000 a year"},
-        {co.share_price() >= founding.scaled(2, 1), dollars(co.share_price()) + " of " + dollars(founding.scaled(2, 1))},
-        {profit >= sim::Money::dollars(2'000'000), dollars(profit) + " of $2,000,000 a year"},
+        {dividend, "none yet"},
+        {towns.size() >= 8, std::to_string(towns.size()) + " of 8 towns"},
+        {full_year && profit >= sim::Money::dollars(1'000'000), dollars(profit) + " of $1,000,000 a year" + (full_year ? "" : ", over a full year")},
+        {freight >= 100 * sim::kMilli, std::to_string(freight / sim::kMilli) + " of 100 loads"},
+        {full_year && profit >= sim::Money::dollars(2'000'000), dollars(profit) + " of $2,000,000 a year" + (full_year ? "" : ", over a full year")},
     };
     p.index = kCount;
     for (int i = 0; i < kCount; ++i) {

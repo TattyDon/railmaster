@@ -84,8 +84,9 @@ there):
 - After that, a free game sets you goals, one at a time, in a banner under
   the toolbar with how far along you are and a hint (click it to fold the
   hint away): run a paying train, reach a third town, carry freight, run
-  four trains, make $250,000 a year, double your share price, make
-  $2,000,000 a year. A bell and a message mark each one met.
+  four trains, make $250,000 a year, pay a dividend, serve eight towns,
+  make $1,000,000 a year (over a full year), deliver 100 loads of freight,
+  make $2,000,000 a year. A bell and a message mark each one met.
 - `--quick` skips the title screen and the dialog and starts on the demo
   network: three towns, their stations and two trains, built for you.
 - Every game starts paused: Space starts the clock, + and - change the

@@ -492,9 +492,21 @@ nothing.
 The help card (?) has a second page (Tab): what makes a line pay, from
 these measurements.
 
+A long-game check: a scripted player following the tips (towns 5 to 16
+miles apart, then up to 30; a train a line, a second on good ones; a
+dividend once it makes $250K) on three maps with three rivals, to 1850.
+The old ladder had six of its seven goals met within the first year
+(shares trade at twice the founding price from the start, so "double the
+share price" came free) and then nothing until $2M a year, which this
+player never reached: linking towns alone levels off at $0.5M to $1.5M.
+The ladder is now ten goals: the first year's basics, a dividend, eight
+towns and $1M a year (over a full year) from about 1831, 100 loads of
+freight about 1837 to 1841, and $2M a year, which needs freight and
+industries.
+
 Next:
-- Check a long game: a player following the tips through to 1850, and
-  what the goals ladder asks of them by then.
+- A scripted player that also builds freight lines from the Guide, to see
+  whether $2M a year is in reach by 1860.
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
