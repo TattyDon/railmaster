@@ -504,9 +504,18 @@ towns and $1M a year (over a full year) from about 1831, 100 loads of
 freight about 1837 to 1841, and $2M a year, which needs freight and
 industries.
 
+Is $2M a year in reach? Run to 1860 beside the same player, the rival AIs
+(which also build freight lines, add trains freely and buy industries)
+got there: on one map two of three rivals passed $2M by 1838 and reached
+$5-6M by 1860; on another one passed it by 1850 and another reached
+$3.8M by 1860. The town-linking player stayed at $0.9-1.6M. So the last
+goal sits where its hint says, on freight and industries, about 1838 to
+1855 for a player who builds them.
+
 Next:
-- A scripted player that also builds freight lines from the Guide, to see
-  whether $2M a year is in reach by 1860.
+- Bring the rivals' freight planning to the player: the Guide's freight
+  links use the same reckoning the AI does (catchment prices, not just the
+  sites' own).
 - More shading: occlusion between buildings themselves (eaves, alleys).
 
 Still to do:
