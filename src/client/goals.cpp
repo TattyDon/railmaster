@@ -119,7 +119,10 @@ void Goals::draw(const sim::World& world, float width) const {
     const Progress p = progress(world);
     const std::string head = (p.index < p.count ? "Goal " + std::to_string(p.index + 1) + " of " + std::to_string(p.count) + ": " : std::string()) + p.title +
                              (p.status.empty() ? "" : "  (" + p.status + ")");
-    const float w = std::min(width - 40.0f, std::max(360.0f, static_cast<float>(text_width(head, kScale)) + 40.0f));
+    // A click folds the tip away, or brings it back: said at the right.
+    const std::string fold = p.hint.empty() ? std::string() : expanded_ ? "hide tip" : "show tip";
+    const auto fold_w = static_cast<float>(text_width(fold, kScale));
+    const float w = std::min(width - 40.0f, std::max(360.0f, static_cast<float>(text_width(head, kScale)) + 40.0f + (fold.empty() ? 0.0f : fold_w + 24.0f)));
     const float x0 = (width - w) / 2;
     std::vector<std::string> lines;
     if (expanded_) {
@@ -146,6 +149,10 @@ void Goals::draw(const sim::World& world, float width) const {
     box_[3] = kTop + h;
     glColor3f(1.0f, 0.86f, 0.5f);
     draw_text(x0 + 14, kTop + 6, head, kScale);
+    if (!fold.empty()) {
+        glColor3f(0.62f, 0.6f, 0.55f);
+        draw_text(x0 + w - 14 - fold_w, kTop + 6, fold, kScale);
+    }
     glColor3f(0.86f, 0.84f, 0.78f);
     float y = kTop + 26;
     for (const std::string& l : lines) {

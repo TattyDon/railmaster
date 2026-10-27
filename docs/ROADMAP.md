@@ -597,9 +597,14 @@ or station by name needs no keys.
 The names on the map are clickable in the Look tool: a town's goes there,
 closer in; a station's opens its panel.
 
+The goals banner says it folds ("hide tip" at its right): a click tucks
+it to a single line, and back (it always did, but nothing said so). The
+first steps' panel already had its own "hide".
+
 Next:
-- The goals banner and the first steps' panel can be moved out of the way
-  (or tucked away to a single line), as they cover the map's middle.
+- Multiplayer, lockstep over the deterministic simulation: to start, a
+  host and one client on a local network, exchanging each tick's
+  commands, with the replay's checks to catch any drift.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
