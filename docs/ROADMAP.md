@@ -577,9 +577,21 @@ them. The spots are drawn before what stands on them and not written to
 depth: at a town's distance the depth buffer cannot tell a spot from the
 feet on it, and written, the spots hid the people (seen, then fixed).
 
+Trains stand on a soft strip of shade too, the length of the engine and
+its cars, fading at the sides and ends, on the rails or the ground beside
+(on a bridge, its deck), drawn the same way before the trains.
+
+Getting around: in the Look tool the map drags with the left button (a
+press that does not move is still a click, on release), a double click
+goes to the place (on or near a town, in close), the + and - by the
+minimap zoom (held, they keep going), Cmd (Ctrl) + = and - zoom, and the
+settings say which way a scroll zooms. Asked for by a player on a Mac
+trackpad, where pinching may not reach the game.
+
 Next:
-- Trains far off: the same soft shade under engines and cars in wide
-  views, where the sun's shadow map no longer reaches them.
+- A compass by the minimap showing which way is north, that puts the view
+  back to north-up and the usual tilt when clicked (and a key for it), for
+  players lost after turning the view.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

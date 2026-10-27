@@ -116,7 +116,7 @@ finds its data wherever the install put it.
   instead of the shapes drawn in code; see [docs/models.md](docs/models.md)
   for the roles and how to add a pack.
 - Busy stations look it: people wait on the platforms (one for every quarter load of passengers), with mail sacks and freight crates stacked at the ends.
-- The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade, alleys and eaves shaded, lamps and people on soft spots of shade) where the graphics card allows; houses far off are drawn lighter, so wide views stay quick
+- The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade, alleys and eaves shaded, lamps, people and trains on soft shade) where the graphics card allows; houses far off are drawn lighter, so wide views stay quick
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
 - Zoom with the mouse wheel or a two-finger scroll (Settings turns the

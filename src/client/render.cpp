@@ -154,6 +154,32 @@ void contact_shadow(float x, float y, float z, float r, float strength, const Ca
     }
 }
 
+// A soft dark strip on the ground under something long (a train): from
+// (x, y) back `length` along -(dx, dy), `half` wide either side, darkest
+// down the middle and fading out at the sides and ends. It lies at `z` (the
+// rails) or on the ground beside, whichever is higher. Inside GL_QUADS.
+void contact_strip(float x, float y, float z, float dx, float dy, float length, float half, float strength, const Camera& cam) {
+    const float across[4] = {-half * 1.8f, -half * 0.6f, half * 0.6f, half * 1.8f};
+    const float across_a[4] = {0, 1, 1, 0};
+    const float pad = half;
+    const float along[4] = {-pad, pad, length - pad, length + pad};
+    const float along_a[4] = {0, 1, 1, 0};
+    const float qx = -dy, qy = dx;
+    const auto corner = [&](int i, int j) {
+        const float px = x - dx * along[i] + qx * across[j], py = y - dy * along[i] + qy * across[j];
+        glColor4f(0, 0, 0, strength * across_a[j] * along_a[i]);
+        glVertex3f(px, py, std::max(cam.ground_z(px, py) + kLift + 0.004f, z + 0.002f));
+    };
+    glNormal3f(0, 0, 1);
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+            corner(i, j);
+            corner(i + 1, j);
+            corner(i + 1, j + 1);
+            corner(i, j + 1);
+        }
+}
+
 // A box on the ground (or at z), `hl` long along the direction (dx, dy),
 // `hw` wide across it, `h` tall: walls in the colour given, the top `top`.
 void box(float x, float y, float z, float dx, float dy, float hl, float hw, float h, const float* side, const float* top) {
@@ -926,6 +952,13 @@ float stock_length(Stock kind, float s) {
     case Stock::Caboose: return 0.13f * s;
     }
     return 0.2f * s;
+}
+
+// The kind of car a load rides in.
+Stock car_stock(const sim::CargoType& cargo) {
+    if (cargo.cargo_class == sim::CargoClass::Express) return cargo.key == "mail" ? Stock::Mail : Stock::Coach;
+    if (cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite") return Stock::Hopper;
+    return Stock::Boxcar;
 }
 
 const char* stock_role(Stock kind) {
@@ -4452,6 +4485,27 @@ void draw_railway(const sim::World& w, const Camera& cam) {
                 barn(x + dx * 0.15f * s, y + dy * 0.15f * s, z, dx, dy, 0.16f * s, 0.07f * s, 0.09f * s, wall, slate);
             }
         }
+        // First a soft shade along each train on the ground (not written to
+        // depth, so it never hides the train), where the sun's shadow map is
+        // too coarse to show one far off; then the trains.
+        glEnd();
+        glDepthMask(GL_FALSE);
+        glBegin(GL_QUADS);
+        for (const sim::Train& t : rw.trains()) {
+            if (!t.in_service()) continue;
+            const Pose p = train_pose(rw, t);
+            const sim::Fuel fuel = w.data().locomotives.get(t.loco).fuel;
+            const float gap = 0.012f * s;
+            float length = stock_length(fuel == sim::Fuel::Steam ? Stock::Steam : fuel == sim::Fuel::Diesel ? Stock::Diesel : Stock::Electric, s);
+            for (const sim::Car& car : t.cars)
+                if (car.cargo) length += gap + stock_length(car_stock(w.data().cargo.get(*car.cargo)), s);
+            if (t.diner) length += gap + stock_length(Stock::Diner, s);
+            if (t.caboose) length += gap + stock_length(Stock::Caboose, s);
+            contact_strip(tiles(p.pos.x_mm, cam), tiles(p.pos.y_mm, cam), cam.z_of(p.z_mm), p.dx, p.dy, length, 0.035f * s, 0.45f, cam);
+        }
+        glEnd();
+        glDepthMask(GL_TRUE);
+        glBegin(GL_QUADS);
         for (const sim::Train& t : rw.trains()) {
             if (!t.in_service()) continue;
             const Pose p = train_pose(rw, t);
@@ -4503,14 +4557,13 @@ void draw_railway(const sim::World& w, const Camera& cam) {
             for (const sim::Car& car : t.cars) {
                 if (!car.cargo) continue; // empty cars are left behind
                 const sim::CargoType& cargo = w.data().cargo.get(*car.cargo);
-                if (cargo.cargo_class == sim::CargoClass::Express) {
-                    behind(cargo.key == "mail" ? Stock::Mail : Stock::Coach, cargo.key);
-                } else if (cargo.key == "coal" || cargo.key == "iron" || cargo.key == "bauxite") {
+                const Stock kind = car_stock(cargo);
+                if (kind == Stock::Hopper) {
                     static constexpr float kCoal[3] = {0.07f, 0.07f, 0.08f}, kIron[3] = {0.45f, 0.24f, 0.16f},
                                            kBauxite[3] = {0.62f, 0.3f, 0.2f};
-                    behind(Stock::Hopper, cargo.key, cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite);
+                    behind(kind, cargo.key, cargo.key == "coal" ? kCoal : cargo.key == "iron" ? kIron : kBauxite);
                 } else {
-                    behind(Stock::Boxcar, cargo.key);
+                    behind(kind, cargo.key);
                 }
             }
             if (t.diner) behind(Stock::Diner);
