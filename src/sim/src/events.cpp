@@ -107,9 +107,9 @@ void World::apply_effects(const std::vector<EventEffect>& effects, std::size_t e
         switch (f.kind) {
         case EffectKind::News: headline(f.text); break;
         case EffectKind::CompanyCash:
-            if (player_company()) company().post(Ledger::Grants, f.amount);
+            if (player_company(kHumanPlayer)) company_of(kHumanPlayer).post(Ledger::Grants, f.amount);
             break;
-        case EffectKind::PlayerCash: investor().cash += f.amount; break;
+        case EffectKind::PlayerCash: investor(kHumanPlayer).cash += f.amount; break;
         case EffectKind::CargoPrice:
         case EffectKind::ExpressDemand:
         case EffectKind::Production:
@@ -173,7 +173,7 @@ void World::earthquake(const EventEffect& f) {
 // Saboteurs stop some of the player's trains out on the line, as breakdowns
 // with their repair bills (rt3-clone-spec §14.4 [C]).
 void World::sabotage(const EventEffect& f) {
-    const auto co = player_company();
+    const auto co = player_company(kHumanPlayer);
     if (!co) return;
     std::vector<TrainId> running;
     for (const Train& t : railway_.trains()) {
@@ -305,7 +305,7 @@ std::int64_t World::place_delivered_milli(CompanyId company, const Goal& g) cons
 std::string World::variable_key(const std::string& name) const {
     if (name.rfind("@player|", 0) == 0) return "@player:" + std::to_string(kHumanPlayer) + name.substr(7);
     if (name.rfind("@company|", 0) == 0) {
-        const auto co = player_company();
+        const auto co = player_company(kHumanPlayer);
         return "@company:" + (co ? std::to_string(*co) : std::string("none")) + name.substr(8);
     }
     return name; // the game's, or a territory's (its name is part of it)

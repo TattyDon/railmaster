@@ -176,6 +176,49 @@ TEST_CASE("a replay watched as it plays ends as the save did, and refuses the wa
     CHECK(watched.execute(SetPriority{.train = 0, .priority = 1}).ok);
 }
 
+TEST_CASE("two human players: each copy of the game, played from either seat, runs alike (multiplayer)") {
+    const auto make = [](PlayerId seat) {
+        WorldConfig cfg;
+        cfg.width_tiles = cfg.height_tiles = 96;
+        cfg.seed = 9;
+        cfg.rivals = 1;
+        cfg.humans = 2;
+        World w(cfg, shipped());
+        w.set_local_player(seat);
+        return w;
+    };
+    World host = make(0), guest = make(1);
+    REQUIRE(host.investors().size() == 3); // the host, player 2, one rival
+    CHECK(host.rivals().size() == 1);
+    CHECK(host.human(1));
+    CHECK_FALSE(host.human(2));
+    CHECK_FALSE(guest.player_company().has_value()); // player 2 has yet to found one
+    // The same commands, given with their players, on both copies.
+    const FoundCompany found{"Second Line", Money::dollars(1'000'000), Money::dollars(1'000'000)};
+    for (World* w : {&host, &guest}) {
+        REQUIRE(w->execute(found, 1).ok);
+        REQUIRE(w->execute(IssueBond{}, 0).ok);
+    }
+    run_days(host, 40);
+    run_days(guest, 40);
+    for (World* w : {&host, &guest}) REQUIRE(w->execute(IssueBond{}, 1).ok);
+    run_days(host, 50);
+    run_days(guest, 50);
+    CHECK(host.save() == guest.save());
+    // Each sees their own company, and acts for themselves by default.
+    CHECK(host.company().name() == "Railmaster Railroad");
+    CHECK(guest.company().name() == "Second Line");
+    const auto bonds = [](const World& w, PlayerId p) { return w.company_of(p).bonds().size(); };
+    const std::size_t before = bonds(guest, 1), host_before = bonds(guest, 0);
+    REQUIRE(before > 0);
+    REQUIRE(guest.execute(RepayBond{}).ok);
+    CHECK(bonds(guest, 1) == before - 1);
+    CHECK(bonds(guest, 0) == host_before);
+    CHECK(guest.command_log().back().who == 1);
+    // A replay of the guest's copy (as the host would log it) ends alike.
+    CHECK(World::replay(guest.save(), shipped()).save() == guest.save());
+}
+
 TEST_CASE("saves are compressed") {
     const World w = busy_world();
     const std::string saved = w.save();

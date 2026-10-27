@@ -25,7 +25,7 @@ namespace railmaster::sim {
 namespace {
 
 // Bump when the members saved change; older saves are then refused.
-constexpr std::uint32_t kSaveVersion = 27; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
+constexpr std::uint32_t kSaveVersion = 28; // 2: events, Grants; 3: restrictions; 4: breakdowns; 5: crossings; 6: express via;
                                            // 7: luxury demand, cost index; 8: warehouse conversion;
                                            // 9: service stops; 10: scenario choices, disasters, average speed;
                                            // 11: compressed, with the world's config and command log;
@@ -39,7 +39,8 @@ constexpr std::uint32_t kSaveVersion = 27; // 2: events, Grants; 3: restrictions
                                            // 22: share prices by month; 23: deliveries from or to a place;
                                            // 24: stations and buildings to undo; 25: trains' legs;
                                            // 26: legs' empty trips and income by cargo;
-                                           // 27: travellers from and to homes
+                                           // 27: travellers from and to homes;
+                                           // 28: human players (multiplayer)
 constexpr char kMagic[8] = {'R', 'M', 'S', 'A', 'V', 'E', '\0', '\0'};
 // A compressed save: this, the format version (4 bytes), the uncompressed
 // size (8 bytes), then the plain save deflated with zlib.
@@ -632,7 +633,7 @@ void io(Ar& ar, WorldConfig& c) {
     fields(ar, c.seed, c.start_date, c.width_tiles, c.height_tiles, c.tile_size_m, c.cells_per_node, c.sandbox,
            c.found_player_company, c.founding, c.starting_cash, c.populate, c.difficulty, c.business_cycle, c.rivals);
     fields(ar, c.chairman_can_be_fired, c.chairman_can_resign, c.town_growth, c.industries_appear, c.territories,
-           c.rival_ai, c.scenario, c.landscape, c.towns, c.industries, c.territory_map);
+           c.rival_ai, c.scenario, c.landscape, c.towns, c.industries, c.territory_map, c.humans);
 }
 template <class Ar>
 void io(Ar& ar, Landscape& l) {
@@ -642,7 +643,7 @@ void io(Ar& ar, Landscape& l) {
 template <class Ar>
 void io(Ar& ar, World& w) {
     fields(ar, w.rng_, w.date_, w.tick_of_day_, w.total_ticks_, w.terrain_, w.economy_, w.territories_, w.railway_);
-    fields(ar, w.spent_, w.earned_, w.sandbox_, w.difficulty_, w.market_, w.rivals_, w.news_, w.last_player_company_);
+    fields(ar, w.spent_, w.earned_, w.sandbox_, w.difficulty_, w.market_, w.rivals_, w.news_, w.last_company_);
     fields(ar, w.chairman_can_be_fired_, w.chairman_can_resign_, w.town_growth_, w.industries_appear_,
            w.failed_attempts_, w.rival_ai_, w.actor_, w.last_forced_sale_, w.business_cycle_, w.economy_news_,
            w.economic_state_, w.economy_terrain_revision_, w.start_year_);

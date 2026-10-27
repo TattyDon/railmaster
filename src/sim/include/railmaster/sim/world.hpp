@@ -61,6 +61,9 @@ struct WorldConfig {
     Difficulty difficulty = Difficulty::Medium;
     bool business_cycle = true; // the economic state moves; off holds it at Normal
     std::int32_t rivals = 0;    // AI companies, up to the number of tycoons in the data
+    // Human players (multiplayer): the host, player 0, then players 1 and
+    // up, who start with a fortune and found their companies themselves.
+    std::int32_t humans = 1;
     // Scenarios may lock the chair: no firing and no resigning (Go West!).
     bool chairman_can_be_fired = true;
     bool chairman_can_resign = true;
@@ -145,12 +148,31 @@ public:
     std::optional<std::string> access_problem(CompanyId company, MapPoint p) const;
     // Territories among these points that `company` would need access to.
     std::vector<TerritoryId> access_needed(CompanyId company, const std::vector<MapPoint>& points) const;
-    // The company the human player chairs (company 0 unless control changed
-    // hands), or, after being fired or resigning, the one they last ran.
-    Company& company() { return market_.companies.at(player_company().value_or(last_player_company_)); }
-    const Company& company() const { return market_.companies.at(player_company().value_or(last_player_company_)); }
-    // The company the human player runs now, if any.
-    std::optional<CompanyId> player_company() const { return market_.investors.front().chairs; }
+    // The players are investors: the humans first (WorldConfig::humans; the
+    // host is player 0), then the AI rivals. This copy of the game is played
+    // from local_player()'s seat (multiplayer): company(), player_company(),
+    // investor() and last_forced_sale() without a player, and execute()
+    // without one, are that player's. It changes no rule: the simulation
+    // names the players it means, so every copy runs alike.
+    void set_local_player(PlayerId p) { local_ = p; }
+    PlayerId local_player() const { return local_; }
+    bool human(PlayerId p) const { return p < static_cast<PlayerId>(std::max(1, config_.humans)); }
+    // Whether a human player chairs company `c`.
+    bool human_company(CompanyId c) const;
+    // The company `who` chairs, or, after being fired or resigning, the one
+    // they last ran (company 0 for one who never ran any).
+    Company& company_of(PlayerId who) {
+        return market_.companies.at(player_company(who).value_or(who < last_company_.size() ? last_company_[who] : 0));
+    }
+    const Company& company_of(PlayerId who) const {
+        return market_.companies.at(player_company(who).value_or(who < last_company_.size() ? last_company_[who] : 0));
+    }
+    std::optional<CompanyId> player_company(PlayerId who) const { return market_.investors.at(who).chairs; }
+    // The local player's company, as above.
+    Company& company() { return company_of(local_); }
+    const Company& company() const { return company_of(local_); }
+    // The company the local player runs now, if any.
+    std::optional<CompanyId> player_company() const { return player_company(local_); }
     // Things that happened since the last call, for the news ticker:
     // splits, grumbling investors, chairmen fired, appointed or resigning.
     std::vector<std::string> take_news() { return std::exchange(news_, {}); }
@@ -174,16 +196,18 @@ public:
     // Rivals' trains earn by the AI's difficulty bonus or penalty instead
     // of the player's (`owner`: the train's company; none: the player's).
     std::int32_t revenue_permille(StationId s, std::optional<CompanyId> owner = std::nullopt) const;
-    Investor& investor() { return market_.investors.front(); }
-    const Investor& investor() const { return market_.investors.front(); }
+    Investor& investor(PlayerId who) { return market_.investors.at(who); }
+    const Investor& investor(PlayerId who) const { return market_.investors.at(who); }
+    Investor& investor() { return investor(local_); }
+    const Investor& investor() const { return investor(local_); }
     // Shares sold automatically at the last month end because purchasing
-    // power went negative.
-    std::int64_t last_forced_sale() const { return last_forced_sale_; }
+    // power went negative (the local player's).
+    std::int64_t last_forced_sale() const { return local_ < last_forced_sale_.size() ? last_forced_sale_[local_] : 0; }
     Railway& railway() { return railway_; }
     const Railway& railway() const { return railway_; }
 
     // Apply a command made by player `who`: all of it, or none of it with a reason.
-    CommandResult execute(const Command& cmd, PlayerId who = kHumanPlayer);
+    CommandResult execute(const Command& cmd, PlayerId who = kLocalPlayer);
     // What a BuildTrack would build and cost, without building it.
     PlanResult preview(const BuildTrack& cmd) const;
     // Everything spent through commands so far. A stand-in until companies
@@ -237,7 +261,8 @@ public:
     // A scenario's track budget: the tiles a company has left, if there is a budget.
     std::optional<std::int64_t> track_tiles_left(CompanyId c) const;
     // How many track builds the player can still undo.
-    std::size_t undoable_track(PlayerId who = kHumanPlayer) const {
+    std::size_t undoable_track(PlayerId who = kLocalPlayer) const {
+        if (who == kLocalPlayer) who = local_;
         return who < track_undo_.size() ? track_undo_[who].size() : 0;
     }
     // The score for the medal won, in thousandths; 0 without one.
@@ -314,7 +339,8 @@ private:
         news_.push_back(text);
         headlines_.push_back(std::move(text));
     }
-    CompanyId last_player_company_ = 0;
+    std::vector<CompanyId> last_company_; // by player: the company each last ran
+    PlayerId local_ = kHumanPlayer;       // whose seat this copy is played from (not saved)
     bool chairman_can_be_fired_ = true;
     bool chairman_can_resign_ = true;
     bool town_growth_ = true;
@@ -327,7 +353,7 @@ private:
     bool watch_only_ = false;             // a replay being watched: only play_logged commands (not saved)
     bool ticking_ = false;                // inside tick(): commands are the simulation's own
     void tick_inner();
-    std::int64_t last_forced_sale_ = 0;
+    std::vector<std::int64_t> last_forced_sale_; // by player
     bool business_cycle_ = true;
     std::optional<EconomicState> economy_news_;
     EconomicState economic_state_ = EconomicState::Normal;

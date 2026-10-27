@@ -498,7 +498,7 @@ void pursue_control(World& w, const Rival& r, const Tycoon& ty) {
         const Investor& me = w.investors().at(r.player);
         const std::int64_t stake_permille = std::max<std::int64_t>(0, me.shares_in(c.id())) * 1000 / c.shares_outstanding();
         // Merge what it controls, if its company can pay the others out.
-        if (mine && stake_permille > 500 && ty.takeovers >= 70 && c.id() != w.company().id()) {
+        if (mine && stake_permille > 500 && ty.takeovers >= 70 && !w.human_company(c.id())) {
             const Money offer = c.share_price().scaled(b.corporate.merger_neutral_premium_percent + 15, 100);
             const Money cost = offer * (c.shares_outstanding() - me.shares_in(c.id()));
             if (w.company(*mine).cash() > cost + Money::dollars(b.ai.cash_reserve)) {

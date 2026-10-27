@@ -112,6 +112,8 @@ Format versions:
 - **26:** each leg's trips that arrived with nothing to sell, and its income by cargo.
 - **27:** travellers from and to homes: waiting loads by destination home,
   each express car's home, and the homes avoiding the railway.
+- **28:** human players (multiplayer): the config's number of humans, the
+  company each player last ran, and forced share sales by player.
 
 - **Version:** a save of another format version is refused. Bump
   `kSaveVersion` whenever the saved members change. There is no migration

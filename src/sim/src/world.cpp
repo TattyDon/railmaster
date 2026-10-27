@@ -86,6 +86,14 @@ World::World(const WorldConfig& config, GameData data)
         if (const auto why = founding_problem(kHumanPlayer, terms)) throw std::invalid_argument("founding: " + *why);
         found_for(kHumanPlayer, terms);
     }
+    // The other human players (multiplayer): a fortune each, and a company
+    // to found when they are ready.
+    for (std::int32_t h = 1; h < config.humans; ++h) {
+        Investor other;
+        other.name = "Player " + std::to_string(h + 1);
+        other.cash = Money::dollars(data_.balance.stock.founder_fortune);
+        market_.investors.push_back(std::move(other));
+    }
     rival_ai_ = config.rival_ai;
     chairman_can_be_fired_ = config.chairman_can_be_fired;
     chairman_can_resign_ = config.chairman_can_resign;
@@ -217,7 +225,7 @@ CompanyId World::found_for(PlayerId who, const FoundCompany& t) {
     inv.add_shares(id, t.personal_investment.in_cents() /
                            std::max<std::int64_t>(1, data_.balance.stock.founding_share_price_cents));
     inv.chairs = id;
-    if (who == kHumanPlayer) note_player_company();
+    if (human(who)) note_player_company();
     return id;
 }
 
@@ -251,7 +259,7 @@ void World::tick_inner() {
                                           data_.locomotives.get(railway_.train(train).loco).appeal_percent);
         Train& t = railway_.train_mut(train);
         Company& runner = company(t.owner);
-        if (t.owner == company().id()) earned_ += e.total;
+        if (t.owner == company_of(kHumanPlayer).id()) earned_ += e.total;
         t.profit_this_month += e.total;
         for (const auto& [cargo, amount] : e.by_cargo) {
             (data_.cargo.get(cargo).cargo_class == CargoClass::Express ? t.accounts.express : t.accounts.freight) += amount;
@@ -435,7 +443,7 @@ std::int32_t World::revenue_permille(StationId s, std::optional<CompanyId> owner
     } else {
         age_permille = station_age_permille(today - st.built_day, true);
     }
-    const bool rival = owner && owner != player_company();
+    const bool rival = owner && !human_company(*owner);
     const std::int32_t level = rival ? data_.balance.finance.ai_revenue_percent[static_cast<std::size_t>(difficulty_)] * 10
                                      : difficulty_revenue_permille(difficulty_);
     return level * age_permille / 1000;
@@ -469,7 +477,7 @@ void World::charge_running_costs() {
         if (c.defunct()) continue;
         // Easy games cut the player's maintenance, fuel and track costs [D];
         // by how much is [I]. The economic state moves fuel, labour and upkeep [C].
-        const bool easy = difficulty_ == Difficulty::Easy && c.id() == company().id();
+        const bool easy = difficulty_ == Difficulty::Easy && human_company(c.id());
         const std::int64_t cost_pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
         c.post(Ledger::TrainMaintenance, maintenance[c.id()].scaled(cost_pct, 100));
         c.post(Ledger::Fuel, fuel[c.id()].scaled(cost_pct, 100));
@@ -484,7 +492,7 @@ void World::charge_running_costs() {
     }
     for (const TrainCost& c : train_costs) {
         Train& t = railway_.train_mut(c.id);
-        const bool easy = difficulty_ == Difficulty::Easy && t.owner == company().id();
+        const bool easy = difficulty_ == Difficulty::Easy && human_company(t.owner);
         const std::int64_t pct = (easy ? f.easy_cost_percent : 100) * cost_percent() / 100;
         const Money upkeep = c.upkeep.scaled(pct, 100), fuel_cost = c.fuel.scaled(pct, 100);
         t.profit_this_month -= upkeep + fuel_cost;
@@ -513,7 +521,7 @@ void World::on_new_month() {
     if (business_cycle_ && checks > 0 && (date_.month() - 1) % std::max(1, 12 / checks) == 0) {
         set_economic_state(next_economic_state(economic_state(), rng_, data_.balance.economic_states));
     }
-    last_forced_sale_ = monthly_market(market_)[kHumanPlayer];
+    last_forced_sale_ = monthly_market(market_);
     for (const auto& [id, ratio] : apply_splits(market_)) {
         news_.push_back(company(id).name() + " shares split " + std::to_string(ratio) + " for 1");
     }
@@ -748,7 +756,18 @@ void World::add_house(std::size_t t) {
 }
 
 void World::note_player_company() {
-    if (const auto c = player_company()) last_player_company_ = *c;
+    for (PlayerId p = 0; p < market_.investors.size() && human(p); ++p) {
+        const auto c = player_company(p);
+        if (!c) continue;
+        if (last_company_.size() <= p) last_company_.resize(std::size_t{p} + 1, 0);
+        last_company_[p] = *c;
+    }
+}
+
+bool World::human_company(CompanyId c) const {
+    for (PlayerId p = 0; p < market_.investors.size() && human(p); ++p)
+        if (market_.investors[p].chairs == c) return true;
+    return false;
 }
 
 void World::review_chairmen() {

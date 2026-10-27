@@ -141,6 +141,7 @@ PlanResult World::priced(PlanResult r) const {
 }
 
 CommandResult World::execute(const Command& cmd, PlayerId who) {
+    if (who == kLocalPlayer) who = local_;
     if (who >= market_.investors.size()) return fail("unknown player");
     if (watch_only_ && !ticking_) return fail("this game is a replay being watched");
     actor_ = who;
@@ -175,7 +176,7 @@ CommandResult World::play_logged(const LoggedCommand& c) {
 Company& World::acting() { return market_.companies.at(*market_.investors.at(actor_).chairs); }
 const Company& World::acting() const { return market_.companies.at(*market_.investors.at(actor_).chairs); }
 
-bool World::money_no_object() const { return sandbox_ && actor_ == kHumanPlayer; }
+bool World::money_no_object() const { return sandbox_ && human(actor_); }
 
 bool World::owns_track_at(const TrackEnd& at) const {
     const TrackNetwork& net = railway_.track();
@@ -769,8 +770,8 @@ CommandResult World::run(const AttemptTakeover& cmd) {
     for (std::size_t i = 0; i < market_.investors.size(); ++i) {
         if (market_.investors[i].chairs == cmd.target) incumbent = static_cast<PlayerId>(i);
     }
-    // The human always runs a company: one with nothing to swap cannot take theirs [I].
-    if (incumbent == kHumanPlayer && !bidder.chairs) return fail("you have no company to offer in exchange");
+    // A human always runs a company: one with nothing to swap cannot take theirs [I].
+    if (incumbent && human(*incumbent) && !bidder.chairs) return fail("you have no company to offer in exchange");
     if (auto why = too_soon(cmd.target)) return fail(*why);
 
     const Vote v = takeover_vote(market_, actor_, cmd.target, data_.balance.corporate);
@@ -792,8 +793,8 @@ CommandResult World::run(const AttemptMerger& cmd) {
     const Company& target = company(cmd.target);
     if (target.defunct()) return fail("that company no longer exists");
     if (target.id() == buyer.id()) return fail("a company cannot merge with itself");
-    if (actor_ != kHumanPlayer && target.id() == company().id()) {
-        return fail("the player's own company cannot be merged away"); // [I] for now
+    if (!human(actor_) && human_company(target.id())) {
+        return fail("a player's own company cannot be merged away"); // [I] for now
     }
     if (cmd.offer_per_share <= Money{}) return fail("the offer must be above nothing");
     if (auto why = too_soon(cmd.target)) return fail(*why);
@@ -1012,19 +1013,19 @@ CommandResult World::run(const UpgradeStation& cmd) {
 }
 
 CommandResult World::run(const Cheat& cmd) {
-    const auto co = player_company();
+    const auto co = player_company(kHumanPlayer);
     switch (cmd.kind) {
-    case CheatKind::PlayerMoney: investor().cash += cmd.amount; break;
+    case CheatKind::PlayerMoney: investor(kHumanPlayer).cash += cmd.amount; break;
     case CheatKind::CompanyMoney:
         if (!co) return fail("you run no company");
-        company().post(Ledger::Grants, cmd.amount);
+        company_of(kHumanPlayer).post(Ledger::Grants, cmd.amount);
         break;
     case CheatKind::AllTerritories:
         if (!co) return fail("you run no company");
         for (std::size_t t = 0; t < territories_.territories.size(); ++t) {
             const Territory& terr = territories_.territories[t];
-            if (!terr.open() && !company().has_access(static_cast<TerritoryId>(t))) {
-                company().grant_access(static_cast<TerritoryId>(t), terr.credit_grades);
+            if (!terr.open() && !company_of(kHumanPlayer).has_access(static_cast<TerritoryId>(t))) {
+                company_of(kHumanPlayer).grant_access(static_cast<TerritoryId>(t), terr.credit_grades);
             }
         }
         break;

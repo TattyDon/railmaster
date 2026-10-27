@@ -24,6 +24,9 @@ constexpr std::int32_t kMaxStockIssuesPerYear = 2;
 // private account and a portfolio, and may chair one company.
 using PlayerId = std::uint16_t;
 constexpr PlayerId kHumanPlayer = 0;
+// For World::execute and the like: whoever this copy of the game is played
+// by (World::local_player()).
+constexpr PlayerId kLocalPlayer = 0xFFFF;
 
 struct Investor {
     std::string name{};

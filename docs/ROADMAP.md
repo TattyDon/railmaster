@@ -602,9 +602,9 @@ it to a single line, and back (it always did, but nothing said so). The
 first steps' panel already had its own "hide".
 
 Next:
-- Multiplayer, lockstep over the deterministic simulation: to start, a
-  host and one client on a local network, exchanging each tick's
-  commands, with the replay's checks to catch any drift.
+- Trackpads like a map app: two fingers move the map, a pinch zooms (a
+  player on a Mac trackpad found the map hard to get about).
+- Then multiplayer's network: host and join on a local network.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -663,7 +663,18 @@ Still to do:
   accept or decline are still written by hand in the file.
 
 ## M6: Multiplayer and polish
-- Lockstep multiplayer over the deterministic simulation.
+- Lockstep multiplayer over the deterministic simulation. Started: the
+  simulation has human players beyond the host (`WorldConfig::humans`:
+  the host is player 0, the others come next and found their own
+  companies; the AI plays only its rivals), and each copy of a game is
+  played from one seat (`World::set_local_player`): what the player sees
+  and the commands they give without naming a player are that seat's,
+  while every rule names the players it means (Easy games, sandbox money
+  and protection from rival mergers go to every human; a scenario's goals,
+  events and questions stay the host's). A test plays one game from two
+  seats and gets the same save byte for byte. Still to do: the network
+  (host and join, commands exchanged each tick), and the client's Host and
+  Join.
 - Save/load: done ([spec/saves.md](spec/saves.md)), compressed, with the
   game's config and a command log that replays it exactly
   (`railmaster_replay`).

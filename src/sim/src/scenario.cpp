@@ -298,7 +298,7 @@ Date Scenario::last_deadline() const {
 }
 
 GoalProgress check_goal(const World& w, const Goal& g) {
-    const auto co = w.player_company();
+    const auto co = w.player_company(kHumanPlayer);
     const auto against = [](const char* what, Money have, Money want) {
         return GoalProgress{have >= want, std::string(what) + " " + dollars(have) + " of " + dollars(want)};
     };
@@ -347,15 +347,15 @@ GoalProgress check_goal(const World& w, const Goal& g) {
         const auto have = static_cast<std::int64_t>(seen.size());
         return {have >= g.count, "Stations in " + std::to_string(have) + " of " + std::to_string(g.count) + " territories"};
     }
-    case GoalKind::BookValue: return against("Book value", co ? w.company().book_value() : Money{}, g.amount);
-    case GoalKind::CompanyCash: return against("Company cash", co ? w.company().cash() : Money{}, g.amount);
+    case GoalKind::BookValue: return against("Book value", co ? w.company_of(kHumanPlayer).book_value() : Money{}, g.amount);
+    case GoalKind::CompanyCash: return against("Company cash", co ? w.company_of(kHumanPlayer).cash() : Money{}, g.amount);
     case GoalKind::Revenue:
-        return against("Revenue, last 12 months", co ? w.company().trailing_revenue().value_or(Money{}) : Money{}, g.amount);
-    case GoalKind::PersonalNetWorth: return against("Personal net worth", net_worth(w.investor(), w.market()), g.amount);
+        return against("Revenue, last 12 months", co ? w.company_of(kHumanPlayer).trailing_revenue().value_or(Money{}) : Money{}, g.amount);
+    case GoalKind::PersonalNetWorth: return against("Personal net worth", net_worth(w.investor(kHumanPlayer), w.market()), g.amount);
     case GoalKind::IndustryProfit: {
         Money profit;
         if (co) {
-            for (const YearAccounts& y : w.company().history())
+            for (const YearAccounts& y : w.company_of(kHumanPlayer).history())
                 profit += y.lines[static_cast<std::size_t>(Ledger::IndustryIncome)] -
                           y.lines[static_cast<std::size_t>(Ledger::IndustryCosts)];
         }
@@ -365,7 +365,7 @@ GoalProgress check_goal(const World& w, const Goal& g) {
         const auto cargo = w.data().cargo.find(g.cargo);
         const bool placed = !g.from.empty() || !g.to.empty();
         std::int64_t loads = 0;
-        if (co && cargo) loads = (placed ? w.place_delivered_milli(*co, g) : w.company().delivered_milli(*cargo)) / kMilli;
+        if (co && cargo) loads = (placed ? w.place_delivered_milli(*co, g) : w.company_of(kHumanPlayer).delivered_milli(*cargo)) / kMilli;
         std::string what = "Deliver " + g.cargo;
         if (!g.from.empty()) what += " from " + g.from;
         if (!g.to.empty()) what += " to " + g.to;
@@ -389,7 +389,7 @@ GoalProgress check_goal(const World& w, const Goal& g) {
         Money best;
         for (const Company& c : w.companies())
             if (!c.defunct() && (!co || c.id() != *co)) best = std::max(best, c.market_cap());
-        const Money mine = co ? w.company().market_cap() : Money{};
+        const Money mine = co ? w.company_of(kHumanPlayer).market_cap() : Money{};
         return {co.has_value() && mine > best, "Market value " + dollars(mine) + ", best rival " + dollars(best)};
     }
     }
