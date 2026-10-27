@@ -126,7 +126,7 @@ int Title::items() const {
     switch (page_) {
     case 0: return 7;
     case 4: return 3; // map size, start from, open
-    case 5: return 4; // your name, host, join at, join
+    case 5: return 5; // your name, host new, host saved, join at, join
     case 1: return 7; // map size, rivals, territories, difficulty, landscape, map number, start
     case 2: return static_cast<int>(scenarios_.size());
     default: return static_cast<int>(slots_.size());
@@ -184,11 +184,19 @@ void Title::choose() {
             sel_ = 6;
             message_.clear();
             return;
-        case 2: sel_ = 3; return; // the address typed: on to joining
+        case 2:
+            // A saved game, to host again (its players take their seats back).
+            if (name_.empty()) name_ = "Player";
+            hosting_ = true;
+            page_ = 3;
+            sel_ = 0;
+            message_.clear();
+            return;
+        case 3: sel_ = 4; return; // the address typed: on to joining
         default:
             if (address_.empty()) {
                 message_ = "Type the address the host's game shows (Join at)";
-                sel_ = 2;
+                sel_ = 3;
                 return;
             }
             if (name_.empty()) name_ = "Player";
@@ -235,6 +243,7 @@ void Title::choose() {
     default:
         if (slots_.empty() || slots_[static_cast<std::size_t>(sel_)].second == "Empty") return;
         request_ = Request{Request::Kind::Load, {}, slots_[static_cast<std::size_t>(sel_)].first};
+        request_->host = hosting_;
         return;
     }
 }
@@ -243,7 +252,7 @@ void Title::key(SDL_Keycode key) {
     const int n = std::max(1, items());
     switch (key) {
     case SDLK_BACKSPACE:
-        if (page_ == 5 && (sel_ == 0 || sel_ == 2)) {
+        if (page_ == 5 && (sel_ == 0 || sel_ == 3)) {
             // Rub out the last letter (a whole UTF-8 character).
             std::string& field = sel_ == 0 ? name_ : address_;
             while (!field.empty() && (static_cast<unsigned char>(field.back()) & 0xC0) == 0x80) field.pop_back();
@@ -253,9 +262,9 @@ void Title::key(SDL_Keycode key) {
         [[fallthrough]];
     case SDLK_ESCAPE:
         message_.clear();
-        if (page_ == 1 && hosting_) {
+        if ((page_ == 1 || page_ == 3) && hosting_) {
+            sel_ = page_ == 1 ? 1 : 2;
             page_ = 5; // back to Play together
-            sel_ = 1;
             hosting_ = false;
             return;
         }
@@ -286,13 +295,13 @@ void Title::key(SDL_Keycode key) {
 }
 
 void Title::text(const char* utf8) {
-    if (page_ != 5 || (sel_ != 0 && sel_ != 2)) return;
+    if (page_ != 5 || (sel_ != 0 && sel_ != 3)) return;
     std::string& field = sel_ == 0 ? name_ : address_;
     const std::size_t most = sel_ == 0 ? 24 : 60;
     for (const char* c = utf8; *c; ++c) {
         if (field.size() >= most) break;
         // An address has no spaces; a name has no control characters.
-        if (sel_ == 2 && (*c == ' ' || static_cast<unsigned char>(*c) >= 0x80)) continue;
+        if (sel_ == 3 && (*c == ' ' || static_cast<unsigned char>(*c) >= 0x80)) continue;
         if (static_cast<unsigned char>(*c) < 0x20) continue;
         field.push_back(*c);
     }
@@ -303,7 +312,7 @@ void Title::click(float sx, float sy) {
         const Box& b = boxes_[i];
         if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) {
             sel_ = static_cast<int>(i);
-            if (page_ == 5 && (sel_ == 0 || sel_ == 2)) return; // a field: ready for typing
+            if (page_ == 5 && (sel_ == 0 || sel_ == 3)) return; // a field: ready for typing
             choose();
             return;
         }
@@ -424,9 +433,10 @@ void Title::draw(float width, float height, const std::string& build) const {
         };
         field(0, "Your name", name_, "type your name");
         item("Host a new game", sel_ == 1, 560, kScale + 1);
+        item("Host a saved game", sel_ == 2, 560, kScale + 1);
         y += 8;
-        field(2, "Join at", address_, "the host's address, e.g. 192.168.1.20");
-        item("Join", sel_ == 3, 560, kScale + 1);
+        field(3, "Join at", address_, "the host's address, e.g. 192.168.1.20");
+        item("Join", sel_ == 4, 560, kScale + 1);
         if (!message_.empty()) {
             y += 6;
             glColor3f(1.0f, 0.55f, 0.45f);
@@ -440,7 +450,8 @@ void Title::draw(float width, float height, const std::string& build) const {
         for (const std::string& l :
              wrap("Each player runs their own railroad on the same map, on their own computer on the same home network. "
                   "The host picks the map and sets the pace; the others join with the address the host's game shows. "
-                  "Everyone needs the same version of the game.",
+                  "A hosted game saved goes on another day: host the save, and each player joining under the same name "
+                  "takes their railroad back. Everyone needs the same version of the game.",
                   kScale, 540)) {
             draw_text(x0, y, l, kScale);
             y += 19;
@@ -497,7 +508,7 @@ void Title::draw(float width, float height, const std::string& build) const {
         break;
     }
     default: {
-        heading("Load a saved game");
+        heading(hosting_ ? "Host a saved game" : "Load a saved game");
         for (std::size_t i = 0; i < slots_.size(); ++i) {
             const float row = y;
             const std::string name = i == 0 ? std::string("Quick save")

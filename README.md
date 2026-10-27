@@ -366,6 +366,9 @@ rivals. On the title screen choose **Play together**, type your name, then:
 - **Host a new game**: pick the map as for a new railroad and start. The
   top line shows the address the others join at ("Hosting at
   192.168.1.20, 2 players").
+- **Host a saved game**: a game hosted before and saved (Ctrl+S or the
+  menu) goes on another day. Each player who joins under the same name
+  takes their railroad back.
 - **Join at**: type that address, then **Join**.
 
 The name and the last address are remembered. From a terminal the same is

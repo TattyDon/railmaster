@@ -659,9 +659,17 @@ message history. The Status screen lists the players: name, railroad, net
 worth, and whether each is in the game now. A test sends a line each way;
 checked with two game windows.
 
+A hosted game goes on another day: Play together's Host a saved game
+loads it and opens it again, and a player joining under the name they
+played by takes their seat (and railroad) back; newcomers take a seat
+nobody has made their own. Tested over the loopback and with two game
+windows (one evening hosted, saved, the next hosted from the title
+screen, the guest back in their railroad).
+
 Next:
-- A hosted game saved and hosted again later (its seats kept), so a long
-  game can be played over several evenings.
+- Multiplayer: a player whose connection drops mid-game rejoining without
+  the host restarting already works (their seat is kept by name); what is
+  left is play-testing on two real computers.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

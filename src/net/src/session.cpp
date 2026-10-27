@@ -154,11 +154,25 @@ void Host::handle(Seat& s, const Message& m) {
             s.conn.close();
             return;
         }
-        // The first free seat (seat 0 is the host's).
+        // A player coming back to a game (a save hosted again, or after
+        // losing the connection) takes the seat with their name; anyone else
+        // the first free seat (seat 0 is the host's).
         const auto humans = static_cast<sim::PlayerId>(std::max(1, world_.config().humans));
+        const auto taken = [&](sim::PlayerId p) {
+            return std::any_of(seats_.begin(), seats_.end(), [&](const Seat& o) { return o.joined && o.seat == p; });
+        };
         std::optional<sim::PlayerId> free;
         for (sim::PlayerId p = 1; p < humans && !free; ++p) {
-            if (std::none_of(seats_.begin(), seats_.end(), [&](const Seat& o) { return o.joined && o.seat == p; })) free = p;
+            if (!taken(p) && !name.empty() && world_.investor(p).name == name) free = p;
+        }
+        for (sim::PlayerId p = 1; p < humans && !free; ++p) {
+            if (taken(p)) continue;
+            // Not a seat someone else has made their own (named), while
+            // one is left with the name it started with.
+            if (world_.investor(p).name == "Player " + std::to_string(p + 1)) free = p;
+        }
+        for (sim::PlayerId p = 1; p < humans && !free; ++p) {
+            if (!taken(p)) free = p;
         }
         if (!free) {
             s.conn.send(kRefuse, humans <= 1 ? "this game has no seats for other players"

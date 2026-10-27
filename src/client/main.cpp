@@ -632,8 +632,10 @@ int main(int argc, char* argv[]) {
             (void)world.take_news();
             (void)world.take_headlines();
             tools.show("Game loaded from " + file + ": " + world.date().month_year_label(), true);
+            return true;
         } catch (const std::exception& e) {
             tools.show(e.what(), false);
+            return false;
         }
     };
     const auto save_slots = [&] {
@@ -1565,6 +1567,26 @@ int main(int argc, char* argv[]) {
                 break;
             case client::Title::Request::Kind::Load:
                 first_steps_pending = false;
+                if (req->host) {
+                    // Play together's Host a saved game: only a game hosted before has seats for others.
+                    if (!load_game(req->path)) {
+                        title.say("Cannot load that game");
+                        break;
+                    }
+                    save_player();
+                    std::string error;
+                    if (world.config().humans <= 1) {
+                        tools.show("That game was played alone: it has no seats for others. Host a new game to play together", false);
+                    } else if (open_to_others(net::kDefaultPort, title.player_name(), error)) {
+                        announce_host();
+                    } else {
+                        tools.show("Cannot open the game to others: " + error, false);
+                    }
+                    if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+                    modal_paused = false;
+                    title.hide();
+                    break;
+                }
                 load_game(req->path);
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
                 modal_paused = false;

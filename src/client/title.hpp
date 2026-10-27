@@ -21,7 +21,7 @@ public:
         sim::WorldConfig config{}; // NewGame
         std::string path;          // Scenario, Load and Watch (a saved game to replay from its start); for NewGame and Editor, a landscape image (none: generated); Join: the host's address
         bool flat = false;         // Editor: start from flat land
-        bool host = false;         // NewGame: open it to other players (multiplayer)
+        bool host = false;         // NewGame and Load: open it to other players (multiplayer)
     };
 
     // `data_dir` holds scenarios/; `slots` are the save files to offer, each

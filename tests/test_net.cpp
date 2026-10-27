@@ -277,3 +277,25 @@ TEST_CASE("players chat: each line reaches everyone, with who said it") {
     REQUIRE(guest.players().size() == 2);
     CHECK(guest.players()[1].first == 1);
 }
+
+TEST_CASE("a hosted game saved and hosted again: each player joining under their name takes their railroad back") {
+    // An evening's game: Gil (player 2) founded a railroad, then it was saved.
+    std::string saved;
+    {
+        World first = small_world(3);
+        REQUIRE(first.execute(RenamePlayer{"Gil"}, 1).ok);
+        REQUIRE(first.execute(FoundCompany{"Gil's Line", Money::dollars(1'000'000), Money::dollars(1'000'000)}, 1).ok);
+        saved = first.save();
+    }
+    // Another evening: the save hosted again.
+    World host_world = World::load(saved, shipped());
+    HostThread host(host_world, 0);
+    World newcomer_world = small_world(1);
+    net::Guest newcomer(newcomer_world, "127.0.0.1:" + std::to_string(host.port()), "Hal", shipped());
+    CHECK(newcomer.seat() == 2); // Gil's seat is kept for Gil
+    World gil_world = small_world(1);
+    net::Guest gil(gil_world, "127.0.0.1:" + std::to_string(host.port()), "Gil", shipped());
+    CHECK(gil.seat() == 1);
+    REQUIRE(gil_world.player_company().has_value());
+    CHECK(gil_world.company().name() == "Gil's Line");
+}
