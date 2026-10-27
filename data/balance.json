@@ -368,7 +368,7 @@
     "starting_personal_cash": 500000
   },
   "time": {
-    "normal_seconds_per_year": 240,
+    "normal_seconds_per_year": 480,
     "speed_step_percent": 200
   },
   "towns": {

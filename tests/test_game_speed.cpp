@@ -27,11 +27,11 @@ TEST_CASE("six speeds: + and - step through them, Pause stops and resumes [D]") 
     CHECK(std::string(game_speed_name(GameSpeed::VeryFast)) == "Very Fast");
 }
 
-TEST_CASE("about four minutes a game year at Normal, doubling or halving per step [I]") {
+TEST_CASE("about eight minutes a game year at Normal, doubling or halving per step [I]") {
     const Balance::Time t;
     CHECK(days_per_second_milli(GameSpeed::Paused, t) == 0);
     const std::int64_t normal = days_per_second_milli(GameSpeed::Normal, t);
-    CHECK(normal == 365'000 / 240);
+    CHECK(normal == 365'000 / 480);
     CHECK(days_per_second_milli(GameSpeed::Fast, t) == normal * 2);
     CHECK(days_per_second_milli(GameSpeed::VeryFast, t) == normal * 4);
     CHECK(days_per_second_milli(GameSpeed::Slow, t) == normal / 2);

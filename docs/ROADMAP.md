@@ -609,6 +609,14 @@ system's magnify events, as SDL2 does not pass them on;
 little, and Settings can make every scroll zoom or move. Asked for by a
 player on a Mac trackpad.
 
+From the same play-testing: a train's panel now has buttons for what can
+be done with it (change route, new engine, priority, fewer or more cars,
+copy, wait for full loads, follow, retire), and your station's for
+enlarging and renaming, so nothing needs a key to be found; a Menu
+button on the top bar opens the game menu (settings such as music,
+saving, the main menu, quitting), which only Esc reached before; and
+Normal speed is half as fast, about eight minutes a game year.
+
 Next:
 - Multiplayer's network: host and join on a local network, commands
   exchanged each tick, and Host and Join on the title screen.

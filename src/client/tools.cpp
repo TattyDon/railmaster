@@ -1658,6 +1658,10 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         else open_find();
         return;
     }
+    if (const auto mb = menu_button(); !right_button && sx >= mb[0] && sx < mb[2] && sy >= mb[1] && sy < mb[3]) {
+        open_menu();
+        return;
+    }
     if (!right_button && click_row(sx, sy)) return;
     if (guide_open_) {
         guide_open_ = false; // a click away from the guide closes it
@@ -1689,7 +1693,16 @@ void Tools::on_click(float sx, float sy, bool right_button) {
     }
     switch (tool_) {
     case Tool::Inspect:
-        if (detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3]) return;
+        if (detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3]) {
+            // A button on the panel does what its key does.
+            for (const DetailAction& a : detail_actions_) {
+                if (sx >= a.x0 && sx < a.x1 && sy >= a.y0 && sy < a.y1) {
+                    on_key(a.key, 0);
+                    return;
+                }
+            }
+            return;
+        }
         if (!open_detail_under_cursor()) {
             detail_.reset();
             follow_ = false;
@@ -2155,7 +2168,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
             if (SDL_GetTicks() > retire_armed_until_ || retire_armed_ != *id) {
                 retire_armed_until_ = SDL_GetTicks() + 3000;
                 retire_armed_ = *id;
-                show("Press X again to retire " + name, false);
+                show("Press X (or Retire) again to retire " + name, false);
                 return true;
             }
             retire_armed_until_ = 0;
@@ -4079,11 +4092,43 @@ void Tools::draw_detail_panel() const {
         rows.push_back(line({"Made in all", loads(s.produced_milli) + " loads"}));
     }
 
+    // What can be done here, as buttons at the foot (each its key).
+    std::vector<std::pair<std::string, SDL_Keycode>> actions;
+    if (detail_->kind == DetailKind::Train && detail_->id < rw.trains().size()) {
+        if (rw.train(detail_->id).owner == world_.company().id()) {
+            actions = {{"Change route (E)", SDLK_e}, {"New engine (R)", SDLK_r}, {"Priority (H)", SDLK_h},
+                       {"Fewer cars ([)", SDLK_LEFTBRACKET}, {"More cars (])", SDLK_RIGHTBRACKET}, {"Copy (Y)", SDLK_y},
+                       {"Wait for full (W)", SDLK_w}, {follow_ ? "Stop following" : "Follow", SDLK_SPACE},
+                       {"Retire (X twice)", SDLK_x}};
+        } else {
+            actions = {{follow_ ? "Stop following" : "Follow", SDLK_SPACE}};
+        }
+    } else if (detail_->kind == DetailKind::Station && detail_->id < rw.stations().size() &&
+               rw.station(detail_->id).owner == world_.company().id()) {
+        actions = {{"Enlarge (U)", SDLK_u}, {"Rename (Enter)", SDLK_RETURN}};
+    }
+
     // Lay the rows out in a panel at the right of the screen.
     constexpr float kW = 400.0f, kRow = 18.0f;
     const auto w = static_cast<float>(cam_.width_px);
     const float x0 = w - kW - 12, y0 = kToolbarY + kButtonH + 10;
-    float h = 16;
+    // The buttons' rows, wrapped to the panel's width.
+    constexpr float kChipH = 24.0f, kChipGap = 6.0f;
+    float actions_h = 0;
+    if (!actions.empty()) {
+        float cx = 0;
+        int lines = 1;
+        for (const auto& [label, key] : actions) {
+            const float cw = static_cast<float>(text_width(label, kScale)) + 16;
+            if (cx > 0 && cx + cw > kW - 28) {
+                ++lines;
+                cx = 0;
+            }
+            cx += cw + kChipGap;
+        }
+        actions_h = 10 + static_cast<float>(lines) * (kChipH + kChipGap);
+    }
+    float h = 16 + actions_h;
     const auto row_h = [&](const DetailRow& r) {
         switch (r.style) {
         case DetailRow::Style::Title: return 24.0f;
@@ -4095,6 +4140,7 @@ void Tools::draw_detail_panel() const {
     };
     for (const DetailRow& r : rows) h += row_h(r);
     const float max_h = static_cast<float>(cam_.height_px) - kBottomBarH - y0 - 10;
+    const float rows_max = max_h - actions_h; // the rows' room above the buttons
     // Too tall: skip rows under the title (no further than lets the last fit).
     if (h <= max_h) {
         detail_skip_ = 0;
@@ -4102,7 +4148,7 @@ void Tools::draw_detail_panel() const {
         float tail = 16 + 20; // margins and the "more" line
         std::size_t most = rows.size() - 1;
         if (!rows.empty()) tail += row_h(rows.front());
-        while (most > 1 && tail + row_h(rows[most]) <= max_h) tail += row_h(rows[most--]);
+        while (most > 1 && tail + row_h(rows[most]) <= rows_max) tail += row_h(rows[most--]);
         detail_skip_ = std::min(detail_skip_, most);
     }
     ui::panel(x0, y0, x0 + kW, y0 + std::min(h, max_h));
@@ -4112,7 +4158,7 @@ void Tools::draw_detail_panel() const {
     for (std::size_t ri = 0; ri < rows.size(); ++ri) {
         if (ri >= 1 && ri <= detail_skip_) continue;
         const DetailRow& r = rows[ri];
-        if (y + row_h(r) > y0 + max_h - (h > max_h ? 20 : 0)) {
+        if (y + row_h(r) > y0 + rows_max - (h > max_h ? 20 : 0)) {
             cut = true;
             break;
         }
@@ -4139,7 +4185,7 @@ void Tools::draw_detail_panel() const {
         case DetailRow::Style::Bars: {
             // A bar a month, green up from the zero line, red down below it;
             // the month still running dimmed.
-            if (y + row_h(r) > y0 + max_h) break;
+            if (y + row_h(r) > y0 + rows_max) break;
             glColor3f(r.r, r.g, r.b);
             draw_text(x0 + 14, y, r.cells[0], kScale);
             double top = 1, bottom = 0;
@@ -4198,7 +4244,28 @@ void Tools::draw_detail_panel() const {
         // There is more: say how to see it.
         glColor3f(0.85f, 0.75f, 0.5f);
         const char* more = cut ? (detail_skip_ > 0 ? "Wheel: more above and below" : "Wheel over this panel: more below") : "Wheel: more above";
-        draw_text(x0 + 14, y0 + max_h - 22, more, kScale);
+        draw_text(x0 + 14, y0 + rows_max - 22, more, kScale);
+    }
+    // The buttons, wrapped along the panel's foot.
+    detail_actions_.clear();
+    if (!actions.empty()) {
+        const float bottom = y0 + std::min(h, max_h);
+        float cx = x0 + 14, cy = bottom - actions_h + 8;
+        ui::rule(x0 + 10, x0 + kW - 10, cy - 4);
+        for (const auto& [label, key] : actions) {
+            const float cw = static_cast<float>(text_width(label, kScale)) + 16;
+            if (cx > x0 + 14 && cx + cw > x0 + kW - 14) {
+                cx = x0 + 14;
+                cy += kChipH + kChipGap;
+            }
+            const bool hot = hover_sx_ >= cx && hover_sx_ < cx + cw && hover_sy_ >= cy && hover_sy_ < cy + kChipH;
+            ui::tab(cx, cy, cx + cw, cy + kChipH, hot);
+            if (hot) glColor3f(0.12f, 0.08f, 0.03f);
+            else glColor3f(0.92f, 0.88f, 0.8f);
+            draw_text(cx + 8, cy + 6, label, kScale);
+            detail_actions_.push_back({key, cx, cy, cx + cw, cy + kChipH});
+            cx += cw + kChipGap;
+        }
     }
 }
 
@@ -4318,6 +4385,12 @@ void Tools::draw_ui(const std::string& status) const {
         if (find_open_) glColor3f(0.12f, 0.08f, 0.03f);
         else glColor3f(0.92f, 0.88f, 0.8f);
         draw_text(fb[0] + 4, fb[1] + 4, "Ctrl+F Find", kScale);
+    }
+    {
+        const auto mb = menu_button();
+        ui::tab(mb[0], mb[1], mb[2], mb[3], false);
+        glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(mb[0] + 4, mb[1] + 4, "Esc Menu", kScale);
     }
     {
         const auto hb = help_button();
@@ -4493,6 +4566,12 @@ std::array<float, 4> Tools::find_button() const {
     const auto gb = guide_button();
     const float x = gb[2] + 3.0f;
     return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+F Find", kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+std::array<float, 4> Tools::menu_button() const {
+    const auto fb = find_button();
+    const float x = fb[2] + 3.0f;
+    return {x, kToolbarY, x + static_cast<float>(text_width("Esc Menu", kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 void Tools::show_station(sim::StationId id) {

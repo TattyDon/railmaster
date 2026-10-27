@@ -24,7 +24,7 @@ struct Balance {
     // Normal, and how much each step up (Fast, Very Fast) multiplies the
     // pace, or each step down divides it, in percent.
     struct Time {
-        std::int32_t normal_seconds_per_year = 240;
+        std::int32_t normal_seconds_per_year = 480;
         std::int32_t speed_step_percent = 200;
     } time;
 

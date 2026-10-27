@@ -82,7 +82,7 @@ Separate the deterministic simulation from rendering so it can be tested headles
 - Calendar is a real Gregorian calendar with month/day and, for short scenarios, hour of day (The War Effort runs 06:00 11 Dec 1941 → 06:00 15 Dec 1941) **[D/C]**.
 - Typical scenario length 25–35 years **[C]**.
 - **Game speeds**: Paused, Very Slow, Slow, Normal, Fast, Very Fast (6 states). Keys `+`, `−`, `Pause`. Every game starts **paused** **[D]**.
-- Real time per game year at Normal: not documented. Default **~4 minutes per game year at Normal**, each speed step ×2 / ×0.5 **[I]**.
+- Real time per game year at Normal: not documented. Default **~8 minutes per game year at Normal** (raised from 4 after play-testing found it too fast), each speed step ×2 / ×0.5 **[I]**.
 - Day/night cycle with shortened nights, and a weather cycle ("mostly clear with occasional storms") — both cosmetic in the default implementation **[D cosmetic-ness I]**. CtC added a "brighter night" option **[D]**.
 - In multiplayer, game speed is shared **[D]**.
 

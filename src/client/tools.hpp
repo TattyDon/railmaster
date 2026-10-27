@@ -201,6 +201,13 @@ private:
     std::optional<Detail> detail_{};
     bool follow_ = false; // the view follows the detail panel's train
     mutable std::array<float, 4> detail_box_{}; // where the panel was last drawn: x0, y0, x1, y1
+    // Buttons at the foot of the detail panel, each doing what its key does
+    // (so a train can be changed without knowing the keys).
+    struct DetailAction {
+        SDL_Keycode key;
+        float x0, y0, x1, y1;
+    };
+    mutable std::vector<DetailAction> detail_actions_;
     // Rows scrolled past (under the title) when the panel is taller than the
     // window; the wheel over it moves this.
     mutable std::size_t detail_skip_ = 0;
@@ -386,6 +393,7 @@ private:
     std::string site_name(sim::SiteId id) const;
     std::array<float, 4> guide_button() const;
     std::array<float, 4> find_button() const; // after the Guide's: Find a town or station
+    std::array<float, 4> menu_button() const; // after Find's: the game menu (settings, save, leave)
 
     bool help_open_ = false; // the help card (?)
     int help_page_ = 0;      // 0 the keys, 1 what makes a line pay (Tab turns)
