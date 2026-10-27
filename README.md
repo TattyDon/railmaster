@@ -357,11 +357,36 @@ The bottom bar always shows what the current tool does and its options. While
 laying track, the planned route is drawn coloured by structure (grey bridges,
 dark tunnels), with its price next to the cursor.
 
+### Playing together (multiplayer)
+
+Up to four players on a local network, each on their own computer, each
+founding and running their own railroad on the same map against the AI
+rivals. For now it is started from a terminal (Host and Join buttons on the
+title screen are coming):
+
+```sh
+railmaster --host --name=Ann          # a new game others can join
+railmaster --join=192.168.1.20 --name=Bob   # join it (the address the host's game shows)
+```
+
+On a Mac the program is inside the app:
+`~/Applications/Railmaster.app/Contents/MacOS/Railmaster --host`.
+The host's game shows its address when it starts (`--host=PORT` and
+`--join=ADDRESS:PORT` pick another port than 27630). Everyone runs the same
+version of the game. The host sets the pace (speed and pause); the host's
+newspaper and menus no longer stop the clock while others are in the game.
+Players can come and go: a player who leaves frees their seat (their
+company carries on, unattended), and if the host leaves, the others' games
+carry on on their own. Each copy of the game checks itself against the
+host's once a game month and says so if they have drifted apart (please
+report that: it is a bug).
+
 ## Layout
 
 | Path | Contents |
 |------|----------|
 | `src/sim/` | Headless, deterministic game simulation |
+| `src/net/` | Multiplayer over a network: lockstep host and guest sessions on TCP |
 | `src/client/` | SDL2/OpenGL front end |
 | `tests/` | Unit tests for the simulation |
 | `tools/calibrate/` | Headless balance check against the spec's targets |

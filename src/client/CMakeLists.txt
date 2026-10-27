@@ -52,6 +52,7 @@ target_include_directories(railmaster PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/genera
 find_package(Threads REQUIRED)
 target_link_libraries(railmaster PRIVATE
     railmaster::sim
+    railmaster::net
     Threads::Threads
     SDL2::SDL2
     OpenGL::GL

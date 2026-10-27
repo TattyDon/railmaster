@@ -144,6 +144,7 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
     if (who == kLocalPlayer) who = local_;
     if (who >= market_.investors.size()) return fail("unknown player");
     if (watch_only_ && !ticking_) return fail("this game is a replay being watched");
+    if (remote_ && !ticking_ && !relaying_ && who == local_) return remote_(cmd); // the host plays it
     actor_ = who;
     CommandResult r = std::visit(
         [this](const auto& c) {
@@ -168,7 +169,9 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
 CommandResult World::play_logged(const LoggedCommand& c) {
     const bool watching = watch_only_;
     watch_only_ = false;
+    relaying_ = true;
     CommandResult r = execute(c.cmd, c.who);
+    relaying_ = false;
     watch_only_ = watching;
     return r;
 }

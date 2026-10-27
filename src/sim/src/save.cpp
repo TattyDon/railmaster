@@ -717,6 +717,33 @@ World World::load(std::string_view compressed, GameData data) {
     return w;
 }
 
+std::uint64_t World::checksum() const {
+    Writer ar;
+    io(ar, const_cast<World&>(*this)); // the writer only reads
+    const std::string bytes = ar.take();
+    std::uint64_t h = 1469598103934665603ULL; // FNV-1a
+    for (const char c : bytes) {
+        h ^= static_cast<unsigned char>(c);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+std::string World::encode(const std::vector<LoggedCommand>& cmds) {
+    Writer ar;
+    ar.put(cmds.size(), 8);
+    for (LoggedCommand c : cmds) fields(ar, c.tick, c.who, c.cmd);
+    return ar.take();
+}
+
+std::vector<World::LoggedCommand> World::decode(std::string_view bytes) {
+    Reader ar(bytes);
+    std::vector<LoggedCommand> cmds(ar.count(1));
+    for (auto& c : cmds) fields(ar, c.tick, c.who, c.cmd);
+    if (!ar.done()) throw std::runtime_error("commands: unexpected bytes at the end");
+    return cmds;
+}
+
 World World::replay(std::string_view save_bytes, GameData data) {
     const World saved = load(save_bytes, data);
     data.balance = saved.data_.balance; // played with the save's balance, as load does

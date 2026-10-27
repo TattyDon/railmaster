@@ -38,6 +38,7 @@ add_executable(railmaster_tests
     test_scenarios.cpp
     test_track_removal.cpp
     test_save.cpp
+    test_net.cpp
     test_demo.cpp
     test_routes.cpp
     test_landscape.cpp
@@ -50,7 +51,9 @@ add_executable(railmaster_tests
     test_warehouses_spawning.cpp
     test_world.cpp
 )
-target_link_libraries(railmaster_tests PRIVATE railmaster::sim doctest::doctest railmaster_warnings)
+find_package(Threads REQUIRED)
+target_link_libraries(railmaster_tests PRIVATE railmaster::sim railmaster::net doctest::doctest railmaster_warnings
+    Threads::Threads)
 target_compile_definitions(railmaster_tests PRIVATE
     RAILMASTER_DATA_DIR="${PROJECT_SOURCE_DIR}/data")
 

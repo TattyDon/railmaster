@@ -29,6 +29,7 @@
 #include "goals.hpp"
 #include "tutorial.hpp"
 
+#include "railmaster/net/session.hpp"
 #include "railmaster/sim/demo.hpp"
 #include "railmaster/sim/game_speed.hpp"
 #include "railmaster/sim/world.hpp"
@@ -40,6 +41,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 #include <new>
 #include <cctype>
 #include <cmath>
@@ -54,6 +56,7 @@ namespace {
 
 namespace sim = railmaster::sim;
 namespace client = railmaster::client;
+namespace net = railmaster::net;
 
 
 std::string read_file(const std::string& path) {
@@ -280,6 +283,13 @@ int main(int argc, char* argv[]) {
     std::string scenario_path;
     std::string load_path;
     std::string landscape_path; // --landscape=FILE: a heightmap image for the map
+    // Multiplayer: --host[=PORT] opens a new game to others on the network,
+    // --join=ADDRESS[:PORT] joins one; --name=NAME is how others see you.
+    std::optional<std::uint16_t> host_port;
+    std::string join_address;
+    std::string player_name;
+    if (const char* user = std::getenv("USER")) player_name = user;
+    if (player_name.empty()) player_name = "Player";
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--version") {
@@ -298,6 +308,10 @@ int main(int argc, char* argv[]) {
         else if (arg.rfind("--scenario=", 0) == 0) scenario_path = arg.substr(11);
         else if (arg.rfind("--load=", 0) == 0) load_path = arg.substr(7);
         else if (arg.rfind("--landscape=", 0) == 0) landscape_path = arg.substr(12);
+        else if (arg == "--host") host_port = net::kDefaultPort;
+        else if (arg.rfind("--host=", 0) == 0) host_port = static_cast<std::uint16_t>(std::stoi(arg.substr(7)));
+        else if (arg.rfind("--join=", 0) == 0) join_address = arg.substr(7);
+        else if (arg.rfind("--name=", 0) == 0) player_name = arg.substr(7);
         else if (arg == "--map=small") map_size = sim::MapSize::Small;
         else if (arg == "--map=medium") map_size = sim::MapSize::Medium;
         else if (arg == "--map=large") map_size = sim::MapSize::Large;
@@ -332,6 +346,23 @@ int main(int argc, char* argv[]) {
         }
         empty = true;
     }
+    // A hosted game has seats for four players (the host's and three more);
+    // with no other game chosen, a new map, each player founding a company.
+    if (host_port) {
+        config.humans = 4;
+        if (scenario_path.empty() && load_path.empty() && !quick) empty = true;
+    }
+    // Joining: the host's game replaces this one, so make it small and quick.
+    if (!join_address.empty()) {
+        config = sim::WorldConfig{};
+        config.width_tiles = config.height_tiles = 64;
+        config.rivals = 0;
+        config.populate = false;
+        empty = true;
+        quick = false;
+        load_path.clear();
+        host_port.reset();
+    }
     // Started with no game chosen on the command line: the title screen,
     // over the demo railway running on its own.
     const bool title_at_start = !quick && !empty && scenario_path.empty() && load_path.empty() && !look;
@@ -348,6 +379,36 @@ int main(int argc, char* argv[]) {
     }
     // The demo network is built once the player has a company to pay for it.
     bool demo_pending = !empty;
+    // A game over the network (src/net): hosting it or joining one. Either
+    // goes when the game is left or another one started.
+    std::unique_ptr<net::Host> host;
+    std::unique_ptr<net::Guest> guest;
+    if (!join_address.empty()) {
+        std::printf("Joining %s...\n", join_address.c_str());
+        try {
+            guest = std::make_unique<net::Guest>(world, join_address, player_name, load_game_data(data_dir));
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "Cannot join %s: %s\n", join_address.c_str(), e.what());
+            return 1;
+        }
+        std::printf("Joined as player %d\n", guest->seat() + 1);
+    }
+    if (host_port) {
+        try {
+            host = std::make_unique<net::Host>(world, *host_port);
+            host->set_name(player_name);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "Cannot host: %s\n", e.what());
+            return 1;
+        }
+    }
+    const auto leave_network = [&] {
+        guest.reset();
+        host.reset();
+    };
+    // A game others are playing too: the host's newspaper, menu and ledger
+    // do not stop everyone's clock (the host can still pause it).
+    const auto shared_game = [&] { return guest || (host && host->players().size() > 1); };
 
 #ifdef SDL_HINT_MAC_SCROLL_MOMENTUM
     // A flick on a Mac trackpad carries on a little, as in a map app.
@@ -461,6 +522,17 @@ int main(int argc, char* argv[]) {
     }
     if (!world.player_company() && !title_at_start) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
+    if (host) {
+        std::string where;
+        for (const std::string& a : net::local_addresses()) where += (where.empty() ? "" : " or ") + a;
+        if (where.empty()) where = "this computer's address";
+        const std::string port = host->port() == net::kDefaultPort ? "" : ":" + std::to_string(host->port());
+        const std::string text = "Hosting: others join with  railmaster --join=" + where + port;
+        std::printf("%s\n", text.c_str());
+        tools.show(text, true);
+        tools.log(text, true);
+    }
+    if (guest) speed.toggle_pause(); // the host's game sets the pace
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
     bool modal_paused = false; // the newspaper or menu paused the game, and closing it resumes
@@ -533,6 +605,7 @@ int main(int argc, char* argv[]) {
     };
     const auto load_game = [&](const std::string& file) {
         try {
+            leave_network();
             world = sim::World::load(read_file(file), load_game_data(data_dir));
             watching.reset();
             demo_pending = false;
@@ -583,6 +656,7 @@ int main(int argc, char* argv[]) {
     // `watch`: a replay to watch rather than a game to play.
     const auto start_world = [&](const sim::WorldConfig& cfg, std::optional<sim::GameData> game_data = std::nullopt, bool watch = false) {
         tutorial.end();
+        leave_network();
         try {
             world = sim::World(cfg, game_data ? std::move(*game_data) : load_game_data(data_dir));
         } catch (const std::exception& e) {
@@ -655,6 +729,7 @@ int main(int argc, char* argv[]) {
             name = std::filesystem::path(req.path).stem().string();
         }
         const MapExtras extras = req.path.empty() ? MapExtras{} : read_map_extras(req.path, cfg);
+        leave_network();
         try {
             world = sim::World(cfg, std::move(d));
         } catch (const std::exception& e) {
@@ -1211,6 +1286,12 @@ int main(int argc, char* argv[]) {
         // Fixed-step simulation, decoupled from frame rate.
         tick_accumulator += dt * static_cast<double>(sim::days_per_second_milli(speed.speed(), world.data().balance.time)) /
                             1000.0 * sim::World::kTicksPerDay;
+        // A guest's game runs as far as the host's has, at the host's pace.
+        if (guest) {
+            guest->poll();
+            guest->advance(4096);
+            tick_accumulator = 0;
+        }
         for (int guard = 0; tick_accumulator >= 1.0 && guard < 4096; ++guard) {
             if (watching && !watching->done) {
                 // The save's commands, at the ticks they were given.
@@ -1232,7 +1313,24 @@ int main(int argc, char* argv[]) {
                 }
             }
             world.tick();
+            if (host) host->after_tick();
             tick_accumulator -= 1.0;
+        }
+        if (host) host->poll();
+        // Players joining and leaving, the host gone, the game out of step.
+        {
+            std::vector<std::string> net_news = host ? host->take_news() : guest ? guest->take_news() : std::vector<std::string>{};
+            for (const std::string& n : net_news) {
+                tools.show(n, true);
+                tools.log(n, true);
+            }
+            static bool drift_told = false;
+            if (guest && guest->drift() && !drift_told) {
+                drift_told = true;
+                const std::string text = "Out of step with the host's game (" + *guest->drift() + "): please report this";
+                tools.show(text, false);
+                tools.log(text, false);
+            }
         }
         if (demo_pending && world.player_company()) {
             demo_pending = false;
@@ -1271,7 +1369,8 @@ int main(int argc, char* argv[]) {
         // A scenario event's question stops the clock until it is answered,
         // as RT3's event dialogs do.
         // (Not in a replay: its answer comes from the save.)
-        if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused && !watching) speed.toggle_pause();
+        if (world.pending_choices().size() > choices_seen && speed.speed() != sim::GameSpeed::Paused && !watching && !shared_game())
+            speed.toggle_pause();
         choices_seen = world.pending_choices().size();
         // The year's books are closed: show the ledger, paused, as RT3 does.
         if (world.date().year() != ledger_year) {
@@ -1282,7 +1381,7 @@ int main(int argc, char* argv[]) {
             }
             if (world.player_company() && !tools.founding_open() && !watching) {
                 tools.open_ledger();
-                if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
+                if (speed.speed() != sim::GameSpeed::Paused && !shared_game()) speed.toggle_pause();
             }
         }
         // News: splits, grumbling investors, chairmen fired or appointed,
@@ -1318,6 +1417,7 @@ int main(int argc, char* argv[]) {
             case client::Tools::MenuRequest::Kind::Save: save_game(req->path); break;
             case client::Tools::MenuRequest::Kind::Load: load_game(req->path); break;
             case client::Tools::MenuRequest::Kind::MainMenu:
+                leave_network();
                 tutorial.end();
                 first_steps_pending = false;
                 title.set_slots(save_slots());
@@ -1458,7 +1558,7 @@ int main(int argc, char* argv[]) {
             }
         }
         // The newspaper and the menu stop the clock while open, as RT3's do.
-        const bool modal = !title.open() && (tools.newspaper_open() || tools.menu_open());
+        const bool modal = !title.open() && !shared_game() && (tools.newspaper_open() || tools.menu_open());
         if (modal && !modal_paused) {
             modal_paused = speed.speed() != sim::GameSpeed::Paused;
             if (modal_paused) speed.toggle_pause();
@@ -1602,9 +1702,17 @@ int main(int argc, char* argv[]) {
         std::string pace = sim::game_speed_name(speed.speed());
         std::string status = world.date().month_year_label() + "  " + economy + " economy  " +
                              (speed.speed() == sim::GameSpeed::Paused ? pace : "Speed " + pace);
+        if (guest && guest->connected()) {
+            status = world.date().month_year_label() + "  " + economy + " economy  Player " +
+                     std::to_string(guest->seat() + 1) + ", at the host's pace" +
+                     (guest->behind() > 4 * sim::World::kTicksPerDay ? " (catching up)" : "");
+        } else if (host) {
+            const auto n = host->players().size();
+            status += "  Hosting, " + std::to_string(n) + (n == 1 ? " player" : " players");
+        }
         // A scenario's track budget, in place of the speed keys' reminder.
         const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;
-        status += tiles ? "  track budget " + std::to_string(*tiles) : std::string("  +/- speed, pause");
+        status += tiles ? "  track budget " + std::to_string(*tiles) : guest ? std::string() : std::string("  +/- speed, pause");
         if (title.open()) {
             title.draw(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px), build_label);
             SDL_GL_SwapWindow(window);
@@ -1724,6 +1832,10 @@ int main(int argc, char* argv[]) {
         SDL_GL_SwapWindow(window);
     }
 
+    if (guest) {
+        std::printf("Matched the host's game %d times%s\n", guest->verified(),
+                    guest->drift() ? (", then: " + *guest->drift()).c_str() : "");
+    }
     client::audio::shutdown();
     SDL_GL_DeleteContext(gl);
     SDL_DestroyWindow(window);

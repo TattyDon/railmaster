@@ -619,9 +619,33 @@ Normal speed is half as fast, about eight minutes a game year. In a window too
 narrow for every top-bar button with its key (about 1100 pixels), the
 buttons drop the keys ("Look", "Guide", "Menu") so they all still fit.
 
+Multiplayer's network (`src/net`, lockstep): `railmaster --host` opens a
+new game with four seats, and `railmaster --join=ADDRESS` joins it. The
+guest is sent the host's game as a save and takes the first free seat.
+From then on the host sends, every frame, how far its game has run and
+the commands given since (its own and the guests'), and each guest's copy
+plays on that far at the host's pace. A guest's own commands go to the
+host, which plays them for everyone; the guest's copy waits for the
+command to come back (a few milliseconds on a home network) and answers
+with the result it got playing it itself (`World::set_remote`). So the
+game's tools work unchanged, including the ones that chain commands on
+what the last one made (track, then a station on its end, then a train
+for the station). Once a game month the host sends a checksum of its game
+(`World::checksum`), and a guest that no longer matches says so. Tests
+run a host and a guest over the loopback: founding, bonds, a refused
+command, a whole railway built by the guest, the copies matching byte for
+byte after 90 days (three checksums), a copy changed behind the host's
+back being found out, a full game turning a guest away, and the host
+leaving (the guest's game carries on alone). Checked by hand with two
+game windows: a guest founding its company through the host, both papers
+reporting it, five months at Very Fast with five checksums matched. A
+bug found on the way: the host sent a tick's go-ahead before its
+checksum, so guests could pass the tick unchecked; the test now counts
+the checksums matched.
+
 Next:
-- Multiplayer's network: host and join on a local network, commands
-  exchanged each tick, and Host and Join on the title screen.
+- Host and Join on the title screen (the address typed in, the host's
+  address shown), and players' names on their companies.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -689,9 +713,9 @@ Still to do:
   while every rule names the players it means (Easy games, sandbox money
   and protection from rival mergers go to every human; a scenario's goals,
   events and questions stay the host's). A test plays one game from two
-  seats and gets the same save byte for byte. Still to do: the network
-  (host and join, commands exchanged each tick), and the client's Host and
-  Join.
+  seats and gets the same save byte for byte. The network: done
+  (`src/net`, `--host` and `--join`; see M5's notes above). Still to do:
+  Host and Join on the title screen.
 - Save/load: done ([spec/saves.md](spec/saves.md)), compressed, with the
   game's config and a command log that replays it exactly
   (`railmaster_replay`).

@@ -37,6 +37,7 @@ else()
 endif()
 
 add_subdirectory(src/sim)
+add_subdirectory(src/net)
 
 if(RAILMASTER_BUILD_TOOLS)
     add_subdirectory(tools/calibrate)

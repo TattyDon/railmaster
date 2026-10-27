@@ -16,6 +16,7 @@
 #include "railmaster/sim/territory.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <utility>
@@ -302,6 +303,21 @@ public:
     void set_watch_only(bool on) { watch_only_ = on; }
     bool watch_only() const { return watch_only_; }
     CommandResult play_logged(const LoggedCommand& c);
+    // Multiplayer, a guest's copy (src/net): commands given for this copy's
+    // own player go to `remote` instead, which has the host play them for
+    // everyone and returns the result once this copy has played them too
+    // (with play_logged, which never goes to `remote`). No remote: commands
+    // run here, as in a game of one's own.
+    using Remote = std::function<CommandResult(const Command&)>;
+    void set_remote(Remote r) { remote_ = std::move(r); }
+    bool has_remote() const { return static_cast<bool>(remote_); }
+    // A fingerprint of the whole game (what save() writes, before it is
+    // compressed): copies of a multiplayer game compare it to find drift.
+    std::uint64_t checksum() const;
+    // Logged commands as bytes, to send over the network, and back again
+    // (throws std::runtime_error on bad bytes).
+    static std::string encode(const std::vector<LoggedCommand>& cmds);
+    static std::vector<LoggedCommand> decode(std::string_view bytes);
     template <class Ar>
     friend void io(Ar& ar, World& v);
 
@@ -351,6 +367,8 @@ private:
     WorldConfig config_;                  // as made, for replays
     std::vector<LoggedCommand> command_log_;
     bool watch_only_ = false;             // a replay being watched: only play_logged commands (not saved)
+    Remote remote_;                       // a multiplayer guest's way to the host (not saved)
+    bool relaying_ = false;               // inside play_logged
     bool ticking_ = false;                // inside tick(): commands are the simulation's own
     void tick_inner();
     std::vector<std::int64_t> last_forced_sale_; // by player
