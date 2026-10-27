@@ -336,6 +336,7 @@ and checks the economy against the spec's targets
 | Double-click (Look tool) | Go to the place; on or near a town, closer in |
 | Mouse wheel, two-finger scroll, + and - by the minimap, Cmd (Ctrl) + = and -, Option (Alt) + Up/Down, pinch | Zoom in and out (Settings: which way a scroll zooms) |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
+| Home, or the compass under the zoom buttons | North up again, at the usual tilt (the compass's red needle points north as the view turns) |
 | V | Switch between the 3D view and the flat top-down map |
 | Sound | Made in code, no recordings: a steam whistle's chord as trains near the view leave a station (diesels and electrics a deeper horn), a bell as they arrive, the engine nearest the middle of the view chuffing at its speed (a diesel rumbles and an electric whines instead, rising in pitch as it speeds up), a cash register when your trains are paid, and clicks. Closer views are louder; the menu's Settings set the volume. Music: three original tunes in the manner of the period (a march-time rag, a waltz and a slow folk air), synthesised as piano and played in turn, quietly; Settings set its volume (Off to 100%) |
 | N | Time of day: day, dusk, night, dawn, or a slow round of all four while the game runs. After dark, stars twinkle and the moon rises over the horizon, fixed in the sky as the view turns |

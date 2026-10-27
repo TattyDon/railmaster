@@ -3397,7 +3397,7 @@ void Tools::draw_help() const {
          {{"Drag", "Move the map (F1); double-click goes there"},
           {"Arrows", "Pan (or the mouse at the window's edge)"},
           {"Wheel  Cmd+= / -", "Zoom (or the + and - by the minimap)"},
-          {"Shift+arrows", "Turn and tilt (or right-drag)"},
+          {"Shift+arrows", "Turn and tilt (right-drag); Home: north up"},
           {"Ctrl+F", "Find a town or station"},
           {"0-9", "Go to a bookmark; Shift+0-9 stores one"},
           {"V", "Flat map or 3D"}}},

@@ -743,6 +743,20 @@ int main(int argc, char* argv[]) {
         return 0;
     };
     int zoom_held = 0;
+    // Under them a compass: its needle points north as the view turns, and
+    // a click on it (or Home) puts the view back to north-up, as it opens.
+    const auto compass_centre = [&] {
+        return std::pair{radar_x() + kRadar + 6 + kZoomButton / 2, radar_y() + 2 * kZoomButton + 12 + kZoomButton / 2};
+    };
+    const auto on_compass = [&](float x, float y) {
+        const auto [cx, cy] = compass_centre();
+        return std::fabs(x - cx) <= kZoomButton / 2 && std::fabs(y - cy) <= kZoomButton / 2;
+    };
+    const auto north_up = [&] {
+        const client::Camera fresh;
+        cam.yaw = fresh.yaw;
+        cam.pitch = fresh.pitch;
+    };
     // In the Look tool a press on the map waits to see what it is: let go
     // where it was and it is a click; move and it drags the view.
     std::optional<std::pair<float, float>> map_press, map_last;
@@ -889,6 +903,10 @@ int main(int argc, char* argv[]) {
                 }
                 // The zoom buttons: a step now, and on while held.
                 if (!tools.founding_open() && ev.button.button == SDL_BUTTON_LEFT) {
+                    if (on_compass(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y))) {
+                        north_up();
+                        break;
+                    }
                     if (const int z = zoom_button_at(static_cast<float>(ev.button.x), static_cast<float>(ev.button.y)); z != 0) {
                         zoom_held = z;
                         cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2, z > 0 ? 1.25f : 0.8f);
@@ -963,6 +981,11 @@ int main(int argc, char* argv[]) {
                     (ev.key.keysym.sym == SDLK_s || ev.key.keysym.sym == SDLK_l)) {
                     if (ev.key.keysym.sym == SDLK_s) save_game(kQuickSave);
                     else load_game(kQuickSave);
+                    break;
+                }
+                // Home: north up again, at the usual tilt.
+                if (ev.key.keysym.sym == SDLK_HOME) {
+                    north_up();
                     break;
                 }
                 // Cmd (or Ctrl) and = or - zoom in and out, as in other Mac apps.
@@ -1573,6 +1596,25 @@ int main(int argc, char* argv[]) {
                 }
                 glEnd();
                 glLineWidth(1.0f);
+            }
+            {
+                // The compass: north red, south pale; turned as the view is (north is up in the flat map).
+                const auto [cx, cy] = compass_centre();
+                client::ui::chip(cx - kZoomButton / 2, cy - kZoomButton / 2, cx + kZoomButton / 2, cy + kZoomButton / 2, 0.75f);
+                const float yaw = cam.three_d ? cam.yaw : 0.0f;
+                const float nx = -std::sin(yaw), ny = -std::cos(yaw); // north on screen (y down)
+                const float r = kZoomButton * 0.36f, wd = kZoomButton * 0.12f;
+                const float px = -ny * wd, py = nx * wd;
+                glBegin(GL_TRIANGLES);
+                glColor3f(0.9f, 0.25f, 0.2f);
+                glVertex2f(cx + nx * r, cy + ny * r);
+                glVertex2f(cx + px, cy + py);
+                glVertex2f(cx - px, cy - py);
+                glColor3f(0.92f, 0.9f, 0.84f);
+                glVertex2f(cx - nx * r, cy - ny * r);
+                glVertex2f(cx - px, cy - py);
+                glVertex2f(cx + px, cy + py);
+                glEnd();
             }
         }
         if (editor.open()) editor.draw_ui(static_cast<float>(cam.width_px), static_cast<float>(cam.height_px));

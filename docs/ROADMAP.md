@@ -588,10 +588,12 @@ minimap zoom (held, they keep going), Cmd (Ctrl) + = and - zoom, and the
 settings say which way a scroll zooms. Asked for by a player on a Mac
 trackpad, where pinching may not reach the game.
 
+A compass under the zoom buttons points north as the view turns; a click
+on it, or Home, puts the view back to north-up at the usual tilt.
+
 Next:
-- A compass by the minimap showing which way is north, that puts the view
-  back to north-up and the usual tilt when clicked (and a key for it), for
-  players lost after turning the view.
+- Find (Ctrl+F) also from a button on the top bar, beside the Guide's,
+  so going to a town by name needs no keys.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
