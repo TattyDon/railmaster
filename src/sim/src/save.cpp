@@ -605,6 +605,8 @@ void io(Ar& ar, RemoveServiceBuilding& c) { fields(ar, c.building); }
 template <class Ar>
 void io(Ar& ar, RenameStation& c) { fields(ar, c.station, c.name); }
 template <class Ar>
+void io(Ar& ar, RenamePlayer& c) { fields(ar, c.name); }
+template <class Ar>
 void io(Ar& ar, Cheat& c) { fields(ar, c.kind, c.amount, c.train, c.tier); }
 // Commands with nothing to say.
 template <class Ar>

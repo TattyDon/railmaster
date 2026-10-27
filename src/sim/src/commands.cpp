@@ -153,7 +153,7 @@ CommandResult World::execute(const Command& cmd, PlayerId who) {
             // else acts for a company.
             if constexpr (!std::is_same_v<T, BuyShares> && !std::is_same_v<T, SellShares> &&
                           !std::is_same_v<T, AttemptTakeover> && !std::is_same_v<T, Resign> &&
-                          !std::is_same_v<T, FoundCompany>) {
+                          !std::is_same_v<T, FoundCompany> && !std::is_same_v<T, RenamePlayer>) {
                 if (!market_.investors[actor_].chairs) return fail("you do not run a company");
             }
             return run(c);
@@ -1132,6 +1132,19 @@ CommandResult World::run(const RenameStation& cmd) {
     }
     railway_.station_mut(cmd.station).name = name;
     return success(Money{}, cmd.station);
+}
+
+CommandResult World::run(const RenamePlayer& cmd) {
+    if (!human(actor_)) return fail("only players choose their names");
+    const auto first = cmd.name.find_first_not_of(' ');
+    const std::string name = first == std::string::npos ? "" : cmd.name.substr(first, cmd.name.find_last_not_of(' ') - first + 1);
+    if (name.empty()) return fail("a player needs a name");
+    if (name.size() > 24) return fail("names are at most 24 characters");
+    for (std::size_t i = 0; i < market_.investors.size(); ++i) {
+        if (i != actor_ && market_.investors[i].name == name) return fail("another player is called that");
+    }
+    market_.investors[actor_].name = name;
+    return success(Money{}, 0);
 }
 
 CommandResult World::run(const AnswerChoice& cmd) {

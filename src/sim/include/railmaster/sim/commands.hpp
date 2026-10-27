@@ -294,6 +294,12 @@ struct RenameStation {
     std::string name{};
 };
 
+// The name a human player goes by (multiplayer: what the others see in the
+// news and the market): 1 to 24 characters, not another player's.
+struct RenamePlayer {
+    std::string name{};
+};
+
 struct RemoveServiceBuilding {
     ServiceBuildingId building = 0;
 };
@@ -303,7 +309,7 @@ using Command = std::variant<BuildTrack, RemoveTrack, UndoTrack, UpgradeTrack, E
                              CopyTrain, RetireTrain, ElectrifyTrack, BuyTerritoryAccess, IssueBond, RepayBond,
                              BuyShares, SellShares, IssueStock, BuyBackStock, SetDividend, AttemptTakeover,
                              AttemptMerger, Resign, FoundCompany, DeclareBankruptcy, BuyIndustry, BuildIndustry,
-                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding, RenameStation, UndoBuild, EndBuildUndo>;
+                             UpgradeIndustry, SetPortMode, BuildStationBuilding, AnswerChoice, UpgradeStation, Cheat, RemoveStation, RemoveServiceBuilding, RenameStation, UndoBuild, EndBuildUndo, RenamePlayer>;
 
 struct CommandResult {
     bool ok = false;

@@ -493,6 +493,7 @@ private:
     CommandResult run(const RemoveStation& cmd);
     CommandResult run(const RemoveServiceBuilding& cmd);
     CommandResult run(const RenameStation& cmd);
+    CommandResult run(const RenamePlayer& cmd);
     CommandResult run(const UndoBuild& cmd);
     CommandResult run(const EndBuildUndo& cmd);
 public:

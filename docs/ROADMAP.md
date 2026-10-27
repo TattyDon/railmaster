@@ -643,9 +643,19 @@ bug found on the way: the host sent a tick's go-ahead before its
 checksum, so guests could pass the tick unchecked; the test now counts
 the checksums matched.
 
+Then Play together on the title screen: your name, Host a new game (the
+new railroad's settings, with seats for four) and Join at an address
+typed in, remembered between games; the host's top line shows where to
+join and how many play, a guest's the host's speed or that the host has
+paused. Players go by their names (a RenamePlayer command, logged and
+played on every copy like any other), so the papers say "Ann has founded
+...". Checked with two game windows, from the title screens to both
+papers.
+
 Next:
-- Host and Join on the title screen (the address typed in, the host's
-  address shown), and players' names on their companies.
+- Multiplayer chat, and a list of who is playing (with their companies)
+  on the Status screen.
+- A guest's game catching up smoothly after a long pause on its side.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.
@@ -714,8 +724,8 @@ Still to do:
   and protection from rival mergers go to every human; a scenario's goals,
   events and questions stay the host's). A test plays one game from two
   seats and gets the same save byte for byte. The network: done
-  (`src/net`, `--host` and `--join`; see M5's notes above). Still to do:
-  Host and Join on the title screen.
+  (`src/net`, `--host` and `--join`; see M5's notes above). Host and Join are on the
+  title screen (Play together).
 - Save/load: done ([spec/saves.md](spec/saves.md)), compressed, with the
   game's config and a command log that replays it exactly
   (`railmaster_replay`).

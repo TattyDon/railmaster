@@ -9,7 +9,7 @@ namespace railmaster::net {
 namespace {
 
 // Bump when the messages change: games of different versions do not mix.
-constexpr std::uint32_t kProtocol = 1;
+constexpr std::uint32_t kProtocol = 2;
 
 // A checksum every game month (30 days).
 constexpr std::uint64_t kCheckTicks = 30ULL * sim::World::kTicksPerDay;
@@ -23,6 +23,7 @@ enum Type : std::uint8_t {
     kDone = 6,    // host: the guest's command numbered so, played (where in the log) or refused (why)
     kCheck = 7,   // host: the game's checksum at a tick
     kNote = 8,    // host: news for everyone's screen
+    kPlayers = 9, // host: everyone's seat and name
 };
 
 class Out {
@@ -107,14 +108,24 @@ void Host::say(const std::string& text) {
 
 void Host::send_step() {
     const auto& log = world_.command_log();
-    if (log.size() == sent_ && world_.total_ticks() == sent_tick_) return;
+    if (log.size() == sent_ && world_.total_ticks() == sent_tick_ && pace_ == sent_pace_) return;
     const std::vector<sim::World::LoggedCommand> fresh(log.begin() + static_cast<std::ptrdiff_t>(sent_), log.end());
     Out m;
-    m.u(world_.total_ticks(), 8).rest(sim::World::encode(fresh));
+    m.u(world_.total_ticks(), 8).u(pace_, 1).rest(sim::World::encode(fresh));
     for (Seat& s : seats_)
         if (s.joined) s.conn.send(kStep, m.str());
     sent_ = log.size();
     sent_tick_ = world_.total_ticks();
+    sent_pace_ = pace_;
+}
+
+void Host::send_players() {
+    Out m;
+    const auto list = players();
+    m.u(list.size(), 2);
+    for (const auto& [seat, name] : list) m.u(seat, 2).text(name);
+    for (Seat& s : seats_)
+        if (s.joined) s.conn.send(kPlayers, m.str());
 }
 
 void Host::handle(Seat& s, const Message& m) {
@@ -153,6 +164,8 @@ void Host::handle(Seat& s, const Message& m) {
         Out w;
         w.u(s.seat, 2).rest(world_.save());
         s.conn.send(kWelcome, w.str());
+        sent_pace_ = 0xFF; // the newcomer hears the pace with the next step
+        send_players();
         say(name + " joined as " + player_name(s.seat));
         return;
     }
@@ -192,7 +205,10 @@ void Host::poll() {
         const bool joined = it->joined;
         const std::string name = it->name;
         it = seats_.erase(it);
-        if (joined) say(name + " left the game");
+        if (joined) {
+            send_players();
+            say(name + " left the game");
+        }
     }
 }
 
@@ -265,6 +281,7 @@ void Guest::handle(const Message& m) {
     switch (m.type) {
     case kStep: {
         granted_ = std::max(granted_, in.u(8));
+        pace_ = static_cast<std::uint8_t>(in.u(1));
         for (auto& c : sim::World::decode(in.rest())) queue_.push_back(std::move(c));
         return;
     }
@@ -284,6 +301,14 @@ void Guest::handle(const Message& m) {
         return;
     }
     case kNote: news_.push_back(m.body); return;
+    case kPlayers: {
+        players_.assign(static_cast<std::size_t>(in.u(2)), {});
+        for (auto& [seat, name] : players_) {
+            seat = static_cast<sim::PlayerId>(in.u(2));
+            name = in.text();
+        }
+        return;
+    }
     default: return;
     }
 }

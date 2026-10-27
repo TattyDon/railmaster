@@ -361,20 +361,22 @@ dark tunnels), with its price next to the cursor.
 
 Up to four players on a local network, each on their own computer, each
 founding and running their own railroad on the same map against the AI
-rivals. For now it is started from a terminal (Host and Join buttons on the
-title screen are coming):
+rivals. On the title screen choose **Play together**, type your name, then:
 
-```sh
-railmaster --host --name=Ann          # a new game others can join
-railmaster --join=192.168.1.20 --name=Bob   # join it (the address the host's game shows)
-```
+- **Host a new game**: pick the map as for a new railroad and start. The
+  top line shows the address the others join at ("Hosting at
+  192.168.1.20, 2 players").
+- **Join at**: type that address, then **Join**.
 
-On a Mac the program is inside the app:
-`~/Applications/Railmaster.app/Contents/MacOS/Railmaster --host`.
-The host's game shows its address when it starts (`--host=PORT` and
-`--join=ADDRESS:PORT` pick another port than 27630). Everyone runs the same
-version of the game. The host sets the pace (speed and pause); the host's
-newspaper and menus no longer stop the clock while others are in the game.
+The name and the last address are remembered. From a terminal the same is
+`railmaster --host --name=Ann` and `railmaster --join=192.168.1.20
+--name=Bob` (`--host=PORT` and `--join=ADDRESS:PORT` pick another port than
+27630; on a Mac the program is
+`~/Applications/Railmaster.app/Contents/MacOS/Railmaster`). Everyone runs
+the same version of the game. The host sets the pace (speed and pause; the
+others' top line says which); the host's newspaper and menus no longer
+stop the clock while others are in the game. Players go by their names in
+the news and the market.
 Players can come and go: a player who leaves frees their seat (their
 company carries on, unattended), and if the host leaves, the others' games
 carry on on their own. Each copy of the game checks itself against the

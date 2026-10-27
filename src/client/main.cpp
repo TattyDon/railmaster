@@ -392,13 +392,31 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         std::printf("Joined as player %d\n", guest->seat() + 1);
+        if (!world.execute(sim::RenamePlayer{player_name}).ok) {
+            (void)world.execute(sim::RenamePlayer{player_name + " " + std::to_string(guest->seat() + 1)});
+        }
     }
-    if (host_port) {
+    std::string host_address; // where others join the hosted game: "192.168.1.20" (":port" if not the usual)
+    // Open the game being played to others; false (with the reason shown) if it cannot be.
+    const auto open_to_others = [&](std::uint16_t port, const std::string& name, std::string& error) {
         try {
-            host = std::make_unique<net::Host>(world, *host_port);
-            host->set_name(player_name);
+            host = std::make_unique<net::Host>(world, port);
+            host->set_name(name);
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "Cannot host: %s\n", e.what());
+            error = e.what();
+            return false;
+        }
+        // Others see the host by name (in the news, the market).
+        if (!name.empty()) (void)world.execute(sim::RenamePlayer{name});
+        const auto addresses = net::local_addresses();
+        host_address = addresses.empty() ? std::string("this computer's address") : addresses.front();
+        if (host->port() != net::kDefaultPort) host_address += ":" + std::to_string(host->port());
+        return true;
+    };
+    if (host_port) {
+        std::string error;
+        if (!open_to_others(*host_port, player_name, error)) {
+            std::fprintf(stderr, "Cannot host: %s\n", error.c_str());
             return 1;
         }
     }
@@ -522,16 +540,14 @@ int main(int argc, char* argv[]) {
     }
     if (!world.player_company() && !title_at_start) tools.open_founding(/*cancellable=*/false);
     sim::SpeedControl speed; // every game starts paused [D]
-    if (host) {
-        std::string where;
-        for (const std::string& a : net::local_addresses()) where += (where.empty() ? "" : " or ") + a;
-        if (where.empty()) where = "this computer's address";
-        const std::string port = host->port() == net::kDefaultPort ? "" : ":" + std::to_string(host->port());
-        const std::string text = "Hosting: others join with  railmaster --join=" + where + port;
+    // Where the others join, on screen (and in the message history).
+    const auto announce_host = [&] {
+        const std::string text = "Others join this game at " + host_address + " (Play together, Join at)";
         std::printf("%s\n", text.c_str());
         tools.show(text, true);
         tools.log(text, true);
-    }
+    };
+    if (host) announce_host();
     if (guest) speed.toggle_pause(); // the host's game sets the pace
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
@@ -641,6 +657,20 @@ int main(int argc, char* argv[]) {
         SDL_free(pref);
     }
     client::Title title(data_dir, maps_dir, scenarios_dir, save_slots());
+    // The name others see and the last host joined, kept in the player's folder.
+    const std::string player_path = settings_path.empty() ? std::string() : settings_path.substr(0, settings_path.size() - 12) + "player.txt";
+    {
+        std::ifstream in(player_path);
+        std::string name, address;
+        std::getline(in, name);
+        std::getline(in, address);
+        title.set_player(name.empty() ? player_name : name, address);
+    }
+    const auto save_player = [&] {
+        if (player_path.empty()) return;
+        std::ofstream out(player_path);
+        out << title.player_name() << "\n" << title.join_address() << "\n";
+    };
     client::Editor editor(world, cam);
     client::Tutorial tutorial;
     client::Goals goals; // a free game's goals, once the first steps are done
@@ -879,6 +909,10 @@ int main(int argc, char* argv[]) {
             if (title.open()) {
                 if (ev.type == SDL_KEYDOWN) {
                     title.key(ev.key.keysym.sym);
+                    continue;
+                }
+                if (ev.type == SDL_TEXTINPUT) {
+                    title.text(ev.text.text);
                     continue;
                 }
                 if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
@@ -1316,7 +1350,10 @@ int main(int argc, char* argv[]) {
             if (host) host->after_tick();
             tick_accumulator -= 1.0;
         }
-        if (host) host->poll();
+        if (host) {
+            host->set_pace(static_cast<std::uint8_t>(speed.speed()));
+            host->poll();
+        }
         // Players joining and leaving, the host gone, the game out of step.
         {
             std::vector<std::string> net_news = host ? host->take_news() : guest ? guest->take_news() : std::vector<std::string>{};
@@ -1438,9 +1475,62 @@ int main(int argc, char* argv[]) {
                     cfg.industries = std::move(extras.industries);
                     cfg.territory_map = std::move(extras.territories);
                 }
-                start_world(cfg);
+                if (!start_world(cfg)) break;
                 tutorial.end();
                 first_steps_pending = true;
+                if (req->host) {
+                    // Open to others: Play together's Host a new game.
+                    save_player();
+                    std::string error;
+                    if (open_to_others(net::kDefaultPort, title.player_name(), error)) {
+                        first_steps_pending = false; // the first steps' panel would hide the address
+                        announce_host();
+                    } else {
+                        tools.show("Cannot open the game to others: " + error, false);
+                    }
+                }
+                break;
+            }
+            case client::Title::Request::Kind::Join: {
+                save_player();
+                std::unique_ptr<net::Guest> joined;
+                leave_network();
+                try {
+                    joined = std::make_unique<net::Guest>(world, req->path, title.player_name(), load_game_data(data_dir), 5000);
+                } catch (const std::exception& e) {
+                    title.say("Cannot join " + req->path + ": " + e.what());
+                    break;
+                }
+                // As start_world, for the host's game now in `world`.
+                tutorial.end();
+                watching.reset();
+                demo_pending = false;
+                first_steps_pending = false;
+                {
+                    const client::Tools::Settings kept = tools.settings();
+                    tools.~Tools();
+                    new (&tools) client::Tools(world, cam);
+                    tools.settings() = kept;
+                    if (char* pref = SDL_GetPrefPath("Railmaster", "Railmaster")) {
+                        tools.set_save_paths(pref, kQuickSave);
+                        SDL_free(pref);
+                    }
+                }
+                guest = std::move(joined);
+                // Others see this player by name (a number added if it is taken).
+                if (!world.execute(sim::RenamePlayer{title.player_name()}).ok) {
+                    (void)world.execute(sim::RenamePlayer{title.player_name() + " " + std::to_string(guest->seat() + 1)});
+                }
+                look_at_biggest_town();
+                ledger_year = world.date().year();
+                choices_seen = world.pending_choices().size();
+                (void)world.take_news();
+                (void)world.take_headlines();
+                if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
+                if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause(); // the host's game sets the pace
+                modal_paused = false;
+                tools.show("Joined " + req->path + " as player " + std::to_string(guest->seat() + 1), true);
+                title.hide();
                 break;
             }
             case client::Title::Request::Kind::Scenario:
@@ -1703,12 +1793,15 @@ int main(int argc, char* argv[]) {
         std::string status = world.date().month_year_label() + "  " + economy + " economy  " +
                              (speed.speed() == sim::GameSpeed::Paused ? pace : "Speed " + pace);
         if (guest && guest->connected()) {
+            const auto host_speed = static_cast<sim::GameSpeed>(std::min<int>(guest->host_pace(), 5));
             status = world.date().month_year_label() + "  " + economy + " economy  Player " +
-                     std::to_string(guest->seat() + 1) + ", at the host's pace" +
-                     (guest->behind() > 4 * sim::World::kTicksPerDay ? " (catching up)" : "");
+                     std::to_string(guest->seat() + 1) + "  " +
+                     (host_speed == sim::GameSpeed::Paused ? std::string("Paused by the host")
+                                                           : std::string("Speed ") + sim::game_speed_name(host_speed) + " (the host's)") +
+                     (guest->behind() > 4 * sim::World::kTicksPerDay ? ", catching up" : "");
         } else if (host) {
             const auto n = host->players().size();
-            status += "  Hosting, " + std::to_string(n) + (n == 1 ? " player" : " players");
+            status += "  Hosting at " + host_address + ", " + std::to_string(n) + (n == 1 ? " player" : " players");
         }
         // A scenario's track budget, in place of the speed keys' reminder.
         const auto tiles = world.player_company() ? world.track_tiles_left(*world.player_company()) : std::nullopt;

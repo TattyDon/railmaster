@@ -113,8 +113,9 @@ void Title::show() {
     scan_scenarios();
     open_ = true;
     page_ = 0;
+    hosting_ = false;
     // A first game (nothing saved yet) starts on the tutorial.
-    sel_ = first_time() ? 4 : 0;
+    sel_ = first_time() ? 5 : 0;
 }
 
 bool Title::first_time() const {
@@ -123,8 +124,9 @@ bool Title::first_time() const {
 
 int Title::items() const {
     switch (page_) {
-    case 0: return 6;
+    case 0: return 7;
     case 4: return 3; // map size, start from, open
+    case 5: return 4; // your name, host, join at, join
     case 1: return 7; // map size, rivals, territories, difficulty, landscape, map number, start
     case 2: return static_cast<int>(scenarios_.size());
     default: return static_cast<int>(slots_.size());
@@ -158,17 +160,42 @@ void Title::change(int step) {
 void Title::choose() {
     switch (page_) {
     case 0:
-        if (sel_ == 4) {
+        if (sel_ == 5) {
             request_ = Request{Request::Kind::Tutorial, {}, {}};
             return;
         }
-        if (sel_ == 5) {
+        if (sel_ == 6) {
             request_ = Request{Request::Kind::Quit, {}, {}};
             return;
         }
         page_ = sel_ + 1;
-        sel_ = page_ == 1 ? 6 : page_ == 4 ? 2 : 0;
+        sel_ = page_ == 1 ? 6 : page_ == 4 ? 2 : page_ == 5 ? 1 : 0;
+        hosting_ = false;
+        message_.clear();
         return;
+    case 5:
+        switch (sel_) {
+        case 0: sel_ = 1; return; // the name typed: on to hosting
+        case 1:
+            // The new railroad's settings, to host.
+            if (name_.empty()) name_ = "Player";
+            hosting_ = true;
+            page_ = 1;
+            sel_ = 6;
+            message_.clear();
+            return;
+        case 2: sel_ = 3; return; // the address typed: on to joining
+        default:
+            if (address_.empty()) {
+                message_ = "Type the address the host's game shows (Join at)";
+                sel_ = 2;
+                return;
+            }
+            if (name_.empty()) name_ = "Player";
+            message_.clear();
+            request_ = Request{Request::Kind::Join, {}, address_};
+            return;
+        }
     case 4: {
         if (sel_ != 2) {
             change(+1);
@@ -194,6 +221,10 @@ void Title::choose() {
         r.config.territories = kTerritories[territories_];
         r.config.difficulty = static_cast<sim::Difficulty>(difficulty_);
         r.config.found_player_company = false; // the founding dialog sets the terms
+        if (hosting_) {
+            r.host = true;
+            r.config.humans = 4; // seats for the host and three more
+        }
         if (landscape_ > 0) r.path = maps_[static_cast<std::size_t>(landscape_ - 1)].first;
         request_ = r;
         return;
@@ -211,8 +242,23 @@ void Title::choose() {
 void Title::key(SDL_Keycode key) {
     const int n = std::max(1, items());
     switch (key) {
-    case SDLK_ESCAPE:
     case SDLK_BACKSPACE:
+        if (page_ == 5 && (sel_ == 0 || sel_ == 2)) {
+            // Rub out the last letter (a whole UTF-8 character).
+            std::string& field = sel_ == 0 ? name_ : address_;
+            while (!field.empty() && (static_cast<unsigned char>(field.back()) & 0xC0) == 0x80) field.pop_back();
+            if (!field.empty()) field.pop_back();
+            return;
+        }
+        [[fallthrough]];
+    case SDLK_ESCAPE:
+        message_.clear();
+        if (page_ == 1 && hosting_) {
+            page_ = 5; // back to Play together
+            sel_ = 1;
+            hosting_ = false;
+            return;
+        }
         if (page_ != 0) {
             sel_ = page_ - 1;
             page_ = 0;
@@ -239,11 +285,25 @@ void Title::key(SDL_Keycode key) {
     }
 }
 
+void Title::text(const char* utf8) {
+    if (page_ != 5 || (sel_ != 0 && sel_ != 2)) return;
+    std::string& field = sel_ == 0 ? name_ : address_;
+    const std::size_t most = sel_ == 0 ? 24 : 60;
+    for (const char* c = utf8; *c; ++c) {
+        if (field.size() >= most) break;
+        // An address has no spaces; a name has no control characters.
+        if (sel_ == 2 && (*c == ' ' || static_cast<unsigned char>(*c) >= 0x80)) continue;
+        if (static_cast<unsigned char>(*c) < 0x20) continue;
+        field.push_back(*c);
+    }
+}
+
 void Title::click(float sx, float sy) {
     for (std::size_t i = 0; i < boxes_.size(); ++i) {
         const Box& b = boxes_[i];
         if (sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1) {
             sel_ = static_cast<int>(i);
+            if (page_ == 5 && (sel_ == 0 || sel_ == 2)) return; // a field: ready for typing
             choose();
             return;
         }
@@ -298,20 +358,21 @@ void Title::draw(float width, float height, const std::string& build) const {
     std::string foot;
     switch (page_) {
     case 0: {
-        const std::string names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor",
+        const std::string names[] = {"New railroad", "Scenarios", "Load a saved game", "Map editor", "Play together",
                                      first_time() ? "Tutorial - start here" : "Tutorial", "Quit"};
-        for (int i = 0; i < 6; ++i) item(names[i], i == sel_, 380, kScale + 1);
+        for (int i = 0; i < 7; ++i) item(names[i], i == sel_, 380, kScale + 1);
         // What the highlighted choice is.
         static const char* const kAbout[] = {
             "A free game on a new map: no deadline. Build the railroad you like; the first steps are shown as you go.",
             "Set challenges with goals and a deadline: win a bronze, silver or gold medal.",
             "Carry on where you left off.",
             "Shape your own land, towns and industries, and play on it.",
+            "Up to four players on a home network, each with their own railroad on one map: host a game, or join one.",
             "New to Railmaster? A guided first railroad: track, stations and a train, about ten minutes.",
             "Leave the game."};
         y += 10;
         glColor3f(0.8f, 0.76f, 0.66f);
-        for (const std::string& l : wrap(kAbout[std::clamp(sel_, 0, 5)], kScale, 400)) {
+        for (const std::string& l : wrap(kAbout[std::clamp(sel_, 0, 6)], kScale, 400)) {
             draw_text(x0, y, l, kScale);
             y += 20;
         }
@@ -319,7 +380,7 @@ void Title::draw(float width, float height, const std::string& build) const {
         break;
     }
     case 1: {
-        heading("New railroad");
+        heading(hosting_ ? "Host a new railroad" : "New railroad");
         const std::string values[] = {kSizes[map_size_], rivals_ == 0 ? std::string("None") : std::to_string(rivals_),
                                       territories_ == 0 ? std::string("None") : std::to_string(kTerritories[territories_]),
                                       kDifficulties[difficulty_],
@@ -334,8 +395,57 @@ void Title::draw(float width, float height, const std::string& build) const {
             draw_text(x0 + 440 - static_cast<float>(text_width(v, kScale)), row, v, kScale);
         }
         y += 10;
-        item("Start", sel_ == 6, 460, kScale + 1);
+        item(hosting_ ? "Start, open to others" : "Start", sel_ == 6, 460, kScale + 1);
+        if (hosting_) {
+            y += 14;
+            glColor3f(0.82f, 0.78f, 0.7f);
+            for (const std::string& l : wrap("Once it starts, the game shows the address the others type to join. "
+                                             "Rival railroads play as well, as in a game of your own.",
+                                             kScale, 460)) {
+                draw_text(x0, y, l, kScale);
+                y += 19;
+            }
+        }
         foot = "Left/Right change   Enter starts   Esc back";
+        break;
+    }
+    case 5: {
+        heading("Play together");
+        // Two rows to type in, each followed by what it is for.
+        const auto field = [&](int row, const char* label, const std::string& value, const char* empty) {
+            const float at = y;
+            item(label, sel_ == row, 560, kScale);
+            const bool typing = sel_ == row;
+            fill(x0 + 170, at - 2, x0 + 548, at + 20, 0.0f, 0.0f, 0.0f, typing ? 0.55f : 0.35f);
+            if (value.empty() && !typing) glColor3f(0.5f, 0.48f, 0.45f);
+            else glColor3f(1.0f, 0.95f, 0.8f);
+            const bool blink = (SDL_GetTicks() / 500) % 2 == 0;
+            draw_text(x0 + 178, at, value.empty() && !typing ? std::string(empty) : value + (typing && blink ? "_" : ""), kScale);
+        };
+        field(0, "Your name", name_, "type your name");
+        item("Host a new game", sel_ == 1, 560, kScale + 1);
+        y += 8;
+        field(2, "Join at", address_, "the host's address, e.g. 192.168.1.20");
+        item("Join", sel_ == 3, 560, kScale + 1);
+        if (!message_.empty()) {
+            y += 6;
+            glColor3f(1.0f, 0.55f, 0.45f);
+            for (const std::string& l : wrap(message_, kScale, 540)) {
+                draw_text(x0, y, l, kScale);
+                y += 19;
+            }
+        }
+        y += 14;
+        glColor3f(0.82f, 0.78f, 0.7f);
+        for (const std::string& l :
+             wrap("Each player runs their own railroad on the same map, on their own computer on the same home network. "
+                  "The host picks the map and sets the pace; the others join with the address the host's game shows. "
+                  "Everyone needs the same version of the game.",
+                  kScale, 540)) {
+            draw_text(x0, y, l, kScale);
+            y += 19;
+        }
+        foot = "Up/Down choose   type in the name and address   Enter   Esc back";
         break;
     }
     case 2: {

@@ -48,6 +48,8 @@ public:
     // News for the host's screen ("Ann joined as player 2").
     std::vector<std::string> take_news();
     void set_name(std::string name) { name_ = std::move(name); }
+    // The host's game speed (sim::GameSpeed, 0 paused), shown to the guests.
+    void set_pace(std::uint8_t pace) { pace_ = pace; }
 
 private:
     struct Seat {
@@ -59,11 +61,13 @@ private:
     void handle(Seat& s, const Message& m);
     void send_step();
     void say(const std::string& text); // to the host's screen and every guest
+    void send_players();               // everyone's names, to every guest
     sim::World& world_;
     Listener listener_;
     std::vector<Seat> seats_;
     std::size_t sent_ = 0;         // commands of the log sent to the guests
     std::uint64_t sent_tick_ = 0;  // how far they have been told to run
+    std::uint8_t pace_ = 0, sent_pace_ = 0xFF;
     std::string name_ = "Host";
     std::vector<std::string> news_;
 };
@@ -91,6 +95,10 @@ public:
     sim::PlayerId seat() const { return world_.local_player(); }
     // News for the guest's screen: who joined or left, the host gone.
     std::vector<std::string> take_news();
+    // Who is playing, as the host last said: (seat, name), the host first.
+    const std::vector<std::pair<sim::PlayerId, std::string>>& players() const { return players_; }
+    // The host's game speed (sim::GameSpeed, 0 paused).
+    std::uint8_t host_pace() const { return pace_; }
     // Set when this copy has drifted from the host's (a bug): what was found.
     const std::optional<std::string>& drift() const { return drift_; }
     // How many of the host's checksums this copy has matched.
@@ -105,6 +113,8 @@ private:
     Connection conn_;
     std::deque<sim::World::LoggedCommand> queue_; // to play as their ticks come
     std::uint64_t granted_ = 0;                   // the host's game has run this far
+    std::uint8_t pace_ = 0;
+    std::vector<std::pair<sim::PlayerId, std::string>> players_;
     std::map<std::uint64_t, std::uint64_t> checks_;
     std::map<std::size_t, sim::CommandResult> own_results_; // by place in the log
     struct Done {

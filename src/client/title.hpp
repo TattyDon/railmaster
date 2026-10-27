@@ -17,10 +17,11 @@ namespace railmaster::client {
 class Title {
 public:
     struct Request {
-        enum class Kind { NewGame, Scenario, Load, Watch, Editor, Tutorial, Quit } kind;
+        enum class Kind { NewGame, Scenario, Load, Watch, Editor, Tutorial, Join, Quit } kind;
         sim::WorldConfig config{}; // NewGame
-        std::string path;          // Scenario, Load and Watch (a saved game to replay from its start); for NewGame and Editor, a landscape image (none: generated)
+        std::string path;          // Scenario, Load and Watch (a saved game to replay from its start); for NewGame and Editor, a landscape image (none: generated); Join: the host's address
         bool flat = false;         // Editor: start from flat land
+        bool host = false;         // NewGame: open it to other players (multiplayer)
     };
 
     // `data_dir` holds scenarios/; `slots` are the save files to offer, each
@@ -38,6 +39,16 @@ public:
     std::optional<Request> take_request() { return std::exchange(request_, std::nullopt); }
 
     void key(SDL_Keycode key);
+    void text(const char* utf8); // typed text, for the Play together page's name and address
+    // The player's name and the last host joined, for the Play together page.
+    void set_player(std::string name, std::string address) {
+        name_ = std::move(name);
+        address_ = std::move(address);
+    }
+    const std::string& player_name() const { return name_; }
+    const std::string& join_address() const { return address_; }
+    // A line on the page, for what went wrong ("Cannot join ...").
+    void say(std::string message) { message_ = std::move(message); }
     void click(float sx, float sy);
     void draw(float width, float height, const std::string& build) const;
 
@@ -54,7 +65,9 @@ private:
     void change(int step); // Left/Right on the new-railroad settings
 
     bool open_ = false;
-    int page_ = 0; // 0 the title, 1 new railroad, 2 scenarios, 3 load, 4 map editor
+    int page_ = 0; // 0 the title, 1 new railroad, 2 scenarios, 3 load, 4 map editor, 5 play together
+    bool hosting_ = false; // the new railroad is to be hosted (from Play together)
+    std::string name_, address_, message_;
     void scan_maps();
     void scan_scenarios();
     std::string scenarios_dir_;

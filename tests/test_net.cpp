@@ -111,6 +111,11 @@ TEST_CASE("a guest joins over the network, plays from its seat, and both copies 
     REQUIRE(founded.ok);
     REQUIRE(guest_world.player_company().has_value());
     CHECK(guest_world.company().name() == "Ann's Line");
+    // Players go by their names (the others see them in the news).
+    REQUIRE(guest_world.execute(RenamePlayer{"  Ann "}).ok);
+    CHECK(guest_world.investor().name == "Ann");
+    CHECK_FALSE(guest_world.execute(RenamePlayer{"You"}).ok); // the host's (player 1's) name
+    CHECK_FALSE(guest_world.execute(RenamePlayer{""}).ok);
     const CommandResult bond = guest_world.execute(IssueBond{});
     CHECK(bond.ok);
     const CommandResult refused = guest_world.execute(SetPriority{.train = 999, .priority = 2});
@@ -138,6 +143,7 @@ TEST_CASE("a guest joins over the network, plays from its seat, and both copies 
     CHECK(host_world.company_of(1).name() == "Ann's Line");
     CHECK(host_world.company().name() != "Ann's Line");
     CHECK(host_world.command_log().back().who == 1);
+    CHECK(host_world.investor(1).name == "Ann");
 }
 
 TEST_CASE("a game with no free seat turns a guest away, saying why") {
