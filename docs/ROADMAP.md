@@ -652,10 +652,16 @@ played on every copy like any other), so the papers say "Ann has founded
 ...". Checked with two game windows, from the title screens to both
 papers.
 
+Then chat: Ctrl+T or the Chat button (shown only in multiplayer) opens a
+line to type in; the host passes each line on with who said it, and the
+last lines show above the bottom bar for half a minute, kept in the
+message history. The Status screen lists the players: name, railroad, net
+worth, and whether each is in the game now. A test sends a line each way;
+checked with two game windows.
+
 Next:
-- Multiplayer chat, and a list of who is playing (with their companies)
-  on the Status screen.
-- A guest's game catching up smoothly after a long pause on its side.
+- A hosted game saved and hosted again later (its seats kept), so a long
+  game can be played over several evenings.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

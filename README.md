@@ -376,7 +376,11 @@ The name and the last address are remembered. From a terminal the same is
 the same version of the game. The host sets the pace (speed and pause; the
 others' top line says which); the host's newspaper and menus no longer
 stop the clock while others are in the game. Players go by their names in
-the news and the market.
+the news and the market. **Ctrl+T** (or the Chat button on the top bar)
+says something to everyone: the last lines show above the bottom bar for
+half a minute and stay in the message history (M). The Status screen (F10)
+lists the players: each one's railroad, net worth, and whether they are in
+the game now.
 Players can come and go: a player who leaves frees their seat (their
 company carries on, unattended), and if the host leaves, the others' games
 carry on on their own. Each copy of the game checks itself against the

@@ -811,6 +811,61 @@ void Tools::cancel() {
     editing_.reset();
 }
 
+void Tools::add_chat(std::string line) {
+    log(line, true);
+    chat_lines_.push_back({std::move(line), SDL_GetTicks()});
+    if (chat_lines_.size() > 40) chat_lines_.erase(chat_lines_.begin());
+}
+
+bool Tools::chat_key(SDL_Keycode key) {
+    if (key == SDLK_ESCAPE) {
+        chat_open_ = false;
+    } else if (key == SDLK_BACKSPACE) {
+        while (!chat_text_.empty() && (static_cast<unsigned char>(chat_text_.back()) & 0xC0) == 0x80) chat_text_.pop_back();
+        if (!chat_text_.empty()) chat_text_.pop_back();
+    } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+        if (!chat_text_.empty()) chat_out_ = chat_text_;
+        chat_text_.clear();
+        chat_open_ = false;
+    }
+    return true; // every other key is the typing's
+}
+
+void Tools::draw_chat() const {
+    // The last lines said, above the bottom bar, fading after half a minute
+    // (all of the last ten while typing).
+    const auto h = static_cast<float>(cam_.height_px);
+    const float x0 = 200;
+    const Uint32 now = SDL_GetTicks();
+    std::vector<const ChatLine*> shown;
+    for (auto it = chat_lines_.rbegin(); it != chat_lines_.rend() && shown.size() < 10; ++it) {
+        if (!chat_open_ && now - it->at > 30000) break;
+        if (!chat_open_ && shown.size() >= 6) break;
+        shown.push_back(&*it);
+    }
+    float y = h - kBottomBarH - 30 - (chat_open_ ? 30.0f : 0.0f);
+    for (const ChatLine* l : shown) {
+        const float fade = chat_open_ ? 1.0f : std::clamp(static_cast<float>(30000 - (now - l->at)) / 5000.0f, 0.0f, 1.0f);
+        const float w = static_cast<float>(text_width(l->text, kScale));
+        ui::chip(x0 - 6, y - 3, x0 + w + 6, y + 19, 0.55f * fade);
+        glColor4f(1.0f, 0.95f, 0.8f, fade);
+        draw_text(x0, y, l->text, kScale);
+        y -= 24;
+    }
+    if (chat_open_) {
+        const float by = h - kBottomBarH - 34;
+        ui::panel(x0 - 10, by, x0 + 620, by + 28);
+        const bool blink = (now / 500) % 2 == 0;
+        glColor3f(1.0f, 0.9f, 0.5f);
+        draw_text(x0, by + 6, "Say:", kScale);
+        glColor3f(1.0f, 0.97f, 0.88f);
+        draw_text(x0 + 44, by + 6, chat_text_ + (blink ? "_" : ""), kScale);
+        glColor3f(0.6f, 0.58f, 0.54f);
+        const char* help = "Enter sends, Esc closes";
+        draw_text(x0 + 610 - static_cast<float>(text_width(help, kScale)), by + 6, help, kScale);
+    }
+}
+
 void Tools::show(std::string message, bool good) {
     message_ = std::move(message);
     message_good_ = good;
@@ -1171,6 +1226,10 @@ bool Tools::rename_key(SDL_Keycode key) {
 }
 
 bool Tools::on_text(const char* text) {
+    if (chat_open_) {
+        if (chat_text_.size() < 200) chat_text_ += text;
+        return true;
+    }
     if (renaming_) {
         if (rename_text_.size() < 30) rename_text_ += text;
         return true;
@@ -1668,6 +1727,11 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         open_menu();
         return;
     }
+    if (const auto cb = chat_button(); multiplayer_ && !right_button && sx >= cb[0] && sx < cb[2] && sy >= cb[1] && sy < cb[3]) {
+        chat_open_ = !chat_open_;
+        chat_text_.clear();
+        return;
+    }
     if (!right_button && click_row(sx, sy)) return;
     if (guide_open_) {
         guide_open_ = false; // a click away from the guide closes it
@@ -1928,8 +1992,14 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (menu_open_) return menu_key(key);
+    if (chat_open_) return chat_key(key);
     if (guide_open_) return guide_key(key);
     if (renaming_) return rename_key(key);
+    if (key == SDLK_t && multiplayer_ && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
+        chat_open_ = true; // Ctrl+T: talk to the other players
+        chat_text_.clear();
+        return true;
+    }
     if (key == SDLK_g && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
         open_guide();
         return true;
@@ -2639,6 +2709,22 @@ void Tools::draw_status_panel() const {
                             2});
         }
         if (res.finished) rows.push_back({res.medal ? "The scenario is over." : "The scenario is over: no medal.", 0});
+    }
+    // Multiplayer: who plays, their railroads and how they stand.
+    if (multiplayer_) {
+        rows.push_back({"", 1});
+        rows.push_back({"Players", 0});
+        const auto humans = static_cast<sim::PlayerId>(std::max(1, world_.config().humans));
+        for (sim::PlayerId p = 0; p < humans && p < world_.investors().size(); ++p) {
+            const sim::Investor& inv = world_.investor(p);
+            const auto co = world_.player_company(p);
+            const bool here = p < online_.size() && online_[p];
+            std::string line = "  " + as_written(inv.name) + (p == world_.local_player() ? " (you)" : "");
+            line += co ? ", chairman of " + as_written(world_.company(*co).name()) : std::string(", no railroad yet");
+            line += ", net worth " + format_money(sim::net_worth(inv, world_.market()));
+            line += here ? "" : "  (not playing now)";
+            rows.push_back({line, here ? 1 : 4});
+        }
     }
     const float h = kRow * static_cast<float>(rows.size()) + 20;
     ui::panel(x0, y0, x0 + w, y0 + h);
@@ -3364,6 +3450,7 @@ constexpr const char* kHelpLabel = "? Help";
 constexpr const char* kGuideLabel = "Ctrl+G Guide";
 constexpr const char* kFindLabel = "Ctrl+F Find";
 constexpr const char* kMenuLabel = "Esc Menu";
+constexpr const char* kChatLabel = "Ctrl+T Chat";
 
 } // namespace
 
@@ -3372,6 +3459,7 @@ const char* Tools::bar_label(const char* full) const {
     float x = 6.0f;
     for (const auto& b : kToolButtons) x += static_cast<float>(text_width(b.second, kScale)) + 11.0f;
     for (const char* l : {kHelpLabel, kGuideLabel, kFindLabel, kMenuLabel}) x += static_cast<float>(text_width(l, kScale)) + 11.0f;
+    if (multiplayer_) x += static_cast<float>(text_width(kChatLabel, kScale)) + 11.0f;
     if (x <= static_cast<float>(cam_.width_px)) return full;
     const char* space = std::strchr(full, ' ');
     return space ? space + 1 : full;
@@ -4418,6 +4506,13 @@ void Tools::draw_ui(const std::string& status) const {
         glColor3f(0.92f, 0.88f, 0.8f);
         draw_text(mb[0] + 4, mb[1] + 4, bar_label(kMenuLabel), kScale);
     }
+    if (multiplayer_) {
+        const auto cb = chat_button();
+        ui::tab(cb[0], cb[1], cb[2], cb[3], chat_open_);
+        if (chat_open_) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(cb[0] + 4, cb[1] + 4, bar_label(kChatLabel), kScale);
+    }
     {
         const auto hb = help_button();
         ui::tab(hb[0], hb[1], hb[2], hb[3], help_open_);
@@ -4498,6 +4593,7 @@ void Tools::draw_ui(const std::string& status) const {
     if (tool_ == Tool::Industry) draw_industry_options();
     if (tool_ == Tool::Inspect && detail_) draw_detail_panel();
     if (log_open_) draw_log_panel();
+    if (multiplayer_ || !chat_lines_.empty()) draw_chat();
     // Money rising from paid trains.
     for (const Floater& f : floaters_) {
         float sx = 0, sy = 0;
@@ -4598,6 +4694,12 @@ std::array<float, 4> Tools::menu_button() const {
     const auto fb = find_button();
     const float x = fb[2] + 3.0f;
     return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kMenuLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+std::array<float, 4> Tools::chat_button() const {
+    const auto mb = menu_button();
+    const float x = mb[2] + 3.0f;
+    return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kChatLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 void Tools::show_station(sim::StationId id) {

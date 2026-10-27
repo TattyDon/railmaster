@@ -47,7 +47,7 @@ public:
     // Typed text (SDL_TEXTINPUT); true if a box took it.
     bool on_text(const char* text);
     // A box is taking typed keys (the arrows should not pan).
-    bool typing() const { return find_open_ || guide_open_ || renaming_; }
+    bool typing() const { return find_open_ || guide_open_ || renaming_ || chat_open_; }
     bool guide_open() const { return guide_open_; }
     // The Guide's best `n` lines not yet served, for the big map.
     std::vector<MapLink> guide_links(std::size_t n) const;
@@ -77,6 +77,17 @@ public:
     std::vector<sim::Money> last_revenue_;
     // Flash a message in the top bar for a few seconds.
     void show(std::string message, bool good);
+    // Multiplayer (main says): others play this game too, and which seats
+    // (players) are in it now. Chat and the Status screen's players need it.
+    void set_multiplayer(bool on, std::vector<bool> online = {}) {
+        multiplayer_ = on;
+        online_ = std::move(online);
+        if (!on) chat_open_ = false;
+    }
+    // Chat: a line the player has typed to say (main sends it), and a line
+    // said by anyone, to show above the bottom bar.
+    std::optional<std::string> take_chat() { return std::exchange(chat_out_, std::nullopt); }
+    void add_chat(std::string line);
     // The founding dialog: how much to invest and how much outside money to
     // take. While open it takes all input; Enter founds the company.
     // `cancellable`: Esc closes it (when founding a further company).
@@ -406,6 +417,20 @@ private:
     std::string find_text_;
     // Renaming the station whose panel is open (Enter in Look): the name as typed.
     bool renaming_ = false;
+    // Multiplayer chat.
+    bool multiplayer_ = false;
+    std::vector<bool> online_; // by player
+    bool chat_open_ = false;
+    std::string chat_text_;
+    std::optional<std::string> chat_out_;
+    struct ChatLine {
+        std::string text;
+        Uint32 at = 0; // SDL_GetTicks when said
+    };
+    std::vector<ChatLine> chat_lines_;
+    bool chat_key(SDL_Keycode key);
+    void draw_chat() const;
+    std::array<float, 4> chat_button() const; // after Menu's, in multiplayer
     std::string rename_text_;
     bool rename_key(SDL_Keycode key);
     std::size_t find_sel_ = 0;

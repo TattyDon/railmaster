@@ -4,6 +4,7 @@
 
 #include <doctest/doctest.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -245,4 +246,34 @@ TEST_CASE("a guest builds a whole railway through the host, each step using what
     CHECK(guest.verified() >= 1);
     CHECK(mine(host_world) == mine(guest_world));
     CHECK(guest_world.save() == host_world.save());
+}
+
+TEST_CASE("players chat: each line reaches everyone, with who said it") {
+    World host_world = small_world(2);
+    REQUIRE(host_world.execute(RenamePlayer{"Bo"}).ok);
+    HostThread host(host_world, 0);
+    World guest_world = small_world(1);
+    net::Guest guest(guest_world, "127.0.0.1:" + std::to_string(host.port()), "Gil", shipped());
+    REQUIRE(guest_world.execute(RenamePlayer{"Gil"}).ok);
+    guest.chat("  hello\tthere ");
+    host.with([](World&, net::Host& h) {
+        h.chat("welcome");
+        return 0;
+    });
+    std::vector<std::string> heard;
+    for (int i = 0; i < 400 && heard.size() < 2; ++i) {
+        guest.poll();
+        for (auto& l : guest.take_chat()) heard.push_back(l);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    REQUIRE(heard.size() == 2);
+    // The host passes lines on in the order it has them (its own may come first).
+    CHECK(std::find(heard.begin(), heard.end(), "Gil: hello there") != heard.end());
+    CHECK(std::find(heard.begin(), heard.end(), "Bo: welcome") != heard.end());
+    host.stop();
+    const auto host_heard = host.with([](World&, net::Host& h) { return h.take_chat(); });
+    CHECK(host_heard.size() == 2);
+    // Who is playing, as the guest heard it.
+    REQUIRE(guest.players().size() == 2);
+    CHECK(guest.players()[1].first == 1);
 }

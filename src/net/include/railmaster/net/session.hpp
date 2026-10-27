@@ -50,6 +50,10 @@ public:
     void set_name(std::string name) { name_ = std::move(name); }
     // The host's game speed (sim::GameSpeed, 0 paused), shown to the guests.
     void set_pace(std::uint8_t pace) { pace_ = pace; }
+    // Say something to everyone (chat); take_chat() has everyone's lines,
+    // "Ann: hello", the host's own included.
+    void chat(const std::string& text);
+    std::vector<std::string> take_chat();
 
 private:
     struct Seat {
@@ -70,6 +74,8 @@ private:
     std::uint8_t pace_ = 0, sent_pace_ = 0xFF;
     std::string name_ = "Host";
     std::vector<std::string> news_;
+    std::vector<std::string> chat_;
+    void broadcast_chat(const std::string& line);
 };
 
 class Guest {
@@ -99,6 +105,10 @@ public:
     const std::vector<std::pair<sim::PlayerId, std::string>>& players() const { return players_; }
     // The host's game speed (sim::GameSpeed, 0 paused).
     std::uint8_t host_pace() const { return pace_; }
+    // Say something to everyone (chat); take_chat() has everyone's lines as
+    // the host passes them on, "Ann: hello", this player's own included.
+    void chat(const std::string& text);
+    std::vector<std::string> take_chat();
     // Set when this copy has drifted from the host's (a bug): what was found.
     const std::optional<std::string>& drift() const { return drift_; }
     // How many of the host's checksums this copy has matched.
@@ -126,6 +136,7 @@ private:
     std::optional<Done> done_;
     std::uint32_t seq_ = 0;
     std::vector<std::string> news_;
+    std::vector<std::string> chat_;
     std::optional<std::string> drift_;
     int verified_ = 0;
 };

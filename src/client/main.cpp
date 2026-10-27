@@ -1361,6 +1361,22 @@ int main(int argc, char* argv[]) {
                 tools.show(n, true);
                 tools.log(n, true);
             }
+            // Chat, and who is in the game now (for the Status screen).
+            const bool together = guest ? guest->connected() : host != nullptr;
+            std::vector<bool> online;
+            const auto here = host ? host->players() : guest ? guest->players() : std::vector<std::pair<sim::PlayerId, std::string>>{};
+            for (const auto& [seat, who] : here) {
+                if (online.size() <= seat) online.resize(seat + std::size_t{1});
+                online[seat] = true;
+            }
+            tools.set_multiplayer(together, std::move(online));
+            if (const auto said = tools.take_chat()) {
+                if (host) host->chat(*said);
+                else if (guest) guest->chat(*said);
+            }
+            for (std::string& line : host ? host->take_chat() : guest ? guest->take_chat() : std::vector<std::string>{}) {
+                tools.add_chat(std::move(line));
+            }
             static bool drift_told = false;
             if (guest && guest->drift() && !drift_told) {
                 drift_told = true;

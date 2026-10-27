@@ -9,7 +9,7 @@ namespace railmaster::net {
 namespace {
 
 // Bump when the messages change: games of different versions do not mix.
-constexpr std::uint32_t kProtocol = 2;
+constexpr std::uint32_t kProtocol = 3;
 
 // A checksum every game month (30 days).
 constexpr std::uint64_t kCheckTicks = 30ULL * sim::World::kTicksPerDay;
@@ -24,7 +24,20 @@ enum Type : std::uint8_t {
     kCheck = 7,   // host: the game's checksum at a tick
     kNote = 8,    // host: news for everyone's screen
     kPlayers = 9, // host: everyone's seat and name
+    kChat = 10,   // guest: something to say; host: a line said, with who said it
 };
+
+// A line of chat: at most this long, no control characters.
+std::string clean_chat(std::string_view text) {
+    std::string out;
+    for (const char c : text) {
+        if (out.size() >= 200) break;
+        if (c == '\t') out.push_back(' ');
+        else if (static_cast<unsigned char>(c) >= 0x20) out.push_back(c);
+    }
+    const auto first = out.find_first_not_of(' ');
+    return first == std::string::npos ? std::string() : out.substr(first, out.find_last_not_of(' ') - first + 1);
+}
 
 class Out {
 public:
@@ -181,9 +194,28 @@ void Host::handle(Seat& s, const Message& m) {
         s.conn.send(kDone, d.str());
         return;
     }
+    case kChat: {
+        if (!s.joined) return;
+        const std::string text = clean_chat(m.body);
+        if (!text.empty()) broadcast_chat(world_.investor(s.seat).name + ": " + text);
+        return;
+    }
     default: return; // nothing else comes from a guest
     }
 }
+
+void Host::broadcast_chat(const std::string& line) {
+    chat_.push_back(line);
+    for (Seat& s : seats_)
+        if (s.joined) s.conn.send(kChat, line);
+}
+
+void Host::chat(const std::string& text) {
+    const std::string t = clean_chat(text);
+    if (!t.empty()) broadcast_chat(world_.investor(0).name + ": " + t);
+}
+
+std::vector<std::string> Host::take_chat() { return std::exchange(chat_, {}); }
 
 void Host::poll() {
     while (auto c = listener_.accept()) seats_.push_back(Seat{std::move(*c), 0, {}, false});
@@ -301,6 +333,7 @@ void Guest::handle(const Message& m) {
         return;
     }
     case kNote: news_.push_back(m.body); return;
+    case kChat: chat_.push_back(m.body); return;
     case kPlayers: {
         players_.assign(static_cast<std::size_t>(in.u(2)), {});
         for (auto& [seat, name] : players_) {
@@ -360,6 +393,14 @@ void Guest::verify() {
         it = checks_.erase(it);
     }
 }
+
+void Guest::chat(const std::string& text) {
+    const std::string t = clean_chat(text);
+    if (t.empty() || !conn_.open()) return;
+    conn_.send(kChat, t);
+}
+
+std::vector<std::string> Guest::take_chat() { return std::exchange(chat_, {}); }
 
 std::uint64_t Guest::behind() const { return granted_ > world_.total_ticks() ? granted_ - world_.total_ticks() : 0; }
 
