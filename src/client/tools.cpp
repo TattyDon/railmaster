@@ -1208,7 +1208,7 @@ void Tools::draw_find_panel() const {
         y += kRow;
     }
     glColor3f(0.6f, 0.58f, 0.54f);
-    draw_text(x0 + 14, y0 + h - 22, "Type to narrow   Up/Down or click choose   Enter or click again: go   Esc close", kScale);
+    draw_text(x0 + 14, y0 + h - 22, "Type to narrow   Up/Down or click   Enter goes there   Esc close", kScale);
 }
 
 void Tools::draw_newspaper() const {
@@ -1651,6 +1651,11 @@ void Tools::on_click(float sx, float sy, bool right_button) {
         help_open_ = true;
         return;
     }
+    if (const auto fb = find_button(); !right_button && sx >= fb[0] && sx < fb[2] && sy >= fb[1] && sy < fb[3]) {
+        if (find_open_) find_open_ = false;
+        else open_find();
+        return;
+    }
     if (!right_button && click_row(sx, sy)) return;
     if (guide_open_) {
         guide_open_ = false; // a click away from the guide closes it
@@ -1924,9 +1929,7 @@ bool Tools::on_key(SDL_Keycode key, Uint16 mod) {
         return true;
     }
     if (key == SDLK_f && (mod & (KMOD_CTRL | KMOD_GUI)) != 0) {
-        find_open_ = true;
-        find_text_.clear();
-        find_sel_ = 0;
+        open_find();
         return true;
     }
     if (log_open_) {
@@ -4308,6 +4311,13 @@ void Tools::draw_ui(const std::string& status) const {
         draw_text(gb[0] + 4, gb[1] + 4, "Ctrl+G Guide", kScale);
     }
     {
+        const auto fb = find_button();
+        ui::tab(fb[0], fb[1], fb[2], fb[3], find_open_);
+        if (find_open_) glColor3f(0.12f, 0.08f, 0.03f);
+        else glColor3f(0.92f, 0.88f, 0.8f);
+        draw_text(fb[0] + 4, fb[1] + 4, "Ctrl+F Find", kScale);
+    }
+    {
         const auto hb = help_button();
         ui::tab(hb[0], hb[1], hb[2], hb[3], help_open_);
         if (help_open_) glColor3f(0.12f, 0.08f, 0.03f);
@@ -4475,6 +4485,18 @@ std::array<float, 4> Tools::guide_button() const {
     const auto hb = help_button();
     const float x = hb[2] + 3.0f;
     return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+G Guide", kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+std::array<float, 4> Tools::find_button() const {
+    const auto gb = guide_button();
+    const float x = gb[2] + 3.0f;
+    return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+F Find", kScale)) + 8.0f, kToolbarY + kButtonH};
+}
+
+void Tools::open_find() {
+    find_open_ = true;
+    find_text_.clear();
+    find_sel_ = 0;
 }
 
 std::string Tools::site_name(sim::SiteId id) const {

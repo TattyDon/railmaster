@@ -329,7 +329,7 @@ and checks the economy against the spec's targets
 | Earnings | When one of your trains is paid at a station, the amount (+$12,345) rises from it in green and fades |
 | Trains in trouble | A "!" badge floats over each of your trains with a problem: pulsing red when it has run out of water or has no route, amber when broken down or out of sand or oil. Its panel says what is wrong and what to do |
 | Water | Steam engines need water and sand from a service tower (F4) on their line; without one they crawl at a fraction of their speed. The Train tool warns before you buy a steam train whose stations have no tower near, and a message says which train has run dry |
-| Ctrl+F | Find a town or station (rt3-clone-spec §15.7 Find city): type part of its name, Up/Down choose, Enter goes there (and opens a station's panel) |
+| Ctrl+F, or the Find button on the top bar | Find a town or station (rt3-clone-spec §15.7 Find city): type part of its name, Up/Down choose, Enter goes there (and opens a station's panel) |
 | PgUp / PgDn (Inspect) | Go to your next or previous train |
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), travel (an arc from each station to every place its waiting passengers, in blue, mail, gold, and troops, green, want to go, wider the more are waiting; hovering a station lists them), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
 | Arrows, mouse at the window edge, left-drag (Look tool) | Pan |

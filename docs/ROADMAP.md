@@ -591,9 +591,12 @@ trackpad, where pinching may not reach the game.
 A compass under the zoom buttons points north as the view turns; a click
 on it, or Home, puts the view back to north-up at the usual tilt.
 
+Find has a button on the top bar too, beside the Guide's: going to a town
+or station by name needs no keys.
+
 Next:
-- Find (Ctrl+F) also from a button on the top bar, beside the Guide's,
-  so going to a town by name needs no keys.
+- Station and train names on the map clickable to open their panels, as
+  town and station labels already show where things are.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

@@ -379,6 +379,8 @@ private:
     void draw_guide() const;
     std::string site_name(sim::SiteId id) const;
     std::array<float, 4> guide_button() const;
+    std::array<float, 4> find_button() const; // after the Guide's: Find a town or station
+    void open_find();
     bool help_open_ = false; // the help card (?)
     int help_page_ = 0;      // 0 the keys, 1 what makes a line pay (Tab turns)
     void draw_help() const;
