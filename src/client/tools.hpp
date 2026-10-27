@@ -103,6 +103,7 @@ public:
     // Whether (sx, sy) is on the interface rather than the map: the bars at
     // the top and bottom, an open panel or screen, a dialog.
     bool over_ui(float sx, float sy) const;
+    bool over_detail_panel(float sx, float sy) const; // the Look tool's panel, at the right
     // Open the Find box (Ctrl+F), or a station's panel (the Look tool), as a click on it does.
     void open_find();
     void show_station(sim::StationId id);
@@ -157,6 +158,7 @@ private:
     std::string hint() const;
     std::string inspect_text() const;
     std::vector<Button> layout_buttons() const;
+    const char* bar_label(const char* full) const; // the label, without its key when the bar is crowded
     void cycle_overlay(int direction);
     std::string cell_text() const;
     std::string speed_chart_text() const;

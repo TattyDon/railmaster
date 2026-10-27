@@ -615,7 +615,9 @@ copy, wait for full loads, follow, retire), and your station's for
 enlarging and renaming, so nothing needs a key to be found; a Menu
 button on the top bar opens the game menu (settings such as music,
 saving, the main menu, quitting), which only Esc reached before; and
-Normal speed is half as fast, about eight minutes a game year.
+Normal speed is half as fast, about eight minutes a game year. In a window too
+narrow for every top-bar button with its key (about 1100 pixels), the
+buttons drop the keys ("Look", "Guide", "Menu") so they all still fit.
 
 Next:
 - Multiplayer's network: host and join on a local network, commands

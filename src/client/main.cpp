@@ -1695,9 +1695,12 @@ int main(int argc, char* argv[]) {
         {
             const auto w = static_cast<float>(client::text_width(build_label, 2));
             const float x = static_cast<float>(cam.width_px) - w - 10, y = static_cast<float>(cam.height_px) - 44.0f - 22.0f;
-            client::ui::chip(x - 7, y - 5, x + w + 7, y + 19);
-            glColor3f(0.85f, 0.85f, 0.8f);
-            client::draw_text(x, y, build_label, 2);
+            // Not over a detail panel reaching down this far (its buttons are there).
+            if (title.open() || !tools.over_detail_panel(x, y)) {
+                client::ui::chip(x - 7, y - 5, x + w + 7, y + 19);
+                glColor3f(0.85f, 0.85f, 0.8f);
+                client::draw_text(x, y, build_label, 2);
+            }
             if (watching && !title.open()) {
                 // What is being watched, and how far it has got.
                 const std::string label = "Replay of " + watching->name + ": " + world.date().month_year_label() + " of " +

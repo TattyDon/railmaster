@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
@@ -1094,6 +1095,11 @@ bool Tools::over_ui(float sx, float sy) const {
     if (screen_open() || menu_open_ || paper_open_ || founding_ || typing()) return true;
     if (sy < 52.0f || sy > static_cast<float>(cam_.height_px) - 46.0f) return true; // the tool bar, the status bar
     return detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] && sy < detail_box_[3];
+}
+
+bool Tools::over_detail_panel(float sx, float sy) const {
+    return tool_ == Tool::Inspect && detail_ && sx >= detail_box_[0] && sx < detail_box_[2] && sy >= detail_box_[1] &&
+           sy < detail_box_[3];
 }
 
 bool Tools::on_wheel(float sx, float sy, int steps) {
@@ -3346,16 +3352,36 @@ std::string Tools::speed_chart_text() const {
            row(true) + " mph.  Appeal " + appeal;
 }
 
+namespace {
+
+constexpr std::pair<Tool, const char*> kToolButtons[] = {
+    {Tool::Inspect, "F1 Look"},       {Tool::Track, "F2 Track"},       {Tool::Station, "F3 Station"},
+    {Tool::ServiceTower, "F4 Tower"}, {Tool::Maintenance, "F5 Shed"},  {Tool::Train, "F6 Train"},
+    {Tool::Finance, "F7 Company"},      {Tool::Market, "F8 Market"},     {Tool::Industry, "F9 Industry"},
+    {Tool::Status, "F10 Status"},     {Tool::Lists, "F11 Lists"},      {Tool::Ledger, "L Ledger"},
+};
+constexpr const char* kHelpLabel = "? Help";
+constexpr const char* kGuideLabel = "Ctrl+G Guide";
+constexpr const char* kFindLabel = "Ctrl+F Find";
+constexpr const char* kMenuLabel = "Esc Menu";
+
+} // namespace
+
+const char* Tools::bar_label(const char* full) const {
+    // A window too narrow for every button with its key: the names alone.
+    float x = 6.0f;
+    for (const auto& b : kToolButtons) x += static_cast<float>(text_width(b.second, kScale)) + 11.0f;
+    for (const char* l : {kHelpLabel, kGuideLabel, kFindLabel, kMenuLabel}) x += static_cast<float>(text_width(l, kScale)) + 11.0f;
+    if (x <= static_cast<float>(cam_.width_px)) return full;
+    const char* space = std::strchr(full, ' ');
+    return space ? space + 1 : full;
+}
+
 std::vector<Tools::Button> Tools::layout_buttons() const {
-    static constexpr std::pair<Tool, const char*> kButtons[] = {
-        {Tool::Inspect, "F1 Look"},       {Tool::Track, "F2 Track"},       {Tool::Station, "F3 Station"},
-        {Tool::ServiceTower, "F4 Tower"}, {Tool::Maintenance, "F5 Shed"},  {Tool::Train, "F6 Train"},
-        {Tool::Finance, "F7 Company"},      {Tool::Market, "F8 Market"},     {Tool::Industry, "F9 Industry"},
-        {Tool::Status, "F10 Status"},     {Tool::Lists, "F11 Lists"},      {Tool::Ledger, "L Ledger"},
-    };
     std::vector<Button> out;
     float x = 6.0f;
-    for (const auto& [t, label] : kButtons) {
+    for (const auto& [t, full] : kToolButtons) {
+        const char* label = bar_label(full);
         const float w = static_cast<float>(text_width(label, kScale)) + 8.0f;
         out.push_back({t, label, x, kToolbarY, x + w, kToolbarY + kButtonH});
         x += w + 3.0f;
@@ -3366,7 +3392,7 @@ std::vector<Tools::Button> Tools::layout_buttons() const {
 std::array<float, 4> Tools::help_button() const {
     const std::vector<Button> buttons = layout_buttons();
     const float x = buttons.back().x1 + 3.0f;
-    return {x, kToolbarY, x + static_cast<float>(text_width("? Help", kScale)) + 8.0f, kToolbarY + kButtonH};
+    return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kHelpLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 namespace {
@@ -4377,27 +4403,27 @@ void Tools::draw_ui(const std::string& status) const {
         ui::tab(gb[0], gb[1], gb[2], gb[3], guide_open_);
         if (guide_open_) glColor3f(0.12f, 0.08f, 0.03f);
         else glColor3f(0.92f, 0.88f, 0.8f);
-        draw_text(gb[0] + 4, gb[1] + 4, "Ctrl+G Guide", kScale);
+        draw_text(gb[0] + 4, gb[1] + 4, bar_label(kGuideLabel), kScale);
     }
     {
         const auto fb = find_button();
         ui::tab(fb[0], fb[1], fb[2], fb[3], find_open_);
         if (find_open_) glColor3f(0.12f, 0.08f, 0.03f);
         else glColor3f(0.92f, 0.88f, 0.8f);
-        draw_text(fb[0] + 4, fb[1] + 4, "Ctrl+F Find", kScale);
+        draw_text(fb[0] + 4, fb[1] + 4, bar_label(kFindLabel), kScale);
     }
     {
         const auto mb = menu_button();
         ui::tab(mb[0], mb[1], mb[2], mb[3], false);
         glColor3f(0.92f, 0.88f, 0.8f);
-        draw_text(mb[0] + 4, mb[1] + 4, "Esc Menu", kScale);
+        draw_text(mb[0] + 4, mb[1] + 4, bar_label(kMenuLabel), kScale);
     }
     {
         const auto hb = help_button();
         ui::tab(hb[0], hb[1], hb[2], hb[3], help_open_);
         if (help_open_) glColor3f(0.12f, 0.08f, 0.03f);
         else glColor3f(0.92f, 0.88f, 0.8f);
-        draw_text(hb[0] + 4, hb[1] + 4, "? Help", kScale);
+        draw_text(hb[0] + 4, hb[1] + 4, bar_label(kHelpLabel), kScale);
     }
 
     // Bottom bar: what the tool does, and the last result or what is under the cursor.
@@ -4559,19 +4585,19 @@ void Tools::draw_ui(const std::string& status) const {
 std::array<float, 4> Tools::guide_button() const {
     const auto hb = help_button();
     const float x = hb[2] + 3.0f;
-    return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+G Guide", kScale)) + 8.0f, kToolbarY + kButtonH};
+    return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kGuideLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 std::array<float, 4> Tools::find_button() const {
     const auto gb = guide_button();
     const float x = gb[2] + 3.0f;
-    return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+F Find", kScale)) + 8.0f, kToolbarY + kButtonH};
+    return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kFindLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 std::array<float, 4> Tools::menu_button() const {
     const auto fb = find_button();
     const float x = fb[2] + 3.0f;
-    return {x, kToolbarY, x + static_cast<float>(text_width("Esc Menu", kScale)) + 8.0f, kToolbarY + kButtonH};
+    return {x, kToolbarY, x + static_cast<float>(text_width(bar_label(kMenuLabel), kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
 void Tools::show_station(sim::StationId id) {
