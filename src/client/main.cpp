@@ -25,6 +25,7 @@
 #include "shading.hpp"
 #include "ui.hpp"
 #include "tools.hpp"
+#include "gestures.hpp"
 #include "goals.hpp"
 #include "tutorial.hpp"
 
@@ -348,6 +349,10 @@ int main(int argc, char* argv[]) {
     // The demo network is built once the player has a company to pay for it.
     bool demo_pending = !empty;
 
+#ifdef SDL_HINT_MAC_SCROLL_MOMENTUM
+    // A flick on a Mac trackpad carries on a little, as in a map app.
+    SDL_SetHint(SDL_HINT_MAC_SCROLL_MOMENTUM, "1");
+#endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::fprintf(stderr, "Sdl_init failed: %s\n", SDL_GetError());
         return 1;
@@ -424,6 +429,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     SDL_GL_SetSwapInterval(1);
+    client::watch_pinch(); // a Mac trackpad's pinch zooms
     // The window's icon (the desktop entry has the same picture).
     {
         int iw = 0, ih = 0, channels = 0;
@@ -497,6 +503,7 @@ int main(int argc, char* argv[]) {
             else if (name == "seasons") st.seasons = value != 0;
             else if (name == "clouds") st.clouds = value != 0;
             else if (name == "reverse_zoom") st.reverse_zoom = value != 0;
+            else if (name == "scroll_mode") st.scroll_mode = std::clamp(value, 0, 2);
             else if (name == "music") st.music = std::clamp(value, 0, 10);
         }
     }
@@ -506,7 +513,7 @@ int main(int argc, char* argv[]) {
         std::ofstream out(settings_path);
         out << "volume " << st.volume << "\nedge_scroll " << st.edge_scroll << "\ntime_of_day " << st.time_mode
             << "\nshow_fps " << st.show_fps << "\ncheats " << st.cheats << "\nseasons " << st.seasons << "\nclouds " << st.clouds << "\nmusic " << st.music
-            << "\nreverse_zoom " << st.reverse_zoom << "\n";
+            << "\nreverse_zoom " << st.reverse_zoom << "\nscroll_mode " << st.scroll_mode << "\n";
     };
     const auto save_game = [&](const std::string& file, bool quiet = false) {
         try {
@@ -844,12 +851,29 @@ int main(int argc, char* argv[]) {
                 // on a mouse wheel.
 #if SDL_VERSION_ATLEAST(2, 0, 18)
                 const float amount = std::clamp(ev.wheel.preciseY, -3.0f, 3.0f);
+                const float across = ev.wheel.preciseX;
 #else
                 const float amount = static_cast<float>(std::clamp(ev.wheel.y, -3, 3));
+                const float across = static_cast<float>(ev.wheel.x);
 #endif
                 // Over a list, the wheel scrolls it instead.
                 if (!editor.open() && ev.wheel.y != 0 &&
                     tools.on_wheel(static_cast<float>(mx), static_cast<float>(my), ev.wheel.y)) {
+                    break;
+                }
+                // A trackpad (fine steps, or sideways) moves the map, as in a
+                // map app, and a pinch zooms; a mouse wheel (whole notches)
+                // zooms. Cmd (or Ctrl) with either zooms.
+                const bool trackpad = across != 0.0f || std::fabs(amount - std::round(amount)) > 0.001f;
+                const int mode = tools.settings().scroll_mode;
+                const bool zoom_key = (SDL_GetModState() & (KMOD_CTRL | KMOD_GUI)) != 0;
+                const bool move = !zoom_key && (mode == 2 || (mode == 0 && trackpad));
+                if (move) {
+                    // The map follows the scroll as a page would: the system's own
+                    // scrolling direction (natural or not) carries over.
+                    constexpr float kPixels = 12.0f; // a scroll step on screen
+                    const auto fx = static_cast<float>(mx), fy = static_cast<float>(my);
+                    cam.drag(fx, fy, fx - across * kPixels, fy + amount * kPixels);
                     break;
                 }
                 const float signed_amount = tools.settings().reverse_zoom ? -amount : amount;
@@ -1109,6 +1133,12 @@ int main(int argc, char* argv[]) {
         const bool shift = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
         const bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
         const float turn = static_cast<float>(dt) * 1.5f;
+        // A pinch on the trackpad: in where the fingers spread, at the pointer.
+        if (const double pinch = client::take_pinch(); pinch != 0.0 && !title.open()) {
+            int px = 0, py = 0;
+            SDL_GetMouseState(&px, &py);
+            cam.zoom_at(static_cast<float>(px), static_cast<float>(py), static_cast<float>(std::clamp(1.0 + pinch, 0.5, 2.0)));
+        }
         if (zoom_held != 0) {
             const float step = std::pow(2.0f, static_cast<float>(dt));
             cam.zoom_at(static_cast<float>(cam.width_px) / 2, static_cast<float>(cam.height_px) / 2,

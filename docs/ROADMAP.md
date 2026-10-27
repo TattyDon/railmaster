@@ -601,10 +601,17 @@ The goals banner says it folds ("hide tip" at its right): a click tucks
 it to a single line, and back (it always did, but nothing said so). The
 first steps' panel already had its own "hide".
 
+Trackpads work like a map app: two fingers slide the map (a scroll in
+fine steps or sideways is a trackpad's; whole notches are a wheel's,
+which zooms), a pinch zooms at the pointer (on macOS read from the
+system's magnify events, as SDL2 does not pass them on;
+`src/client/gestures_mac.mm`), Cmd + scroll zooms, a flick carries on a
+little, and Settings can make every scroll zoom or move. Asked for by a
+player on a Mac trackpad.
+
 Next:
-- Trackpads like a map app: two fingers move the map, a pinch zooms (a
-  player on a Mac trackpad found the map hard to get about).
-- Then multiplayer's network: host and join on a local network.
+- Multiplayer's network: host and join on a local network, commands
+  exchanged each tick, and Host and Join on the title screen.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

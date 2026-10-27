@@ -119,10 +119,11 @@ finds its data wherever the install put it.
 - The game draws with shaders, shadows and ambient occlusion (woods with dark floors, buildings grounded in soft shade, alleys and eaves shaded, lamps, people and trains on soft shade) where the graphics card allows; houses far off are drawn lighter, so wide views stay quick
   (it prints which renderer it uses); `--no-shaders` uses the simpler
   renderer if the picture looks wrong on your machine.
-- Zoom with the mouse wheel or a two-finger scroll (Settings turns the
-  direction round), the + and - buttons beside the minimap (hold them to
-  keep zooming), Cmd (Ctrl) + = and -, or Option (Alt) + Up/Down; a pinch
-  works where the system passes it on. In the Look tool (F1) drag the map
+- On a trackpad, as in a map app: slide two fingers to move the map and
+  pinch to zoom (on a Mac; Cmd + slide zooms too). A mouse wheel zooms
+  (Settings: Scrolling, and which way a scroll zooms). Also the + and -
+  buttons beside the minimap (hold them to keep zooming), Cmd (Ctrl) + =
+  and -, or Option (Alt) + Up/Down. In the Look tool (F1) drag the map
   with the left button to move it, and double-click to go to a place (a
   town: closer in). Arrow keys pan; Shift+arrows or dragging with the
   right mouse button turn and tilt the view. Ctrl+S saves, Ctrl+L loads.
@@ -335,7 +336,8 @@ and checks the economy against the spec's targets
 | Arrows, mouse at the window edge, left-drag (Look tool) | Pan |
 | Double-click (Look tool) | Go to the place; on or near a town, closer in |
 | Click a name on the map (Look tool) | A town's: go there, closer in; a station's: open its panel |
-| Mouse wheel, two-finger scroll, + and - by the minimap, Cmd (Ctrl) + = and -, Option (Alt) + Up/Down, pinch | Zoom in and out (Settings: which way a scroll zooms) |
+| Mouse wheel, pinch (Mac trackpad), Cmd + two-finger scroll, + and - by the minimap, Cmd (Ctrl) + = and -, Option (Alt) + Up/Down | Zoom in and out (Settings: which way a scroll zooms) |
+| Two-finger scroll on a trackpad | Move the map (Settings: Scrolling can make every scroll zoom, or move) |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | Home, or the compass under the zoom buttons | North up again, at the usual tilt (the compass's red needle points north as the view turns) |
 | V | Switch between the 3D view and the flat top-down map |

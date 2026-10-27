@@ -20,6 +20,15 @@ add_executable(railmaster
     ui.cpp
 )
 
+# A trackpad's pinch: read from the system on macOS (SDL2 does not pass it on).
+if(APPLE)
+    enable_language(OBJCXX)
+    target_sources(railmaster PRIVATE gestures_mac.mm)
+    target_link_libraries(railmaster PRIVATE "-framework Cocoa")
+else()
+    target_sources(railmaster PRIVATE gestures.cpp)
+endif()
+
 # Single-header libraries for loading art: cgltf (glTF, MIT) and stb_image
 # (PNG/JPEG, public domain). As system headers, the project's warnings do
 # not apply to them; their implementations are compiled quietly.

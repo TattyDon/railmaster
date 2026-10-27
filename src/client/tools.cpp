@@ -1276,7 +1276,8 @@ namespace {
 // The game menu's pages, and the items on its first.
 enum MenuPage { kMenuMain, kMenuSave, kMenuLoad, kMenuQuit, kMenuLeave, kMenuSettings };
 enum MenuItem { kItemResume, kItemSave, kItemLoad, kItemBriefing, kItemSettings, kItemMainMenu, kItemQuit, kMainItems };
-constexpr int kSettingRows = 10; // sound, music, edge scrolling, time of day, seasons, clouds, frames a second, debug console, zoom direction, back
+constexpr int kSettingRows = 11; // sound, music, edge scrolling, time of day, seasons, clouds, frames a second, debug console, scrolling, zoom direction, back
+constexpr const char* kScrollModes[] = {"Trackpad moves, wheel zooms", "Always zooms", "Always moves the map"};
 constexpr const char* kTimeOfDay[] = {"Day", "Dusk", "Night", "Dawn", "Day and night"};
 
 } // namespace
@@ -1306,7 +1307,8 @@ void Tools::change_setting(int step) {
     case 5: settings_.clouds = !settings_.clouds; break;
     case 6: settings_.show_fps = !settings_.show_fps; break;
     case 7: settings_.cheats = !settings_.cheats; break;
-    case 8: settings_.reverse_zoom = !settings_.reverse_zoom; break;
+    case 8: settings_.scroll_mode = (settings_.scroll_mode + step + 3) % 3; break;
+    case 9: settings_.reverse_zoom = !settings_.reverse_zoom; break;
     default: return;
     }
     settings_changed_ = true;
@@ -1426,11 +1428,11 @@ void Tools::draw_menu() const {
     case kMenuSettings:
         title = "Settings";
         items = {"Sound", "Music", "Scroll at the window's edge", "Time of day", "Seasons (snow, autumn leaves)", "Clouds and weather",
-                 "Frames a second", "Debug console (. key, cheats)", "Scroll to zoom in", "Back"};
+                 "Frames a second", "Debug console (. key, cheats)", "Scrolling", "Scroll to zoom in", "Back"};
         notes = {settings_.volume == 0 ? std::string("Off") : std::to_string(settings_.volume * 10) + "%",
                  settings_.music == 0 ? std::string("Off") : std::to_string(settings_.music * 10) + "%", settings_.edge_scroll ? "On" : "Off", kTimeOfDay[settings_.time_mode], settings_.seasons ? "On" : "Off",
                  settings_.clouds ? "On" : "Off", settings_.show_fps ? "On" : "Off", settings_.cheats ? "On" : "Off",
-                 settings_.reverse_zoom ? "Down" : "Up", ""};
+                 kScrollModes[std::clamp(settings_.scroll_mode, 0, 2)], settings_.reverse_zoom ? "Down" : "Up", ""};
         break;
     default:
         title = menu_page_ == kMenuLeave ? "Leave without saving?" : "Quit without saving?";
@@ -3397,9 +3399,9 @@ void Tools::draw_help() const {
           {"M  Ctrl+G", "Messages; the Guide: who wants what, best links"},
           {"Shift+M", "The big map: towns, industries, lines; click to go"}}},
         {"Getting around",
-         {{"Drag", "Move the map (F1); double-click goes there"},
+         {{"Drag  2 fingers", "Move the map (F1); double-click goes there"},
           {"Arrows", "Pan (or the mouse at the window's edge)"},
-          {"Wheel  Cmd+= / -", "Zoom (or the + and - by the minimap)"},
+          {"Wheel  pinch", "Zoom (or Cmd+= / -, or + and - by the minimap)"},
           {"Shift+arrows", "Turn and tilt (right-drag); Home: north up"},
           {"Ctrl+F", "Find a town or station"},
           {"0-9", "Go to a bookmark; Shift+0-9 stores one"},

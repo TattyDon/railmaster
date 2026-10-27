@@ -125,6 +125,9 @@ public:
         bool seasons = true; // snow in winter, leaves turning in autumn
         bool clouds = true;  // clouds' shadows drifting over the land
         bool reverse_zoom = false; // a scroll the other way zooms in (as some trackpads feel natural)
+        // What a scroll does: 0 a trackpad's moves the map (and a pinch zooms),
+        // a mouse wheel's zooms; 1 always zooms; 2 always moves the map.
+        int scroll_mode = 0;
     };
     Settings& settings() { return settings_; }
     // Whether the menu changed them since the last call (to save them).
