@@ -334,6 +334,7 @@ and checks the economy against the spec's targets
 | O / P | Cycle the map overlays (rt3-clone-spec §15.3): holdings (every company's track, stations and industries in its colour), profitability (trains and stations green, yellow or red over the last 12 months), track grade (green level to red at the limit), traffic (brighter the busier; red where single track held trains at meets, so it needs a second track), travel (an arc from each station to every place its waiting passengers, in blue, mail, gold, and troops, green, want to go, wider the more are waiting; hovering a station lists them), then each cargo's price map (red cheap, green dear). Hovering shows the figures |
 | Arrows, mouse at the window edge, left-drag (Look tool) | Pan |
 | Double-click (Look tool) | Go to the place; on or near a town, closer in |
+| Click a name on the map (Look tool) | A town's: go there, closer in; a station's: open its panel |
 | Mouse wheel, two-finger scroll, + and - by the minimap, Cmd (Ctrl) + = and -, Option (Alt) + Up/Down, pinch | Zoom in and out (Settings: which way a scroll zooms) |
 | Shift+arrows, right-drag | Turn the view (left/right) and tilt it (up/down); a right click without dragging still stops the current line or route |
 | Home, or the compass under the zoom buttons | North up again, at the usual tilt (the compass's red needle points north as the view turns) |

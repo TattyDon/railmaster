@@ -938,8 +938,20 @@ int main(int argc, char* argv[]) {
             case SDL_MOUSEBUTTONUP:
                 if (ev.button.button == SDL_BUTTON_LEFT) {
                     zoom_held = 0;
-                    // A press on the map that did not drag: the click it was.
-                    if (map_press && !map_dragging) tools.on_click(map_press->first, map_press->second, false);
+                    // A press on the map that did not drag: the click it was. On
+                    // a station's name it opens the station; on a town's, it goes there.
+                    if (map_press && !map_dragging) {
+                        if (const auto hit = client::label_at(map_press->first, map_press->second)) {
+                            if (hit->station) {
+                                tools.show_station(hit->id);
+                            } else if (hit->id < world.economy().towns().size()) {
+                                const sim::Town& t = world.economy().towns()[hit->id];
+                                cam.glide_to(world.economy().node_centre(t.cx, t.cy), std::min(cam.distance, 14.0f));
+                            }
+                        } else {
+                            tools.on_click(map_press->first, map_press->second, false);
+                        }
+                    }
                     map_press.reset();
                     map_dragging = false;
                 }

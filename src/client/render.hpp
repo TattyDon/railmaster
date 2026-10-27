@@ -70,6 +70,13 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
 // Signs under the stations near the camera: the name, a stripe in the
 // owner's colour, and how many loads of passengers, mail and freight wait.
 void draw_station_names(const sim::World& w, const Camera& cam);
+// The town or station whose name, as last drawn, is at screen (sx, sy):
+// towns (drawn over the stations' names) first.
+struct LabelHit {
+    bool station; // else a town
+    std::uint32_t id; // StationId or the town's index
+};
+std::optional<LabelHit> label_at(float sx, float sy);
 // Territory borders along map-cell edges (closed borders in red), in map
 // coordinates; then, in screen coordinates, each territory's name at its
 // centre with its access price (none if open, "YOURS" with access).

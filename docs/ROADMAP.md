@@ -594,9 +594,12 @@ on it, or Home, puts the view back to north-up at the usual tilt.
 Find has a button on the top bar too, beside the Guide's: going to a town
 or station by name needs no keys.
 
+The names on the map are clickable in the Look tool: a town's goes there,
+closer in; a station's opens its panel.
+
 Next:
-- Station and train names on the map clickable to open their panels, as
-  town and station labels already show where things are.
+- The goals banner and the first steps' panel can be moved out of the way
+  (or tucked away to a single line), as they cover the map's middle.
 
 Still to do:
 - Modern OpenGL renderer: terrain, track, trains, buildings, free camera.

@@ -4493,6 +4493,12 @@ std::array<float, 4> Tools::find_button() const {
     return {x, kToolbarY, x + static_cast<float>(text_width("Ctrl+F Find", kScale)) + 8.0f, kToolbarY + kButtonH};
 }
 
+void Tools::show_station(sim::StationId id) {
+    if (id >= world_.railway().stations().size()) return;
+    select(Tool::Inspect);
+    open_detail(DetailKind::Station, id);
+}
+
 void Tools::open_find() {
     find_open_ = true;
     find_text_.clear();

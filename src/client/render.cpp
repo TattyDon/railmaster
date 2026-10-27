@@ -5236,7 +5236,24 @@ void draw_price_overlay(const sim::Economy& eco, const sim::CargoType& cargo, co
     glEnd();
 }
 
+// Where the towns' and stations' names were drawn last frame, for clicks.
+struct LabelBox {
+    std::uint32_t id;
+    float x0, y0, x1, y1;
+};
+std::vector<LabelBox> g_town_labels, g_station_labels;
+
+std::optional<LabelHit> label_at(float sx, float sy) {
+    const auto in = [&](const LabelBox& b) { return sx >= b.x0 && sx < b.x1 && sy >= b.y0 && sy < b.y1; };
+    for (const LabelBox& b : g_town_labels)
+        if (in(b)) return LabelHit{false, b.id};
+    for (const LabelBox& b : g_station_labels)
+        if (in(b)) return LabelHit{true, b.id};
+    return std::nullopt;
+}
+
 void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Balance::Towns& towns) {
+    g_town_labels.clear();
     const float cell_mm = cam.mm_per_tile;
     // Nearest towns first; a label that would overlap one already placed
     // is left out, and far ones fade, so the horizon does not fill up.
@@ -5289,6 +5306,7 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
         });
         if (clash) continue;
         placed.push_back(box);
+        if (alpha > 0.3f) g_town_labels.push_back({static_cast<std::uint32_t>(l.town), box.x0, box.y0, box.x1, box.y1});
         ui::chip(box.x0, box.y0, box.x1, box.y1, 0.62f * alpha);
         glColor4f(1.0f, 1.0f, 0.95f, alpha);
         draw_text(l.sx - w / 2, l.sy, label, 2);
@@ -5308,6 +5326,7 @@ void draw_town_names(const sim::Economy& eco, const Camera& cam, const sim::Bala
 }
 
 void draw_station_names(const sim::World& w, const Camera& cam) {
+    g_station_labels.clear();
     const sim::Railway& rw = w.railway();
     const auto& cargo = w.data().cargo;
     const std::optional<sim::CargoId> passengers = cargo.find("passengers"), mail = cargo.find("mail");
@@ -5365,6 +5384,7 @@ void draw_station_names(const sim::World& w, const Camera& cam) {
         });
         if (clash) continue;
         placed.push_back(box);
+        if (alpha > 0.3f) g_station_labels.push_back({l.id, box.x0, box.y0, box.x1, box.y1});
         ui::chip(box.x0, box.y0, box.x1, box.y1, 0.7f * alpha);
         float r, g, b;
         owner_rgb(s.owner, player, r, g, b);

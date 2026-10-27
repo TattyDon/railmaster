@@ -103,6 +103,9 @@ public:
     // Whether (sx, sy) is on the interface rather than the map: the bars at
     // the top and bottom, an open panel or screen, a dialog.
     bool over_ui(float sx, float sy) const;
+    // Open the Find box (Ctrl+F), or a station's panel (the Look tool), as a click on it does.
+    void open_find();
+    void show_station(sim::StationId id);
     void open_menu();
     // Where the menu's save slots live (a folder of the player's own); the
     // quick save (Ctrl+S) stays at `quick`.
@@ -380,7 +383,7 @@ private:
     std::string site_name(sim::SiteId id) const;
     std::array<float, 4> guide_button() const;
     std::array<float, 4> find_button() const; // after the Guide's: Find a town or station
-    void open_find();
+
     bool help_open_ = false; // the help card (?)
     int help_page_ = 0;      // 0 the keys, 1 what makes a line pay (Tab turns)
     void draw_help() const;
