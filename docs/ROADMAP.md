@@ -759,8 +759,13 @@ Still to do:
   version that launched the build through a shell script would not open
   from Spotlight ("SystemIntents does not have permission"). Started from
   the root folder, as an app opened from the Finder is, the game works
-  from its own saves folder. Still to do: a bundle to hand to others
-  (SDL2 inside it, signed and notarised), Windows, and localisation.
+  from its own saves folder. A bundle to hand to others:
+  `packaging/macos/share.sh` builds for macOS 11 and later, puts the
+  Homebrew libraries (SDL2) inside the app with their references pointed
+  there, signs it ad hoc and zips it (checked on Linux with stand-ins for
+  the macOS tools; not yet on a Mac). Still to do: notarising (needs an
+  Apple developer account), a universal (Apple silicon and Intel) build,
+  Windows, and localisation.
 
 ## Research backlog
 The values most needed from observing the original game, in rough order:

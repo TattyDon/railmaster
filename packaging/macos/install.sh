@@ -20,42 +20,7 @@ cmake --build build
 game="$repo/build/src/client/railmaster"
 
 app="$HOME/Applications/Railmaster.app"
-rm -rf "$app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-
-# The game itself, and its data in the app's Resources, where it looks
-# from inside an app.
-cp "$game" "$app/Contents/MacOS/Railmaster"
-cp -R data "$app/Contents/Resources/data"
-
-# The icon, from data/icon.png, at the sizes macOS asks for.
-iconset="$(mktemp -d)/railmaster.iconset"
-mkdir -p "$iconset"
-for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" data/icon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
-    double=$((size * 2))
-    sips -z "$double" "$double" data/icon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
-done
-iconutil -c icns "$iconset" -o "$app/Contents/Resources/railmaster.icns"
-rm -rf "$(dirname "$iconset")"
-
-cat > "$app/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleName</key><string>Railmaster</string>
-    <key>CFBundleDisplayName</key><string>Railmaster</string>
-    <key>CFBundleIdentifier</key><string>io.github.tattydon.railmaster</string>
-    <key>CFBundleExecutable</key><string>Railmaster</string>
-    <key>CFBundleIconFile</key><string>railmaster</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>LSApplicationCategoryType</key><string>public.app-category.simulation-games</string>
-    <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-PLIST
+"$repo/packaging/macos/make_app.sh" "$game" "$app"
 
 # Signed for this Mac (ad hoc), so macOS will open it, and registered, so
 # Spotlight and Launchpad know it.

@@ -71,6 +71,13 @@ opens from Launchpad, Spotlight or the Dock; `packaging/macos/update.sh`
 fetches the latest version, rebuilds it and refreshes the app. Saves made
 with Ctrl+S then go in `~/Library/Application Support/Railmaster`.
 
+To give the game to someone else (to play together on another Mac, say),
+`packaging/macos/share.sh` makes a zip on your Desktop with an app that
+needs nothing installed: SDL2 is inside it. It runs on Macs with the same
+kind of processor as yours (Apple silicon or Intel) and says which macOS
+it needs. It is not notarised, so the first time the other Mac opens it,
+Control-click it and choose Open (the script prints the steps).
+
 Or install it (Linux): `sudo cmake --install build`, or
 `cmake --install build --prefix ~/.local` for yourself only, puts
 `railmaster` on your path, its data in `share/railmaster` beside it, and
@@ -370,6 +377,9 @@ rivals. On the title screen choose **Play together**, type your name, then:
   menu) goes on another day. Each player who joins under the same name
   takes their railroad back.
 - **Join at**: type that address, then **Join**.
+
+The other computer needs the same version of the game: on a Mac,
+`packaging/macos/share.sh` makes a zip of it to copy across (see above).
 
 The name and the last address are remembered. From a terminal the same is
 `railmaster --host --name=Ann` and `railmaster --join=192.168.1.20
