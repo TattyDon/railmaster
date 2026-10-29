@@ -2651,7 +2651,7 @@ void Tools::draw_status_panel() const {
     const auto& sc = world_.scenario();
     if (!sc) {
         rows.push_back({"Game status", 0});
-        rows.push_back({"A free game: no goals and no deadline. Start one with --scenario=file.", 1});
+        rows.push_back({"A free game: no goals and no deadline. Scenarios, on the title screen, set goals with medals to win.", 1});
         if (world_.assisted()) rows.push_back({"Assisted: the debug console has been used in this game", 1});
     } else {
         const sim::ScenarioResult& res = world_.scenario_result();
