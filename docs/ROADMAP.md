@@ -779,8 +779,10 @@ Still to do:
   from its own saves folder. A bundle to hand to others:
   `packaging/macos/share.sh` builds for macOS 11 and later, puts the
   Homebrew libraries (SDL2) inside the app with their references pointed
-  there, signs it ad hoc and zips it (checked on Linux with stand-ins for
-  the macOS tools; not yet on a Mac). Still to do: notarising (needs an
+  there, signs it ad hoc and zips it. CI's macOS job runs it on every
+  push, checks the app starts with Homebrew's SDL hidden (it loads SDL2
+  and SDL3 from inside itself), and keeps the zip as the run's download
+  (macOS 14 or later, as Homebrew's SDL is built). Still to do: notarising (needs an
   Apple developer account), a universal (Apple silicon and Intel) build,
   Windows, and localisation.
 

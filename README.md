@@ -54,8 +54,13 @@ Windows: the easiest way is WSL2 with Ubuntu, following the Linux steps;
 on Windows 11 the game window appears on the desktop. A native build with
 Visual Studio and vcpkg (`sdl2`, `nlohmann-json`, `zlib`) should also work.
 
-Only the Linux build is tested so far (CI runs gcc and clang on Ubuntu).
-If the macOS or Windows steps fail, please open an issue with the error.
+CI builds and tests on Linux (gcc and clang) and on macOS (Apple silicon),
+and checks that gcc's and clang's builds play the same game byte for byte.
+Each macOS run also makes the shareable app (see below) and keeps it as a
+download: on GitHub, the repository's Actions tab, the latest CI run,
+Artifacts, "Railmaster-macOS-apple-silicon" (a zip with the app inside;
+macOS 14 or later). Windows is not built yet: if its steps fail, please
+open an issue with the error.
 
 **3. Play.** From the `railmaster` folder (the game reads `data/` from
 there):
