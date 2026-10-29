@@ -25,6 +25,9 @@ if(APPLE)
     enable_language(OBJCXX)
     target_sources(railmaster PRIVATE gestures_mac.mm)
     target_link_libraries(railmaster PRIVATE "-framework Cocoa")
+    # Apple marks OpenGL deprecated; the game uses it on purpose (the
+    # renderer is OpenGL 2), so its warnings are not wanted.
+    target_compile_definitions(railmaster PRIVATE GL_SILENCE_DEPRECATION)
 else()
     target_sources(railmaster PRIVATE gestures.cpp)
 endif()

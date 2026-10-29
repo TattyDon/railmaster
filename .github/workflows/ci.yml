@@ -42,3 +42,28 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  # The Mac build (Apple silicon): the trackpad's pinch (gestures_mac.mm)
+  # compiles only here, and share.sh's app, with SDL2 inside it, is kept as
+  # a download (the run's Artifacts) to try on any recent Apple-silicon Mac.
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install ninja sdl2 nlohmann-json
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Make the app to share
+        run: |
+          mkdir -p "$HOME/Desktop"
+          packaging/macos/share.sh
+          unzip -l "$HOME"/Desktop/Railmaster-*.zip | grep -E 'MacOS/Railmaster|Frameworks/'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Railmaster-macOS-apple-silicon
+          path: ~/Desktop/Railmaster-*.zip
