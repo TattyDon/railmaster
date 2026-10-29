@@ -666,6 +666,23 @@ nobody has made their own. Tested over the loopback and with two game
 windows (one evening hosted, saved, the next hosted from the title
 screen, the guest back in their railroad).
 
+Building for the Mac in CI (an Apple-silicon job: build, tests, and
+share.sh's app checked to start with Homebrew's SDL hidden, kept as the
+run's download) turned up what Linux's newer compilers let pass: a local
+named like a field in a static member (Apple's clang 15 calls it
+shadowing), and structured bindings captured by lambdas (clang 16 and
+later). Building with clang 15 and libc++ here found them all at once.
+It also turned up a real bug: gcc and clang made different worlds from
+the same seed. Three places drew two random numbers in one expression
+(town and territory names, territory seeds), whose order C++ leaves to
+the compiler. Each draw is now a statement of its own; loaded games
+always ran alike (400 days compared), so multiplayer, which starts every
+guest from the host's save, was not affected, but maps from a seed and
+replays were. A CI job now has gcc's and clang's builds make the same
+game byte for byte and replay each other's (railmaster_replay --make);
+put back, the old code fails it. Homebrew's sdl2 has become sdl2-compat
+(over SDL3, loaded as it starts), so share.sh puts SDL3 in the app too.
+
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without
   the host restarting already works (their seat is kept by name); what is

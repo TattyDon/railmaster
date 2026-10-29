@@ -55,7 +55,11 @@ std::string town_name(Random& rng) {
                                              "Port", "Red",   "Stone", "West",  "Wood", "Bright"};
     static constexpr const char* kSecond[] = {"ford", "vale", "ton",  "bury",  "field", "wick",  "port", "ham",
                                               "burg", "ville", "dale", "mouth", "ridge", "crest", "haven"};
-    return std::string(kFirst[rng.below(std::size(kFirst))]) + kSecond[rng.below(std::size(kSecond))];
+    // One draw a statement: the two sides of a + may run in either order
+    // (gcc and clang differ), and every build must name towns alike.
+    const auto first = rng.below(std::size(kFirst));
+    const auto second = rng.below(std::size(kSecond));
+    return std::string(kFirst[first]) + kSecond[second];
 }
 
 // --- Industry data -----------------------------------------------------------

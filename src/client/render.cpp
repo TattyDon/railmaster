@@ -4821,7 +4821,8 @@ Occlusion compute_occlusion(const OcclusionInput& in) {
         });
     }
     for (const auto& [x, y, half] : in.squares) {
-        stamp(x, y, half, 0.6f, [&](float px, float py) { return std::fabs(px) <= half && std::fabs(py) <= half; });
+        const float reach = half; // (older compilers cannot capture a structured binding)
+        stamp(x, y, half, 0.6f, [reach](float px, float py) { return std::fabs(px) <= reach && std::fabs(py) <= reach; });
     }
     for (const auto& [x, y, rad] : in.discs) disc(x, y, rad, 0.6f);
     // Two box blurs, each about half a tile each way: roughly a Gaussian,

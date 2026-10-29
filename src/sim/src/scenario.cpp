@@ -136,17 +136,17 @@ Scenario Scenario::from_json(std::string_view json_text) {
             if ((!goal.from.empty() || !goal.to.empty()) && goal.kind != GoalKind::Deliver) {
                 throw std::runtime_error("from and to are for deliver goals");
             }
-            for (const std::string& name : {goal.from, goal.to}) {
-                if (name.empty()) continue;
-                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == name; })) {
-                    throw std::runtime_error("goal names town '" + name + "', which the scenario does not place");
+            for (const std::string& town_name : {goal.from, goal.to}) {
+                if (town_name.empty()) continue;
+                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == town_name; })) {
+                    throw std::runtime_error("goal names town '" + town_name + "', which the scenario does not place");
                 }
             }
             goal.count = g.value("count", std::int64_t{0});
             goal.amount = Money::dollars(g.value("amount", std::int64_t{0}));
-            for (const std::string& name : goal.towns) {
-                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == name; })) {
-                    throw std::runtime_error("goal names town '" + name + "', which the scenario does not place");
+            for (const std::string& town_name : goal.towns) {
+                if (std::none_of(s.towns.begin(), s.towns.end(), [&](const ScenarioTown& t) { return t.name == town_name; })) {
+                    throw std::runtime_error("goal names town '" + town_name + "', which the scenario does not place");
                 }
             }
             if (goal.kind == GoalKind::ConnectTowns && goal.towns.size() < 2) {

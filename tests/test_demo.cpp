@@ -33,7 +33,8 @@ GameData shipped() {
 
 TEST_CASE("the demo network runs the fastest steam or diesel engine of its year") {
     const GameData data = shipped();
-    for (const auto& [year, expected] : {std::pair{1900, "Eight Wheeler 4-4-0"}, std::pair{1950, "Mallard 4-6-2"}}) {
+    for (const auto& [y, expected] : {std::pair{1900, "Eight Wheeler 4-4-0"}, std::pair{1950, "Mallard 4-6-2"}}) {
+        const int year = y; // (older compilers cannot capture a structured binding)
         CAPTURE(year);
         WorldConfig cfg;
         cfg.seed = 1;

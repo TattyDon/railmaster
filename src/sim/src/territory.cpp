@@ -17,7 +17,10 @@ std::string territory_name(Random& rng) {
     static constexpr const char* kStem[] = {"Ald", "Bran", "Cor", "Dal", "Esk", "Fen", "Gar", "Hol", "Ister", "Kel",
                                             "Lom", "Mar", "Nor", "Os", "Pell", "Rav", "Sel", "Tor", "Val", "Wend"};
     static constexpr const char* kEnd[] = {"land", "mark", "shire", "ia", "avia", "onia", "heim", "wick"};
-    return std::string(kStem[rng.below(std::size(kStem))]) + kEnd[rng.below(std::size(kEnd))];
+    // One draw a statement (the order of a +'s sides is up to the compiler).
+    const auto stem = rng.below(std::size(kStem));
+    const auto end = rng.below(std::size(kEnd));
+    return std::string(kStem[stem]) + kEnd[end];
 }
 
 } // namespace
@@ -29,7 +32,13 @@ TerritoryMap generate_territories(std::int32_t width, std::int32_t height, std::
     map.width = width;
     map.height = height;
     std::vector<std::pair<std::int32_t, std::int32_t>> seeds;
-    for (std::int32_t i = 0; i < count; ++i) seeds.emplace_back(rng.between(0, width - 1), rng.between(0, height - 1));
+    for (std::int32_t i = 0; i < count; ++i) {
+        // x drawn before y in every build (a call's arguments may be worked
+        // out in either order).
+        const std::int32_t x = rng.between(0, width - 1);
+        const std::int32_t y = rng.between(0, height - 1);
+        seeds.emplace_back(x, y);
+    }
     map.cells.resize(static_cast<std::size_t>(width) * static_cast<std::size_t>(height));
     for (std::int32_t y = 0; y < height; ++y) {
         for (std::int32_t x = 0; x < width; ++x) {

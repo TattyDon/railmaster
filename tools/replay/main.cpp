@@ -7,7 +7,15 @@
 //
 // Exits 0 when the replay matches the save byte for byte, 1 when it does
 // not, 2 when the save cannot be read or replayed.
+//
+//   railmaster_replay --make GAME.sav [DAYS] [DATA_DIR]
+//
+// Makes a game to check with: a small map with rivals and territories, the
+// demo railway, DAYS of play (120 if not given), saved. Builds of the game
+// from different compilers must make it byte for byte alike, and replay
+// each other's (CI checks both).
 
+#include "railmaster/sim/demo.hpp"
 #include "railmaster/sim/world.hpp"
 
 #include <chrono>
@@ -39,11 +47,38 @@ GameData load_data(const std::string& dir) {
     return d;
 }
 
+int make(const std::string& out, int days, const std::string& dir) {
+    WorldConfig cfg;
+    cfg.width_tiles = cfg.height_tiles = 128;
+    cfg.seed = 2024;
+    cfg.rivals = 2;
+    cfg.territories = 4;
+    World w(cfg, load_data(dir));
+    (void)build_demo_network(w); // logged commands, as a player's
+    for (int t = 0; t < days * World::kTicksPerDay; ++t) w.tick();
+    std::ofstream file(out, std::ios::binary);
+    const std::string bytes = w.save();
+    file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    if (!file) throw std::runtime_error("cannot write " + out);
+    std::printf("made %s: %d days, %zu commands, checksum %016llx\n", out.c_str(), days, w.command_log().size(),
+                static_cast<unsigned long long>(w.checksum()));
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc >= 3 && std::string(argv[1]) == "--make") {
+        try {
+            const int days = argc > 3 ? std::stoi(argv[3]) : 120;
+            return make(argv[2], days, argc > 4 ? argv[4] : RAILMASTER_DEFAULT_DATA_DIR);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "%s\n", e.what());
+            return 2;
+        }
+    }
     if (argc < 2) {
-        std::fprintf(stderr, "usage: railmaster_replay GAME.sav [DATA_DIR]\n");
+        std::fprintf(stderr, "usage: railmaster_replay GAME.sav [DATA_DIR], or railmaster_replay --make GAME.sav [DAYS] [DATA_DIR]\n");
         return 2;
     }
     const std::string dir = argc > 2 ? argv[2] : RAILMASTER_DEFAULT_DATA_DIR;

@@ -81,3 +81,29 @@ jobs:
         with:
           name: Railmaster-macOS-apple-silicon
           path: ~/Desktop/Railmaster-*.zip
+
+  # The simulation must run alike whichever compiler built it (multiplayer
+  # and replays depend on it): gcc's and clang's builds make the same game
+  # byte for byte, and each replays the other's. (C++ leaves some orders of
+  # evaluation to the compiler; gcc and clang differ.)
+  determinism:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nlohmann-json3-dev zlib1g-dev
+      - name: Build with gcc and clang
+        run: |
+          for cc in g++ clang++; do
+            CXX=$cc cmake -S . -B build-$cc -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_BUILD_CLIENT=OFF -DRAILMASTER_BUILD_TESTS=OFF
+            cmake --build build-$cc --target railmaster_replay
+          done
+      - name: Same game from both, and each replays the other's
+        run: |
+          build-g++/tools/replay/railmaster_replay --make gcc.sav
+          build-clang++/tools/replay/railmaster_replay --make clang.sav
+          cmp gcc.sav clang.sav
+          build-clang++/tools/replay/railmaster_replay gcc.sav
+          build-g++/tools/replay/railmaster_replay clang.sav
