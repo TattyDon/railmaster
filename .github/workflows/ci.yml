@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: brew install ninja sdl2 nlohmann-json
+        run: brew install ninja sdl2 nlohmann-json doctest
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_WARNINGS_AS_ERRORS=ON
       - name: Build
@@ -63,6 +63,20 @@ jobs:
           mkdir -p "$HOME/Desktop"
           packaging/macos/share.sh
           unzip -l "$HOME"/Desktop/Railmaster-*.zip | grep -E 'MacOS/Railmaster|Frameworks/'
+      - name: The shared app starts without Homebrew's SDL
+        run: |
+          # As on a Mac without Homebrew: SDL's libraries hidden, the app
+          # from the zip must find its own.
+          set -o pipefail
+          for f in sdl2-compat sdl2 sdl3; do
+            [ -d "/opt/homebrew/Cellar/$f" ] && sudo mv "/opt/homebrew/Cellar/$f" "/opt/homebrew/Cellar/$f.hidden" || true
+          done
+          mkdir -p "$RUNNER_TEMP/unzipped"
+          ditto -x -k "$HOME"/Desktop/Railmaster-*.zip "$RUNNER_TEMP/unzipped"
+          DYLD_PRINT_LIBRARIES=1 "$RUNNER_TEMP/unzipped/Railmaster.app/Contents/MacOS/Railmaster" --version 2>&1 | grep -iE 'sdl|railmaster'
+          for f in sdl2-compat sdl2 sdl3; do
+            [ -d "/opt/homebrew/Cellar/$f.hidden" ] && sudo mv "/opt/homebrew/Cellar/$f.hidden" "/opt/homebrew/Cellar/$f" || true
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: Railmaster-macOS-apple-silicon

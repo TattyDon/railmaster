@@ -1,6 +1,8 @@
 find_package(doctest QUIET)
 if(NOT doctest_FOUND)
     include(FetchContent)
+    # doctest 2.4.11 asks for a CMake older than CMake 4 still accepts.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
     FetchContent_Declare(doctest
         GIT_REPOSITORY https://github.com/doctest/doctest.git
         GIT_TAG v2.4.11)

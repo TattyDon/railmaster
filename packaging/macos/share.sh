@@ -58,6 +58,25 @@ while [ -n "$todo" ]; do
         install_name_tool -change "$lib" "@executable_path/../Frameworks/$name" "$binary"
     done
 done
+# Homebrew's sdl2 is sdl2-compat: SDL2's interface over SDL3, which it
+# loads as it starts rather than linking to it, so otool does not list it.
+# It looks for SDL3 beside itself first: put it there.
+for compat in "$frameworks"/libSDL2*.dylib; do
+    [ -f "$compat" ] || continue
+    if grep -q "libSDL3" "$compat"; then
+        sdl3="$(brew --prefix sdl3 2>/dev/null)/lib/libSDL3.0.dylib"
+        if [ ! -f "$sdl3" ]; then
+            echo "SDL2 here is sdl2-compat, but SDL3 was not found at $sdl3" >&2
+            exit 1
+        fi
+        cp -L "$sdl3" "$frameworks/libSDL3.0.dylib"
+        chmod u+w "$frameworks/libSDL3.0.dylib"
+        install_name_tool -id "@executable_path/../Frameworks/libSDL3.0.dylib" "$frameworks/libSDL3.0.dylib"
+        # And under the other name sdl2-compat may look for (a copy: signing
+        # is fussy about links).
+        cp "$frameworks/libSDL3.0.dylib" "$frameworks/libSDL3.dylib"
+    fi
+done
 left="$(outside "$app/Contents/MacOS/Railmaster"; for f in "$frameworks"/*; do [ -f "$f" ] && outside "$f"; done)"
 if [ -n "$left" ]; then
     echo "Still linked outside the app (the other Mac would need these):" >&2
