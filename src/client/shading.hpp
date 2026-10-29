@@ -25,6 +25,8 @@ unsigned white_texture();
 // looks down along the sun at the camera's target, over an area that grows
 // as the camera pulls back. end_shadow_pass restores the camera.
 void begin_shadow_pass(Camera& cam);
+// Drawing into the shadow map now (flat things that cast nothing may skip it).
+bool in_shadow_pass();
 void end_shadow_pass(Camera& cam);
 
 // The time of day, 0 to 1 round the clock: 0 day, 0.25 dusk, 0.5 night,

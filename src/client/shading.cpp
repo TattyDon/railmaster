@@ -293,6 +293,7 @@ float g_rain = 0.0f;
 float g_snow = 0.0f, g_autumn = 0.0f, g_clock = 0.0f;
 std::array<float, 16> g_light{}; // map tiles to the shadow map's clip space
 bool g_shadows_ready = false;
+bool g_in_shadow_pass = false;
 
 GLuint compile(GLenum kind, const char* src) {
     const GLuint s = p_create_shader(kind);
@@ -408,8 +409,11 @@ void horizon_rgb(float& r, float& g, float& b) {
     b = kHorizon[2];
 }
 
+bool in_shadow_pass() { return g_in_shadow_pass; }
+
 void begin_shadow_pass(Camera& cam) {
     if (!g_active || !g_shadows_ready) return;
+    g_in_shadow_pass = true;
     // An orthographic view down the sun's rays onto the area round the
     // target, wider as the camera pulls back.
     const float extent = std::clamp(cam.distance * 1.6f, 10.0f, 160.0f);
@@ -456,6 +460,7 @@ void begin_shadow_pass(Camera& cam) {
 
 void end_shadow_pass(Camera& cam) {
     if (!g_active || !g_shadows_ready) return;
+    g_in_shadow_pass = false;
     glDisable(GL_POLYGON_OFFSET_FILL);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     p_bind_framebuffer(GL_FRAMEBUFFER, 0);

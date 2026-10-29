@@ -3624,13 +3624,97 @@ void draw_station(sim::StationSize size, float x, float y, float z, float dx, fl
 // What stands where (railway, industries, towns) and how the towns are laid
 // out, kept between frames: rebuilt only when the railway, the sites, the
 // towns or the drawing scale change. `version` counts rebuilds.
+// The fields round the towns (decoration only: the simulation knows nothing
+// of them). Each tile is one field, two or four, each with its crop and the
+// way its furrows run; hedges along the tiles' edges.
+enum class Crop : std::uint8_t { Wheat, Barley, Roots, Pasture, Hay };
+struct Field {
+    float x0, y0, x1, y1; // tiles
+    Crop crop;
+    bool across; // furrows run along y rather than x
+};
+struct Fields {
+    std::vector<Field> fields;
+    std::vector<std::array<float, 4>> hedges; // a hedge's middle and direction (a tile long)
+    std::vector<std::array<int, 2>> tiles;    // the tiles they cover
+};
+
 struct Scene {
     std::uint64_t key = 0;
     std::uint64_t version = 0;
     std::optional<Occupancy> taken;     // railway and industries: houses keep off
-    std::optional<Occupancy> wooded;    // that and the towns: trees keep off
+    std::optional<Occupancy> wooded;    // that, the towns and their fields: trees keep off
     TownLayout towns;
+    Fields fields;
 };
+
+float map_noise(float x, float y, float cells, std::uint32_t seed);
+
+// The fields round each town: open, gentle grassland within a ring about
+// it (wider for bigger towns, ragged at the edge), clear of houses,
+// streets, track, stations and industries.
+Fields lay_out_fields(const sim::Economy& eco, const Occupancy& wooded, const Camera& cam) {
+    Fields out;
+    const sim::Terrain* t = cam.terrain;
+    if (t == nullptr) return out;
+    const int w = t->width(), h = t->height();
+    std::vector<bool> field(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
+    const auto index = [&](int x, int y) { return static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x); };
+    const float steep = static_cast<float>(t->tile_size_m()) * 0.07f;
+    for (const sim::Town& town : eco.towns()) {
+        const sim::MapPoint c = eco.node_centre(town.cx, town.cy);
+        const float cx = static_cast<float>(c.x_mm) / cam.mm_per_tile, cy = static_cast<float>(c.y_mm) / cam.mm_per_tile;
+        const float reach = std::min(14.0f, 4.5f + 1.4f * std::sqrt(static_cast<float>(town.houses.size())));
+        const int r = static_cast<int>(std::ceil(reach * 1.25f));
+        for (int ty = std::max(0, static_cast<int>(cy) - r); ty <= std::min(h - 1, static_cast<int>(cy) + r); ++ty) {
+            for (int tx = std::max(0, static_cast<int>(cx) - r); tx <= std::min(w - 1, static_cast<int>(cx) + r); ++tx) {
+                if (field[index(tx, ty)]) continue;
+                const float mx = static_cast<float>(tx) + 0.5f, my = static_cast<float>(ty) + 0.5f;
+                const float ragged = 0.7f + 0.55f * map_noise(mx, my, 3.0f, 81);
+                if (std::hypot(mx - cx, my - cy) > reach * ragged) continue;
+                const sim::GroundType g = t->ground(tx, ty);
+                if (g != sim::GroundType::Grass && g != sim::GroundType::Farmland) continue;
+                const std::int32_t hs[4] = {t->corner_height(tx, ty), t->corner_height(tx + 1, ty), t->corner_height(tx, ty + 1),
+                                            t->corner_height(tx + 1, ty + 1)};
+                if (static_cast<float>(*std::max_element(hs, hs + 4) - *std::min_element(hs, hs + 4)) > steep) continue;
+                if (wooded.blocked(mx, my, 0.45f)) continue;
+                field[index(tx, ty)] = true;
+                out.tiles.push_back({tx, ty});
+                // One field, two halves or four quarters, each its own crop.
+                const std::uint32_t th = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 71);
+                const auto x0 = static_cast<float>(tx), y0 = static_cast<float>(ty);
+                const auto part = [&](float a0, float b0, float a1, float b1, std::uint32_t salt) {
+                    const std::uint32_t ph = hash(th, salt, 72);
+                    out.fields.push_back({a0, b0, a1, b1, static_cast<Crop>(ph % 5), ((ph >> 5) & 1u) != 0});
+                };
+                switch ((th >> 8) % 4) {
+                case 0: part(x0, y0, x0 + 1, y0 + 1, 1); break;
+                case 1: part(x0, y0, x0 + 0.5f, y0 + 1, 1), part(x0 + 0.5f, y0, x0 + 1, y0 + 1, 2); break;
+                case 2: part(x0, y0, x0 + 1, y0 + 0.5f, 1), part(x0, y0 + 0.5f, x0 + 1, y0 + 1, 2); break;
+                default:
+                    for (std::uint32_t q = 0; q < 4; ++q) {
+                        const float qx = x0 + 0.5f * static_cast<float>(q % 2), qy = y0 + 0.5f * static_cast<float>(q / 2);
+                        part(qx, qy, qx + 0.5f, qy + 0.5f, q + 1);
+                    }
+                }
+            }
+        }
+    }
+    // Hedges round the farmland, and along about half the edges between its tiles.
+    for (const auto& [tx, ty] : out.tiles) {
+        const auto x0 = static_cast<float>(tx), y0 = static_cast<float>(ty);
+        const int nb[4][2] = {{tx, ty - 1}, {tx + 1, ty}, {tx, ty + 1}, {tx - 1, ty}};
+        const float edge[4][4] = {{x0, y0, 1, 0}, {x0 + 1, y0, 0, 1}, {x0, y0 + 1, 1, 0}, {x0, y0, 0, 1}};
+        for (int i = 0; i < 4; ++i) {
+            const int nx = nb[i][0], ny = nb[i][1];
+            const bool farmed = nx >= 0 && ny >= 0 && nx < w && ny < h && field[index(nx, ny)];
+            // Each shared edge once (from its lower tile), and then only some.
+            if (farmed && (i >= 2 || unit(hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), 73 + static_cast<std::uint32_t>(i))) < 0.5f)) continue;
+            out.hedges.push_back({edge[i][0] + edge[i][2] * 0.5f, edge[i][1] + edge[i][3] * 0.5f, edge[i][2], edge[i][3]});
+        }
+    }
+    return out;
+}
 
 std::uint64_t scene_key(const sim::Economy& eco, const sim::Railway& rw, const Camera& cam) {
     std::uint64_t h = 1469598103934665603ull;
@@ -3670,6 +3754,8 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
             sc.wooded->mark_disc(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0.12f);
         }
     }
+    sc.fields = lay_out_fields(eco, *sc.wooded, cam);
+    for (const auto& [tx, ty] : sc.fields.tiles) sc.wooded->mark_square(static_cast<float>(tx) + 0.5f, static_cast<float>(ty) + 0.5f, 0.42f);
     sc.key = key;
     ++sc.version;
     return sc;
@@ -5003,6 +5089,158 @@ void draw_houses(const TownLayout& towns, const std::vector<std::array<float, 12
     }
 }
 
+// The day of the year (0 to 365) and how much snow lies, for the crops.
+float g_crop_day = 180.0f;
+float g_crop_snow = 0.0f;
+
+// A crop's colour on a day of the year: `furrow` is the darker of the
+// strips (bare earth between rows, or the tramlines in a cereal).
+void crop_rgb(Crop crop, float day, bool furrow, float* rgb) {
+    static constexpr float kEarth[3] = {0.43f, 0.32f, 0.21f}, kDark[3] = {0.34f, 0.25f, 0.17f};
+    static constexpr float kShoots[3] = {0.33f, 0.47f, 0.19f}, kRipe[3] = {0.8f, 0.66f, 0.3f}, kPale[3] = {0.84f, 0.75f, 0.45f};
+    static constexpr float kStubble[3] = {0.7f, 0.63f, 0.42f}, kLeaf[3] = {0.22f, 0.4f, 0.15f}, kGrass[3] = {0.35f, 0.53f, 0.23f};
+    static constexpr float kHay[3] = {0.63f, 0.62f, 0.37f};
+    const auto ramp = [](float x, float a, float b) { return std::clamp((x - a) / (b - a), 0.0f, 1.0f); };
+    const auto mix = [&](const float* a, const float* b, float k) {
+        for (int i = 0; i < 3; ++i) rgb[i] = a[i] + (b[i] - a[i]) * k;
+    };
+    const float* earth = furrow ? kDark : kEarth;
+    switch (crop) {
+    case Crop::Wheat:
+    case Crop::Barley: {
+        // Sown in the autumn, green through the spring, ripe in high summer,
+        // cut to stubble, ploughed in the autumn and sown again.
+        const float shift = crop == Crop::Barley ? -12.0f : 0.0f;
+        const float* ripe = crop == Crop::Barley ? kPale : kRipe;
+        const float d = day - shift;
+        float green = 0.25f + 0.65f * ramp(d, 50, 140);
+        if (d >= 300) green = 0.25f * ramp(d, 300, 340);
+        if (d < 230) {
+            mix(earth, kShoots, furrow ? green * 0.85f : green);
+            if (d > 150) {
+                float turned[3];
+                for (int i = 0; i < 3; ++i) turned[i] = rgb[i];
+                mix(turned, ripe, ramp(d, 150, 195) * (furrow ? 0.92f : 1.0f));
+            }
+        } else if (d < 270) {
+            mix(kStubble, earth, furrow ? 0.25f : 0.0f);
+        } else {
+            mix(earth, kShoots, d >= 300 ? green : 0.0f);
+        }
+        return;
+    }
+    case Crop::Roots:
+        // Rows of leaves over the summer, bare earth the rest of the year.
+        if (!furrow && day > 120 && day < 270) mix(earth, kLeaf, ramp(day, 120, 165) * (1.0f - ramp(day, 245, 270)));
+        else mix(earth, earth, 0);
+        return;
+    case Crop::Pasture:
+        mix(kGrass, kHay, (1.0f - ramp(day, 70, 120) + ramp(day, 300, 350)) * 0.25f + (furrow ? 0.04f : 0.0f));
+        return;
+    case Crop::Hay:
+        // Long grass, cut in midsummer to pale rows, then growing back.
+        mix(kGrass, kHay, ramp(day, 175, 185) * (1.0f - ramp(day, 200, 245)) * (furrow ? 1.0f : 0.7f));
+        return;
+    }
+}
+
+// Furrows: light and dark bands across the texture (each copy is one pair),
+// a little uneven, multiplying a field's colour.
+GLuint furrow_texture() {
+    static const GLuint tex = make_texture([](int x, int y, float u, float v, float* rgb) {
+        const float band = 0.5f + 0.5f * std::cos(u * 6.2831853f);
+        const float grain = (unit(hash(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y), 91)) - 0.5f) * 0.08f;
+        const float k = 0.72f + 0.28f * band + grain + 0.04f * wrap_noise(u, v, 2, 8, 92);
+        rgb[0] = rgb[1] = rgb[2] = k;
+    });
+    return tex;
+}
+
+// How many furrows (dark bands) to a tile.
+constexpr float kFurrows = 7.0f;
+
+// The fields (see Field): each the crop's colour over the furrows, hedges
+// round them. A display list, rebuilt when the scene changes and each week
+// of the year (the crops grow) or as the snow comes and goes. Flat, so
+// left out of the shadows.
+void draw_fields(const Scene& sc, const Camera& cam) {
+    if (shading::in_shadow_pass()) return;
+    static GLuint list = 0;
+    static std::uint64_t list_key = 0;
+    const std::uint64_t key = (sc.version * 64 + static_cast<std::uint64_t>(g_crop_day / 7.0f)) * 16 +
+                              static_cast<std::uint64_t>(g_crop_snow * 10.0f);
+    if (list != 0 && list_key == key) {
+        glCallList(list);
+        return;
+    }
+    furrow_texture(); // made now: a texture upload inside the list would only be recorded
+    if (list == 0) list = glGenLists(1);
+    list_key = key;
+    glNewList(list, GL_COMPILE_AND_EXECUTE);
+    glBindTexture(GL_TEXTURE_2D, furrow_texture());
+    glBegin(GL_QUADS);
+    glNormal3f(0, 0, 1);
+    constexpr float kSnow[3] = {0.9f, 0.93f, 0.97f};
+    for (const Field& f : sc.fields.fields) {
+        float rgb[3];
+        crop_rgb(f.crop, g_crop_day, false, rgb);
+        for (int i = 0; i < 3; ++i) rgb[i] += (kSnow[i] - rgb[i]) * g_crop_snow * 0.88f; // snow over it, the furrows showing
+        glColor3fv(rgb);
+        // In pieces of at most half a tile, so it lies on the ground.
+        const int nx = std::max(1, static_cast<int>(std::lround((f.x1 - f.x0) * 2))), ny = std::max(1, static_cast<int>(std::lround((f.y1 - f.y0) * 2)));
+        const auto corner = [&](float x, float y) {
+            // The bands run across the furrows' direction.
+            if (f.across) glTexCoord2f(x * kFurrows, y);
+            else glTexCoord2f(y * kFurrows, x);
+            glVertex3f(x, y, cam.ground_z(x, y) + kPatchLift);
+        };
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i) {
+                const float xa = f.x0 + (f.x1 - f.x0) * static_cast<float>(i) / static_cast<float>(nx);
+                const float xb = f.x0 + (f.x1 - f.x0) * static_cast<float>(i + 1) / static_cast<float>(nx);
+                const float ya = f.y0 + (f.y1 - f.y0) * static_cast<float>(j) / static_cast<float>(ny);
+                const float yb = f.y0 + (f.y1 - f.y0) * static_cast<float>(j + 1) / static_cast<float>(ny);
+                corner(xa, ya);
+                corner(xb, ya);
+                corner(xb, yb);
+                corner(xa, yb);
+            }
+    }
+    glEnd();
+    // The hedges: a low wall of green along each edge, its two long sides
+    // and its top (the ends hardly show).
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
+    glBegin(GL_QUADS);
+    constexpr float kHalfWidth = 0.014f, kHeight = 0.026f;
+    static constexpr float kHedge[3] = {0.16f, 0.32f, 0.13f}, kHedgeTop[3] = {0.2f, 0.37f, 0.15f};
+    for (const auto& [mx, my, dx, dy] : sc.fields.hedges) {
+        const float ax = mx - dx * 0.5f, ay = my - dy * 0.5f, bx = mx + dx * 0.5f, by = my + dy * 0.5f;
+        const float za = cam.ground_z(ax, ay) - 0.004f, zb = cam.ground_z(bx, by) - 0.004f;
+        const float cx = -dy * kHalfWidth, cy = dx * kHalfWidth;
+        glColor3fv(kHedge);
+        for (const float side : {-1.0f, 1.0f}) {
+            glNormal3f(-dy * side, dx * side, 0.0f);
+            glVertex3f(ax + cx * side, ay + cy * side, za);
+            glVertex3f(bx + cx * side, by + cy * side, zb);
+            glVertex3f(bx + cx * side, by + cy * side, zb + kHeight);
+            glVertex3f(ax + cx * side, ay + cy * side, za + kHeight);
+        }
+        glColor3fv(kHedgeTop);
+        glNormal3f(0, 0, 1);
+        glVertex3f(ax - cx, ay - cy, za + kHeight);
+        glVertex3f(bx - cx, by - cy, zb + kHeight);
+        glVertex3f(bx + cx, by + cy, zb + kHeight);
+        glVertex3f(ax + cx, ay + cy, za + kHeight);
+    }
+    glEnd();
+    glEndList();
+}
+
+void set_season_day(float day_of_year, float snow) {
+    g_crop_day = std::clamp(day_of_year, 0.0f, 365.0f);
+    g_crop_snow = std::clamp(snow, 0.0f, 1.0f);
+}
+
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
                 std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo) {
     const float px = 1.0f / cam.zoom;
@@ -5051,6 +5289,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         update_construction(towns);
         const std::uint64_t key = (sc.version * 4 + (year < 1890 ? 0u : year < 1930 ? 1u : 2u)) * 1099511628211ull ^ g_construction.key;
         begin_lit();
+        draw_fields(sc, cam);
         if (list != 0 && list_key == key) {
             glCallList(list);
             draw_houses(towns, list_near, key, cam);

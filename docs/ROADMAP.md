@@ -683,6 +683,19 @@ game byte for byte and replay each other's (railmaster_replay --make);
 put back, the old code fails it. Homebrew's sdl2 has become sdl2-compat
 (over SDL3, loaded as it starts), so share.sh puts SDL3 in the app too.
 
+Farm fields round the towns, as RT3's countryside has: a ragged ring of
+open, gentle grassland about each town (wider for bigger towns) is laid
+out in fields, a tile split into one, two or four, each with its crop
+(wheat, barley, roots, pasture, hay) and furrows running one way or the
+other, hedges round the farmland and along half the edges inside it, and
+no trees on it. The crops follow the year (green, ripe, stubble,
+ploughed, under snow). Decoration only: the simulation knows nothing of
+them. Drawn as one quad a field with a furrow texture (a first version
+in strips came to about a million quads on a large map), kept out of the
+shadow pass. A first version let the grass show through in leaf shapes
+along each tile's diagonal: lifted too little above the ground, which
+the terrain draws as two flat triangles a tile.
+
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without
   the host restarting already works (their seat is kept by name); what is

@@ -1307,6 +1307,7 @@ int main(int argc, char* argv[]) {
             float autumn = ramp(doy, 253, 288) * (1.0f - ramp(doy, 314, 344));
             if (!tools.settings().seasons || editor.open()) snow = autumn = 0;
             client::shading::set_season(snow, autumn);
+            client::set_season_day(tools.settings().seasons && !editor.open() ? doy : 180.0f, snow);
             const bool weather = tools.settings().clouds && !editor.open();
             client::shading::set_clouds(weather);
             // Rain (or snow in winter) when the clouds are thickest.

@@ -60,6 +60,9 @@ void owner_rgb(sim::CompanyId owner, std::optional<sim::CompanyId> player, float
 // are ringed red and consumers green. In 3D, towns are laid out along
 // streets (paved as the years pass), clear of the railway's track and
 // stations.
+// The day of the year (0 to 365) and the snow lying (0 to 1), for the
+// crops in the fields round the towns.
+void set_season_day(float day_of_year, float snow);
 void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries, const sim::Railway& rw,
                 std::int32_t year, const Camera& cam, std::optional<sim::CargoId> cargo);
 // RT3-style cargo map: red where the cargo is cheap, green where it is dear.

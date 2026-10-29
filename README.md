@@ -17,7 +17,8 @@ houses (gabled, hipped, L-shaped with a back wing, cross-gabled cottages
 and square Foursquares) with gardens behind, terraces, shops, town halls, churches in their churchyards and
 tree-lined greens (market squares with a fountain in the largest) along lamplit streets busy with
 wagons and, later, motor cars, and people walking them,
-allotments, cemeteries and ball grounds on their edges, and stations to
+allotments, cemeteries and ball grounds on their edges, a patchwork of
+farm fields with hedgerows round them, and stations to
 match; brick mills and works; engines, cars and trees, all from Kenney's
 CC0 kits; track, mines, farms and ports drawn in code; smoke from engines and chimneys; and a camera you can turn and tilt
 ([docs/ROADMAP.md](docs/ROADMAP.md) has what comes next). V switches to
@@ -357,7 +358,7 @@ and checks the economy against the spec's targets
 | N | Time of day: day, dusk, night, dawn, or a slow round of all four while the game runs. After dark, stars twinkle and the moon rises over the horizon, fixed in the sky as the view turns |
 | Clouds and weather | Clouds' shadows drift over the land with the wind; the sky clears and clouds over again every few minutes, and when it is thickest it rains (with its sound) or, in winter, snows, under a duller light. The menu's Settings turn it off |
 | Water | Rivers, lakes and the sea ripple in the wind (even while paused), mirror the sky at low angles and glint in the sun; a lake lies at one level inside earth banks, and rivers step down their rapids |
-| Seasons | The land follows the calendar: from mid September the broadleaf trees turn gold, orange and red (conifers stay green) and the grass fades; from late November snow lies on open ground, on the trees and on roofs into March, and in midwinter the water ices over. Track, roads, roofs and water keep their colours. The menu's Settings turn it off |
+| Seasons | The land follows the calendar: from mid September the broadleaf trees turn gold, orange and red (conifers stay green) and the grass fades; from late November snow lies on open ground, on the trees and on roofs into March, and in midwinter the water ices over. The fields round the towns follow the farming year: wheat and barley green in spring and gold in high summer, cut to stubble, ploughed in the autumn; root crops in leaf over the summer; hay cut in midsummer; all under snow in winter. Track, roads, roofs and water keep their colours. The menu's Settings turn it off |
 | F12 | Show frames a second and the time a frame takes (bottom right) |
 | `--look=X,Y` | Start with the view close over map tile (X, Y) |
 | Shift+0 to 9, 0 to 9 | Store the view as a bookmark; go back to it |
