@@ -60,6 +60,52 @@ float water_level(int tx, int ty) {
 }
 std::int32_t g_day = 0; // the game's, from set_game_day
 
+// Shores are rounded rather than square: a water tile's corner with land on
+// both sides of it is cut away in a quarter circle about the tile's centre
+// and filled with land, and a land tile's corner with water on both sides
+// and beyond is cut the same way and filled with water. A lone water tile
+// is a round pond; a lake's corners curve. The map's own edge is never cut.
+// Corners are counted (0,0), (1,0), (1,1), (0,1) in the tile.
+constexpr int kCorner[4][2] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+constexpr int kShoreArc = 6; // segments in each quarter circle
+template <typename Ground> unsigned shore_cuts(const Ground& t, int tx, int ty) {
+    const int w = t.width(), h = t.height();
+    const auto kind = [&](int x, int y) {
+        return x < 0 || y < 0 || x >= w || y >= h ? -1 : t.ground(x, y) == sim::GroundType::Water ? 1 : 0;
+    };
+    const int self = kind(tx, ty);
+    if (self < 0) return 0;
+    unsigned cuts = 0;
+    for (int k = 0; k < 4; ++k) {
+        const int dx = kCorner[k][0] * 2 - 1, dy = kCorner[k][1] * 2 - 1;
+        const int a = kind(tx + dx, ty), b = kind(tx, ty + dy);
+        if (self == 1 ? (a == 0 && b == 0) : (a == 1 && b == 1 && kind(tx + dx, ty + dy) == 1)) cuts |= 1u << k;
+    }
+    return cuts;
+}
+// Whether the point (tiles) is water, with the shores rounded as drawn.
+// Off the map counts as water.
+template <typename Ground> bool shore_wet(const Ground& t, float x, float y) {
+    const int tx = static_cast<int>(std::floor(x)), ty = static_cast<int>(std::floor(y));
+    if (tx < 0 || ty < 0 || tx >= t.width() || ty >= t.height()) return true;
+    const bool water = t.ground(tx, ty) == sim::GroundType::Water;
+    const float fx = x - static_cast<float>(tx) - 0.5f, fy = y - static_cast<float>(ty) - 0.5f;
+    if (fx * fx + fy * fy <= 0.25f) return water;
+    const int k = fy < 0 ? (fx < 0 ? 0 : 1) : (fx < 0 ? 3 : 2);
+    return ((shore_cuts(t, tx, ty) >> k) & 1u) ? !water : water;
+}
+// The points of corner k's quarter circle, from one edge's midpoint to the
+// other's, going round the tile anticlockwise (tile-relative).
+std::array<std::array<float, 2>, kShoreArc + 1> shore_arc(int k) {
+    const float mid = std::atan2(static_cast<float>(kCorner[k][1]) - 0.5f, static_cast<float>(kCorner[k][0]) - 0.5f);
+    std::array<std::array<float, 2>, kShoreArc + 1> out{};
+    for (int i = 0; i <= kShoreArc; ++i) {
+        const float a = mid - 0.7853982f + 1.5707963f * static_cast<float>(i) / kShoreArc;
+        out[static_cast<std::size_t>(i)] = {0.5f + 0.5f * std::cos(a), 0.5f + 0.5f * std::sin(a)};
+    }
+    return out;
+}
+
 // Lights seen this frame (tiles), shown after dark: a glow at each, and
 // for headlamps a pool of light on the ground ahead.
 struct LightSource {
@@ -400,7 +446,7 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
             c[2] = b + (0.45f - b) * rocky;
         }
     }
-    const auto corner_colour = [&](int cx, int cy) {
+    const auto corner_rgb = [&](int cx, int cy, float* out) {
         float sum[3] = {0, 0, 0};
         int n = 0;
         for (int dy = -1; dy <= 0; ++dy)
@@ -413,48 +459,26 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
             }
         // A little brighter than the tile colours: the texture averages darker.
         constexpr float kBright = 1.12f;
-        if (n == 0) glColor3f(0.45f * kBright, 0.42f * kBright, 0.3f * kBright);
-        else glColor3f(sum[0] * kBright / static_cast<float>(n), sum[1] * kBright / static_cast<float>(n), sum[2] * kBright / static_cast<float>(n));
+        for (int k = 0; k < 3; ++k) out[k] = n == 0 ? (k == 0 ? 0.45f : k == 1 ? 0.42f : 0.3f) * kBright : sum[k] * kBright / static_cast<float>(n);
     };
-    // Land, textured: the texture brightens and darkens the lit colours.
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, ground_texture());
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-    glBegin(GL_QUADS);
-    const auto land_corner = [&](int cx, int cy) {
-        corner_colour(cx, cy);
-        normal(cx, cy);
-        glTexCoord2f(static_cast<float>(cx) / kGroundTextureTiles, static_cast<float>(cy) / kGroundTextureTiles);
-        glVertex3f(static_cast<float>(cx), static_cast<float>(cy), z(cx, cy));
-    };
-    for (int ty = 0; ty < hgt; ++ty) {
-        for (int tx = 0; tx < w; ++tx) {
-            if (t.ground(tx, ty) == sim::GroundType::Water) continue;
-            land_corner(tx, ty);
-            land_corner(tx + 1, ty);
-            land_corner(tx + 1, ty + 1);
-            land_corner(tx, ty + 1);
-        }
-    }
-    glEnd();
     // Each water tile's level: its lowest corner, then lowered to its water
     // neighbours' where they are close, so a lake lies at one level while a
     // river still steps down its rapids.
     std::vector<float> level(static_cast<std::size_t>(w) * static_cast<std::size_t>(hgt), 0.0f);
     const auto at = [&](int x, int y) -> float& { return level[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)]; };
+    const auto wet = [&](int x, int y) { return x >= 0 && y >= 0 && x < w && y < hgt && t.ground(x, y) == sim::GroundType::Water; };
     for (int ty = 0; ty < hgt; ++ty)
         for (int tx = 0; tx < w; ++tx)
-            if (t.ground(tx, ty) == sim::GroundType::Water)
-                at(tx, ty) = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
+            if (wet(tx, ty)) at(tx, ty) = std::min({z(tx, ty), z(tx + 1, ty), z(tx, ty + 1), z(tx + 1, ty + 1)});
     constexpr float kSameWater = 0.3f; // tiles of height
     for (bool changed = true; changed;) {
         changed = false;
         for (int ty = 0; ty < hgt; ++ty) {
             for (int tx = 0; tx < w; ++tx) {
-                if (t.ground(tx, ty) != sim::GroundType::Water) continue;
+                if (!wet(tx, ty)) continue;
                 const int nb[4][2] = {{tx - 1, ty}, {tx + 1, ty}, {tx, ty - 1}, {tx, ty + 1}};
                 for (const auto& n : nb) {
-                    if (n[0] < 0 || n[1] < 0 || n[0] >= w || n[1] >= hgt || t.ground(n[0], n[1]) != sim::GroundType::Water) continue;
+                    if (!wet(n[0], n[1])) continue;
                     const float other = at(n[0], n[1]);
                     if (other < at(tx, ty) - 1e-4f && at(tx, ty) - other < kSameWater) {
                         at(tx, ty) = other;
@@ -466,59 +490,235 @@ void build_terrain_mesh(const sim::Terrain& t, const Camera& cam) {
     }
     g_water_level = level; // for what floats on it (boats, ducks)
     g_water_w = w;
-    // Banks: water lies flat at its tile's lowest corner, so where the
-    // ground round it stands higher, an earth bank runs up from the water
-    // to the ground along each edge; no gap to the sky shows between them.
-    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
+    // The ground's height inside a tile (fx, fy from 0 to 1), as a blend of
+    // its corners (along its edges, as the neighbouring tile has it).
+    const auto blend = [](const float* v, float fx, float fy) {
+        return v[0] * (1 - fx) * (1 - fy) + v[1] * fx * (1 - fy) + v[2] * fx * fy + v[3] * (1 - fx) * fy;
+    };
+    const auto tile_z = [&](int tx, int ty, float fx, float fy) {
+        const float c[4] = {z(tx, ty), z(tx + 1, ty), z(tx + 1, ty + 1), z(tx, ty + 1)};
+        return blend(c, fx, fy);
+    };
+    // A point of land anywhere in a tile: colour, normal and height blended
+    // from its corners. Returns its height.
+    const auto land_point = [&](int tx, int ty, float fx, float fy, float floor_z) {
+        float rgb[4][3], nrm[4][3];
+        for (int k = 0; k < 4; ++k) {
+            const int cx = tx + kCorner[k][0], cy = ty + kCorner[k][1];
+            corner_rgb(cx, cy, rgb[k]);
+            nrm[k][0] = -(z(cx + 1, cy) - z(cx - 1, cy)) / 2;
+            nrm[k][1] = -(z(cx, cy + 1) - z(cx, cy - 1)) / 2;
+        }
+        float out[5];
+        for (int j = 0; j < 5; ++j) {
+            float v[4];
+            for (int k = 0; k < 4; ++k) v[k] = j < 3 ? rgb[k][j] : nrm[k][j - 3];
+            out[j] = blend(v, fx, fy);
+        }
+        const float h = std::max(floor_z, tile_z(tx, ty, fx, fy));
+        const float x = static_cast<float>(tx) + fx, y = static_cast<float>(ty) + fy;
+        glColor3f(out[0], out[1], out[2]);
+        glNormal3f(out[3], out[4], 1.0f);
+        glTexCoord2f(x / kGroundTextureTiles, y / kGroundTextureTiles);
+        glVertex3f(x, y, h);
+        return h;
+    };
+    // A tile's outline, with its cut corners rounded (tile-relative).
+    const auto outline = [](unsigned cuts) {
+        std::vector<std::array<float, 2>> o;
+        for (int k = 0; k < 4; ++k) {
+            if ((cuts >> k) & 1u) {
+                for (const auto& p : shore_arc(k)) o.push_back(p);
+            } else {
+                o.push_back({static_cast<float>(kCorner[k][0]), static_cast<float>(kCorner[k][1])});
+            }
+        }
+        return o;
+    };
+    // The level of the water filling a land tile's cut corner k.
+    const auto fill_level = [&](int tx, int ty, int k) {
+        const int dx = kCorner[k][0] * 2 - 1, dy = kCorner[k][1] * 2 - 1;
+        return std::min({at(tx + dx, ty), at(tx, ty + dy), at(tx + dx, ty + dy)});
+    };
+    std::vector<unsigned> cuts(static_cast<std::size_t>(w) * static_cast<std::size_t>(hgt));
+    for (int ty = 0; ty < hgt; ++ty)
+        for (int tx = 0; tx < w; ++tx) cuts[static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)] = shore_cuts(t, tx, ty);
+    const auto cut = [&](int tx, int ty) { return cuts[static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)]; };
+    // Whether the tile has the map point (px, py) as a cut corner.
+    const auto cut_at = [&](int tx, int ty, int px, int py) {
+        if (tx < 0 || ty < 0 || tx >= w || ty >= hgt) return false;
+        for (int k = 0; k < 4; ++k)
+            if (tx + kCorner[k][0] == px && ty + kCorner[k][1] == py) return ((cut(tx, ty) >> k) & 1u) != 0;
+        return false;
+    };
+    // Land, textured: the texture brightens and darkens the lit colours.
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, ground_texture());
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
     glBegin(GL_QUADS);
-    glColor3f(0.42f, 0.36f, 0.26f);
+    const auto land_corner = [&](int cx, int cy) {
+        float rgb[3];
+        corner_rgb(cx, cy, rgb);
+        glColor3fv(rgb);
+        normal(cx, cy);
+        glTexCoord2f(static_cast<float>(cx) / kGroundTextureTiles, static_cast<float>(cy) / kGroundTextureTiles);
+        glVertex3f(static_cast<float>(cx), static_cast<float>(cy), z(cx, cy));
+    };
     for (int ty = 0; ty < hgt; ++ty) {
         for (int tx = 0; tx < w; ++tx) {
-            if (t.ground(tx, ty) != sim::GroundType::Water) continue;
-            const float wz = at(tx, ty);
-            // The four edges, corner to corner, with the way out of the tile.
-            const int edges[4][6] = {{tx, ty, tx + 1, ty, 0, -1},
-                                     {tx + 1, ty, tx + 1, ty + 1, 1, 0},
-                                     {tx + 1, ty + 1, tx, ty + 1, 0, 1},
-                                     {tx, ty + 1, tx, ty, -1, 0}};
-            for (const auto& e : edges) {
-                float za = z(e[0], e[1]), zb = z(e[2], e[3]);
-                // Next to more water, only the step up to its level.
-                const int nx = tx + e[4], ny = ty + e[5];
-                if (nx >= 0 && ny >= 0 && nx < w && ny < hgt && t.ground(nx, ny) == sim::GroundType::Water) {
-                    za = zb = std::min(at(nx, ny), std::max(za, zb));
+            if (wet(tx, ty) || cut(tx, ty)) continue;
+            land_corner(tx, ty);
+            land_corner(tx + 1, ty);
+            land_corner(tx + 1, ty + 1);
+            land_corner(tx, ty + 1);
+        }
+    }
+    glEnd();
+    // Land tiles with rounded corners, and the land filling water tiles'
+    // cut corners.
+    glBegin(GL_TRIANGLES);
+    for (int ty = 0; ty < hgt; ++ty) {
+        for (int tx = 0; tx < w; ++tx) {
+            const unsigned c = cut(tx, ty);
+            if (!c) continue;
+            if (!wet(tx, ty)) {
+                const auto o = outline(c);
+                for (std::size_t i = 0; i < o.size(); ++i) {
+                    const auto& a = o[i];
+                    const auto& b = o[(i + 1) % o.size()];
+                    land_point(tx, ty, 0.5f, 0.5f, -1e9f);
+                    land_point(tx, ty, a[0], a[1], -1e9f);
+                    land_point(tx, ty, b[0], b[1], -1e9f);
                 }
-                if (za <= wz + 1e-4f && zb <= wz + 1e-4f) continue;
-                glNormal3f(static_cast<float>(-e[4]), static_cast<float>(-e[5]), 0.6f); // facing the water
-                glVertex3f(static_cast<float>(e[0]), static_cast<float>(e[1]), wz);
-                glVertex3f(static_cast<float>(e[2]), static_cast<float>(e[3]), wz);
-                glVertex3f(static_cast<float>(e[2]), static_cast<float>(e[3]), zb);
-                glVertex3f(static_cast<float>(e[0]), static_cast<float>(e[1]), za);
+                continue;
+            }
+            for (int k = 0; k < 4; ++k) {
+                if (!((c >> k) & 1u)) continue;
+                const auto arc = shore_arc(k);
+                for (int i = 0; i < kShoreArc; ++i) {
+                    const auto& a = arc[static_cast<std::size_t>(i)];
+                    const auto& b = arc[static_cast<std::size_t>(i) + 1];
+                    land_point(tx, ty, static_cast<float>(kCorner[k][0]), static_cast<float>(kCorner[k][1]), at(tx, ty));
+                    land_point(tx, ty, b[0], b[1], at(tx, ty));
+                    land_point(tx, ty, a[0], a[1], at(tx, ty));
+                }
             }
         }
     }
     glEnd();
-    glBindTexture(GL_TEXTURE_2D, ground_texture());
-    // Water lies flat, at its lowest corner.
-    glBindTexture(GL_TEXTURE_2D, water_texture());
+    // Banks: water lies flat at its tile's lowest corner, so where the
+    // ground round it stands higher, an earth bank runs up from the water
+    // to the ground along each edge and round each rounded corner; no gap
+    // to the sky shows between them.
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
     glBegin(GL_QUADS);
-    glNormal3f(0, 0, 1);
+    glColor3f(0.42f, 0.36f, 0.26f);
+    // A bank along a rounded corner, from the water at `wz` up to the
+    // tile's ground; `out` faces it away from the tile's centre.
+    const auto arc_bank = [&](int tx, int ty, int k, float wz, bool out) {
+        const auto arc = shore_arc(k);
+        for (int i = 0; i < kShoreArc; ++i) {
+            const auto& a = arc[static_cast<std::size_t>(i)];
+            const auto& b = arc[static_cast<std::size_t>(i) + 1];
+            const float za = tile_z(tx, ty, a[0], a[1]), zb = tile_z(tx, ty, b[0], b[1]);
+            if (za <= wz + 1e-4f && zb <= wz + 1e-4f) continue;
+            const float nx = (a[0] + b[0]) / 2 - 0.5f, ny = (a[1] + b[1]) / 2 - 0.5f;
+            const float s = out ? 2.0f : -2.0f;
+            glNormal3f(nx * s, ny * s, 0.6f);
+            const float ax = static_cast<float>(tx) + a[0], ay = static_cast<float>(ty) + a[1];
+            const float bx = static_cast<float>(tx) + b[0], by = static_cast<float>(ty) + b[1];
+            glVertex3f(ax, ay, wz);
+            glVertex3f(bx, by, wz);
+            glVertex3f(bx, by, std::max(zb, wz));
+            glVertex3f(ax, ay, std::max(za, wz));
+        }
+    };
     for (int ty = 0; ty < hgt; ++ty) {
         for (int tx = 0; tx < w; ++tx) {
-            if (t.ground(tx, ty) != sim::GroundType::Water) continue;
-            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
+            if (!wet(tx, ty)) {
+                for (int k = 0; k < 4; ++k)
+                    if ((cut(tx, ty) >> k) & 1u) arc_bank(tx, ty, k, fill_level(tx, ty, k), true);
+                continue;
+            }
             const float wz = at(tx, ty);
-            const float* c = &tile_rgb[(static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)) * 3];
-            glColor3f(c[0], c[1], c[2]);
-            const float u = fx / kGroundTextureTiles, v = fy / kGroundTextureTiles, step = 1 / kGroundTextureTiles;
-            glTexCoord2f(u, v);
-            glVertex3f(fx, fy, wz);
-            glTexCoord2f(u + step, v);
-            glVertex3f(fx + 1, fy, wz);
-            glTexCoord2f(u + step, v + step);
-            glVertex3f(fx + 1, fy + 1, wz);
-            glTexCoord2f(u, v + step);
-            glVertex3f(fx, fy + 1, wz);
+            for (int k = 0; k < 4; ++k)
+                if ((cut(tx, ty) >> k) & 1u) arc_bank(tx, ty, k, wz, false);
+            // The four edges, corner to corner, with the way out of the tile.
+            for (int e = 0; e < 4; ++e) {
+                const int x0 = tx + kCorner[e][0], y0 = ty + kCorner[e][1];
+                const int x1 = tx + kCorner[(e + 1) % 4][0], y1 = ty + kCorner[(e + 1) % 4][1];
+                static constexpr int kOut[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+                const int nx = tx + kOut[e][0], ny = ty + kOut[e][1];
+                float za = z(x0, y0), zb = z(x1, y1);
+                float s0 = 0, s1 = 1;
+                if (wet(nx, ny)) {
+                    // Next to more water, only the step up to its level.
+                    za = zb = std::min(at(nx, ny), std::max(za, zb));
+                } else {
+                    // Where a corner is rounded off, either side, the bank
+                    // goes round it instead.
+                    if (((cut(tx, ty) >> e) & 1u) || cut_at(nx, ny, x0, y0)) s0 = 0.5f;
+                    if (((cut(tx, ty) >> ((e + 1) % 4)) & 1u) || cut_at(nx, ny, x1, y1)) s1 = 0.5f;
+                    if (s0 >= s1) continue;
+                    const float a = za + (zb - za) * s0, b = za + (zb - za) * s1;
+                    za = a;
+                    zb = b;
+                }
+                if (za <= wz + 1e-4f && zb <= wz + 1e-4f) continue;
+                const float ax = static_cast<float>(x0) + static_cast<float>(x1 - x0) * s0, ay = static_cast<float>(y0) + static_cast<float>(y1 - y0) * s0;
+                const float bx = static_cast<float>(x0) + static_cast<float>(x1 - x0) * s1, by = static_cast<float>(y0) + static_cast<float>(y1 - y0) * s1;
+                glNormal3f(static_cast<float>(-kOut[e][0]), static_cast<float>(-kOut[e][1]), 0.6f); // facing the water
+                glVertex3f(ax, ay, wz);
+                glVertex3f(bx, by, wz);
+                glVertex3f(bx, by, zb);
+                glVertex3f(ax, ay, za);
+            }
+        }
+    }
+    glEnd();
+    // Water lies flat, at its level, round its rounded corners, and fills
+    // the corners rounded off the land.
+    glBindTexture(GL_TEXTURE_2D, water_texture());
+    glBegin(GL_TRIANGLES);
+    glNormal3f(0, 0, 1);
+    const auto water_point = [&](float x, float y, float wz) {
+        glTexCoord2f(x / kGroundTextureTiles, y / kGroundTextureTiles);
+        glVertex3f(x, y, wz);
+    };
+    for (int ty = 0; ty < hgt; ++ty) {
+        for (int tx = 0; tx < w; ++tx) {
+            const auto fx = static_cast<float>(tx), fy = static_cast<float>(ty);
+            const unsigned c = cut(tx, ty);
+            if (wet(tx, ty)) {
+                const float wz = at(tx, ty);
+                const float* rgb = &tile_rgb[(static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)) * 3];
+                glColor3fv(rgb);
+                const auto o = outline(c);
+                for (std::size_t i = 0; i < o.size(); ++i) {
+                    const auto& a = o[i];
+                    const auto& b = o[(i + 1) % o.size()];
+                    water_point(fx + 0.5f, fy + 0.5f, wz);
+                    water_point(fx + a[0], fy + a[1], wz);
+                    water_point(fx + b[0], fy + b[1], wz);
+                }
+                continue;
+            }
+            for (int k = 0; k < 4; ++k) {
+                if (!((c >> k) & 1u)) continue;
+                const int dx = kCorner[k][0] * 2 - 1, dy = kCorner[k][1] * 2 - 1;
+                const float* rgb = &tile_rgb[(static_cast<std::size_t>(ty + dy) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx + dx)) * 3];
+                glColor3fv(rgb);
+                const float wz = fill_level(tx, ty, k);
+                const auto arc = shore_arc(k);
+                const float cx = fx + static_cast<float>(kCorner[k][0]), cy = fy + static_cast<float>(kCorner[k][1]);
+                for (int i = 0; i < kShoreArc; ++i) {
+                    const auto& a = arc[static_cast<std::size_t>(i)];
+                    const auto& b = arc[static_cast<std::size_t>(i) + 1];
+                    water_point(cx, cy, wz);
+                    water_point(fx + b[0], fy + b[1], wz);
+                    water_point(fx + a[0], fy + a[1], wz);
+                }
+            }
         }
     }
     glEnd();
@@ -2093,7 +2293,7 @@ bool on_water(float x, float y, const Camera& cam) {
     if (!cam.terrain) return false;
     const auto tx = static_cast<std::int32_t>(std::floor(x)), ty = static_cast<std::int32_t>(std::floor(y));
     if (tx < 0 || ty < 0 || tx >= cam.terrain->width() || ty >= cam.terrain->height()) return true;
-    return cam.terrain->ground(tx, ty) == sim::GroundType::Water;
+    return shore_wet(*cam.terrain, x, y);
 }
 
 // How far a point (tiles) is from the nearest track, in tiles.
@@ -4017,8 +4217,8 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
     for (const auto& road : sc.roads) {
         std::vector<float> deck(road.size(), kNoDeck);
         const auto wet = [&](const std::array<float, 2>& p) {
-            return cam.terrain && cam.terrain->ground(std::clamp(static_cast<int>(p[0]), 0, cam.terrain->width() - 1),
-                                                      std::clamp(static_cast<int>(p[1]), 0, cam.terrain->height() - 1)) == sim::GroundType::Water;
+            return cam.terrain && shore_wet(*cam.terrain, std::clamp(p[0], 0.0f, static_cast<float>(cam.terrain->width()) - 0.001f),
+                                            std::clamp(p[1], 0.0f, static_cast<float>(cam.terrain->height()) - 0.001f));
         };
         for (std::size_t i = 0; i < road.size();) {
             if (!wet(road[i])) {
@@ -4093,7 +4293,7 @@ template <typename Ground, typename F> void tile_trees(const Ground& t, const Oc
     for (int i = 0; i < n; ++i) {
         const std::uint32_t hh = hash(static_cast<std::uint32_t>(tx), static_cast<std::uint32_t>(ty), static_cast<std::uint32_t>(i + 11));
         const float x = fx + 0.1f + 0.8f * unit(hh), y = fy + 0.1f + 0.8f * unit(hh >> 16);
-        if (wooded.blocked(x, y, 0.08f)) continue;
+        if (wooded.blocked(x, y, 0.08f) || shore_wet(t, x, y)) continue;
         f(i, hh, x, y, 0.65f + 0.4f * unit(hh >> 8));
     }
 }
@@ -4548,7 +4748,7 @@ void draw_boats(const TownLayout& towns, std::int32_t year, const Camera& cam) {
     const sim::Terrain& t = *cam.terrain;
     const auto water = [&](float x, float y) {
         const int tx = static_cast<int>(std::floor(x)), ty = static_cast<int>(std::floor(y));
-        return tx >= 0 && ty >= 0 && tx < t.width() && ty < t.height() && t.ground(tx, ty) == sim::GroundType::Water;
+        return tx >= 0 && ty >= 0 && tx < t.width() && ty < t.height() && shore_wet(t, x, y);
     };
     const auto level = [&](float x, float y) { return water_level(static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y))); };
     static constexpr float kHulls[][3] = {{0.35f, 0.25f, 0.18f}, {0.15f, 0.18f, 0.25f}, {0.55f, 0.15f, 0.12f}, {0.85f, 0.83f, 0.78f}};
@@ -5208,6 +5408,8 @@ struct OcclusionInput {
         int w = 0, h = 0;
         std::vector<sim::GroundType> g;
         sim::GroundType ground(int x, int y) const { return g[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)]; }
+        int width() const { return w; }
+        int height() const { return h; }
     } ground;
     std::optional<Occupancy> wooded; // empty: no trees
     std::vector<Plot> plots;

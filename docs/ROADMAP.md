@@ -343,6 +343,12 @@ Water (shaders): ripples drifting with the wind, the sky mirrored at low
 angles and the sun glinting, calmer far off; ice in midwinter. A body of
 water lies at one level (lowered across neighbours within a small step),
 with earth banks up to the shore and between rapids, so no gaps show.
+Shores are rounded, not square: a water tile's corner with land on both
+sides is cut in a quarter circle and filled with land, and a land tile's
+corner with water on both sides and beyond is cut and filled with water,
+the banks following the curves (a lone water tile is a round pond, a
+river's diagonal steps a wavy bank). Trees, houses, ducks and road
+bridges go by the rounded shapes.
 
 Seasons (shaders only; off in Settings): autumn turns the broadleaf trees
 gold to red and fades the grass from mid September, and snow lies on
