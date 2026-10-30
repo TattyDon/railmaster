@@ -715,6 +715,11 @@ ground over the lip of a bank, and a road's ends are trimmed to past a
 town's last house (not into a gap between two) and join a street only
 when it is close, so none cuts across a town.
 
+A train's detail panel draws its route on the map: the track between its
+stops (the shortest way, as the train plans it), the leg it is on
+brighter, each stop marked and the next one large; worked out again only
+when the route or the track changes.
+
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without
   the host restarting already works (their seat is kept by name); what is

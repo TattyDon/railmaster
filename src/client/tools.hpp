@@ -417,6 +417,10 @@ private:
     std::string find_text_;
     // Renaming the station whose panel is open (Enter in Look): the name as typed.
     bool renaming_ = false;
+    // The detail panel's train's route, track edge by edge between its stops
+    // (worked out again only when the route or the track changes).
+    mutable std::uint64_t route_key_ = 0;
+    mutable std::vector<std::vector<sim::EdgeId>> route_legs_;
     // Multiplayer chat.
     bool multiplayer_ = false;
     std::vector<bool> online_; // by player

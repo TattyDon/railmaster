@@ -3074,9 +3074,44 @@ void Tools::draw_world_overlay() const {
         const sim::Railway& rw = world_.railway();
         const sim::Economy& eco = world_.economy();
         switch (detail_->kind) {
-        case DetailKind::Train:
-            if (detail_train()) draw_marker(rw.train_position(detail_->id), cam_, 12, 1.0f, 0.85f, 0.3f);
+        case DetailKind::Train: {
+            if (!detail_train()) break;
+            // Its route on the map: the track between its stops, the leg it
+            // is on now brighter; each stop marked, the next one large.
+            const sim::Train& t = rw.train(detail_->id);
+            std::uint64_t key = (static_cast<std::uint64_t>(detail_->id) << 32) ^ net.edges().size();
+            for (const sim::StationId s : t.route) key = (key ^ s) * 1099511628211ull;
+            for (const sim::TrackEdge& e : net.edges()) key = (key ^ (e.removed ? 1u : 0u)) * 31u;
+            if (key != route_key_) {
+                route_key_ = key;
+                route_legs_.assign(t.route.size(), {});
+                for (std::size_t i = 0; i < t.route.size() && t.route.size() > 1; ++i) {
+                    const sim::NodeId a = rw.station(t.route[i]).node, b = rw.station(t.route[(i + 1) % t.route.size()]).node;
+                    if (const auto path = net.shortest_path(a, b)) {
+                        for (const sim::PathStep& step : *path) route_legs_[i].push_back(step.edge);
+                    }
+                }
+            }
+            const std::size_t heading = t.route.empty() ? 0 : (t.stop_index + t.route.size() - 1) % t.route.size(); // the leg into the next stop
+            for (std::size_t i = 0; i < route_legs_.size(); ++i) {
+                const bool now = i == heading;
+                for (const sim::EdgeId e : route_legs_[i]) {
+                    const sim::TrackEdge& edge = net.edge(e);
+                    if (now) draw_band(net.node(edge.a).pos, net.node(edge.b).pos, cam_, 3.0f, 1.0f, 0.95f, 0.6f, 0.9f);
+                    else draw_band(net.node(edge.a).pos, net.node(edge.b).pos, cam_, 2.0f, 0.95f, 0.7f, 0.2f, 0.65f);
+                }
+            }
+            for (std::size_t i = 0; i < t.route.size(); ++i) {
+                const sim::MapPoint p = net.node(rw.station(t.route[i]).node).pos;
+                const bool next = i == t.stop_index % t.route.size();
+                const bool service = i < t.service_stop.size() && t.service_stop[i] != 0;
+                if (next) draw_marker(p, cam_, 13, 1.0f, 1.0f, 1.0f);
+                if (service) draw_marker(p, cam_, 8, 0.3f, 0.9f, 1.0f);
+                else draw_marker(p, cam_, 8, 1.0f, 0.85f, 0.2f);
+            }
+            draw_marker(rw.train_position(detail_->id), cam_, 12, 1.0f, 0.85f, 0.3f);
             break;
+        }
         case DetailKind::Station: draw_marker(net.node(rw.station(detail_->id).node).pos, cam_, 12, 1.0f, 0.85f, 0.3f); break;
         case DetailKind::Industry: {
             const sim::Site& s = eco.sites()[detail_->id];

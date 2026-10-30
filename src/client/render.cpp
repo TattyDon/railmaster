@@ -6032,6 +6032,27 @@ void draw_line(sim::MapPoint a, sim::MapPoint b, const Camera& cam, float r, flo
     glEnd();
 }
 
+void draw_band(sim::MapPoint a, sim::MapPoint b, const Camera& cam, float half_px, float r, float g, float bl, float alpha) {
+    const float ax = tiles(a.x_mm, cam), ay = tiles(a.y_mm, cam), bx = tiles(b.x_mm, cam), by = tiles(b.y_mm, cam);
+    const float len = std::hypot(bx - ax, by - ay);
+    if (len <= 1e-5f) return;
+    const float w = half_px / cam.zoom, nx = -(by - ay) / len * w, ny = (bx - ax) / len * w;
+    // Over the rails, in pieces so it follows the ground.
+    const auto at = [&](float x, float y) { glVertex3f(x, y, cam.three_d ? cam.ground_z(x, y) + kLift + 0.03f : 0.0f); };
+    glColor4f(r, g, bl, alpha);
+    glBegin(GL_QUADS);
+    const int pieces = cam.three_d ? std::max(1, static_cast<int>(std::ceil(len / 0.25f))) : 1;
+    for (int k = 0; k < pieces; ++k) {
+        const float k0 = static_cast<float>(k) / static_cast<float>(pieces), k1 = static_cast<float>(k + 1) / static_cast<float>(pieces);
+        const float x0 = ax + (bx - ax) * k0, y0 = ay + (by - ay) * k0, x1 = ax + (bx - ax) * k1, y1 = ay + (by - ay) * k1;
+        at(x0 - nx, y0 - ny);
+        at(x1 - nx, y1 - ny);
+        at(x1 + nx, y1 + ny);
+        at(x0 + nx, y0 + ny);
+    }
+    glEnd();
+}
+
 void draw_marker(sim::MapPoint p, const Camera& cam, float half_px, float r, float g, float b) {
     glBegin(GL_QUADS);
     glColor3f(r, g, b);

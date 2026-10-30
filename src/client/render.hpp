@@ -91,6 +91,9 @@ void draw_plan(sim::MapPoint start, const sim::TrackPlan& plan, const Camera& ca
 void draw_line(sim::MapPoint a, sim::MapPoint b, const Camera& cam, float r, float g, float bl, float alpha);
 // A square marker `half_px` pixels from centre to edge, whatever the zoom.
 void draw_marker(sim::MapPoint p, const Camera& cam, float half_px, float r, float g, float b);
+// A band `half_px` pixels each side of the line from a to b, over the ground
+// and the rails (a train's route, say).
+void draw_band(sim::MapPoint a, sim::MapPoint b, const Camera& cam, float half_px, float r, float g, float bl, float alpha);
 
 // The radar (rt3-clone-spec §15.1): the whole map small, in a square of
 // `size` pixels at (x0, y0) on screen, with towns, your stations and where
