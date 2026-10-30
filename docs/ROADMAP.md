@@ -704,8 +704,10 @@ streets; fields and trees keep off them. Decoration only. The routes are
 kept until the land, the towns' places or the industries change (a large
 map's 195 roads take about a tenth of a second to find), so laying track
 or a town growing (both rebuild the scene) costs only the trimming,
-about 6 ms. Still to do: carts and cars on them, and road bridges (a
-road with no way round water is left out).
+about 6 ms. Carts and, as the years go by, motor cars and lorries travel
+them (about one to five tiles of road, near the camera), drawn by the
+same code as the towns' traffic. Still to do: road bridges (a road with
+no way round water is left out).
 
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without

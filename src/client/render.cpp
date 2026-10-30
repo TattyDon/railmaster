@@ -4230,12 +4230,54 @@ void draw_building_sites(const TownLayout& towns, const Camera& cam) {
 // the road (more in larger towns). Horse carts at first; motor cars mixing
 // in from 1905 until they are all there are by 1925, and lorries from 1915.
 // Only near the camera, and still while the game is paused.
-void draw_traffic(const TownLayout& towns, std::int32_t year, const Camera& cam) {
-    if (cam.distance > 70.0f) return; // too small to see
-    const float reach = std::max(18.0f, cam.distance * 1.5f);
+// One vehicle at (x, y, z) facing (fx, fy), `h` its hash: a horse and covered
+// wagon, or (more of them as the years go by) a motor car or a lorry. With
+// `shade`, only the soft shade under it. Inside GL_QUADS.
+void vehicle(float x, float y, float z, float fx, float fy, std::uint32_t h, std::int32_t year, bool shade, const Camera& cam) {
     static constexpr float kWagon[3] = {0.5f, 0.36f, 0.22f}, kCanvas[3] = {0.9f, 0.88f, 0.8f}, kHorse[3] = {0.36f, 0.24f, 0.15f},
                            kGlass[3] = {0.2f, 0.24f, 0.3f}, kTyre[3] = {0.1f, 0.1f, 0.1f}, kCrate[3] = {0.62f, 0.5f, 0.32f};
     static constexpr float kPaint[][3] = {{0.12f, 0.12f, 0.14f}, {0.55f, 0.1f, 0.1f}, {0.1f, 0.25f, 0.5f}, {0.15f, 0.35f, 0.2f}, {0.75f, 0.72f, 0.65f}};
+    const float motor_share = std::clamp((static_cast<float>(year) - 1905.0f) / 20.0f, 0.0f, 1.0f);
+    const bool motor = unit(h >> 4) < motor_share;
+    const bool lorry = motor && year >= 1915 && unit(h >> 12) < 0.3f;
+    if (shade) {
+        contact_shadow(x, y, z, motor ? 0.026f : 0.034f, 0.4f, cam);
+        return;
+    }
+    if (!motor) {
+        // A covered wagon and the horse in front of it.
+        box(x - fx * 0.012f, y - fy * 0.012f, z + 0.006f, fx, fy, 0.022f, 0.011f, 0.012f, kWagon, kWagon);
+        gable(x - fx * 0.012f, y - fy * 0.012f, z + 0.018f, fx, fy, 0.02f, 0.012f, 0.012f, kCanvas, kCanvas);
+        box(x + fx * 0.024f, y + fy * 0.024f, z + 0.006f, fx, fy, 0.012f, 0.005f, 0.01f, kHorse, kHorse);
+        box(x + fx * 0.038f, y + fy * 0.038f, z + 0.012f, fx, fy, 0.004f, 0.003f, 0.009f, kHorse, kHorse);
+        for (const float a : {-0.025f, 0.012f}) beam(x + fx * a, y + fy * a, z, x + fx * a, y + fy * a, z + 0.006f, 0.004f, kHorse);
+        return;
+    }
+    const float* paint = kPaint[(h >> 16) % 5];
+    if (lorry) {
+        // A cab and a flat bed with crates.
+        box(x + fx * 0.02f, y + fy * 0.02f, z + 0.004f, fx, fy, 0.01f, 0.01f, 0.016f, paint, paint);
+        box(x - fx * 0.01f, y - fy * 0.01f, z + 0.004f, fx, fy, 0.02f, 0.011f, 0.005f, kWagon, kWagon);
+        box(x - fx * 0.012f, y - fy * 0.012f, z + 0.009f, fx, fy, 0.012f, 0.008f, 0.008f, kCrate, kCrate);
+    } else {
+        // A motor car: body, then a glazed cabin.
+        box(x, y, z + 0.004f, fx, fy, 0.018f, 0.009f, 0.008f, paint, paint);
+        box(x - fx * 0.003f, y - fy * 0.003f, z + 0.012f, fx, fy, 0.01f, 0.008f, 0.007f, kGlass, paint);
+    }
+    for (const float a : {-0.012f, 0.012f}) beam(x + fx * a, y + fy * a, z, x + fx * a, y + fy * a, z + 0.004f, 0.005f, kTyre);
+    add_light(x + fx * 0.02f, y + fy * 0.02f, z + 0.008f, 0.03f, 1.0f, 0.9f, 0.6f, fx, fy);
+}
+
+// How fast a vehicle goes, tiles a second: motor cars faster than carts.
+float vehicle_speed(std::uint32_t h, std::int32_t year) {
+    const float motor_share = std::clamp((static_cast<float>(year) - 1905.0f) / 20.0f, 0.0f, 1.0f);
+    const bool motor = unit(h >> 4) < motor_share;
+    return motor ? 0.25f + 0.1f * unit(h >> 8) : 0.08f + 0.03f * unit(h >> 8);
+}
+
+void draw_traffic(const TownLayout& towns, std::int32_t year, const Camera& cam) {
+    if (cam.distance > 70.0f) return; // too small to see
+    const float reach = std::max(18.0f, cam.distance * 1.5f);
     const float t = g_animation_seconds;
     // First the soft shade under each (not written to depth, so it never hides
     // them), then the carts and cars themselves.
@@ -4253,45 +4295,63 @@ void draw_traffic(const TownLayout& towns, std::int32_t year, const Camera& cam)
             const float ux = (x1 - x0) / len, uy = (y1 - y0) / len;
             for (int v = 0; v < count; ++v) {
                 const std::uint32_t h = hash(seg, static_cast<std::uint32_t>(v), 29);
-                // What it is, by the year.
-                const float motor_share = std::clamp((static_cast<float>(year) - 1905.0f) / 20.0f, 0.0f, 1.0f);
-                const bool motor = unit(h >> 4) < motor_share;
-                const bool lorry = motor && year >= 1915 && unit(h >> 12) < 0.3f;
                 // Back and forth along the street; on the right of the way it goes.
-                const float speed = motor ? 0.25f + 0.1f * unit(h >> 8) : 0.08f + 0.03f * unit(h >> 8); // tiles a second
-                const float phase = std::fmod(t * speed / (2 * len) + unit(h), 1.0f);
+                const float phase = std::fmod(t * vehicle_speed(h, year) / (2 * len) + unit(h), 1.0f);
                 const float dir = phase < 0.5f ? 1.0f : -1.0f;
                 const float along = 0.12f + (len - 0.24f) * (phase < 0.5f ? 2 * phase : 2 - 2 * phase);
                 const float lane = kStreetHalf * 0.45f * dir;
                 const float x = x0 + ux * along + uy * lane, y = y0 + uy * along - ux * lane;
-                const float z = cam.ground_z(x, y) + kLift;
-                const float fx = ux * dir, fy = uy * dir; // facing
-                if (shade) {
-                    contact_shadow(x, y, z, motor ? 0.026f : 0.034f, 0.4f, cam);
-                    continue;
+                vehicle(x, y, cam.ground_z(x, y) + kLift, ux * dir, uy * dir, h, year, shade, cam);
+            }
+        }
+        glEnd();
+        if (shade) glDepthMask(GL_TRUE);
+    }
+}
+
+// Traffic on the country roads: about one cart or car to five tiles of
+// road, going from one town to the other and back.
+void draw_road_traffic(const std::vector<std::vector<std::array<float, 2>>>& roads, std::int32_t year, const Camera& cam) {
+    if (cam.distance > 70.0f) return; // too small to see
+    const float reach = std::max(18.0f, cam.distance * 1.5f);
+    const float t = g_animation_seconds;
+    for (const bool shade : {true, false}) {
+        if (shade) glDepthMask(GL_FALSE);
+        glBegin(GL_QUADS);
+        for (std::size_t r = 0; r < roads.size(); ++r) {
+            const auto& road = roads[r];
+            // Its length, and whether any of it is near the camera.
+            float len = 0;
+            bool near = false;
+            for (std::size_t i = 0; i < road.size(); ++i) {
+                if (i > 0) len += std::hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
+                near = near || (std::fabs(road[i][0] - cam.target_x) < reach && std::fabs(road[i][1] - cam.target_y) < reach);
+            }
+            if (!near || len < 1.0f) continue;
+            const int count = std::max(1, static_cast<int>(len / 5.0f));
+            for (int v = 0; v < count; ++v) {
+                const std::uint32_t h = hash(static_cast<std::uint32_t>(r), static_cast<std::uint32_t>(v), 31);
+                const float phase = std::fmod(t * vehicle_speed(h, year) / (2 * len) + unit(h), 1.0f);
+                const float dir = phase < 0.5f ? 1.0f : -1.0f;
+                float along = len * (phase < 0.5f ? 2 * phase : 2 - 2 * phase);
+                // The piece of road it is on.
+                for (std::size_t i = 1; i < road.size(); ++i) {
+                    const float piece = std::hypot(road[i][0] - road[i - 1][0], road[i][1] - road[i - 1][1]);
+                    if (along > piece && i + 1 < road.size()) {
+                        along -= piece;
+                        continue;
+                    }
+                    if (piece <= 1e-4f) break;
+                    const float ux = (road[i][0] - road[i - 1][0]) / piece, uy = (road[i][1] - road[i - 1][1]) / piece;
+                    const float k = std::clamp(along / piece, 0.0f, 1.0f);
+                    const float lane = 0.022f * dir;
+                    const float x = road[i - 1][0] + (road[i][0] - road[i - 1][0]) * k + uy * lane;
+                    const float y = road[i - 1][1] + (road[i][1] - road[i - 1][1]) * k - ux * lane;
+                    if (std::fabs(x - cam.target_x) < reach && std::fabs(y - cam.target_y) < reach) {
+                        vehicle(x, y, cam.ground_z(x, y) + kLift, ux * dir, uy * dir, h, year, shade, cam);
+                    }
+                    break;
                 }
-                if (!motor) {
-                    // A covered wagon and the horse in front of it.
-                    box(x - fx * 0.012f, y - fy * 0.012f, z + 0.006f, fx, fy, 0.022f, 0.011f, 0.012f, kWagon, kWagon);
-                    gable(x - fx * 0.012f, y - fy * 0.012f, z + 0.018f, fx, fy, 0.02f, 0.012f, 0.012f, kCanvas, kCanvas);
-                    box(x + fx * 0.024f, y + fy * 0.024f, z + 0.006f, fx, fy, 0.012f, 0.005f, 0.01f, kHorse, kHorse);
-                    box(x + fx * 0.038f, y + fy * 0.038f, z + 0.012f, fx, fy, 0.004f, 0.003f, 0.009f, kHorse, kHorse);
-                    for (const float a : {-0.025f, 0.012f}) beam(x + fx * a, y + fy * a, z, x + fx * a, y + fy * a, z + 0.006f, 0.004f, kHorse);
-                    continue;
-                }
-                const float* paint = kPaint[(h >> 16) % 5];
-                if (lorry) {
-                    // A cab and a flat bed with crates.
-                    box(x + fx * 0.02f, y + fy * 0.02f, z + 0.004f, fx, fy, 0.01f, 0.01f, 0.016f, paint, paint);
-                    box(x - fx * 0.01f, y - fy * 0.01f, z + 0.004f, fx, fy, 0.02f, 0.011f, 0.005f, kWagon, kWagon);
-                    box(x - fx * 0.012f, y - fy * 0.012f, z + 0.009f, fx, fy, 0.012f, 0.008f, 0.008f, kCrate, kCrate);
-                } else {
-                    // A motor car: body, then a glazed cabin.
-                    box(x, y, z + 0.004f, fx, fy, 0.018f, 0.009f, 0.008f, paint, paint);
-                    box(x - fx * 0.003f, y - fy * 0.003f, z + 0.012f, fx, fy, 0.01f, 0.008f, 0.007f, kGlass, paint);
-                }
-                for (const float a : {-0.012f, 0.012f}) beam(x + fx * a, y + fy * a, z, x + fx * a, y + fy * a, z + 0.004f, 0.005f, kTyre);
-                add_light(x + fx * 0.02f, y + fy * 0.02f, z + 0.008f, 0.03f, 1.0f, 0.9f, 0.6f, fx, fy);
             }
         }
         glEnd();
@@ -5489,6 +5549,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             draw_houses(towns, list_near, key, cam);
             draw_building_sites(towns, cam);
             draw_traffic(towns, year, cam);
+            draw_road_traffic(sc.roads, year, cam);
             draw_people(towns, cam);
             draw_boats(towns, year, cam);
             draw_turning();
@@ -5600,6 +5661,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         draw_houses(towns, list_near, key, cam);
         draw_building_sites(towns, cam);
         draw_traffic(towns, year, cam);
+        draw_road_traffic(sc.roads, year, cam);
         draw_people(towns, cam);
         draw_boats(towns, year, cam);
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
