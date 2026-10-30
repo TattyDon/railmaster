@@ -696,6 +696,17 @@ shadow pass. A first version let the grass show through in leaf shapes
 along each tile's diagonal: lifted too little above the ground, which
 the terrain draws as two flat triangles a tile.
 
+Country roads between the towns: each town to its two nearest within 45
+tiles, found by least cost over the land (round water and industries,
+easy on the grades), smoothed into curves and joined to the nearest
+street at either end; dirt, gravel, then asphalt with the era, as the
+streets; fields and trees keep off them. Decoration only. The routes are
+kept until the land, the towns' places or the industries change (a large
+map's 195 roads take about a tenth of a second to find), so laying track
+or a town growing (both rebuild the scene) costs only the trimming,
+about 6 ms. Still to do: carts and cars on them, and road bridges (a
+road with no way round water is left out).
+
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without
   the host restarting already works (their seat is kept by name); what is

@@ -18,7 +18,8 @@ and square Foursquares) with gardens behind, terraces, shops, town halls, church
 tree-lined greens (market squares with a fountain in the largest) along lamplit streets busy with
 wagons and, later, motor cars, and people walking them,
 allotments, cemeteries and ball grounds on their edges, a patchwork of
-farm fields with hedgerows round them, and stations to
+farm fields with hedgerows round them, country roads winding between
+neighbouring towns (dirt, then gravel, then asphalt), and stations to
 match; brick mills and works; engines, cars and trees, all from Kenney's
 CC0 kits; track, mines, farms and ports drawn in code; smoke from engines and chimneys; and a camera you can turn and tilt
 ([docs/ROADMAP.md](docs/ROADMAP.md) has what comes next). V switches to

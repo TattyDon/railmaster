@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <future>
 #include <limits>
+#include <queue>
 #include <map>
 #include <tuple>
 #include <unordered_map>
@@ -2639,6 +2640,30 @@ constexpr float kPavement = 0.028f;        // its width, tiles
 // Streets on the ground: dirt, then gravel, then asphalt; cobbles in the
 // largest towns until asphalt, and pavements either side in larger ones.
 // Inside GL_QUADS.
+// The country roads (see lay_out_roads): dirt, then gravel, then asphalt,
+// as the streets. Inside GL_QUADS.
+void draw_roads(const std::vector<std::vector<std::array<float, 2>>>& roads, std::int32_t year, const Camera& cam) {
+    const float dirt[3] = {0.56f, 0.48f, 0.36f}, gravel[3] = {0.58f, 0.56f, 0.52f}, asphalt[3] = {0.33f, 0.33f, 0.35f};
+    glColor3fv(year < 1890 ? dirt : year < 1930 ? gravel : asphalt);
+    glNormal3f(0, 0, 1);
+    constexpr float kHalf = 0.05f;
+    for (const auto& road : roads) {
+        for (std::size_t i = 0; i + 1 < road.size(); ++i) {
+            const auto& p = road[i];
+            const auto& q = road[i + 1];
+            const float len = std::hypot(q[0] - p[0], q[1] - p[1]);
+            if (len <= 1e-4f) continue;
+            // Half its width past each end, so the pieces overlap at the bends.
+            const float ux = (q[0] - p[0]) / len, uy = (q[1] - p[1]) / len, nx = -uy * kHalf, ny = ux * kHalf;
+            const float ax = p[0] - ux * kHalf * 0.5f, ay = p[1] - uy * kHalf * 0.5f, bx = q[0] + ux * kHalf * 0.5f, by = q[1] + uy * kHalf * 0.5f;
+            ground_vertex(ax - nx, ay - ny, cam);
+            ground_vertex(bx - nx, by - ny, cam);
+            ground_vertex(bx + nx, by + ny, cam);
+            ground_vertex(ax + nx, ay + ny, cam);
+        }
+    }
+}
+
 void draw_streets(const TownLayout& layout, std::int32_t year, const Camera& cam) {
     const float dirt[3] = {0.6f, 0.52f, 0.4f}, gravel[3] = {0.58f, 0.56f, 0.52f}, asphalt[3] = {0.33f, 0.33f, 0.35f};
     const float* surface = year < 1890 ? dirt : year < 1930 ? gravel : asphalt;
@@ -3645,10 +3670,174 @@ struct Scene {
     std::optional<Occupancy> taken;     // railway and industries: houses keep off
     std::optional<Occupancy> wooded;    // that, the towns and their fields: trees keep off
     TownLayout towns;
+    std::vector<std::vector<std::array<float, 2>>> roads; // country roads between towns: points, tiles
     Fields fields;
 };
 
 float map_noise(float x, float y, float cells, std::uint32_t seed);
+
+// Country roads (decoration only): each town to its two nearest neighbours
+// within reach, found over the land by least cost (round water, easy on
+// the grades, round industries and stations, over track at a crossing),
+// smoothed into curves and trimmed where they reach the towns' streets.
+std::vector<std::vector<std::array<float, 2>>> lay_out_roads(const sim::Economy& eco, const std::vector<std::array<float, 3>>& industries,
+                                                            const Occupancy& wooded, const std::vector<float>& streets,
+                                                            const Camera& cam) {
+    // The nearest point of a street to p, within three tiles.
+    const auto street_near = [&](const std::array<float, 2>& p) -> std::optional<std::array<float, 2>> {
+        std::optional<std::array<float, 2>> best;
+        float best_d = 3.0f;
+        for (std::size_t i = 0; i + 3 < streets.size(); i += 4) {
+            const float ax = streets[i], ay = streets[i + 1], bx = streets[i + 2], by = streets[i + 3];
+            if (p[0] < std::min(ax, bx) - best_d || p[0] > std::max(ax, bx) + best_d || p[1] < std::min(ay, by) - best_d ||
+                p[1] > std::max(ay, by) + best_d) {
+                continue; // too far to be nearer
+            }
+            const float len2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+            const float k = len2 > 0 ? std::clamp(((p[0] - ax) * (bx - ax) + (p[1] - ay) * (by - ay)) / len2, 0.0f, 1.0f) : 0.0f;
+            const float qx = ax + (bx - ax) * k, qy = ay + (by - ay) * k;
+            const float d = std::hypot(p[0] - qx, p[1] - qy);
+            if (d < best_d) {
+                best_d = d;
+                best = std::array<float, 2>{qx, qy};
+            }
+        }
+        return best;
+    };
+    std::vector<std::vector<std::array<float, 2>>> out;
+    const sim::Terrain* t = cam.terrain;
+    if (t == nullptr) return out;
+    const int w = t->width(), h = t->height();
+    const auto& towns = eco.towns();
+    // The routes depend only on the land, the towns' places and the
+    // industries' (not on houses or track: a town growing or a line being
+    // laid does not send them searching again), so they are kept until
+    // one of those changes; trimming them to the streets is redone each time.
+    static std::vector<std::vector<std::array<float, 2>>> routes;
+    static std::uint64_t routes_key = 0;
+    std::uint64_t key = g_terrain_key ^ (static_cast<std::uint64_t>(w) << 40);
+    const auto mix = [&](std::uint64_t v) { key = (key ^ v) * 1099511628211ull; };
+    for (const sim::Town& town : towns) mix((static_cast<std::uint64_t>(static_cast<std::uint32_t>(town.cx)) << 32) | static_cast<std::uint32_t>(town.cy));
+    for (const auto& [x, y, half] : industries) mix(static_cast<std::uint64_t>(x * 64) * 1000003u + static_cast<std::uint64_t>(y * 64) + static_cast<std::uint64_t>(half * 64));
+    const bool route = routes_key != key;
+    std::vector<std::array<float, 2>> centre;
+    for (const sim::Town& town : towns) {
+        const sim::MapPoint c = eco.node_centre(town.cx, town.cy);
+        centre.push_back({static_cast<float>(c.x_mm) / cam.mm_per_tile, static_cast<float>(c.y_mm) / cam.mm_per_tile});
+    }
+    if (route) {
+        routes.clear();
+        routes_key = key;
+        // Tiles an industry stands on: roads go round.
+        std::vector<bool> works(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
+        for (const auto& [x, y, half] : industries) {
+            for (int ty = std::max(0, static_cast<int>(y - half - 0.3f)); ty <= std::min(h - 1, static_cast<int>(y + half + 0.3f)); ++ty)
+                for (int tx = std::max(0, static_cast<int>(x - half - 0.3f)); tx <= std::min(w - 1, static_cast<int>(x + half + 0.3f)); ++tx)
+                    works[static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)] = true;
+        }
+        // Which pairs: each town's two nearest within reach, once each.
+        constexpr float kReach = 45.0f;
+        std::vector<std::pair<std::size_t, std::size_t>> pairs;
+        for (std::size_t i = 0; i < towns.size(); ++i) {
+            std::vector<std::pair<float, std::size_t>> near;
+            for (std::size_t j = 0; j < towns.size(); ++j) {
+                if (j == i) continue;
+                const float d = std::hypot(centre[i][0] - centre[j][0], centre[i][1] - centre[j][1]);
+                if (d <= kReach) near.emplace_back(d, j);
+            }
+            std::sort(near.begin(), near.end());
+            for (std::size_t n = 0; n < std::min<std::size_t>(2, near.size()); ++n) {
+                const std::size_t other = near[n].second;
+                const std::pair<std::size_t, std::size_t> p{std::min(i, other), std::max(i, other)};
+                if (std::find(pairs.begin(), pairs.end(), p) == pairs.end()) pairs.push_back(p);
+            }
+        }
+        const auto height = [&](int x, int y) {
+            return 0.25f * static_cast<float>(t->corner_height(x, y) + t->corner_height(x + 1, y) + t->corner_height(x, y + 1) +
+                                              t->corner_height(x + 1, y + 1));
+        };
+        const auto size_m = static_cast<float>(t->tile_size_m());
+        for (const auto& [a, b] : pairs) {
+            const int ax = std::clamp(static_cast<int>(centre[a][0]), 0, w - 1), ay = std::clamp(static_cast<int>(centre[a][1]), 0, h - 1);
+            const int bx = std::clamp(static_cast<int>(centre[b][0]), 0, w - 1), by = std::clamp(static_cast<int>(centre[b][1]), 0, h - 1);
+            // The search keeps to a box round the two towns.
+            constexpr int kMargin = 12;
+            const int x0 = std::max(0, std::min(ax, bx) - kMargin), x1 = std::min(w - 1, std::max(ax, bx) + kMargin);
+            const int y0 = std::max(0, std::min(ay, by) - kMargin), y1 = std::min(h - 1, std::max(ay, by) + kMargin);
+            const int bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+            const auto at = [&](int x, int y) { return static_cast<std::size_t>(y - y0) * static_cast<std::size_t>(bw) + static_cast<std::size_t>(x - x0); };
+            std::vector<float> cost(static_cast<std::size_t>(bw) * static_cast<std::size_t>(bh), std::numeric_limits<float>::max());
+            std::vector<int> from(cost.size(), -1);
+            using Entry = std::pair<float, int>; // (cost + estimate, cell)
+            std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+            cost[at(ax, ay)] = 0;
+            open.push({0.0f, static_cast<int>(at(ax, ay))});
+            bool found = false;
+            while (!open.empty()) {
+                const auto [f, cell] = open.top();
+                open.pop();
+                const int cx = x0 + cell % bw, cy = y0 + cell / bw;
+                if (cx == bx && cy == by) {
+                    found = true;
+                    break;
+                }
+                const float here = cost[static_cast<std::size_t>(cell)];
+                if (f - std::hypot(static_cast<float>(bx - cx), static_cast<float>(by - cy)) > here + 1e-3f) continue; // stale
+                for (int dy = -1; dy <= 1; ++dy)
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        if (dx == 0 && dy == 0) continue;
+                        const int nx = cx + dx, ny = cy + dy;
+                        if (nx < x0 || ny < y0 || nx > x1 || ny > y1) continue;
+                        if (t->ground(nx, ny) == sim::GroundType::Water) continue;
+                        const float step = (dx != 0 && dy != 0) ? 1.4142f : 1.0f;
+                        const float grade = std::fabs(height(nx, ny) - height(cx, cy)) / (size_m * step);
+                        if (grade > 0.18f) continue; // too steep for a cart
+                        // Round the industries' ground.
+                        const float detour = works[static_cast<std::size_t>(ny) * static_cast<std::size_t>(w) + static_cast<std::size_t>(nx)] ? 8.0f : 0.0f;
+                        const float c = here + step * (1.0f + 30.0f * grade + detour);
+                        if (c < cost[at(nx, ny)]) {
+                            cost[at(nx, ny)] = c;
+                            from[at(nx, ny)] = cell;
+                            open.push({c + std::hypot(static_cast<float>(bx - nx), static_cast<float>(by - ny)), static_cast<int>(at(nx, ny))});
+                        }
+                    }
+            }
+            if (!found) continue; // no way round the water (no road bridges yet)
+            std::vector<std::array<float, 2>> path;
+            for (int cell = static_cast<int>(at(bx, by)); cell >= 0; cell = from[static_cast<std::size_t>(cell)]) {
+                path.push_back({static_cast<float>(x0 + cell % bw) + 0.5f, static_cast<float>(y0 + cell / bw) + 0.5f});
+            }
+            std::reverse(path.begin(), path.end());
+            // Smoothed (corners cut twice), then trimmed to the open country
+            // between the towns' streets.
+            for (int pass = 0; pass < 2 && path.size() > 2; ++pass) {
+                std::vector<std::array<float, 2>> smooth{path.front()};
+                for (std::size_t i = 0; i + 1 < path.size(); ++i) {
+                    const auto& p = path[i];
+                    const auto& q = path[i + 1];
+                    smooth.push_back({p[0] * 0.75f + q[0] * 0.25f, p[1] * 0.75f + q[1] * 0.25f});
+                    smooth.push_back({p[0] * 0.25f + q[0] * 0.75f, p[1] * 0.25f + q[1] * 0.75f});
+                }
+                smooth.push_back(path.back());
+                path = std::move(smooth);
+            }
+            routes.push_back(std::move(path));
+        }
+    }
+    for (const auto& path : routes) {
+        const auto in_town = [&](const std::array<float, 2>& p) { return wooded.blocked(p[0], p[1], 0.05f); };
+        std::size_t first = 0, last = path.size();
+        while (first < last && in_town(path[first])) ++first;
+        while (last > first && in_town(path[last - 1])) --last;
+        if (last - first < 4) continue;
+        std::vector<std::array<float, 2>> road(path.begin() + static_cast<std::ptrdiff_t>(first), path.begin() + static_cast<std::ptrdiff_t>(last));
+        // Joined to the towns' streets at either end.
+        if (const auto s = street_near(road.front())) road.insert(road.begin(), *s);
+        if (const auto s = street_near(road.back())) road.push_back(*s);
+        out.push_back(std::move(road));
+    }
+    return out;
+}
 
 // The fields round each town: open, gentle grassland within a ring about
 // it (wider for bigger towns, ragged at the edge), clear of houses,
@@ -3737,10 +3926,12 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
     const int width = cam.terrain ? cam.terrain->width() : eco.width() * eco.cells_per_node();
     const int height = cam.terrain ? cam.terrain->height() : eco.height() * eco.cells_per_node();
     sc.taken.emplace(rw, cam, width, height);
+    std::vector<std::array<float, 3>> works; // industries' squares: centre and half side
     for (const sim::Site& site : eco.sites()) {
         if (site.closed || industries.get(site.type).kind == sim::IndustryKind::House) continue;
-        sc.taken->mark_square((static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k,
-                              0.5f * std::max(k, static_cast<float>(eco.footprint_cells())));
+        works.push_back({(static_cast<float>(site.cx) + 0.5f) * k, (static_cast<float>(site.cy) + 0.5f) * k,
+                         0.5f * std::max(k, static_cast<float>(eco.footprint_cells()))});
+        sc.taken->mark_square(works.back()[0], works.back()[1], works.back()[2]);
     }
     sc.towns = layout_towns(eco, industries, *sc.taken, cam);
     sc.wooded = sc.taken;
@@ -3754,6 +3945,9 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
             sc.wooded->mark_disc(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0.12f);
         }
     }
+    sc.roads = lay_out_roads(eco, works, *sc.wooded, sc.towns.streets, cam);
+    for (const auto& road : sc.roads)
+        for (const auto& [x, y] : road) sc.wooded->mark_disc(x, y, 0.15f); // fields and trees keep off
     sc.fields = lay_out_fields(eco, *sc.wooded, cam);
     for (const auto& [tx, ty] : sc.fields.tiles) sc.wooded->mark_square(static_cast<float>(tx) + 0.5f, static_cast<float>(ty) + 0.5f, 0.42f);
     sc.key = key;
@@ -5314,6 +5508,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glNewList(list, GL_COMPILE_AND_EXECUTE);
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
+        draw_roads(sc.roads, year, cam);
         for (const Green& g : towns.greens) draw_green(g, cam);
         for (const Crossing& c : towns.crossings) draw_crossing(c, cam);
         // The lamps, each over a soft spot of shade (drawn first, and not
