@@ -552,6 +552,7 @@ int main(int argc, char* argv[]) {
     std::size_t choices_seen = 0; // scenario questions waiting, as of the last frame
     std::int32_t ledger_year = world.date().year(); // the ledger opens when a new year starts
     bool modal_paused = false; // the newspaper or menu paused the game, and closing it resumes
+    bool ledger_paused = false; // the year's ledger paused the game, and closing it resumes
     // A saved game watched from its start (the title screen's load page, W):
     // its logged commands are given as their ticks come round, while the
     // player only watches, until Ctrl+R takes the game over from there.
@@ -716,6 +717,7 @@ int main(int argc, char* argv[]) {
         if (!world.player_company() && !watch) tools.open_founding(/*cancellable=*/false);
         if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause(); // every game starts paused [D]
         modal_paused = false;
+        ledger_paused = false;
         title.hide();
         return true;
     };
@@ -777,6 +779,7 @@ int main(int argc, char* argv[]) {
         cam.distance = static_cast<float>(std::max(world.terrain().width(), world.terrain().height())) * 0.45f;
         if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
         modal_paused = false;
+        ledger_paused = false;
         (void)world.take_news();
         (void)world.take_headlines();
         // A map of the player's own is saved back where it came from; the
@@ -1437,7 +1440,10 @@ int main(int argc, char* argv[]) {
             }
             if (world.player_company() && !tools.founding_open() && !watching) {
                 tools.open_ledger();
-                if (speed.speed() != sim::GameSpeed::Paused && !shared_game()) speed.toggle_pause();
+                if (speed.speed() != sim::GameSpeed::Paused && !shared_game()) {
+                    speed.toggle_pause();
+                    ledger_paused = true;
+                }
             }
         }
         // News: splits, grumbling investors, chairmen fired or appointed,
@@ -1548,6 +1554,7 @@ int main(int argc, char* argv[]) {
                 if (!world.player_company()) tools.open_founding(/*cancellable=*/false);
                 if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause(); // the host's game sets the pace
                 modal_paused = false;
+                ledger_paused = false;
                 tools.show("Joined " + req->path + " as player " + std::to_string(guest->seat() + 1), true);
                 title.hide();
                 break;
@@ -1585,12 +1592,14 @@ int main(int argc, char* argv[]) {
                     }
                     if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
                     modal_paused = false;
+                    ledger_paused = false;
                     title.hide();
                     break;
                 }
                 load_game(req->path);
                 if (speed.speed() != sim::GameSpeed::Paused) speed.toggle_pause();
                 modal_paused = false;
+                ledger_paused = false;
                 title.hide();
                 break;
             case client::Title::Request::Kind::Editor: start_editor(*req); break;
@@ -1685,6 +1694,12 @@ int main(int argc, char* argv[]) {
                 title.show();
                 break;
             }
+        }
+        // Closing the year's ledger starts the clock it stopped (unless the
+        // player has started it already).
+        if (ledger_paused && tools.tool() != client::Tool::Ledger) {
+            ledger_paused = false;
+            if (speed.speed() == sim::GameSpeed::Paused) speed.toggle_pause();
         }
         // The newspaper and the menu stop the clock while open, as RT3's do.
         const bool modal = !title.open() && !shared_game() && (tools.newspaper_open() || tools.menu_open());
