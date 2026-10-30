@@ -694,7 +694,10 @@ them. Drawn as one quad a field with a furrow texture (a first version
 in strips came to about a million quads on a large map), kept out of the
 shadow pass. A first version let the grass show through in leaf shapes
 along each tile's diagonal: lifted too little above the ground, which
-the terrain draws as two flat triangles a tile.
+the terrain draws as two flat triangles a tile. Each crop is a
+display list of its own, coloured as it is drawn, so the season changing
+or track laid elsewhere does not rebuild them (rebuilding took about a
+tenth of a second on a large map, every game week).
 
 Country roads between the towns: each town to its two nearest within 45
 tiles, found by least cost over the land (round water and industries,

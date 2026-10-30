@@ -5507,80 +5507,97 @@ GLuint furrow_texture() {
 constexpr float kFurrows = 7.0f;
 
 // The fields (see Field): each the crop's colour over the furrows, hedges
-// round them. A display list, rebuilt when the scene changes and each week
-// of the year (the crops grow) or as the snow comes and goes. Flat, so
-// left out of the shadows.
+// round them. One display list a crop, without colour, and one for the
+// hedges, compiled when the fields change; the crop's colour for the day
+// (and the snow) is set before each is drawn, so the year turning costs
+// nothing. Flat, so left out of the shadows.
 void draw_fields(const Scene& sc, const Camera& cam) {
     if (shading::in_shadow_pass()) return;
-    static GLuint list = 0;
-    static std::uint64_t list_key = 0;
-    const std::uint64_t key = (sc.version * 64 + static_cast<std::uint64_t>(g_crop_day / 7.0f)) * 16 +
-                              static_cast<std::uint64_t>(g_crop_snow * 10.0f);
-    if (list != 0 && list_key == key) {
-        glCallList(list);
-        return;
-    }
-    furrow_texture(); // made now: a texture upload inside the list would only be recorded
-    if (list == 0) list = glGenLists(1);
-    list_key = key;
-    glNewList(list, GL_COMPILE_AND_EXECUTE);
-    glBindTexture(GL_TEXTURE_2D, furrow_texture());
-    glBegin(GL_QUADS);
-    glNormal3f(0, 0, 1);
-    constexpr float kSnow[3] = {0.9f, 0.93f, 0.97f};
-    for (const Field& f : sc.fields.fields) {
-        float rgb[3];
-        crop_rgb(f.crop, g_crop_day, false, rgb);
-        for (int i = 0; i < 3; ++i) rgb[i] += (kSnow[i] - rgb[i]) * g_crop_snow * 0.88f; // snow over it, the furrows showing
-        glColor3fv(rgb);
-        // In pieces of at most half a tile, so it lies on the ground.
-        const int nx = std::max(1, static_cast<int>(std::lround((f.x1 - f.x0) * 2))), ny = std::max(1, static_cast<int>(std::lround((f.y1 - f.y0) * 2)));
-        const auto corner = [&](float x, float y) {
-            // The bands run across the furrows' direction.
-            if (f.across) glTexCoord2f(x * kFurrows, y);
-            else glTexCoord2f(y * kFurrows, x);
-            glVertex3f(x, y, cam.ground_z(x, y) + kPatchLift);
-        };
-        for (int j = 0; j < ny; ++j)
-            for (int i = 0; i < nx; ++i) {
-                const float xa = f.x0 + (f.x1 - f.x0) * static_cast<float>(i) / static_cast<float>(nx);
-                const float xb = f.x0 + (f.x1 - f.x0) * static_cast<float>(i + 1) / static_cast<float>(nx);
-                const float ya = f.y0 + (f.y1 - f.y0) * static_cast<float>(j) / static_cast<float>(ny);
-                const float yb = f.y0 + (f.y1 - f.y0) * static_cast<float>(j + 1) / static_cast<float>(ny);
-                corner(xa, ya);
-                corner(xb, ya);
-                corner(xb, yb);
-                corner(xa, yb);
-            }
-    }
-    glEnd();
-    // The hedges: a low wall of green along each edge, its two long sides
-    // and its top (the ends hardly show).
-    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
-    glBegin(GL_QUADS);
-    constexpr float kHalfWidth = 0.014f, kHeight = 0.026f;
-    static constexpr float kHedge[3] = {0.16f, 0.32f, 0.13f}, kHedgeTop[3] = {0.2f, 0.37f, 0.15f};
-    for (const auto& [mx, my, dx, dy] : sc.fields.hedges) {
-        const float ax = mx - dx * 0.5f, ay = my - dy * 0.5f, bx = mx + dx * 0.5f, by = my + dy * 0.5f;
-        const float za = cam.ground_z(ax, ay) - 0.004f, zb = cam.ground_z(bx, by) - 0.004f;
-        const float cx = -dy * kHalfWidth, cy = dx * kHalfWidth;
-        glColor3fv(kHedge);
-        for (const float side : {-1.0f, 1.0f}) {
-            glNormal3f(-dy * side, dx * side, 0.0f);
-            glVertex3f(ax + cx * side, ay + cy * side, za);
-            glVertex3f(bx + cx * side, by + cy * side, zb);
-            glVertex3f(bx + cx * side, by + cy * side, zb + kHeight);
-            glVertex3f(ax + cx * side, ay + cy * side, za + kHeight);
+    constexpr int kCrops = 5;
+    static std::array<GLuint, kCrops + 1> lists{};
+    static std::uint64_t lists_key = 0;
+    // What the lists hold: the fields and hedges themselves (a scene rebuilt
+    // for track laid far off leaves them as they are).
+    std::uint64_t key = 1469598103934665603ull ^ static_cast<std::uint64_t>(cam.height_exaggeration * 1000);
+    const auto mix = [&](float v) { key = (key ^ static_cast<std::uint64_t>(static_cast<std::int64_t>(v * 64))) * 1099511628211ull; };
+    for (const Field& f : sc.fields.fields) mix(f.x0 * 7 + f.y0 * 13 + f.x1 + f.y1 * 3 + static_cast<float>(f.crop) * 0.5f + (f.across ? 0.25f : 0.0f));
+    for (const auto& [mx, my, dx, dy] : sc.fields.hedges) mix(mx * 5 + my * 11 + dx);
+    if (lists[0] == 0 || lists_key != key) {
+        furrow_texture(); // made now: a texture upload inside a list would only be recorded
+        if (lists[0] == 0) {
+            const GLuint first = glGenLists(kCrops + 1);
+            for (int i = 0; i <= kCrops; ++i) lists[static_cast<std::size_t>(i)] = first + static_cast<GLuint>(i);
         }
-        glColor3fv(kHedgeTop);
-        glNormal3f(0, 0, 1);
-        glVertex3f(ax - cx, ay - cy, za + kHeight);
-        glVertex3f(bx - cx, by - cy, zb + kHeight);
-        glVertex3f(bx + cx, by + cy, zb + kHeight);
-        glVertex3f(ax + cx, ay + cy, za + kHeight);
+        lists_key = key;
+        for (int c = 0; c < kCrops; ++c) {
+            glNewList(lists[static_cast<std::size_t>(c)], GL_COMPILE);
+            glBegin(GL_QUADS);
+            glNormal3f(0, 0, 1);
+            for (const Field& f : sc.fields.fields) {
+                if (static_cast<int>(f.crop) != c) continue;
+                // In pieces of at most half a tile, so it lies on the ground.
+                const int nx = std::max(1, static_cast<int>(std::lround((f.x1 - f.x0) * 2))), ny = std::max(1, static_cast<int>(std::lround((f.y1 - f.y0) * 2)));
+                const auto corner = [&](float x, float y) {
+                    // The bands run across the furrows' direction.
+                    if (f.across) glTexCoord2f(x * kFurrows, y);
+                    else glTexCoord2f(y * kFurrows, x);
+                    glVertex3f(x, y, cam.ground_z(x, y) + kPatchLift);
+                };
+                for (int j = 0; j < ny; ++j)
+                    for (int i = 0; i < nx; ++i) {
+                        const float xa = f.x0 + (f.x1 - f.x0) * static_cast<float>(i) / static_cast<float>(nx);
+                        const float xb = f.x0 + (f.x1 - f.x0) * static_cast<float>(i + 1) / static_cast<float>(nx);
+                        const float ya = f.y0 + (f.y1 - f.y0) * static_cast<float>(j) / static_cast<float>(ny);
+                        const float yb = f.y0 + (f.y1 - f.y0) * static_cast<float>(j + 1) / static_cast<float>(ny);
+                        corner(xa, ya);
+                        corner(xb, ya);
+                        corner(xb, yb);
+                        corner(xa, yb);
+                    }
+            }
+            glEnd();
+            glEndList();
+        }
+        // The hedges: a low wall of green along each edge, its two long sides
+        // and its top (the ends hardly show).
+        glNewList(lists[kCrops], GL_COMPILE);
+        glBegin(GL_QUADS);
+        constexpr float kHalfWidth = 0.014f, kHeight = 0.026f;
+        static constexpr float kHedge[3] = {0.16f, 0.32f, 0.13f}, kHedgeTop[3] = {0.2f, 0.37f, 0.15f};
+        for (const auto& [mx, my, dx, dy] : sc.fields.hedges) {
+            const float ax = mx - dx * 0.5f, ay = my - dy * 0.5f, bx = mx + dx * 0.5f, by = my + dy * 0.5f;
+            const float za = cam.ground_z(ax, ay) - 0.004f, zb = cam.ground_z(bx, by) - 0.004f;
+            const float cx = -dy * kHalfWidth, cy = dx * kHalfWidth;
+            glColor3fv(kHedge);
+            for (const float side : {-1.0f, 1.0f}) {
+                glNormal3f(-dy * side, dx * side, 0.0f);
+                glVertex3f(ax + cx * side, ay + cy * side, za);
+                glVertex3f(bx + cx * side, by + cy * side, zb);
+                glVertex3f(bx + cx * side, by + cy * side, zb + kHeight);
+                glVertex3f(ax + cx * side, ay + cy * side, za + kHeight);
+            }
+            glColor3fv(kHedgeTop);
+            glNormal3f(0, 0, 1);
+            glVertex3f(ax - cx, ay - cy, za + kHeight);
+            glVertex3f(bx - cx, by - cy, zb + kHeight);
+            glVertex3f(bx + cx, by + cy, zb + kHeight);
+            glVertex3f(ax + cx, ay + cy, za + kHeight);
+        }
+        glEnd();
+        glEndList();
     }
-    glEnd();
-    glEndList();
+    // Each crop in its colour for the day, snow over it, the furrows showing.
+    constexpr float kSnow[3] = {0.9f, 0.93f, 0.97f};
+    glBindTexture(GL_TEXTURE_2D, furrow_texture());
+    for (int c = 0; c < kCrops; ++c) {
+        float rgb[3];
+        crop_rgb(static_cast<Crop>(c), g_crop_day, false, rgb);
+        for (int i = 0; i < 3; ++i) rgb[i] += (kSnow[i] - rgb[i]) * g_crop_snow * 0.88f;
+        glColor3fv(rgb);
+        glCallList(lists[static_cast<std::size_t>(c)]);
+    }
+    glBindTexture(GL_TEXTURE_2D, shading::white_texture());
+    glCallList(lists[kCrops]);
 }
 
 void set_season_day(float day_of_year, float snow) {
