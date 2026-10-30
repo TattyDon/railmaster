@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libsdl2-dev libgl-dev nlohmann-json3-dev doctest-dev zlib1g-dev
+      - name: Configure
+        run: |
+          if [ "${{ matrix.compiler }}" = clang ]; then export CXX=clang++; else export CXX=g++; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRAILMASTER_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nlohmann-json3-dev doctest-dev zlib1g-dev
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRAILMASTER_BUILD_CLIENT=OFF
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all"
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # The Mac build (Apple silicon): the trackpad's pinch (gestures_mac.mm)
+  # compiles only here, and share.sh's app, with SDL2 inside it, is kept as
+  # a download (the run's Artifacts) to try on any recent Apple-silicon Mac.
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: brew install ninja sdl2 nlohmann-json doctest
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Make the app to share
+        run: |
+          mkdir -p "$HOME/Desktop"
+          packaging/macos/share.sh
+          unzip -l "$HOME"/Desktop/Railmaster-*.zip | grep -E 'MacOS/Railmaster|Frameworks/'
+      - name: The shared app starts without Homebrew's SDL
+        run: |
+          # As on a Mac without Homebrew: SDL's libraries hidden, the app
+          # from the zip must find its own.
+          set -o pipefail
+          for f in sdl2-compat sdl2 sdl3; do
+            [ -d "/opt/homebrew/Cellar/$f" ] && sudo mv "/opt/homebrew/Cellar/$f" "/opt/homebrew/Cellar/$f.hidden" || true
+          done
+          mkdir -p "$RUNNER_TEMP/unzipped"
+          ditto -x -k "$HOME"/Desktop/Railmaster-*.zip "$RUNNER_TEMP/unzipped"
+          DYLD_PRINT_LIBRARIES=1 "$RUNNER_TEMP/unzipped/Railmaster.app/Contents/MacOS/Railmaster" --version 2>&1 | grep -iE 'sdl|railmaster'
+          for f in sdl2-compat sdl2 sdl3; do
+            [ -d "/opt/homebrew/Cellar/$f.hidden" ] && sudo mv "/opt/homebrew/Cellar/$f.hidden" "/opt/homebrew/Cellar/$f" || true
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Railmaster-macOS-apple-silicon
+          path: ~/Desktop/Railmaster-*.zip
+
+  # The simulation must run alike whichever compiler built it (multiplayer
+  # and replays depend on it): gcc's and clang's builds make the same game
+  # byte for byte, and each replays the other's. (C++ leaves some orders of
+  # evaluation to the compiler; gcc and clang differ.)
+  determinism:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build nlohmann-json3-dev zlib1g-dev
+      - name: Build with gcc and clang
+        run: |
+          for cc in g++ clang++; do
+            CXX=$cc cmake -S . -B build-$cc -G Ninja -DCMAKE_BUILD_TYPE=Release -DRAILMASTER_BUILD_CLIENT=OFF -DRAILMASTER_BUILD_TESTS=OFF
+            cmake --build build-$cc --target railmaster_replay
+          done
+      - name: Same game from both, and each replays the other's
+        run: |
+          build-g++/tools/replay/railmaster_replay --make gcc.sav
+          build-clang++/tools/replay/railmaster_replay --make clang.sav
+          cmp gcc.sav clang.sav
+          build-clang++/tools/replay/railmaster_replay gcc.sav
+          build-g++/tools/replay/railmaster_replay clang.sav

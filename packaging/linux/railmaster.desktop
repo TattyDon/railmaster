@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Railmaster
+GenericName=Railroad tycoon game
+Comment=Build a railroad empire, 1830 to the present
+Exec=railmaster
+Icon=railmaster
+Terminal=false
+Categories=Game;Simulation;
+Keywords=railroad;railway;train;tycoon;
