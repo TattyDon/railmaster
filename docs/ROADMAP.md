@@ -706,8 +706,14 @@ map's 195 roads take about a tenth of a second to find), so laying track
 or a town growing (both rebuild the scene) costs only the trimming,
 about 6 ms. Carts and, as the years go by, motor cars and lorries travel
 them (about one to five tiles of road, near the camera), drawn by the
-same code as the towns' traffic. Still to do: road bridges (a road with
-no way round water is left out).
+same code as the towns' traffic. Roads bridge rivers and narrows (water
+next to land, never open water, and at a cost, so they go round where
+that is near): a deck level with the higher bank, timber and from 1910
+concrete, rails along it and posts into the water; the traffic drives
+over it. Road pieces go in tenth-of-a-tile steps, so they keep on the
+ground over the lip of a bank, and a road's ends are trimmed to past a
+town's last house (not into a gap between two) and join a street only
+when it is close, so none cuts across a town.
 
 Next:
 - Multiplayer: a player whose connection drops mid-game rejoining without

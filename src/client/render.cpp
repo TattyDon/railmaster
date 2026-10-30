@@ -29,6 +29,8 @@ namespace {
 // Overlays and track sit this far above the ground (tiles), so they show
 // over it without flickering.
 constexpr float kLift = 0.04f;
+// A road point on land, not on a bridge's deck.
+constexpr float kNoDeck = -1e9f;
 
 float tiles(std::int64_t mm, const Camera& cam) { return static_cast<float>(mm) / cam.mm_per_tile; }
 
@@ -2642,12 +2644,18 @@ constexpr float kPavement = 0.028f;        // its width, tiles
 // Inside GL_QUADS.
 // The country roads (see lay_out_roads): dirt, then gravel, then asphalt,
 // as the streets. Inside GL_QUADS.
-void draw_roads(const std::vector<std::vector<std::array<float, 2>>>& roads, std::int32_t year, const Camera& cam) {
+void draw_roads(const std::vector<std::vector<std::array<float, 2>>>& roads, const std::vector<std::vector<float>>& decks,
+                std::int32_t year, const Camera& cam) {
     const float dirt[3] = {0.56f, 0.48f, 0.36f}, gravel[3] = {0.58f, 0.56f, 0.52f}, asphalt[3] = {0.33f, 0.33f, 0.35f};
-    glColor3fv(year < 1890 ? dirt : year < 1930 ? gravel : asphalt);
-    glNormal3f(0, 0, 1);
+    const float* surface = year < 1890 ? dirt : year < 1930 ? gravel : asphalt;
+    // Bridges: timber, then (from 1910) concrete.
+    static constexpr float kTimber[3] = {0.44f, 0.33f, 0.22f}, kConcrete[3] = {0.62f, 0.61f, 0.58f};
+    const float* bridge = year < 1910 ? kTimber : kConcrete;
     constexpr float kHalf = 0.05f;
-    for (const auto& road : roads) {
+    for (std::size_t r = 0; r < roads.size(); ++r) {
+        const auto& road = roads[r];
+        const std::vector<float>* deck = r < decks.size() ? &decks[r] : nullptr;
+        const auto deck_at = [&](std::size_t i) { return deck && i < deck->size() ? (*deck)[i] : kNoDeck; };
         for (std::size_t i = 0; i + 1 < road.size(); ++i) {
             const auto& p = road[i];
             const auto& q = road[i + 1];
@@ -2656,10 +2664,36 @@ void draw_roads(const std::vector<std::vector<std::array<float, 2>>>& roads, std
             // Half its width past each end, so the pieces overlap at the bends.
             const float ux = (q[0] - p[0]) / len, uy = (q[1] - p[1]) / len, nx = -uy * kHalf, ny = ux * kHalf;
             const float ax = p[0] - ux * kHalf * 0.5f, ay = p[1] - uy * kHalf * 0.5f, bx = q[0] + ux * kHalf * 0.5f, by = q[1] + uy * kHalf * 0.5f;
-            ground_vertex(ax - nx, ay - ny, cam);
-            ground_vertex(bx - nx, by - ny, cam);
-            ground_vertex(bx + nx, by + ny, cam);
-            ground_vertex(ax + nx, ay + ny, cam);
+            const float da = deck_at(i), db = deck_at(i + 1);
+            glNormal3f(0, 0, 1);
+            if (da == kNoDeck && db == kNoDeck) {
+                // In steps of a tenth of a tile, so it keeps on the ground over a crest.
+                glColor3fv(surface);
+                const int steps = std::max(1, static_cast<int>(std::ceil(std::hypot(bx - ax, by - ay) / 0.1f)));
+                for (int k = 0; k < steps; ++k) {
+                    const float k0 = static_cast<float>(k) / static_cast<float>(steps), k1 = static_cast<float>(k + 1) / static_cast<float>(steps);
+                    const float x0 = ax + (bx - ax) * k0, y0 = ay + (by - ay) * k0, x1 = ax + (bx - ax) * k1, y1 = ay + (by - ay) * k1;
+                    ground_vertex(x0 - nx, y0 - ny, cam);
+                    ground_vertex(x1 - nx, y1 - ny, cam);
+                    ground_vertex(x1 + nx, y1 + ny, cam);
+                    ground_vertex(x0 + nx, y0 + ny, cam);
+                }
+                continue;
+            }
+            // On the bridge (or onto it from the bank): the deck, its rails
+            // either side and a post down into the water at each point.
+            const float za = da != kNoDeck ? da : cam.ground_z(p[0], p[1]) + kLift;
+            const float zb = db != kNoDeck ? db : cam.ground_z(q[0], q[1]) + kLift;
+            glColor3fv(bridge);
+            glVertex3f(ax - nx, ay - ny, za);
+            glVertex3f(bx - nx, by - ny, zb);
+            glVertex3f(bx + nx, by + ny, zb);
+            glVertex3f(ax + nx, ay + ny, za);
+            for (const float side : {-1.0f, 1.0f}) {
+                const float ox = nx * side * 1.05f, oy = ny * side * 1.05f;
+                beam(p[0] + ox, p[1] + oy, za + 0.012f, q[0] + ox, q[1] + oy, zb + 0.012f, 0.004f, bridge);
+            }
+            if (da != kNoDeck) beam(p[0], p[1], cam.ground_z(p[0], p[1]) - 0.05f, p[0], p[1], da, 0.012f, bridge);
         }
     }
 }
@@ -3671,6 +3705,7 @@ struct Scene {
     std::optional<Occupancy> wooded;    // that, the towns and their fields: trees keep off
     TownLayout towns;
     std::vector<std::vector<std::array<float, 2>>> roads; // country roads between towns: points, tiles
+    std::vector<std::vector<float>> road_deck;            // by road and point: a bridge's deck height, or kNoDeck on land
     Fields fields;
 };
 
@@ -3683,10 +3718,11 @@ float map_noise(float x, float y, float cells, std::uint32_t seed);
 std::vector<std::vector<std::array<float, 2>>> lay_out_roads(const sim::Economy& eco, const std::vector<std::array<float, 3>>& industries,
                                                             const Occupancy& wooded, const std::vector<float>& streets,
                                                             const Camera& cam) {
-    // The nearest point of a street to p, within three tiles.
+    // The nearest point of a street to p, close enough to join straight
+    // (further, a straight join could cut across the houses).
     const auto street_near = [&](const std::array<float, 2>& p) -> std::optional<std::array<float, 2>> {
         std::optional<std::array<float, 2>> best;
-        float best_d = 3.0f;
+        float best_d = 1.25f;
         for (std::size_t i = 0; i + 3 < streets.size(); i += 4) {
             const float ax = streets[i], ay = streets[i + 1], bx = streets[i + 2], by = streets[i + 3];
             if (p[0] < std::min(ax, bx) - best_d || p[0] > std::max(ax, bx) + best_d || p[1] < std::min(ay, by) - best_d ||
@@ -3735,6 +3771,18 @@ std::vector<std::vector<std::array<float, 2>>> lay_out_roads(const sim::Economy&
                 for (int tx = std::max(0, static_cast<int>(x - half - 0.3f)); tx <= std::min(w - 1, static_cast<int>(x + half + 0.3f)); ++tx)
                     works[static_cast<std::size_t>(ty) * static_cast<std::size_t>(w) + static_cast<std::size_t>(tx)] = true;
         }
+        // Water a road may bridge: next to land (rivers, and lakes' edges
+        // and narrows), not open water.
+        const auto water = [&](int x, int y) { return x < 0 || y < 0 || x >= w || y >= h || t->ground(x, y) == sim::GroundType::Water; };
+        std::vector<bool> bridgeable(static_cast<std::size_t>(w) * static_cast<std::size_t>(h), false);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x) {
+                if (!water(x, y)) continue;
+                bool shore = false;
+                for (int dy = -1; dy <= 1 && !shore; ++dy)
+                    for (int dx = -1; dx <= 1 && !shore; ++dx) shore = !water(x + dx, y + dy);
+                bridgeable[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x)] = shore;
+            }
         // Which pairs: each town's two nearest within reach, once each.
         constexpr float kReach = 45.0f;
         std::vector<std::pair<std::size_t, std::size_t>> pairs;
@@ -3788,12 +3836,17 @@ std::vector<std::vector<std::array<float, 2>>> lay_out_roads(const sim::Economy&
                         if (dx == 0 && dy == 0) continue;
                         const int nx = cx + dx, ny = cy + dy;
                         if (nx < x0 || ny < y0 || nx > x1 || ny > y1) continue;
-                        if (t->ground(nx, ny) == sim::GroundType::Water) continue;
+                        const bool wet = t->ground(nx, ny) == sim::GroundType::Water;
+                        if (wet && !bridgeable[static_cast<std::size_t>(ny) * static_cast<std::size_t>(w) + static_cast<std::size_t>(nx)]) continue;
                         const float step = (dx != 0 && dy != 0) ? 1.4142f : 1.0f;
-                        const float grade = std::fabs(height(nx, ny) - height(cx, cy)) / (size_m * step);
+                        // (A bridge is level: water's grade does not count.)
+                        const bool was_wet = t->ground(cx, cy) == sim::GroundType::Water;
+                        const float grade = wet || was_wet ? 0.0f : std::fabs(height(nx, ny) - height(cx, cy)) / (size_m * step);
                         if (grade > 0.18f) continue; // too steep for a cart
                         // Round the industries' ground.
-                        const float detour = works[static_cast<std::size_t>(ny) * static_cast<std::size_t>(w) + static_cast<std::size_t>(nx)] ? 8.0f : 0.0f;
+                        const float detour = works[static_cast<std::size_t>(ny) * static_cast<std::size_t>(w) + static_cast<std::size_t>(nx)] ? 8.0f
+                                             : wet ? 10.0f // a bridge, where going round is far
+                                                   : 0.0f;
                         const float c = here + step * (1.0f + 30.0f * grade + detour);
                         if (c < cost[at(nx, ny)]) {
                             cost[at(nx, ny)] = c;
@@ -3826,9 +3879,20 @@ std::vector<std::vector<std::array<float, 2>>> lay_out_roads(const sim::Economy&
     }
     for (const auto& path : routes) {
         const auto in_town = [&](const std::array<float, 2>& p) { return wooded.blocked(p[0], p[1], 0.05f); };
+        // Out of a town: past its last house or street, not just into a gap
+        // between two (clear ground for about a tile and a half after).
+        constexpr std::size_t kClear = 6;
+        const auto clear_from = [&](std::size_t i, int step) {
+            for (std::size_t n = 0; n < kClear; ++n) {
+                const auto at = static_cast<std::ptrdiff_t>(i) + step * static_cast<std::ptrdiff_t>(n);
+                if (at < 0 || at >= static_cast<std::ptrdiff_t>(path.size())) return true;
+                if (in_town(path[static_cast<std::size_t>(at)])) return false;
+            }
+            return true;
+        };
         std::size_t first = 0, last = path.size();
-        while (first < last && in_town(path[first])) ++first;
-        while (last > first && in_town(path[last - 1])) --last;
+        while (first < last && !clear_from(first, 1)) ++first;
+        while (last > first && !clear_from(last - 1, -1)) --last;
         if (last - first < 4) continue;
         std::vector<std::array<float, 2>> road(path.begin() + static_cast<std::ptrdiff_t>(first), path.begin() + static_cast<std::ptrdiff_t>(last));
         // Joined to the towns' streets at either end.
@@ -3948,6 +4012,29 @@ const Scene& scene(const sim::Economy& eco, const sim::IndustryRegistry& industr
     sc.roads = lay_out_roads(eco, works, *sc.wooded, sc.towns.streets, cam);
     for (const auto& road : sc.roads)
         for (const auto& [x, y] : road) sc.wooded->mark_disc(x, y, 0.15f); // fields and trees keep off
+    // Where a road crosses water, a bridge: its deck level with the higher bank.
+    sc.road_deck.clear();
+    for (const auto& road : sc.roads) {
+        std::vector<float> deck(road.size(), kNoDeck);
+        const auto wet = [&](const std::array<float, 2>& p) {
+            return cam.terrain && cam.terrain->ground(std::clamp(static_cast<int>(p[0]), 0, cam.terrain->width() - 1),
+                                                      std::clamp(static_cast<int>(p[1]), 0, cam.terrain->height() - 1)) == sim::GroundType::Water;
+        };
+        for (std::size_t i = 0; i < road.size();) {
+            if (!wet(road[i])) {
+                ++i;
+                continue;
+            }
+            std::size_t j = i;
+            while (j + 1 < road.size() && wet(road[j + 1])) ++j;
+            const auto& before = road[i > 0 ? i - 1 : i];
+            const auto& after = road[j + 1 < road.size() ? j + 1 : j];
+            const float z = std::max(cam.ground_z(before[0], before[1]), cam.ground_z(after[0], after[1])) + 0.02f;
+            for (std::size_t n = i; n <= j; ++n) deck[n] = z;
+            i = j + 1;
+        }
+        sc.road_deck.push_back(std::move(deck));
+    }
     sc.fields = lay_out_fields(eco, *sc.wooded, cam);
     for (const auto& [tx, ty] : sc.fields.tiles) sc.wooded->mark_square(static_cast<float>(tx) + 0.5f, static_cast<float>(ty) + 0.5f, 0.42f);
     sc.key = key;
@@ -4311,7 +4398,8 @@ void draw_traffic(const TownLayout& towns, std::int32_t year, const Camera& cam)
 
 // Traffic on the country roads: about one cart or car to five tiles of
 // road, going from one town to the other and back.
-void draw_road_traffic(const std::vector<std::vector<std::array<float, 2>>>& roads, std::int32_t year, const Camera& cam) {
+void draw_road_traffic(const std::vector<std::vector<std::array<float, 2>>>& roads, const std::vector<std::vector<float>>& decks,
+                       std::int32_t year, const Camera& cam) {
     if (cam.distance > 70.0f) return; // too small to see
     const float reach = std::max(18.0f, cam.distance * 1.5f);
     const float t = g_animation_seconds;
@@ -4348,7 +4436,12 @@ void draw_road_traffic(const std::vector<std::vector<std::array<float, 2>>>& roa
                     const float x = road[i - 1][0] + (road[i][0] - road[i - 1][0]) * k + uy * lane;
                     const float y = road[i - 1][1] + (road[i][1] - road[i - 1][1]) * k - ux * lane;
                     if (std::fabs(x - cam.target_x) < reach && std::fabs(y - cam.target_y) < reach) {
-                        vehicle(x, y, cam.ground_z(x, y) + kLift, ux * dir, uy * dir, h, year, shade, cam);
+                        // On a bridge's deck where there is one.
+                        const float da = r < decks.size() ? decks[r][i - 1] : kNoDeck, db = r < decks.size() ? decks[r][i] : kNoDeck;
+                        const float ground = cam.ground_z(x, y) + kLift;
+                        const float z = da == kNoDeck && db == kNoDeck ? ground
+                                        : (da != kNoDeck ? da : ground) + ((db != kNoDeck ? db : ground) - (da != kNoDeck ? da : ground)) * k;
+                        vehicle(x, y, z, ux * dir, uy * dir, h, year, shade, cam);
                     }
                     break;
                 }
@@ -5549,7 +5642,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
             draw_houses(towns, list_near, key, cam);
             draw_building_sites(towns, cam);
             draw_traffic(towns, year, cam);
-            draw_road_traffic(sc.roads, year, cam);
+            draw_road_traffic(sc.roads, sc.road_deck, year, cam);
             draw_people(towns, cam);
             draw_boats(towns, year, cam);
             draw_turning();
@@ -5569,7 +5662,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         glNewList(list, GL_COMPILE_AND_EXECUTE);
         glBegin(GL_QUADS);
         draw_streets(towns, year, cam);
-        draw_roads(sc.roads, year, cam);
+        draw_roads(sc.roads, sc.road_deck, year, cam);
         for (const Green& g : towns.greens) draw_green(g, cam);
         for (const Crossing& c : towns.crossings) draw_crossing(c, cam);
         // The lamps, each over a soft spot of shade (drawn first, and not
@@ -5661,7 +5754,7 @@ void draw_sites(const sim::Economy& eco, const sim::IndustryRegistry& industries
         draw_houses(towns, list_near, key, cam);
         draw_building_sites(towns, cam);
         draw_traffic(towns, year, cam);
-        draw_road_traffic(sc.roads, year, cam);
+        draw_road_traffic(sc.roads, sc.road_deck, year, cam);
         draw_people(towns, cam);
         draw_boats(towns, year, cam);
         list_smoke.assign(g_smoke.begin() + static_cast<std::ptrdiff_t>(smoke_before), g_smoke.end());
